@@ -628,6 +628,35 @@ public partial class HUDRenderer
     /// <summary>Speed presets matching time control button indices.</summary>
     public static readonly float[] TimeControlSpeeds = { 0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f };
 
+    /// <summary>Catalogue the HUD's persistent clickable regions into the central
+    /// UI hit registry: spell-bar slots, the time-control strip, and the two
+    /// top-right button rows. Uses the exact same layout code as drawing and the
+    /// HitTest* methods, so the registry can never desync from the visuals.</summary>
+    public void AppendHitRects(Necroking.UI.UIHitRegistry reg, int screenW, int screenH,
+        bool showTimeControls)
+    {
+        var (barY, slotW, slotH, centerOffset) = GetSpellBarLayout(screenH);
+        for (int s = 0; s < SpellBarBindings.SlotCount; s++)
+        {
+            int slotX = screenW / 2 - centerOffset + s * (slotW + SlotSpacing);
+            reg.Add($"hud.spellbar.{s}", new Rectangle(slotX, barY, slotW, slotH));
+        }
+
+        if (showTimeControls)
+        {
+            TimeControlLayout(screenW, screenH, out int tcBaseX, out int tcBaseY);
+            int tcW = TcBtnW + TcGap + TcCount * TcBtnW + (TcCount - 1) * TcGap;
+            reg.Add("hud.time_controls", new Rectangle(tcBaseX, tcBaseY, tcW, TcBtnH));
+        }
+
+        if (LayoutMenuButtons(screenW))
+            for (int i = 0; i < MenuBtnCount; i++)
+                reg.Add($"hud.menu_row.{i}", _menuBtnRects[i]);
+        if (LayoutEditorButtons(screenW))
+            for (int i = 0; i < EditorBtnCount; i++)
+                reg.Add($"hud.editor_row.{i}", _editorBtnRects[i]);
+    }
+
     // ═══════════════════════════════════════
     //  Tooltips & Info
     // ═══════════════════════════════════════

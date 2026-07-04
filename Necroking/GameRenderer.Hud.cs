@@ -32,8 +32,18 @@ partial class GameRenderer
         return new Rectangle(sw - padR - toastW, yCursor, toastW, toastH);
     }
 
+    /// <summary>Catalogue the visible corner toasts into the central UI hit
+    /// registry (hover-blocking is derived from it; the click routing stays in
+    /// <see cref="UpdateSkillLearnToastInput"/>).</summary>
+    internal void AppendSkillToastHitRects(Necroking.UI.UIHitRegistry reg, int sw, int sh)
+    {
+        for (int i = 0; i < _g._skillLearnToasts.Count; i++)
+            reg.Add($"toast.skill_learn.{i}", GetSkillLearnToastRect(sw, sh, i));
+    }
+
     /// <summary>Hit-test corner toasts and route a left-click to opening the skill
-    /// book on the relevant tab. Called from the UI input pass.</summary>
+    /// book on the relevant tab. Called from the UI input pass. (MouseOverUI is
+    /// NOT set here — the toast rects are in the central UIHitRegistry.)</summary>
     internal void UpdateSkillLearnToastInput(int sw, int sh)
     {
         if (_g._skillLearnToasts.Count == 0) return;
@@ -49,7 +59,6 @@ partial class GameRenderer
             var rect = GetSkillLearnToastRect(sw, sh, stackSlot);
             if (rect.Contains(mx, my))
             {
-                _g._input.MouseOverUI = true;
                 if (_g._input.LeftPressed && !_g._input.IsMouseConsumed)
                 {
                     var t = _g._skillLearnToasts[i];

@@ -392,6 +392,9 @@ public class InventoryUI : Necroking.UI.IModalLayer
                mouseY >= _screenY && mouseY < _screenY + _widgetH;
     }
 
+    public Rectangle? HitBounds(int screenW, int screenH)
+        => _visible ? new Rectangle(_screenX, _screenY, _widgetW, _widgetH) : null;
+
     /// <summary>
     /// Hit-test a screen position against the inventory's slot rects. Returns
     /// true and the slot index when the mouse is over a slot. Used by external

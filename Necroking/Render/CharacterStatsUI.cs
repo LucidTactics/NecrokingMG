@@ -151,34 +151,9 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
     /// of the three panel rects each frame and let the manager hit-test that.</summary>
     private Microsoft.Xna.Framework.Rectangle _lastBoundsRect;
     public bool ContainsMouse(int mx, int my) => _lastBoundsRect.Contains(mx, my);
+    public Microsoft.Xna.Framework.Rectangle? HitBounds(int screenW, int screenH)
+        => IsVisible ? _lastBoundsRect : null;
     public void OnCancel() => Toggle();
-
-    /// <summary>Bounds test covering all three panels (stats + learn + active).</summary>
-    public bool ContainsMouse(int screenW, int screenH, int mx, int my, Simulation sim)
-    {
-        if (!IsVisible) return false;
-        int necroIdx = sim.NecromancerIndex;
-        if (necroIdx < 0 || necroIdx >= sim.Units.Count) return false;
-
-        int activeBuffs = sim.Units[necroIdx].ActiveBuffs.Count;
-        int statsRowCount = 22; // keep in sync with rows list in Draw
-        int buffListH = activeBuffs > 0 ? BuffsHeaderH + activeBuffs * RowH + 6 : 0;
-        int statsH = TitleH + PadY * 2 + statsRowCount * RowH + buffListH;
-        int statsX = AnchorX;
-        int statsY = AnchorY;
-
-        if (mx >= statsX && mx < statsX + PanelW && my >= statsY && my < statsY + statsH)
-            return true;
-
-        int learnX = statsX + PanelW + SkillsGap;
-        int learnH = LearnPanelHeight();
-        if (mx >= learnX && mx < learnX + SkillsPanelW && my >= statsY && my < statsY + learnH)
-            return true;
-
-        int activeX = learnX + SkillsPanelW + SkillsGap;
-        int activeH = ActivePanelHeight();
-        return mx >= activeX && mx < activeX + SkillsPanelW && my >= statsY && my < statsY + activeH;
-    }
 
     private static int LearnPanelHeight() => TitleH + SkillPointsHeaderH + PadY * 2 + Skills.Length * (SkillBtnH + SkillBtnGap) - SkillBtnGap;
     private int ActivePanelHeight()

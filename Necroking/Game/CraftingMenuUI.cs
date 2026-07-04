@@ -505,6 +505,9 @@ public class CraftingMenuUI : Necroking.UI.IModalLayer
                mouseY >= _screenY && mouseY < _screenY + _widgetH;
     }
 
+    public Rectangle? HitBounds(int screenW, int screenH)
+        => _visible ? new Rectangle(_screenX, _screenY, _widgetW, _widgetH) : null;
+
     private List<Rectangle> ComputeItemRects(Editor.UIEditorWidgetDef def)
     {
         var allRects = new List<Rectangle>();
