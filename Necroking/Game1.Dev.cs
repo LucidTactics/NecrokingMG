@@ -546,6 +546,18 @@ public partial class Game1 {
                break;
             }
 
+            // Drive the map editor's ProcGen brush headlessly: paint <style> at a
+            // world point as if the brush were held for [seconds] (default 1).
+            // window.dev('procgen_paint',['Forest','2100','1880','2'])
+            case "procgen_paint": {
+               if (c.Args.Length < 3) { c.Complete(Necroking.Dev.DevServer.Error("procgen_paint needs: <styleName> <x> <y> [seconds]")); break; }
+               float ppx = DevFloat(c.Args[1]), ppy = DevFloat(c.Args[2]);
+               float ppSecs = c.Args.Length >= 4 ? DevFloat(c.Args[3]) : 1f;
+               c.Complete(Necroking.Dev.DevServer.Ok(
+                  _mapEditor.DevPaintProcGen(c.Args[0], new Vec2(ppx, ppy), ppSecs)));
+               break;
+            }
+
             // Assign a unit to a grave (nearest unoccupied empty_grave if idx omitted):
             // window.dev('assign_worker',[unitId]) or window.dev('assign_worker',[unitId, graveObjIdx])
             case "assign_worker": {
@@ -1465,6 +1477,7 @@ public partial class Game1 {
                   "spawn <type> <x> <y>", "spawn_def <unitID> <x> <y> [count]",
                   "spawn_horde <unitID> <x> <y> [count]",
                   "place_obj <defId> <x> <y> [scale]",
+                  "procgen_paint <styleName> <x> <y> [seconds]",
                   // unit manipulation
                   "damage <selector> <amount>", "kill <selector>", "remove <selector>",
                   "zombify [selector]", "set_ai <selector> <AIBehavior>", "move <selector> <x> <y>",
