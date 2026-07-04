@@ -79,6 +79,10 @@ public class GeneralSettings
     [JsonPropertyName("combatLogFadeTime")] public float CombatLogFadeTime { get; set; } = 3.0f;
     [JsonPropertyName("combatLogFontSize")] public int CombatLogFontSize { get; set; } = 12;
     [JsonPropertyName("wpRapidEdit")] public bool WpRapidEdit { get; set; }
+    /// <summary>Map editor's last-open tab (MapEditorTab as int), restored on reopen.
+    /// Per-machine; validate the range before casting since a hand-edited file could
+    /// hold an out-of-range value.</summary>
+    [JsonPropertyName("mapEditorLastTab")] public int MapEditorLastTab { get; set; }
     [JsonPropertyName("buildingsDestructible")] public bool BuildingsDestructible { get; set; } = true;
     [JsonPropertyName("buildingDepositRange")] public float BuildingDepositRange { get; set; } = 5.0f;
     [JsonPropertyName("buildingPlacementRange")] public float BuildingPlacementRange { get; set; } = 20.0f;

@@ -36,6 +36,29 @@ See also: `Necroking/Game1.Dev.cs` (the `ExecuteDevCommand` body), `Core/Simulat
 lives in the map, not in startup spawns; see CLAUDE.md), and **`Necroking/Game/GameSession.cs`**
 (the per-game state owner — see next).
 
+#### Per-frame input capture + window-focus gate (top of `Game1.Update`)
+The **single central place raw mouse/keyboard is read each frame** is the top of `Game1.Update`
+(`Necroking/Game1.cs`, ~line 2627): it calls `Mouse.GetState()`/`Keyboard.GetState()` once, then
+funnels them through **`_input.Capture(mouse, prevMouse, kb, prevKb)`** — `Necroking/Core/InputState.cs`.
+`InputState.Capture` is where **click edges are computed**: `LeftPressed`/`RightPressed`
+(`Pressed` now && `Released` last frame), `LeftDown`/`LeftReleased`, `ScrollDelta`, and where all
+per-frame consumption flags (`MouseOverUI`, `_mouseConsumed`, …) reset. Every system reads `_input.*`
+instead of calling `Mouse.GetState()` directly.
+**The window-focus gate already exists here** (`Game1.cs` ~lines 2630-2684) using MonoGame's
+`Game.IsActive`:
+- `bool unfocused = !IsActive && _activeScenario == null && LaunchArgs.Scenario == null && !LaunchArgs.Headless;`
+  (scenario/headless runs are exempt so the test harness isn't frozen).
+- **Refocus-click protection is the key trick:** when `unfocused && !keepRunningUnfocused` the method
+  sets `_prevMouse = mouse; _prevKb = kb;` and early-returns *before* `Capture` — so next frame the
+  click that refocused the window is already "held" in prevMouse and its rising edge never fires.
+- `keepRunningUnfocused` (dev server or `Settings.General.RunWhenUnfocused`) instead feeds a **neutral**
+  MouseState (all buttons `Released`, cursor centred) into `Capture` so background clicks/keys aren't
+  consumed while the sim keeps ticking.
+- A parallel `cursorOutside` branch (focused but cursor outside the viewport) strips mouse buttons via a
+  no-buttons `MouseState` so out-of-bounds clicks can't command the world.
+Look/edit here when: a click made while the window is unfocused registers in-game; you need to gate
+input on window focus; "run when unfocused" behaviour; where click pressed-this-frame edges come from.
+
 ### `Necroking/Game/GameSession.cs` — per-game world-state owner (recreated each map load)
 What lives here: `GameSession` — a single object that **owns the per-game world systems** (the ones
 rebuilt from scratch on every map load). `Game1` holds one `_session` and exposes its members through

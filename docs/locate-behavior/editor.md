@@ -46,6 +46,11 @@ the vec2/area variants — all follow the identical activate/return pattern.)
 Called from the update tick only when `_activeFieldId != null` (see the `_activeFieldId !=
 null → HandleTextInput` line in the main update). Edits `_inputBuffer` in place; Enter/Tab
 close single-line fields, Escape closes, key-repeat via `_keyRepeatTimer`/`_lastRepeatingKey`.
+**Text-field clipboard (commit 9d3c626) lives here**: Ctrl+A/C/X/V on the single-line
+buffer via `TextCopy.ClipboardService`; other Ctrl+letter chords are swallowed. This only
+runs while a field is active — editors gate their own global chords on
+`EditorBase.IsKeyboardCaptured` (= `IsTextInputActive || IsDropdownOpen ||
+_colorPicker.IsEditingText`) so object-level Ctrl+C/V shortcuts never collide with it.
 
 ### Selection change — the bug site (per-editor, e.g. `UnitEditorWindow.cs`)
 Each editor owns its own selection index and list; `EditorBase.DrawScrollableList(panelId,
@@ -112,6 +117,10 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
   **Undo**: accumulate into `_batchPlacedObjects`, push `UndoObjectBatchPlace` on mouse-up
   (`UndoObjectBatchRemove` for the right-drag eraser). `AutoCreateTriggerInstance(newIdx)`
   after every add (RM06).
+- **Editor-wide keyboard shortcuts** (Ctrl+S save / Ctrl+L load / Ctrl+Z undo) sit in one
+  block in `Update()` right after `bool ctrlDown = …`, each gated on `!textEditing`
+  (`textEditing = _eb.IsKeyboardCaptured`). New global/per-tab chords go here — key edges
+  via `kb.IsKeyDown(K) && _prevKb.IsKeyUp(K)`.
 - **Save**: `SaveMap()` writes `assets/maps/<map>.json` with `Utf8JsonWriter` — env objects
   go in the `placedObjects` array (`defId, x, y, scale, seed`) straight from
   `_envSystem.Objects`, so anything placed via `AddObject` is persisted automatically. Env

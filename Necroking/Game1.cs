@@ -868,6 +868,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         Exiting += (_, _) =>
         {
             System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.UserSettingsDir));
+            _gameData.Settings.General.MapEditorLastTab = (int)_mapEditor.ActiveTab;
             _gameData.Settings.Save(GamePaths.Resolve(GamePaths.UserSettingsJson));
             _gameData.Weather.Save(GamePaths.Resolve(GamePaths.UserWeatherJson));
             SaveSpellBars();
@@ -1617,6 +1618,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _mapEditor.SetItemRegistry(_gameData.Items);
         _mapEditor.SetSpellRegistry(_gameData.Spells);
         _mapEditor.SetGameData(_gameData);
+        // Restore the last-open tab once, now that the editor has its settings —
+        // not in the open handlers (F11 / HUD button / pause menu each open it and
+        // we'd otherwise have to remember all of them).
+        _mapEditor.RestoreTabFromSettings();
         // Default the editor's Save target to whichever map was just loaded, so
         // editing after "Play Test Map" saves to testmap.json — not default.json.
         _mapEditor.SetMapFilename(mapName);

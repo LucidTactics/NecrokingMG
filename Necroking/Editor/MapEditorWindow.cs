@@ -203,6 +203,9 @@ public class MapEditorWindow
     private Vec2 _zoneDragOffset;                // zone center - click point, for body drag
     // Reused per-frame accumulator for the village panel's contents summary
     private readonly Dictionary<string, int> _zoneContentCounts = new();
+    // Ctrl+C/Ctrl+V clipboard for the Zones tab (deep copy, so later edits to the
+    // source zone don't leak into what gets pasted)
+    private MapZone? _zoneClipboard;
 
     // ProcGen tab
     private readonly List<ProcGenStyle> _procGenStyles = new();
@@ -480,6 +483,40 @@ public class MapEditorWindow
         }
     }
 
+    // Undo a zone paste/add: remove the zone by Id (indices may have shifted).
+    private class UndoZonePlace : UndoAction
+    {
+        public MapEditorWindow Owner = null!;
+        public string ZoneId = "";
+        public override void Undo()
+        {
+            var zones = Owner._zoneSystem.ZonesMut;
+            for (int i = 0; i < zones.Count; i++)
+            {
+                if (zones[i].Id != ZoneId) continue;
+                zones.RemoveAt(i);
+                break;
+            }
+            if (Owner.SelectedZoneIndex >= zones.Count)
+                Owner.SelectedZoneIndex = zones.Count - 1;
+        }
+    }
+
+    // Undo a zone delete: re-insert the removed zone at its original index.
+    private class UndoZoneRemove : UndoAction
+    {
+        public MapEditorWindow Owner = null!;
+        public MapZone Zone = null!;
+        public int Index;
+        public override void Undo()
+        {
+            var zones = Owner._zoneSystem.ZonesMut;
+            int idx = Math.Clamp(Index, 0, zones.Count);
+            zones.Insert(idx, Zone);
+            Owner.SelectedZoneIndex = idx;
+        }
+    }
+
     // Groups several actions into one undo step (e.g. object placement + the
     // auto-ground patch stamped under it). Undone in reverse order.
     private class UndoComposite : UndoAction
@@ -674,6 +711,19 @@ public class MapEditorWindow
     }
 
     public void SetGameData(Data.GameData? data) => _gameData = data;
+
+    /// <summary>Restore the last-open tab from per-machine settings. Called once at
+    /// init (right after SetGameData), not from the open handlers — the editor can be
+    /// opened via F11, the HUD button, or the pause menu, so init is the one place
+    /// that covers them all. Clamps to the valid enum range — a stale/hand-edited
+    /// settings file could hold an out-of-range value.</summary>
+    public void RestoreTabFromSettings()
+    {
+        if (_gameData == null) return;
+        int saved = _gameData.Settings.General.MapEditorLastTab;
+        if (System.Enum.IsDefined(typeof(MapEditorTab), saved))
+            ActiveTab = (MapEditorTab)saved;
+    }
 
     public void SetPlacedUnits(List<PlacedUnit> units)
     {
@@ -874,6 +924,44 @@ public class MapEditorWindow
             _statusTimer = 1.5f;
         }
 
+        // --- Zone copy/paste (Ctrl+C / Ctrl+V, Zones tab only). Must stay above the
+        // SelectionStateHash snapshot below so a paste's selection change abandons
+        // any in-progress text-field edit. ---
+        if (!textEditing && ctrlDown && ActiveTab == MapEditorTab.Zones)
+        {
+            if (kb.IsKeyDown(Keys.C) && _prevKb.IsKeyUp(Keys.C) &&
+                SelectedZoneIndex >= 0 && SelectedZoneIndex < _zoneSystem.Count)
+            {
+                _zoneClipboard = CloneZone(_zoneSystem.Zones[SelectedZoneIndex]);
+                _statusMessage = $"Copied zone '{_zoneClipboard.Name}'";
+                _statusTimer = 1.5f;
+            }
+            if (kb.IsKeyDown(Keys.V) && _prevKb.IsKeyUp(Keys.V) && _zoneClipboard != null)
+            {
+                var copy = CloneZone(_zoneClipboard);
+                copy.Id = NextZoneId();
+                copy.Name = NextCopyName(_zoneClipboard.Name);
+                // Center on the mouse; over the side panel there's no meaningful
+                // world position, so fall back to the camera center.
+                Vec2 at = overPanel
+                    ? _camera.Position
+                    : _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
+                copy.X = at.X;
+                copy.Y = at.Y;
+                SelectedZoneIndex = _zoneSystem.Add(copy);
+                PushUndo(new UndoZonePlace { Owner = this, ZoneId = copy.Id });
+                _statusMessage = $"Pasted zone '{copy.Name}'";
+                _statusTimer = 1.5f;
+            }
+        }
+
+        // --- Delete selected zone (Delete key, Zones tab only). ---
+        if (!textEditing && ActiveTab == MapEditorTab.Zones &&
+            kb.IsKeyDown(Keys.Delete) && _prevKb.IsKeyUp(Keys.Delete))
+        {
+            DeleteZone(SelectedZoneIndex);
+        }
+
         // Snapshot selection state — if any per-tab updater changes it below,
         // abandon the active text-field edit. The tabs reuse static field ids
         // ("trig_name", "region_x", …) across objects, so an in-progress buffer
@@ -942,6 +1030,13 @@ public class MapEditorWindow
         // Uses the RAW click — the bar-region suppression above only applies to
         // tab-content hit-tests.
         UpdateBottomBarClicks(rawLeftClick, mouse, panelX, panelY, screenH);
+
+        // Keep the persisted "last tab" in sync in-memory every frame the editor is
+        // open, so ANY settings save path (Exiting, the settings window, dev command,
+        // DualSave) writes the current tab — not the stale default. SaveIfChanged
+        // means updating an already-correct value is free.
+        if (_gameData != null)
+            _gameData.Settings.General.MapEditorLastTab = (int)ActiveTab;
 
         _prevMouse = mouse;
         _prevKb = kb;
@@ -4274,8 +4369,7 @@ public class MapEditorWindow
         {
             if (_eb.DrawButton("Delete Zone", panelX + Margin, y, 110, ButtonHeight, DangerColor))
             {
-                _zoneSystem.Remove(SelectedZoneIndex);
-                SelectedZoneIndex = Math.Min(SelectedZoneIndex, _zoneSystem.Count - 1);
+                DeleteZone(SelectedZoneIndex);
                 return; // list changed — re-layout next frame
             }
             y += ButtonHeight + 8;
@@ -4650,6 +4744,73 @@ public class MapEditorWindow
         ActiveTab = MapEditorTab.Zones;
         SelectedZoneIndex = found;
         return $"zone {zones[found].Id} ({zones[found].Name})";
+    }
+
+    /// <summary>Deep copy of a zone for the clipboard — Population and Spawns are
+    /// reference types, so they must be cloned too. Keep in sync when MapZone grows
+    /// fields (same rule as LoadZones/SaveZones).</summary>
+    private static MapZone CloneZone(MapZone z) => new()
+    {
+        Id = z.Id,
+        Name = z.Name,
+        Kind = z.Kind,
+        X = z.X,
+        Y = z.Y,
+        HalfW = z.HalfW,
+        HalfH = z.HalfH,
+        Population = new ZonePopulation
+        {
+            Peasant = z.Population.Peasant,
+            Hunter = z.Population.Hunter,
+            Militia = z.Population.Militia,
+            Watchdog = z.Population.Watchdog,
+        },
+        Spawns = z.Spawns.Select(s => new ZoneSpawnEntry
+        {
+            DefId = s.DefId,
+            PerMinute = s.PerMinute,
+            MaxAlive = s.MaxAlive,
+        }).ToList(),
+    };
+
+    /// <summary>Name for a pasted zone: "{base} Copy", then "{base} Copy 1", "Copy 2"…
+    /// An existing " Copy"/" Copy N" tail on the source is stripped first, so copying
+    /// a copy enumerates ("Village Copy" → "Village Copy 1", not "… Copy Copy").</summary>
+    private string NextCopyName(string source)
+    {
+        string baseName = StripCopySuffix(source);
+        string candidate = $"{baseName} Copy";
+        for (int n = 1; ZoneNameTaken(candidate); n++)
+            candidate = $"{baseName} Copy {n}";
+        return candidate;
+    }
+
+    private static string StripCopySuffix(string name)
+    {
+        if (name.EndsWith(" Copy")) return name[..^5];
+        int idx = name.LastIndexOf(" Copy ", StringComparison.Ordinal);
+        if (idx >= 0 && int.TryParse(name[(idx + 6)..], out _)) return name[..idx];
+        return name;
+    }
+
+    private bool ZoneNameTaken(string name)
+    {
+        for (int i = 0; i < _zoneSystem.Count; i++)
+            if (_zoneSystem.Zones[i].Name == name) return true;
+        return false;
+    }
+
+    /// <summary>Remove a zone with undo support, fixing up the selection. Shared by
+    /// the Delete key and the "Delete Zone" button.</summary>
+    private void DeleteZone(int idx)
+    {
+        if (idx < 0 || idx >= _zoneSystem.Count) return;
+        var z = _zoneSystem.Zones[idx];
+        PushUndo(new UndoZoneRemove { Owner = this, Zone = z, Index = idx });
+        _zoneSystem.Remove(idx);
+        SelectedZoneIndex = Math.Min(SelectedZoneIndex, _zoneSystem.Count - 1);
+        _statusMessage = $"Deleted zone '{z.Name}'";
+        _statusTimer = 1.5f;
     }
 
     /// <summary>First free "zone_N" id (ids stay unique even after deletions).</summary>
