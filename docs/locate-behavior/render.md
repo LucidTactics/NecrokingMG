@@ -82,10 +82,42 @@ dissolve, morph, outlines, glyphs) or `scope.Suspend()/Resume()` for raw-device 
 
 ## Premultiplied alpha — where it's handled (the full map)
 
-The codebase-wide convention (established by commit `d626422`, "full-fleet shader
-review"): **textures are premultiplied at load, batches blend with
-`BlendState.AlphaBlend` (= One/InvSrcAlpha, the premult pair), and every scene shader
-outputs premultiplied color.** The pieces:
+**2026-07-04 — colors are now STRAIGHT ALPHA at every call site.** The draw layer
+converts (once) per material:
+
+- `Material.PremultiplyTint` (`Render/Material.cs`) says whether a material's batch
+  expects premultiplied vertex tints (auto-derived: `blend == BlendState.AlphaBlend`;
+  explicit `premultiplyTint: false` for HdrAlpha whose vertex color is an HDR pack).
+  `Material.Tint(straight)` is THE conversion. `Material.Begin` stamps
+  `Materials.Open` — the single globally-tracked "which material's batch is open"
+  fact (single-threaded rendering). Raw special-state batches in swept files call
+  `Materials.NoteAdHocBatch()` so conversion turns off inside them.
+- `SpriteScope` (`Render/SpriteQueue.cs`) is THE draw surface everywhere (queue
+  callbacks, HUD, editors, UI classes): it mirrors `SpriteBatch.Draw/DrawString` but
+  encodes colors via `Materials.Open`. An **implicit conversion
+  `SpriteBatch → SpriteScope`** exists (always color-correct because encoding follows
+  the tracker); the reverse stays explicit via `scope.Batch` — the escape hatch for
+  colors already in native encoding (HDR vertex pack, additive-via-A=0 trick) and
+  for third-party extension draws (FontStashSharp text → `scope.Batch.DrawString`
+  with `scope.EncodeTint(color)`). Immediate-mode surfaces: `Game1.Scope`,
+  `EditorBase.Scope`, per-class `Scope => _batch;` accessors.
+- The queue flush (`SpriteQueuePass.Execute`) applies `mat.Tint(item.Color)` to
+  submitted sprites — `SubmitSprite` colors are straight alpha too.
+- Fades: `ColorUtils.Fade(c, t)` scales A only (straight-alpha replacement for the
+  premult-era `color * t`, which now double-dims if fed to a converting draw).
+  `ColorUtils.ByteColor` returns straight alpha. **Never call
+  `Color.FromNonPremultiplied` / hand-premultiply for a draw tint** — that's the
+  old convention and now double-converts (dimmer, not washed out).
+- Native-encoding islands (draw via raw batch, keep hand-encoded colors):
+  `BuffVisualSystem` (`EncodeColor` — per-instance blendMode incl. the A=0 additive
+  trick), `LightningRenderer`, `PoisonCloudRenderer`, `DeathFogRenderer`,
+  `ReanimEffectSystem`, `Bloom`/`UIShaders`/`FogOfWarSystem` internals,
+  `BlendTestScenario` (GPU truth test).
+
+Underneath, the base convention (established by commit `d626422`) is unchanged:
+**textures are premultiplied at load, batches blend with `BlendState.AlphaBlend`
+(= One/InvSrcAlpha, the premult pair), and every scene shader outputs premultiplied
+color.** The pieces:
 
 - **Load-time premultiply (the ONLY texture entry points)** — `Render/TextureUtil.cs`:
   `LoadPremultiplied(device, path|stream)` (= `Texture2D.FromStream` +
@@ -99,13 +131,13 @@ outputs premultiplied color.** The pieces:
   straight-alpha load is deliberate: `Editor/EnvObjectEditorWindow.cs` edge tweaker
   (`Texture2D.FromStream` raw, because it saves pixels back to the PNG — premultiplying
   would darken edges every load→save cycle; `PremultiplyCopy` makes its preview).
-- **CPU color helpers** — `Core/ColorUtils.cs` `Premultiply(r,g,b,alpha)`;
-  `Color.FromNonPremultiplied(...)` at ~30 call sites for translucent tints;
-  `Color.White * a` idiom; `Core/HdrColor.cs` `ToHdrVertex/ToHdrVertexAlpha` for HDR
-  vertex encoding. Rule: inside an AlphaBlend batch a translucent tint must have RGB
-  pre-scaled by A (raw `new Color(r,g,b,128)` gives the "washed-out hue" bug —
-  commit `fddeb57`). `Editor/ColorHarmonizer.cs` un-premultiplies → does color math →
-  re-premultiplies (same round-trip in `WadingWakeSystem` texture recolor).
+- **CPU color helpers** — `Core/ColorUtils.cs`: `Premultiply(Color)` (used only by
+  `Material.Tint`), `Fade(c,t)`, `ByteColor` (straight); `Core/HdrColor.cs`
+  `ToHdrVertex/ToHdrVertexAlpha` for HDR vertex encoding (native, bypasses
+  conversion via HdrAlpha/HdrAdditive's `PremultiplyTint=false`). A raw
+  `new Color(r,g,b,128)` handed to a scope draw is now CORRECT by default.
+  `Editor/ColorHarmonizer.cs` un-premultiplies → does color math →
+  re-premultiplies (pixel-level texture ops, not draw tints — unchanged).
 - **Blend states** — `Render/Material.cs` `Materials` registry: everything is
   `AlphaBlend` (Scene, Hud, FogWisp, Wading, DissolveTree, MorphSdf, HdrAlpha,
   MagicGlyph, DepthStamp) or `Additive` (AdditiveShapes, HdrAdditive, OutlineAdditive)

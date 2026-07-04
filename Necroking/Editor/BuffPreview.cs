@@ -21,6 +21,7 @@ public class BuffPreview
 
     private GraphicsDevice _gd = null!;
     private SpriteBatch _sb = null!;
+    private Render.SpriteScope Scope => _sb;  // straight-alpha draw surface (implicit conversion)
     private RenderTarget2D? _rt;
     private Texture2D _pixel = null!;
     private bool _initialized;
@@ -153,7 +154,7 @@ public class BuffPreview
         _gd.SetRenderTarget(_rt);
         _gd.Clear(new Color(20, 20, 30));
 
-        _sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+        Render.Materials.Hud.Begin(_sb);
 
         DrawGround();
         DrawGroundAura();
@@ -172,6 +173,7 @@ public class BuffPreview
         if (BloomEnabled)
         {
             _sb.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.PointClamp);
+            Render.Materials.NoteAdHocBatch(); // additive glow pass — colors pass through raw
             DrawGroundAura();
             DrawOrbitalsBehind();
             DrawOrbitalsInFront();
@@ -216,14 +218,14 @@ public class BuffPreview
         int groundY = (int)feet.Y;
 
         // Ground line
-        _sb.Draw(_pixel, new Rectangle(0, groundY, PreviewWidth, 1), new Color(40, 45, 55));
+        Scope.Draw(_pixel, new Rectangle(0, groundY, PreviewWidth, 1), new Color(40, 45, 55));
 
         // Ground gradient
         for (int i = 0; i < 20; i++)
         {
             float a = 1f - i / 20f;
             var c = new Color(35, 38, 48) * (a * 0.3f);
-            _sb.Draw(_pixel, new Rectangle(0, groundY + i, PreviewWidth, 1), c);
+            Scope.Draw(_pixel, new Rectangle(0, groundY + i, PreviewWidth, 1), c);
         }
 
         // Grid dots
@@ -232,7 +234,7 @@ public class BuffPreview
         {
             int gx = (int)(feet.X + dx * CameraZoom);
             if (gx >= 0 && gx < PreviewWidth)
-                _sb.Draw(_pixel, new Rectangle(gx, groundY, 1, 1), gridColor);
+                Scope.Draw(_pixel, new Rectangle(gx, groundY, 1, 1), gridColor);
         }
     }
 
@@ -275,7 +277,7 @@ public class BuffPreview
         int bodyH = (int)(UnitHeight * 0.5f);
         int bodyX = (int)(bx + (UnitWidth - bodyW) * 0.5f);
         int bodyY = (int)(by + UnitHeight * 0.2f);
-        _sb.Draw(_pixel, new Rectangle(bodyX, bodyY, bodyW, bodyH), color);
+        Scope.Draw(_pixel, new Rectangle(bodyX, bodyY, bodyW, bodyH), color);
 
         // Head
         int headSize = (int)(UnitWidth * 0.45f);
@@ -288,16 +290,16 @@ public class BuffPreview
         int legH = (int)(UnitHeight * 0.3f);
         int legY = bodyY + bodyH;
         float legSpread = _previewAnimIdx == 1 ? MathF.Sin(_elapsed * 6f) * 3f : 0;
-        _sb.Draw(_pixel, new Rectangle((int)(bodyX + 1 - legSpread), legY, legW, legH), color);
-        _sb.Draw(_pixel, new Rectangle((int)(bodyX + bodyW - legW - 1 + legSpread), legY, legW, legH), color);
+        Scope.Draw(_pixel, new Rectangle((int)(bodyX + 1 - legSpread), legY, legW, legH), color);
+        Scope.Draw(_pixel, new Rectangle((int)(bodyX + bodyW - legW - 1 + legSpread), legY, legW, legH), color);
 
         // Arms
         int armW = (int)(UnitWidth * 0.15f);
         int armH = (int)(UnitHeight * 0.35f);
         float armSwing = _previewAnimIdx == 2 ?
             ((_elapsed % 1.5f) < 0.5f ? MathF.Sin((_elapsed % 1.5f) / 0.5f * PI) * 6f : 0) : 0;
-        _sb.Draw(_pixel, new Rectangle((int)(bodyX - armW - 1), bodyY + 2 - (int)armSwing, armW, armH), color);
-        _sb.Draw(_pixel, new Rectangle(bodyX + bodyW + 1, bodyY + 2 + (int)(armSwing * 0.5f), armW, armH), color);
+        Scope.Draw(_pixel, new Rectangle((int)(bodyX - armW - 1), bodyY + 2 - (int)armSwing, armW, armH), color);
+        Scope.Draw(_pixel, new Rectangle(bodyX + bodyW + 1, bodyY + 2 + (int)(armSwing * 0.5f), armW, armH), color);
     }
 
     private void DrawUnit()
@@ -329,7 +331,7 @@ public class BuffPreview
         int bodyH = (int)(UnitHeight * 0.5f);
         int bodyX = (int)(bx + (UnitWidth - bodyW) * 0.5f);
         int bodyY = (int)(by + UnitHeight * 0.2f);
-        _sb.Draw(_pixel, new Rectangle(bodyX, bodyY, bodyW, bodyH), bodyColor);
+        Scope.Draw(_pixel, new Rectangle(bodyX, bodyY, bodyW, bodyH), bodyColor);
 
         // Head
         int headSize = (int)(UnitWidth * 0.45f);
@@ -342,16 +344,16 @@ public class BuffPreview
         int legH = (int)(UnitHeight * 0.3f);
         int legY = bodyY + bodyH;
         float legSpread = _previewAnimIdx == 1 ? MathF.Sin(_elapsed * 6f) * 3f : 0;
-        _sb.Draw(_pixel, new Rectangle((int)(bodyX + 1 - legSpread), legY, legW, legH), bodyColor);
-        _sb.Draw(_pixel, new Rectangle((int)(bodyX + bodyW - legW - 1 + legSpread), legY, legW, legH), bodyColor);
+        Scope.Draw(_pixel, new Rectangle((int)(bodyX + 1 - legSpread), legY, legW, legH), bodyColor);
+        Scope.Draw(_pixel, new Rectangle((int)(bodyX + bodyW - legW - 1 + legSpread), legY, legW, legH), bodyColor);
 
         // Arms
         int armW = (int)(UnitWidth * 0.15f);
         int armH = (int)(UnitHeight * 0.35f);
         float armSwing = _previewAnimIdx == 2 ?
             ((_elapsed % 1.5f) < 0.5f ? MathF.Sin((_elapsed % 1.5f) / 0.5f * PI) * 6f : 0) : 0;
-        _sb.Draw(_pixel, new Rectangle((int)(bodyX - armW - 1), bodyY + 2 - (int)armSwing, armW, armH), bodyColor);
-        _sb.Draw(_pixel, new Rectangle(bodyX + bodyW + 1, bodyY + 2 + (int)(armSwing * 0.5f), armW, armH), bodyColor);
+        Scope.Draw(_pixel, new Rectangle((int)(bodyX - armW - 1), bodyY + 2 - (int)armSwing, armW, armH), bodyColor);
+        Scope.Draw(_pixel, new Rectangle(bodyX + bodyW + 1, bodyY + 2 + (int)(armSwing * 0.5f), armW, armH), bodyColor);
     }
 
     // ========================================
@@ -491,7 +493,7 @@ public class BuffPreview
 
         // Draw a glowing rectangle behind the unit
         DrawFilledCircle(center, Math.Max(hw, hh), color * 0.15f);
-        _sb.Draw(_pixel,
+        Scope.Draw(_pixel,
             new Rectangle((int)(center.X - hw), (int)(center.Y - hh * 0.65f), (int)(hw * 2), (int)(hh * 1.65f)),
             color * 0.2f);
     }
@@ -563,9 +565,9 @@ public class BuffPreview
                 var p2 = center + points[i + 1] * arcRadius;
 
                 // Glow
-                DrawThickLine(p1, p2, la.GlowWidth, glowColor * (0.5f * flicker));
+                DrawThickLine(p1, p2, la.GlowWidth, Core.ColorUtils.Fade(glowColor, 0.5f * flicker));
                 // Core
-                DrawThickLine(p1, p2, la.CoreWidth, coreColor * flicker);
+                DrawThickLine(p1, p2, la.CoreWidth, Core.ColorUtils.Fade(coreColor, flicker));
             }
         }
     }
@@ -649,7 +651,7 @@ public class BuffPreview
             int x = (int)(center.X - hw);
             int w = (int)(hw * 2);
             if (w > 0)
-                _sb.Draw(_pixel, new Rectangle(x, (int)center.Y + dy, w, 1), color);
+                Scope.Draw(_pixel, new Rectangle(x, (int)center.Y + dy, w, 1), color);
         }
     }
 
@@ -664,7 +666,7 @@ public class BuffPreview
             int x = (int)(center.X - hw);
             int w = (int)(hw * 2);
             if (w > 0)
-                _sb.Draw(_pixel, new Rectangle(x, (int)center.Y + dy, w, 1), color);
+                Scope.Draw(_pixel, new Rectangle(x, (int)center.Y + dy, w, 1), color);
         }
     }
 
@@ -703,7 +705,7 @@ public class BuffPreview
         float length = diff.Length();
         if (length < 0.5f) return;
         float angle = MathF.Atan2(diff.Y, diff.X);
-        _sb.Draw(_pixel,
+        Scope.Draw(_pixel,
             new Rectangle((int)a.X, (int)a.Y, (int)length, Math.Max(1, (int)thickness)),
             null, color, angle, new Vector2(0, 0.5f), SpriteEffects.None, 0f);
     }

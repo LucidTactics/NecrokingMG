@@ -38,6 +38,7 @@ public class SkillBookOverlay : IModalLayer
 
     private RuntimeWidgetRenderer _renderer = null!;
     private SpriteBatch _batch = null!;
+    private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
     private Texture2D _pixel = null!;
 
     private SkillBookState _state = null!;
@@ -264,7 +265,7 @@ public class SkillBookOverlay : IModalLayer
         Layout(sw, sh);
 
         // Dim the world behind the modal.
-        _batch.Draw(_pixel, new Rectangle(0, 0, sw, sh), new Color(0, 0, 0, 180));
+        Scope.Draw(_pixel, new Rectangle(0, 0, sw, sh), new Color(0, 0, 0, 180));
 
         // Never sit on a locked tab (e.g. it re-locked, or one was force-set).
         EnsureActiveTabUnlocked();
@@ -311,7 +312,7 @@ public class SkillBookOverlay : IModalLayer
 
     private void DrawButton(Rectangle r, string label, bool active)
     {
-        _batch.Draw(_pixel, r, new Color(40, 26, 14, 235));
+        Scope.Draw(_pixel, r, new Color(40, 26, 14, 235));
         DrawOutline(r, active ? new Color(214, 182, 112) : new Color(120, 100, 70));
         var sz = _renderer.MeasureText(label, 15, "Roboto");
         _renderer.DrawText(label, (int)(r.X + (r.Width - sz.X) / 2), (int)(r.Y + (r.Height - sz.Y) / 2),
@@ -530,7 +531,7 @@ public class SkillBookOverlay : IModalLayer
         if (len < 0.5f) return;
         float angle = MathF.Atan2(dy, dx);
         for (int t = 0; t < thickness; t++)
-            _batch.Draw(_pixel, new Rectangle((int)a.X, (int)a.Y - thickness / 2 + t, (int)len, 1),
+            Scope.Draw(_pixel, new Rectangle((int)a.X, (int)a.Y - thickness / 2 + t, (int)len, 1),
                 null, color, angle, Vector2.Zero, SpriteEffects.None, 0f);
     }
 
@@ -622,7 +623,7 @@ public class SkillBookOverlay : IModalLayer
         if (ty < 4) ty = 4;
 
         var bg = new Rectangle(tx, ty, w, h);
-        _batch.Draw(_pixel, bg, new Color(26, 13, 8, 240));
+        Scope.Draw(_pixel, bg, new Color(26, 13, 8, 240));
         DrawOutline(bg, new Color(120, 96, 56));
 
         int cy = ty + padY;
@@ -810,7 +811,7 @@ public class SkillBookOverlay : IModalLayer
         // Keep the band on-screen even when the window is taller than the display.
         int bottom = Math.Min(_y + _h, _sh);
         var r = new Rectangle(_x + (_w - w) / 2, bottom - 72, w, h);
-        _batch.Draw(_pixel, r, new Color(26, 13, 8, 235));
+        Scope.Draw(_pixel, r, new Color(26, 13, 8, 235));
         _renderer.DrawText(_toast, (int)(r.X + (w - sz.X) / 2), (int)(r.Y + (h - sz.Y) / 2),
             fontSize, new Color(236, 221, 179), "Roboto");
     }

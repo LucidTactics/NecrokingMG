@@ -27,8 +27,8 @@ public partial class HUDRenderer
     {
         var fr = FillR(inner, frac);
         if (fr.Width <= 0) return;
-        _batch.Draw(_pixel, fr, body);
-        _batch.Draw(_pixel, new Rectangle(fr.X, fr.Y, fr.Width, Math.Max(1, fr.Height * 2 / 5)), top);
+        Scope.Draw(_pixel, fr, body);
+        Scope.Draw(_pixel, new Rectangle(fr.X, fr.Y, fr.Width, Math.Max(1, fr.Height * 2 / 5)), top);
     }
 
     /// <summary>Centered value text (scalable UI font, light with a shadow so it

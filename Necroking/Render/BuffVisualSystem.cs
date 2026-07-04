@@ -630,6 +630,9 @@ public class BuffVisualSystem
 
     /// <summary>
     /// Encode color for rendering inside a premultiplied AlphaBlend spritebatch.
+    /// NATIVE-ENCODING ISLAND: blendMode is per-instance data, so these colors
+    /// are drawn through the RAW batch (never SpriteScope.Draw — the scope's
+    /// straight-alpha conversion would zero the A=0 additive trick).
     /// For additive (blendMode=1): alpha=0 makes premultiplied blend act as additive.
     /// For alpha (blendMode=0): standard premultiplied alpha color.
     /// </summary>
@@ -647,7 +650,12 @@ public class BuffVisualSystem
         }
         else
         {
-            return new Color(hdr.R, hdr.G, hdr.B, (byte)(hdr.A * alpha));
+            // Premultiply RGB by the effective alpha (the old straight-alpha
+            // return washed the hue out in the premult batch).
+            float a = (hdr.A / 255f) * Math.Clamp(alpha, 0f, 1f);
+            return new Color(
+                (byte)(hdr.R * a), (byte)(hdr.G * a), (byte)(hdr.B * a),
+                (byte)(255f * a));
         }
     }
 

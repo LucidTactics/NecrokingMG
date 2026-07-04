@@ -115,6 +115,7 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
     private static readonly Color BuffNameColor = new(220, 200, 160);
 
     private SpriteBatch _batch = null!;
+    private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
     private Texture2D _pixel = null!;
     private SpriteFont? _font;
     private SpriteFont? _smallFont;
@@ -374,12 +375,12 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
         int panelY = AnchorY;
 
         // Stats panel background + border
-        _batch.Draw(_pixel, new Rectangle(panelX, panelY, PanelW, statsH), PanelBg);
+        Scope.Draw(_pixel, new Rectangle(panelX, panelY, PanelW, statsH), PanelBg);
         DrawBorder(panelX, panelY, PanelW, statsH, PanelBorder);
 
         string title = "Character Stats";
         var titleSize = _font.MeasureString(title);
-        _batch.DrawString(_font, title,
+        Scope.DrawString(_font, title,
             new Vector2((int)(panelX + (PanelW - titleSize.X) / 2), (int)(panelY + 4)),
             TitleColor);
 
@@ -389,19 +390,19 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
         {
             if (r.IsSection)
             {
-                _batch.DrawString(rowFont, r.Label, new Vector2(panelX + PadX, y), r.Color);
+                Scope.DrawString(rowFont, r.Label, new Vector2(panelX + PadX, y), r.Color);
             }
             else if (!string.IsNullOrEmpty(r.Label))
             {
-                _batch.DrawString(rowFont, r.Label, new Vector2(panelX + PadX, y), LabelColor);
+                Scope.DrawString(rowFont, r.Label, new Vector2(panelX + PadX, y), LabelColor);
                 var valSize = rowFont.MeasureString(r.Value);
                 int valX = (int)(panelX + PanelW - PadX - valSize.X);
-                _batch.DrawString(rowFont, r.Value, new Vector2(valX, y), r.Color);
+                Scope.DrawString(rowFont, r.Value, new Vector2(valX, y), r.Color);
 
                 if (!string.IsNullOrEmpty(r.BaseSuffix))
                 {
                     var suffSize = rowFont.MeasureString(r.BaseSuffix);
-                    _batch.DrawString(rowFont, r.BaseSuffix,
+                    Scope.DrawString(rowFont, r.BaseSuffix,
                         new Vector2(valX - (int)suffSize.X - 6, y), BaseDimColor);
                 }
 
@@ -414,7 +415,7 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
 
         if (nonZeroPaths.Count > 0)
         {
-            _batch.DrawString(rowFont, "-- Paths --", new Vector2(panelX + PadX, y), SectionColor);
+            Scope.DrawString(rowFont, "-- Paths --", new Vector2(panelX + PadX, y), SectionColor);
             y += BuffsHeaderH;
 
             int iconSize = 16;
@@ -426,17 +427,17 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
                 var tex = MagicPathIcons.Get(path, 24);
                 if (tex != null)
                 {
-                    _batch.Draw(tex, new Rectangle(px, y + 1, iconSize, iconSize),
+                    Scope.Draw(tex, new Rectangle(px, y + 1, iconSize, iconSize),
                         Color.White);
                 }
                 else
                 {
                     // Icon missing — show the short tag as a fallback so the entry still reads.
                     string tag = $"({MagicPathHelpers.ShortTag(path)})";
-                    _batch.DrawString(rowFont, tag, new Vector2(px, y), LabelColor);
+                    Scope.DrawString(rowFont, tag, new Vector2(px, y), LabelColor);
                 }
                 string n = level.ToString();
-                _batch.DrawString(rowFont, n, new Vector2(px + iconSize + 2, y), ValueColor);
+                Scope.DrawString(rowFont, n, new Vector2(px + iconSize + 2, y), ValueColor);
                 px += slotW;
             }
             y += RowH;
@@ -444,7 +445,7 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
 
         if (metamorphActions > 0 && bookState != null)
         {
-            _batch.DrawString(rowFont, "-- Metamorphosis --",
+            Scope.DrawString(rowFont, "-- Metamorphosis --",
                 new Vector2(panelX + PadX, y), SectionColor);
             y += BuffsHeaderH;
 
@@ -459,10 +460,10 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
                                             : $"Eat Corpse  (+{bonus}/{cap} HP)";
                 var rect = new Rectangle(panelX + PadX, y, PanelW - PadX * 2, SkillBtnH);
                 bool hovered = rect.Contains(btnMX, btnMY);
-                _batch.Draw(_pixel, rect, hovered ? SkillBtnBgHover : SkillBtnBg);
+                Scope.Draw(_pixel, rect, hovered ? SkillBtnBgHover : SkillBtnBg);
                 DrawBorder(rect.X, rect.Y, rect.Width, rect.Height, SkillBtnBorder);
                 var lz = rowFont.MeasureString(label);
-                _batch.DrawString(rowFont, label,
+                Scope.DrawString(rowFont, label,
                     new Vector2((int)(rect.X + (rect.Width - lz.X) / 2),
                                 (int)(rect.Y + (rect.Height - lz.Y) / 2)),
                     SkillBtnText);
@@ -481,10 +482,10 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
                                             : $"Consume Soul  (+{bonus}/{cap} Mana)";
                 var rect = new Rectangle(panelX + PadX, y, PanelW - PadX * 2, SkillBtnH);
                 bool hovered = rect.Contains(btnMX, btnMY);
-                _batch.Draw(_pixel, rect, hovered ? SkillBtnBgHover : SkillBtnBg);
+                Scope.Draw(_pixel, rect, hovered ? SkillBtnBgHover : SkillBtnBg);
                 DrawBorder(rect.X, rect.Y, rect.Width, rect.Height, SkillBtnBorder);
                 var lz = rowFont.MeasureString(label);
-                _batch.DrawString(rowFont, label,
+                Scope.DrawString(rowFont, label,
                     new Vector2((int)(rect.X + (rect.Width - lz.X) / 2),
                                 (int)(rect.Y + (rect.Height - lz.Y) / 2)),
                     SkillBtnText);
@@ -498,7 +499,7 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
 
         if (activeBuffCount > 0)
         {
-            _batch.DrawString(rowFont, "-- Active Buffs --",
+            Scope.DrawString(rowFont, "-- Active Buffs --",
                 new Vector2(panelX + PadX, y), SectionColor);
             y += BuffsHeaderH;
             foreach (var ab in unit.ActiveBuffs)
@@ -507,10 +508,10 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
                 string name = def?.DisplayName ?? ab.BuffDefID;
                 string stacks = ab.StackCount > 1 ? $" x{ab.StackCount}" : "";
                 string dur = ab.RemainingDuration > 0f ? $"{ab.RemainingDuration:F1}s" : "perm";
-                _batch.DrawString(rowFont, $"{name}{stacks}",
+                Scope.DrawString(rowFont, $"{name}{stacks}",
                     new Vector2(panelX + PadX, y), BuffNameColor);
                 var durSize = rowFont.MeasureString(dur);
-                _batch.DrawString(rowFont, dur,
+                Scope.DrawString(rowFont, dur,
                     new Vector2((int)(panelX + PanelW - PadX - durSize.X), y), BaseDimColor);
                 y += RowH;
             }
@@ -600,29 +601,29 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
 
         var (tx, ty) = PlaceTip(mx, my, TipW, height, screenW, screenH);
 
-        _batch.Draw(_pixel, new Rectangle(tx, ty, TipW, height), TipBg);
+        Scope.Draw(_pixel, new Rectangle(tx, ty, TipW, height), TipBg);
         DrawBorder(tx, ty, TipW, height, PanelBorder);
 
         int cy = ty + Pad;
-        _batch.DrawString(_font, h.Label, new Vector2(tx + Pad, cy), TitleColor);
+        Scope.DrawString(_font, h.Label, new Vector2(tx + Pad, cy), TitleColor);
         cy += titleH + 4;
 
         foreach (var ln in descLines)
         {
-            _batch.DrawString(rowFont, ln, new Vector2(tx + Pad, cy), LabelColor);
+            Scope.DrawString(rowFont, ln, new Vector2(tx + Pad, cy), LabelColor);
             cy += lineH;
         }
 
         if (bdLines.Count > 0)
         {
             cy += 3;
-            _batch.Draw(_pixel, new Rectangle(tx + Pad, cy, innerW, 1), PanelBorder);
+            Scope.Draw(_pixel, new Rectangle(tx + Pad, cy, innerW, 1), PanelBorder);
             cy += 5;
             foreach (var ln in bdLines)
             {
-                _batch.DrawString(rowFont, ln.Label, new Vector2(tx + Pad, cy), LabelColor);
+                Scope.DrawString(rowFont, ln.Label, new Vector2(tx + Pad, cy), LabelColor);
                 var vs = rowFont.MeasureString(ln.Value);
-                _batch.DrawString(rowFont, ln.Value,
+                Scope.DrawString(rowFont, ln.Value,
                     new Vector2((int)(tx + TipW - Pad - vs.X), cy), ln.Color);
                 cy += lineH;
             }
@@ -734,19 +735,19 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
     {
         int panelH = LearnPanelHeight();
 
-        _batch.Draw(_pixel, new Rectangle(px, py, SkillsPanelW, panelH), PanelBg);
+        Scope.Draw(_pixel, new Rectangle(px, py, SkillsPanelW, panelH), PanelBg);
         DrawBorder(px, py, SkillsPanelW, panelH, PanelBorder);
 
         string title = "Learn Skills";
         var titleSize = _font!.MeasureString(title);
-        _batch.DrawString(_font, title,
+        Scope.DrawString(_font, title,
             new Vector2((int)(px + (SkillsPanelW - titleSize.X) / 2), (int)(py + 4)),
             TitleColor);
 
         // Skill points counter below the title
         string pts = $"Points: {_skillPoints}";
         var ptsSize = _font.MeasureString(pts);
-        _batch.DrawString(_font, pts,
+        Scope.DrawString(_font, pts,
             new Vector2((int)(px + (SkillsPanelW - ptsSize.X) / 2), (int)(py + TitleH + 2)),
             _skillPoints > 0 ? SkillPointsColor : SkillPointsEmptyColor);
 
@@ -783,11 +784,11 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
                 textColor = SkillBtnTextDim;
             }
 
-            _batch.Draw(_pixel, rect, bg);
+            Scope.Draw(_pixel, rect, bg);
             DrawBorder(rect.X, rect.Y, rect.Width, rect.Height, border);
 
             var tSize = rowFont.MeasureString(Skills[i].Name);
-            _batch.DrawString(rowFont, Skills[i].Name,
+            Scope.DrawString(rowFont, Skills[i].Name,
                 new Vector2((int)(rect.X + (rect.Width - tSize.X) / 2),
                            (int)(rect.Y + (rect.Height - tSize.Y) / 2)),
                 textColor);
@@ -807,12 +808,12 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
     {
         int panelH = ActivePanelHeight();
 
-        _batch.Draw(_pixel, new Rectangle(px, py, SkillsPanelW, panelH), PanelBg);
+        Scope.Draw(_pixel, new Rectangle(px, py, SkillsPanelW, panelH), PanelBg);
         DrawBorder(px, py, SkillsPanelW, panelH, PanelBorder);
 
         string title = "Active Skills";
         var titleSize = _font!.MeasureString(title);
-        _batch.DrawString(_font, title,
+        Scope.DrawString(_font, title,
             new Vector2((int)(px + (SkillsPanelW - titleSize.X) / 2), (int)(py + 4)),
             TitleColor);
 
@@ -836,11 +837,11 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
             Color border = bound ? SkillBtnBorderActive : SkillBtnBorder;
             Color textColor = bound ? SkillBtnTextActive : SkillBtnText;
 
-            _batch.Draw(_pixel, rect, bg);
+            Scope.Draw(_pixel, rect, bg);
             DrawBorder(rect.X, rect.Y, rect.Width, rect.Height, border);
 
             var tSize = rowFont.MeasureString(Skills[i].Name);
-            _batch.DrawString(rowFont, Skills[i].Name,
+            Scope.DrawString(rowFont, Skills[i].Name,
                 new Vector2((int)(rect.X + (rect.Width - tSize.X) / 2),
                            (int)(rect.Y + (rect.Height - tSize.Y) / 2)),
                 textColor);
@@ -863,7 +864,7 @@ public class CharacterStatsUI : Necroking.UI.IModalLayer
         {
             string hint = "(learn skills to populate)";
             var hSize = rowFont.MeasureString(hint);
-            _batch.DrawString(rowFont, hint,
+            Scope.DrawString(rowFont, hint,
                 new Vector2((int)(px + (SkillsPanelW - hSize.X) / 2), btnY + 4),
                 SkillBtnTextDim);
         }

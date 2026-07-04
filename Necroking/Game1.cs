@@ -28,6 +28,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     private GraphicsDeviceManager _graphics;
     internal SpriteBatch _spriteBatch = null!;
+
+    /// <summary>Draw surface over the shared SpriteBatch — THE way scene/HUD code
+    /// draws. Colors are straight alpha; the open material (Materials.Open)
+    /// encodes them. Use <c>Scope.Batch</c> only for colors that are already a
+    /// material-native encoding (HDR pack, additive-via-A=0 trick).</summary>
+    internal Render.SpriteScope Scope =>
+        new(_spriteBatch, Render.Materials.Open ?? Render.Materials.Hud);
     internal Texture2D _pixel = null!;
     internal Texture2D _glowTex = null!;
     internal Texture2D? _mainMenuBg;

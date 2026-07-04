@@ -4560,8 +4560,8 @@ public class MapEditorWindow
     /// fill with a darker opaque border (selected = brighter fill + near-white border +
     /// drag handles), plus the rubber-band preview while drawing a new zone.</summary>
     private void DrawZoneOverlays(int screenW, int screenH) {
-       var handleColor = Color.FromNonPremultiplied(255, 255, 100, 220);
-        var handleActiveColor = Color.FromNonPremultiplied(255, 120, 60, 255);
+       var handleColor = new Color(255, 255, 100, 220);
+        var handleActiveColor = new Color(255, 120, 60, 255);
         const int handleSz = 6;
 
         var zones = _zoneSystem.Zones;
@@ -4601,7 +4601,7 @@ public class MapEditorWindow
                 DrawRegionHandleSquare(rx, cy, handleSz, _zoneHandle == RegionHandle.W ? handleActiveColor : handleColor);
 
                 // Body center indicator
-                DrawRegionHandleSquare(cx, cy, handleSz - 1, _zoneHandle == RegionHandle.Body ? handleActiveColor : Color.FromNonPremultiplied(100, 255, 100, 180));
+                DrawRegionHandleSquare(cx, cy, handleSz - 1, _zoneHandle == RegionHandle.Body ? handleActiveColor : new Color(100, 255, 100, 180));
             }
 
             // Label at center

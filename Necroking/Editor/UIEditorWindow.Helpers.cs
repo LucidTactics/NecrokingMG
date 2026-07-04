@@ -96,11 +96,11 @@ public partial class UIEditorWindow
         if (defMaxH > 0 && rect.Height < defMaxH)
         {
             int srcH = (int)System.Math.Round(tex.Height * (rect.Height / (float)defMaxH));
-            _sb.Draw(tex, rect, new Rectangle(0, 0, tex.Width, System.Math.Max(1, srcH)), color);
+            Scope.Draw(tex, rect, new Rectangle(0, 0, tex.Width, System.Math.Max(1, srcH)), color);
         }
         else
         {
-            _sb.Draw(tex, rect, color);
+            Scope.Draw(tex, rect, color);
         }
     }
 

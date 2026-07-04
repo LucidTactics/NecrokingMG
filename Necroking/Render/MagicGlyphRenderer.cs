@@ -47,7 +47,7 @@ public class MagicGlyphRenderer
     /// <summary>
     /// Draw glyph circles on the ground. Call during ground layer pass.
     /// </summary>
-    public void DrawGround(in SpriteScope scope, MagicGlyphSystem glyphSystem)
+    public void DrawGround(SpriteScope scope, MagicGlyphSystem glyphSystem)
     {
         if (glyphSystem.Glyphs.Count == 0 || _effect == null || _material == null) return;
 

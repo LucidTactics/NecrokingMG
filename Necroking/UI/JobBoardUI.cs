@@ -21,6 +21,7 @@ namespace Necroking.UI;
 public class JobBoardUI : IModalLayer
 {
     private SpriteBatch _batch = null!;
+    private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
     private Texture2D _pixel = null!;
     private RuntimeWidgetRenderer _r = null!;
     private WorkerSystem _ws = null!;
@@ -219,7 +220,7 @@ public class JobBoardUI : IModalLayer
         _h = TitleH + Pad + System.Math.Max(TileBaseH, contentH) + Pad;
 
         var panel = new Rectangle(_x, _y, _w, _h);
-        _batch.Draw(_pixel, panel, new Color(24, 22, 28, 240));
+        Scope.Draw(_pixel, panel, new Color(24, 22, 28, 240));
         Border(panel, new Color(150, 140, 162, 220), 2);
         Text("Jobs", _x + Pad, _y + 7, FsTitle, new Color(230, 224, 234));
         DrawButton(ReassignRect, "Auto-assign", new Color(54, 74, 92, 235));
@@ -251,7 +252,7 @@ public class JobBoardUI : IModalLayer
 
         int gapY = ListTop + insertIdx * SlotH;
         var gapRect = new Rectangle(innerX, gapY, innerW, TileBaseH);
-        _batch.Draw(_pixel, gapRect, new Color(60, 70, 96, 90));
+        Scope.Draw(_pixel, gapRect, new Color(60, 70, 96, 90));
         Border(gapRect, new Color(120, 140, 190, 160), 1);
 
         int slot = 0;
@@ -265,7 +266,7 @@ public class JobBoardUI : IModalLayer
         if (dragged != null)
         {
             int fy = System.Math.Clamp(_dragMouseY - _dragGrabDy, ListTop, _y + _h - TileBaseH - Pad);
-            _batch.Draw(_pixel, new Rectangle(innerX + 4, fy + 5, innerW, TileBaseH), new Color(0, 0, 0, 70));
+            Scope.Draw(_pixel, new Rectangle(innerX + 4, fy + 5, innerW, TileBaseH), new Color(0, 0, 0, 70));
             DrawTile(dragged, innerX, fy, innerW, insertIdx + 1, true, collapsed: true);
         }
     }
@@ -279,7 +280,7 @@ public class JobBoardUI : IModalLayer
         int assigned = js.AssignedWorkers.Count;
         int eff = _ws.EffectiveCap(js);
 
-        _batch.Draw(_pixel, g.Box, lifted ? new Color(58, 56, 72, 245) : new Color(36, 34, 42, 235));
+        Scope.Draw(_pixel, g.Box, lifted ? new Color(58, 56, 72, 245) : new Color(36, 34, 42, 235));
         Border(g.Box, lifted ? new Color(170, 180, 220, 240) : new Color(92, 86, 104, 205), lifted ? 2 : 1);
 
         Text(":::", g.Box.X + 5, g.Box.Y + 10, FsName, new Color(120, 114, 132));
@@ -288,12 +289,12 @@ public class JobBoardUI : IModalLayer
 
         // fill bar + count
         var (cur, max) = _ws.JobStorage(def);
-        _batch.Draw(_pixel, g.Bar, new Color(15, 14, 18, 235));
+        Scope.Draw(_pixel, g.Bar, new Color(15, 14, 18, 235));
         if (max > 0)
         {
             float f = System.Math.Clamp(cur / (float)max, 0f, 1f);
             var fillCol = full ? new Color(200, 84, 72) : (def.SpawnsUnit ? new Color(150, 112, 200) : new Color(92, 172, 122));
-            if (f > 0f) _batch.Draw(_pixel, new Rectangle(g.Bar.X, g.Bar.Y, (int)(g.Bar.Width * f), g.Bar.Height), fillCol);
+            if (f > 0f) Scope.Draw(_pixel, new Rectangle(g.Bar.X, g.Bar.Y, (int)(g.Bar.Width * f), g.Bar.Height), fillCol);
         }
         string cap = max > 0 ? max.ToString() : "-";
         Text($"{cur}/{cap}{(full ? "  full" : "")}", g.Bar.Right + 6, g.Bar.Y - 4, FsSmall,
@@ -311,7 +312,7 @@ public class JobBoardUI : IModalLayer
         if (!collapsed && def.OutputChoice)
         {
             int dividerY = g.Box.Y + TileBaseH;
-            _batch.Draw(_pixel, new Rectangle(g.Box.X + 10, dividerY, innerW - 20, 1), new Color(80, 76, 92, 180));
+            Scope.Draw(_pixel, new Rectangle(g.Box.X + 10, dividerY, innerW - 20, 1), new Color(80, 76, 92, 180));
             Text("Keep in stock:", g.Box.X + 14, dividerY + 4, FsSmall, new Color(172, 168, 182));
             int host = _ws.FindHostBuilding(def, default);
             foreach (var o in TargetGeos(js, x, y, innerW))
@@ -343,7 +344,7 @@ public class JobBoardUI : IModalLayer
 
     private void DrawButton(Rectangle r, string label, Color fill)
     {
-        _batch.Draw(_pixel, r, fill);
+        Scope.Draw(_pixel, r, fill);
         Border(r, new Color(198, 198, 206, 195), 1);
         var sz = _r.MeasureText(label, FsBtn);
         _r.DrawText(label, (int)(r.X + (r.Width - sz.X) / 2f), (int)(r.Y + (r.Height - sz.Y) / 2f), FsBtn, new Color(232, 232, 236));

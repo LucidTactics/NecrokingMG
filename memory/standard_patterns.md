@@ -4,6 +4,25 @@ Canonical implementations of common patterns. Consult before writing new code
 that might overlap; update when a new standard is established. (Referenced by
 CLAUDE.md → "Standard Patterns Reference".)
 
+## Draw colors (straight alpha everywhere — 2026-07-04)
+
+- **Author draw colors as STRAIGHT alpha** (`new Color(r,g,b,128)` means "that hue
+  at 50%"). The draw surface encodes per the open material — never call
+  `Color.FromNonPremultiplied`, `ColorUtils.Premultiply`, or hand-scale RGB by A
+  for a draw tint (that now double-converts → dimmer).
+- **Draw through a `SpriteScope`**: queue callbacks get one; immediate-mode code
+  uses `Game1.Scope`, `EditorBase.Scope`, or a per-class `Scope => _batch;`
+  accessor (implicit `SpriteBatch → SpriteScope` conversion exists and is always
+  color-correct). Raw `scope.Batch` is the escape hatch for native encodings
+  (HDR vertex pack, additive-via-A=0 trick) and third-party extension draws
+  (FontStashSharp text: `scope.Batch.DrawString(..., scope.EncodeTint(color))`).
+- **Fades scale A only**: `ColorUtils.Fade(c, t)` — never `color * t` on a color
+  headed into a converting draw.
+- **All batch opens go through `Material.Begin`** (it stamps `Materials.Open`,
+  which the conversion consults). Special raw batches call
+  `Materials.NoteAdHocBatch()`. Full map: docs/locate-behavior/render.md
+  ("Premultiplied alpha" section).
+
 ## Editor UI (EditorBase)
 
 - **Overlay contract** — any popup/dialog drawn over an editor wraps its draw in

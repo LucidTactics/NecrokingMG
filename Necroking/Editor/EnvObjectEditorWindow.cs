@@ -27,6 +27,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
     private GraphicsDevice _device = null!;
     private Texture2D _pixel = null!;
     private SpriteBatch _sb = null!;
+    private Render.SpriteScope Scope => _sb;  // straight-alpha draw surface (implicit conversion)
     private SpriteFont? _font;
     private SpriteFont? _smallFont;
     private string[]? _costItemOptions; // cached dropdown options for cost type
@@ -636,7 +637,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
             // DrawSingleEnvObject).
             DrawPreviewShadow(def, tex, srcRect, drawX, drawY, drawW, drawH, pivotPxX, pivotPxY);
 
-            _sb.Draw(tex, new Rectangle(drawX, drawY, drawW, drawH), srcRect, Color.White);
+            Scope.Draw(tex, new Rectangle(drawX, drawY, drawW, drawH), srcRect, Color.White);
 
             // Scale factor: pixels per world-unit (incorporates def.Scale for correct relative sizing)
             float pixPerWorld = drawH / MathF.Max(def.SpriteWorldHeight * def.Scale, 0.01f);
@@ -787,11 +788,11 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
             var outerC = new Color((byte)0, (byte)0, (byte)0, outerA);
             var innerC = new Color((byte)0, (byte)0, (byte)0, innerA);
 
-            _sb.Draw(_glowTex,
+            Scope.Draw(_glowTex,
                 new Rectangle((int)(pivotPxX - outerW * 0.5f), (int)(pivotPxY - outerH * 0.5f),
                               (int)outerW, (int)outerH),
                 outerC);
-            _sb.Draw(_glowTex,
+            Scope.Draw(_glowTex,
                 new Rectangle((int)(pivotPxX - innerW * 0.5f), (int)(pivotPxY - innerH * 0.5f),
                               (int)innerW, (int)innerH),
                 innerC);
@@ -824,7 +825,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         // Scale: match the on-screen sprite's X size; Y compressed by yScale.
         float baseScale = drawW / (float)texW;
         var posVec = new Vector2(pivotPxX, pivotPxY);
-        _sb.Draw(tex, posVec, srcRect, shadowColor, leanAngle, origin,
+        Scope.Draw(tex, posVec, srcRect, shadowColor, leanAngle, origin,
                  new Vector2(baseScale, baseScale * yScale),
                  SpriteEffects.None, 0f);
     }
@@ -985,7 +986,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         // Align to bottom of cell (objects share a ground plane)
         int rx = x + (w - (int)drawW) / 2;
         int ry = y + h - (int)drawH - 4;
-        _sb.Draw(tex, new Rectangle(rx, ry, (int)drawW, (int)drawH), editSrc, Color.White);
+        Scope.Draw(tex, new Rectangle(rx, ry, (int)drawW, (int)drawH), editSrc, Color.White);
 
         // No label on the edited object slot — it's always the current selection
     }
@@ -1042,7 +1043,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
                 // Align to bottom of cell (shared ground plane)
                 int rx = x + (w - (int)refDrawW) / 2;
                 int ry = y + h - (int)refDrawH - 4;
-                _sb.Draw(refTex, new Rectangle(rx, ry, (int)refDrawW, (int)refDrawH), refSrc, Color.White);
+                Scope.Draw(refTex, new Rectangle(rx, ry, (int)refDrawW, (int)refDrawH), refSrc, Color.White);
             }
 
             // Name label
@@ -2001,7 +2002,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         float len = MathF.Sqrt(dx * dx + dy * dy);
         if (len < 1f) return;
         float angle = MathF.Atan2(dy, dx);
-        _sb.Draw(_pixel, new Rectangle((int)a.X, (int)a.Y, (int)len, 1),
+        Scope.Draw(_pixel, new Rectangle((int)a.X, (int)a.Y, (int)len, 1),
             null, color, angle, Vector2.Zero, SpriteEffects.None, 0);
     }
 
@@ -2431,7 +2432,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
             int px = dx + (dw - pw) / 2;
 
             _ui.DrawRect(new Rectangle(px - 1, cy - 1, pw + 2, ph + 2), new Color(40, 40, 60));
-            _sb.Draw(_edgeTweakerPreview, new Rectangle(px, cy, pw, ph), Color.White);
+            Scope.Draw(_edgeTweakerPreview, new Rectangle(px, cy, pw, ph), Color.White);
             cy += ph + 8;
         }
         else
@@ -2540,7 +2541,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
 
         _pvDrawX = drawX; _pvDrawY = drawY; _pvDrawW = drawW; _pvDrawH = drawH; _pvScale = scale;
 
-        _sb.Draw(tex, new Rectangle(drawX, drawY, drawW, drawH), frame.Rect, Color.White);
+        Scope.Draw(tex, new Rectangle(drawX, drawY, drawW, drawH), frame.Rect, Color.White);
 
         // Pivot crosshair sits where the renderer pins the bag to the hand.
         // PivotY uses bottom-left origin so flip for screen-space (top-left).

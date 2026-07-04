@@ -28,6 +28,7 @@ public class CraftingMenuUI : Necroking.UI.IModalLayer
     private ItemRegistry _items = null!;
     private GameData _gameData = null!;
     private SpriteBatch _batch = null!;
+    private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
     private Texture2D _pixel = null!;
     private SkillBookState? _bookState;
     private readonly Random _rng = new();
@@ -373,7 +374,7 @@ public class CraftingMenuUI : Necroking.UI.IModalLayer
                 {
                     hoveredIdx = i;
                     if (canAfford)
-                        _batch.Draw(_pixel, rects[i], Color.White * 0.1f);
+                        Scope.Draw(_pixel, rects[i], new Color(255, 255, 255, 26));
                 }
             }
 
@@ -381,7 +382,7 @@ public class CraftingMenuUI : Necroking.UI.IModalLayer
                 DrawBorder(rects[i], new Color(100, 255, 100, 80), 2);
 
             if (!canAfford)
-                _batch.Draw(_pixel, rects[i], new Color(0, 0, 0, 80));
+                Scope.Draw(_pixel, rects[i], new Color(0, 0, 0, 80));
 
             // Crafting progress bar
             if (_crafting && _craftingIndex == i)
@@ -390,8 +391,8 @@ public class CraftingMenuUI : Necroking.UI.IModalLayer
                 int barH = 6;
                 int barY = r.Y + r.Height - barH - 2;
                 int barW = r.Width - 4;
-                _batch.Draw(_pixel, new Rectangle(r.X + 2, barY, barW, barH), new Color(20, 20, 30, 200));
-                _batch.Draw(_pixel, new Rectangle(r.X + 2, barY, (int)(barW * _craftProgress), barH), new Color(80, 160, 80, 220));
+                Scope.Draw(_pixel, new Rectangle(r.X + 2, barY, barW, barH), new Color(20, 20, 30, 200));
+                Scope.Draw(_pixel, new Rectangle(r.X + 2, barY, (int)(barW * _craftProgress), barH), new Color(80, 160, 80, 220));
             }
         }
 
@@ -448,7 +449,7 @@ public class CraftingMenuUI : Necroking.UI.IModalLayer
         tx = System.Math.Max(4, tx);
         ty = System.Math.Max(4, ty);
 
-        _batch.Draw(_pixel, new Rectangle(tx, ty, TipW, height), TipBg);
+        Scope.Draw(_pixel, new Rectangle(tx, ty, TipW, height), TipBg);
         DrawBorder(new Rectangle(tx, ty, TipW, height), TipBorder, 2);
 
         int cy = ty + Pad;
@@ -462,7 +463,7 @@ public class CraftingMenuUI : Necroking.UI.IModalLayer
         }
 
         cy += 3;
-        _batch.Draw(_pixel, new Rectangle(tx + Pad, cy, innerW, 1), TipBorder);
+        Scope.Draw(_pixel, new Rectangle(tx + Pad, cy, innerW, 1), TipBorder);
         cy += 5;
         foreach (var (label, value, color) in lines)
         {

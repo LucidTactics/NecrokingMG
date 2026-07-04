@@ -887,7 +887,7 @@ public class SpellEditorWindow : EditorWindow
         _buffPreview.RenderToTarget();
 
         // Re-begin the SpriteBatch to continue UI drawing
-        _ui._sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+        Render.Materials.Hud.Begin(_ui._sb);
     }
 
     private void DrawBuffManagerPopup(int screenW, int screenH)
@@ -1076,7 +1076,7 @@ public class SpellEditorWindow : EditorWindow
                 _ui.DrawRect(new Rectangle(contentX - 1, cy - 1, previewW + 2, previewH + 2), new Color(60, 60, 80));
 
                 // Draw the preview texture
-                _ui._sb.Draw(tex, new Rectangle(contentX, cy, previewW, previewH), Color.White);
+                _ui.Scope.Draw(tex, new Rectangle(contentX, cy, previewW, previewH), Color.White);
 
                 // Label
                 _ui.DrawText("BUFF PREVIEW", new Vector2(contentX + 4, cy + 2), new Color(255, 255, 255, 120));
@@ -1591,7 +1591,7 @@ public class SpellEditorWindow : EditorWindow
         _spellPreview.RenderToTarget();
 
         // Re-begin the SpriteBatch to continue UI drawing
-        _ui._sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+        Render.Materials.Hud.Begin(_ui._sb);
     }
 
     private void DrawPreviewPanel(int x, int y, int w, int h)
@@ -1627,7 +1627,7 @@ public class SpellEditorWindow : EditorWindow
         _ui.DrawRect(new Rectangle(x - 1, curY - 1, previewW + 2, previewH + 2), new Color(60, 60, 80));
 
         // Draw the preview texture at native resolution (no scaling needed since RT matches)
-        _ui._sb.Draw(tex, new Rectangle(x, curY, previewW, previewH), Color.White);
+        _ui.Scope.Draw(tex, new Rectangle(x, curY, previewW, previewH), Color.White);
 
         // Category label overlay
         string catLabel = def.Category.ToUpperInvariant() + " PREVIEW";

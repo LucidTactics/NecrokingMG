@@ -127,6 +127,7 @@ public partial class HUDRenderer
 
     // Dependencies (set via Init)
     private SpriteBatch _batch = null!;
+    private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
     private Texture2D _pixel = null!;
     private SpriteFont? _font;
     private SpriteFont? _smallFont;
@@ -289,9 +290,9 @@ public partial class HUDRenderer
             Color bg = open  ? new Color(70, 100, 160, 220)
                      : hover ? new Color(50, 60, 80, 200)
                              : new Color(20, 20, 30, 160);
-            _batch.Draw(_pixel, r, bg);
+            Scope.Draw(_pixel, r, bg);
             // Top accent line — brighter when open.
-            _batch.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, 2),
+            Scope.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, 2),
                 open ? new Color(140, 180, 255) : new Color(90, 90, 120, 180));
             string label = MenuButtonLabels[i];
             var ls = _smallFont!.MeasureString(label);
@@ -345,9 +346,9 @@ public partial class HUDRenderer
             Color bg = open  ? new Color(160, 100, 70, 220)
                      : hover ? new Color(80, 60, 50, 200)
                              : new Color(30, 20, 20, 160);
-            _batch.Draw(_pixel, r, bg);
+            Scope.Draw(_pixel, r, bg);
             // Top accent line — brighter when open.
-            _batch.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, 2),
+            Scope.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, 2),
                 open ? new Color(255, 180, 140) : new Color(120, 90, 90, 180));
             string label = EditorButtonLabels[i];
             var ls = _smallFont!.MeasureString(label);
@@ -424,7 +425,7 @@ public partial class HUDRenderer
 
             if (hovered)
             {
-                _batch.Draw(_pixel, inner, Color.White * 0.12f);
+                Scope.Draw(_pixel, inner, new Color(255, 255, 255, 31));
                 // Remember what's here so the tooltip can render on top after the bars.
                 if (spell != null) _hoverSlotSpell = spell;
                 else if (slotSpellId == "melee_gather") _hoverSlotMelee = true;
@@ -436,13 +437,13 @@ public partial class HUDRenderer
             if (flash != null && s < flash.Length && flash[s] > 0f)
             {
                 float t = MathF.Min(flash[s] / SlotFlashDuration, 1f); // 1 → 0 as it fades
-                _batch.Draw(_pixel, inner, SlotFlashColor * t);
+                Scope.Draw(_pixel, inner, Core.ColorUtils.Fade(SlotFlashColor, t));
                 // Bright frame edges so it pops even on a busy icon.
                 var edge = SlotFlashEdge * t;
-                _batch.Draw(_pixel, new Rectangle(slot.X, slot.Y, slot.Width, 2), edge);
-                _batch.Draw(_pixel, new Rectangle(slot.X, slot.Bottom - 2, slot.Width, 2), edge);
-                _batch.Draw(_pixel, new Rectangle(slot.X, slot.Y, 2, slot.Height), edge);
-                _batch.Draw(_pixel, new Rectangle(slot.Right - 2, slot.Y, 2, slot.Height), edge);
+                Scope.Draw(_pixel, new Rectangle(slot.X, slot.Y, slot.Width, 2), edge);
+                Scope.Draw(_pixel, new Rectangle(slot.X, slot.Bottom - 2, slot.Width, 2), edge);
+                Scope.Draw(_pixel, new Rectangle(slot.X, slot.Y, 2, slot.Height), edge);
+                Scope.Draw(_pixel, new Rectangle(slot.Right - 2, slot.Y, 2, slot.Height), edge);
             }
 
             // Cooldown sweep (over the icon interior).
@@ -453,19 +454,19 @@ public partial class HUDRenderer
                 {
                     float cdFrac = MathF.Min(cd / MathF.Max(spell.Cooldown, 0.1f), 1f);
                     int cdH = (int)(inner.Height * cdFrac);
-                    _batch.Draw(_pixel, new Rectangle(inner.X, inner.Bottom - cdH, inner.Width, cdH), CooldownOverlay);
+                    Scope.Draw(_pixel, new Rectangle(inner.X, inner.Bottom - cdH, inner.Width, cdH), CooldownOverlay);
                     if (_smallFont != null)
                         Text(_smallFont, $"{cd:F1}", new Vector2(inner.Center.X - 10, inner.Center.Y - 6), CooldownText);
                 }
                 if (sim.NecroState.Mana < spell.ManaCost)
-                    _batch.Draw(_pixel, inner, LowManaOverlay);
+                    Scope.Draw(_pixel, inner, LowManaOverlay);
 
                 // Consumable charges (potion-spells): show the inventory count,
                 // grey out at 0.
                 if (!string.IsNullOrEmpty(spell.ConsumesItem))
                 {
                     int qty = inventory.GetItemCount(spell.ConsumesItem);
-                    if (qty <= 0) _batch.Draw(_pixel, inner, PotionEmptyColor);
+                    if (qty <= 0) Scope.Draw(_pixel, inner, PotionEmptyColor);
                     if (_smallFont != null)
                     {
                         string q = qty.ToString();
@@ -502,7 +503,7 @@ public partial class HUDRenderer
         var inner = SlotInterior(slot);
         if (_widgets == null)
         {
-            _batch.Draw(_pixel, slot, SlotEmptyBg);
+            Scope.Draw(_pixel, slot, SlotEmptyBg);
             drawInterior(inner);
             return;
         }
@@ -522,7 +523,7 @@ public partial class HUDRenderer
         int ddY = barY - 10;
 
         int ddLeft = slotX - 2;
-        _batch.Draw(_pixel, new Rectangle(ddLeft, ddY - ddH - 2, DropdownWidth, ddH + 4), DropdownBg);
+        Scope.Draw(_pixel, new Rectangle(ddLeft, ddY - ddH - 2, DropdownWidth, ddH + 4), DropdownBg);
 
         int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
         int hoverIdx = -1;
@@ -531,7 +532,7 @@ public partial class HUDRenderer
 
         // (None) item — index 0
         if (hoverIdx == 0)
-            _batch.Draw(_pixel, new Rectangle(ddLeft, ddY - DropdownItemH, DropdownWidth, DropdownItemH), DropdownHoverBg);
+            Scope.Draw(_pixel, new Rectangle(ddLeft, ddY - DropdownItemH, DropdownWidth, DropdownItemH), DropdownHoverBg);
         Text(_smallFont, "(None)", new Vector2(slotX + 4, ddY - DropdownItemH), DropdownNoneColor);
 
         for (int si = 0; si < allSpells.Count; si++)
@@ -539,7 +540,7 @@ public partial class HUDRenderer
             var spDef = gameData.Spells.Get(allSpells[si]);
             int itemY = ddY - (si + 2) * DropdownItemH;
             if (hoverIdx == si + 1)
-                _batch.Draw(_pixel, new Rectangle(ddLeft, itemY, DropdownWidth, DropdownItemH), DropdownHoverBg);
+                Scope.Draw(_pixel, new Rectangle(ddLeft, itemY, DropdownWidth, DropdownItemH), DropdownHoverBg);
             string label = spDef != null ? $"{spDef.DisplayName} [{spDef.Category}]" : allSpells[si];
             Color labelColor = bar.Slots[openSlot].SpellID == allSpells[si]
                 ? DropdownSelectedColor : DropdownNormalColor;
@@ -886,8 +887,8 @@ public partial class HUDRenderer
         if (ttX < 4) ttX = 4;
         if (ttY < 4) ttY = my + 20;
 
-        _batch.Draw(_pixel, new Rectangle(ttX - 4, ttY - 4, ttW + 8, ttH + 8), TooltipBg);
-        _batch.Draw(_pixel, new Rectangle(ttX - 4, ttY - 4, ttW + 8, 2), TooltipBorder);
+        Scope.Draw(_pixel, new Rectangle(ttX - 4, ttY - 4, ttW + 8, ttH + 8), TooltipBg);
+        Scope.Draw(_pixel, new Rectangle(ttX - 4, ttY - 4, ttW + 8, 2), TooltipBorder);
         for (int i = 0; i < lines.Length; i++)
             Text(_smallFont, lines[i], new Vector2(ttX, ttY + i * lineH), TooltipText);
     }
@@ -920,7 +921,7 @@ public partial class HUDRenderer
             Color bg = paused ? new Color(160, 70, 70, 220)
                      : hover  ? new Color(50, 60, 80, 180)
                               : new Color(20, 20, 30, 140);
-            _batch.Draw(_pixel, new Rectangle(baseX, baseY, pauseW, TcBtnH), bg);
+            Scope.Draw(_pixel, new Rectangle(baseX, baseY, pauseW, TcBtnH), bg);
             string pauseLabel = paused ? ">" : "||";
             var labelSize = _smallFont.MeasureString(pauseLabel);
             Text(_smallFont, pauseLabel,
@@ -938,7 +939,7 @@ public partial class HUDRenderer
             Color bg = active ? new Color(70, 100, 160, 220)
                      : hover  ? new Color(50, 60, 80, 180)
                               : new Color(20, 20, 30, 140);
-            _batch.Draw(_pixel, new Rectangle(bx, baseY, TcBtnW, TcBtnH), bg);
+            Scope.Draw(_pixel, new Rectangle(bx, baseY, TcBtnW, TcBtnH), bg);
             var labelSize = _smallFont.MeasureString(labels[s]);
             Text(_smallFont, labels[s],
                 new Vector2(bx + TcBtnW / 2f - labelSize.X / 2f, baseY + TcBtnH / 2f - labelSize.Y / 2f),
@@ -999,7 +1000,7 @@ public partial class HUDRenderer
     private void Text(SpriteFont? font, string text, Vector2 pos, Color color)
     {
         if (font != null)
-            _batch.DrawString(font, text, new Vector2((int)pos.X, (int)pos.Y), color);
+            Scope.DrawString(font, text, new Vector2((int)pos.X, (int)pos.Y), color);
     }
 
     private static int FindNecromancer(Simulation sim)

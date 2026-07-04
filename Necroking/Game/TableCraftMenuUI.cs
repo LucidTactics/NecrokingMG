@@ -72,6 +72,7 @@ public class TableCraftMenuUI : Necroking.UI.IModalLayer
     private ItemRegistry _items = null!;
     private PlayerResources _resources = null!;
     private SpriteBatch _batch = null!;
+    private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
     private Texture2D _pixel = null!;
     private SpriteFont? _font;
 
@@ -423,7 +424,7 @@ public class TableCraftMenuUI : Necroking.UI.IModalLayer
                 // icon (if present) draws on top. Inset scales with menu size.
                 int inset = Scaled(4);
                 var inner = new Rectangle(r.X + inset, r.Y + inset, r.Width - inset * 2, r.Height - inset * 2);
-                _batch.Draw(_pixel, inner, new Color(120, 90, 60, 200));
+                Scope.Draw(_pixel, inner, new Color(120, 90, 60, 200));
 
                 // Defer to Game1 for the actual unit sprite — keeps the menu free
                 // of atlas / sprite-frame plumbing.
@@ -456,7 +457,7 @@ public class TableCraftMenuUI : Necroking.UI.IModalLayer
     {
         // Progress bar
         var prog = GetProgressBarRect();
-        _batch.Draw(_pixel, prog, new Color(20, 20, 25, 220));
+        Scope.Draw(_pixel, prog, new Color(20, 20, 25, 220));
         DrawBorder(prog, new Color(160, 160, 160, 180), 1);
 
         // Progress fills over the loop budget (the timed portion that advances
@@ -468,7 +469,7 @@ public class TableCraftMenuUI : Necroking.UI.IModalLayer
         if (progress > 0f)
         {
             int fillW = (int)(prog.Width * progress);
-            _batch.Draw(_pixel, new Rectangle(prog.X, prog.Y, fillW, prog.Height),
+            Scope.Draw(_pixel, new Rectangle(prog.X, prog.Y, fillW, prog.Height),
                 new Color(120, 200, 100, 230));
         }
 
@@ -478,7 +479,7 @@ public class TableCraftMenuUI : Necroking.UI.IModalLayer
         Color btnFill = ts.Crafting
             ? new Color(60, 60, 70, 230)
             : canStart ? new Color(80, 140, 80, 230) : new Color(70, 50, 50, 220);
-        _batch.Draw(_pixel, start, btnFill);
+        Scope.Draw(_pixel, start, btnFill);
         DrawBorder(start, new Color(220, 220, 220, 220), 1);
         DrawTextCentered(start, ts.Crafting ? "..." : "Start");
     }
@@ -487,7 +488,7 @@ public class TableCraftMenuUI : Necroking.UI.IModalLayer
     {
         var r = GetCloseButtonRect();
         bool hover = _lastInput != null && r.Contains((int)_lastInput.MousePos.X, (int)_lastInput.MousePos.Y);
-        _batch.Draw(_pixel, r, hover ? new Color(160, 60, 60, 230) : new Color(80, 30, 30, 200));
+        Scope.Draw(_pixel, r, hover ? new Color(160, 60, 60, 230) : new Color(80, 30, 30, 200));
         DrawBorder(r, new Color(220, 220, 220, 220), 1);
 
         // Draw the X as two diagonal lines instead of font text. Reasons:
@@ -531,7 +532,7 @@ public class TableCraftMenuUI : Necroking.UI.IModalLayer
     private void DrawSlotBackground(Rectangle r, bool isEmpty)
     {
         var fill = isEmpty ? new Color(35, 35, 40, 220) : new Color(55, 55, 60, 230);
-        _batch.Draw(_pixel, r, fill);
+        Scope.Draw(_pixel, r, fill);
         DrawBorder(r, new Color(180, 180, 180, 200), 1);
     }
 
@@ -544,7 +545,7 @@ public class TableCraftMenuUI : Necroking.UI.IModalLayer
         float scale = MathF.Min(_uiScale, (r.Width - 4) / size.X);
         var pos = new Vector2((int)(r.X + (r.Width - size.X * scale) / 2f),
                               (int)(r.Y + r.Height + Scaled(LabelOffsetY)));
-        _batch.DrawString(_font, text, pos, new Color(220, 220, 220, 230),
+        Scope.DrawString(_font, text, pos, new Color(220, 220, 220, 230),
             0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
     }
 
@@ -555,7 +556,7 @@ public class TableCraftMenuUI : Necroking.UI.IModalLayer
         float scale = MathF.Min(_uiScale, (r.Width - 6) / size.X);
         var pos = new Vector2((int)(r.X + (r.Width - size.X * scale) / 2f),
                               (int)(r.Y + (r.Height - size.Y * scale) / 2f));
-        _batch.DrawString(_font, text, pos, Color.White,
+        Scope.DrawString(_font, text, pos, Color.White,
             0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
     }
 
@@ -566,7 +567,7 @@ public class TableCraftMenuUI : Necroking.UI.IModalLayer
         float scale = MathF.Min(_uiScale, (r.Width - 4) / Math.Max(1f, size.X));
         var pos = new Vector2((int)(r.X + (r.Width - size.X * scale) / 2f),
                               (int)(r.Y + (r.Height - size.Y * scale) / 2f));
-        _batch.DrawString(_font, text, pos, Color.White,
+        Scope.DrawString(_font, text, pos, Color.White,
             0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
     }
 

@@ -417,6 +417,7 @@ public class WadingEditorPopup
         sb.End();
         sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
                  null, null, _wadingEffect);
+        Render.Materials.NoteAdHocBatch(); // wading-effect batch, draws White only
 
         var origin = new Vector2(frame.Rect.Width * 0.5f, frame.Rect.Height * 0.5f);
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
@@ -426,7 +427,7 @@ public class WadingEditorPopup
         // Restore the canonical HUD/editor batch state. The HUD pass runs
         // PointClamp (see EffectBatch.HudSampler) — restoring LinearClamp here
         // left all editor text drawn after the wading preview blurry.
-        sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+        Render.Materials.Hud.Begin(sb);
         return true;
     }
 
@@ -475,7 +476,7 @@ public class WadingEditorPopup
         float len = MathF.Sqrt(dx * dx + dy * dy);
         if (len < 0.5f) return;
         float angle = MathF.Atan2(dy, dx);
-        _ui.SpriteBatch.Draw(
+        _ui.Scope.Draw(
             _ui.PixelTexture,
             new Vector2(x1, y1),
             null,

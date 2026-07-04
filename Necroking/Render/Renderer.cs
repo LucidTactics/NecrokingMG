@@ -68,7 +68,7 @@ public class Renderer
     /// <summary>
     /// Draw a sprite frame from an atlas at a world position.
     /// </summary>
-    public void DrawSprite(SpriteBatch batch, SpriteAtlas atlas, SpriteFrame frame,
+    public void DrawSprite(SpriteScope batch, SpriteAtlas atlas, SpriteFrame frame,
                            Vec2 worldPos, float height, Camera25D cam,
                            float scale = 1f, bool flipX = false, Color? tint = null)
     {
@@ -104,7 +104,7 @@ public class Renderer
     /// <summary>
     /// Draw a flipbook frame at a world position.
     /// </summary>
-    public void DrawFlipbookFrame(SpriteBatch batch, Flipbook flipbook, int frameIndex,
+    public void DrawFlipbookFrame(SpriteScope batch, Flipbook flipbook, int frameIndex,
                                    Vec2 worldPos, float height, Camera25D cam,
                                    float scale = 1f, Color? tint = null)
     {

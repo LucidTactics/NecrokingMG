@@ -11,7 +11,7 @@ namespace Necroking.Render;
 public static class DrawUtils
 {
     /// <summary>Draw a circle outline using line segments.</summary>
-    public static void DrawCircleOutline(SpriteBatch batch, Texture2D pixel,
+    public static void DrawCircleOutline(SpriteScope batch, Texture2D pixel,
         Vector2 center, float radius, Color color, int segments = 48)
     {
         float step = MathF.PI * 2f / segments;
@@ -26,7 +26,7 @@ public static class DrawUtils
     }
 
     /// <summary>Draw a 1-pixel line between two points.</summary>
-    public static void DrawLine(SpriteBatch batch, Texture2D pixel, Vector2 a, Vector2 b, Color color)
+    public static void DrawLine(SpriteScope batch, Texture2D pixel, Vector2 a, Vector2 b, Color color)
     {
         float dx = b.X - a.X, dy = b.Y - a.Y;
         float len = MathF.Sqrt(dx * dx + dy * dy);
@@ -37,7 +37,7 @@ public static class DrawUtils
     }
 
     /// <summary>Draw a line with an arbitrary pixel thickness (centered on the a→b axis).</summary>
-    public static void DrawLine(SpriteBatch batch, Texture2D pixel, Vector2 a, Vector2 b, Color color, float thickness)
+    public static void DrawLine(SpriteScope batch, Texture2D pixel, Vector2 a, Vector2 b, Color color, float thickness)
     {
         float dx = b.X - a.X, dy = b.Y - a.Y;
         float len = MathF.Sqrt(dx * dx + dy * dy);
@@ -51,7 +51,7 @@ public static class DrawUtils
     /// <summary>Draw a rectangle outline. The single canonical rect-stroke — replaces
     /// ~13 per-file DrawBorder/DrawRectOutline copies. Corners are non-overlapping (drawn
     /// once each) so the stroke is correct under a translucent color as well as solid.</summary>
-    public static void DrawRectBorder(SpriteBatch batch, Texture2D pixel, Rectangle r, Color color, int thickness = 1)
+    public static void DrawRectBorder(SpriteScope batch, Texture2D pixel, Rectangle r, Color color, int thickness = 1)
     {
         // Top/bottom span the full width; left/right fill only the gap between them, so
         // each corner pixel is drawn exactly once. (A full-height left/right would

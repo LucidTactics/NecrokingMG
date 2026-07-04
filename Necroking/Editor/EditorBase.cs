@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Necroking.Core;
+using Necroking.Render;
 
 namespace Necroking.Editor;
 
@@ -59,6 +60,10 @@ public class EditorBase
     // State
     internal SpriteBatch _sb = null!;
     public SpriteBatch SpriteBatch => _sb;
+
+    /// <summary>Draw surface over the editor batch — colors are straight alpha,
+    /// encoded by the open material. Prefer this over raw <c>_sb</c> draws.</summary>
+    public SpriteScope Scope => new(_sb, Materials.Open ?? Materials.Hud);
     internal Texture2D _pixel = null!;
     /// <summary>1×1 white pixel texture, exposed for editor consumers
     /// that draw their own primitives (e.g. tilted lines via rotated
@@ -193,7 +198,6 @@ public class EditorBase
 
     // Scissor clipping stack
     private readonly Stack<Rectangle> _scissorStack = new();
-    private static readonly RasterizerState _scissorRasterState = new() { ScissorTestEnable = true };
     // CPU-side mirror of the active clip so hit-testing can respect it: a widget
     // scrolled out of its clipped panel is invisible and must not be clickable.
     private Rectangle? _activeClip;
@@ -496,7 +500,7 @@ public class EditorBase
 
     public void DrawRect(Rectangle rect, Color color)
     {
-        _sb.Draw(_pixel, rect, color);
+        Scope.Draw(_pixel, rect, color);
     }
 
     /// <summary>
@@ -508,7 +512,7 @@ public class EditorBase
         float length = diff.Length();
         if (length < 0.5f) return;
         float angle = MathF.Atan2(diff.Y, diff.X);
-        _sb.Draw(_pixel, a, null, color, angle, Vector2.Zero, new Vector2(length, thickness), SpriteEffects.None, 0f);
+        Scope.Draw(_pixel, a, null, color, angle, Vector2.Zero, new Vector2(length, thickness), SpriteEffects.None, 0f);
     }
 
     public void DrawBorder(Rectangle rect, Color color, int thickness = 1)
@@ -524,8 +528,8 @@ public class EditorBase
         {
             // Round to integer pixels to avoid sub-pixel artifacts with PointClamp sampling
             pos = new Vector2((int)pos.X, (int)pos.Y);
-            try { _sb.DrawString(f, text, pos, color); }
-            catch { _sb.DrawString(f, SanitizeForFont(text, f), pos, color); }
+            try { Scope.DrawString(f, text, pos, color); }
+            catch { Scope.DrawString(f, SanitizeForFont(text, f), pos, color); }
         }
     }
 
@@ -611,7 +615,7 @@ public class EditorBase
     public void DrawTexture(Texture2D texture, Vector2 position, Rectangle sourceRect,
         Color color, float rotation, Vector2 origin, float scale, SpriteEffects effects)
     {
-        _sb.Draw(texture, position, sourceRect, color, rotation, origin, scale, effects, 0f);
+        Scope.Draw(texture, position, sourceRect, color, rotation, origin, scale, effects, 0f);
     }
 
     // === Scissor Clipping ===
@@ -637,9 +641,9 @@ public class EditorBase
         // Set the new scissor rectangle
         _gd.ScissorRectangle = clipRect;
 
-        // Begin a new SpriteBatch with scissor test enabled
-        _sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp,
-            null, _scissorRasterState);
+        // Begin a new SpriteBatch with scissor test enabled (via Materials so
+        // Materials.Open stays accurate for color encoding)
+        Materials.HudScissor.Begin(_sb);
     }
 
     /// <summary>
@@ -659,13 +663,12 @@ public class EditorBase
         if (_scissorStack.Count > 0)
         {
             // Still nested - re-enable scissor with the parent clip rect
-            _sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp,
-                null, _scissorRasterState);
+            Materials.HudScissor.Begin(_sb);
         }
         else
         {
             // Back to normal - no scissor test
-            _sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+            Materials.Hud.Begin(_sb);
         }
     }
 
@@ -1739,7 +1742,7 @@ public class EditorBase
         {
             _sb.End();
             _colorPicker.CaptureBackBuffer(_gd);
-            _sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+            Materials.Hud.Begin(_sb);
         }
         _colorPicker.Draw();
     }
@@ -2033,7 +2036,8 @@ public class EditorBase
     {
         if (timer <= 0) return Color.Transparent;
         float alpha = timer < 1f ? timer : 1f;
-        return baseColor * alpha;
+        // Straight-alpha fade (A only) - the draw surface premultiplies.
+        return ColorUtils.Fade(baseColor, alpha);
     }
 
     // === Text Input Handling ===

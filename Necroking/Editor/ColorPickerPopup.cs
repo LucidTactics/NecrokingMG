@@ -15,6 +15,7 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
 {
     // Drawing context (set externally via SetContext)
     private SpriteBatch _sb = null!;
+    private Render.SpriteScope Scope => _sb;  // straight-alpha draw surface (implicit conversion)
     private Texture2D _pixel = null!;
     private SpriteFont? _font;
     private SpriteFont? _smallFont;
@@ -1165,7 +1166,7 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
 
     private void DrawRect(Rectangle rect, Color color)
     {
-        _sb.Draw(_pixel, rect, color);
+        Scope.Draw(_pixel, rect, color);
     }
 
     private void DrawBorder(Rectangle rect, Color color, int thickness = 1)
@@ -1177,7 +1178,7 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
     {
         var f = font ?? _smallFont ?? _font;
         if (f != null)
-            _sb.DrawString(f, text, pos, color);
+            Scope.DrawString(f, text, pos, color);
     }
 
     private Vector2 MeasureText(string text, SpriteFont? font = null)

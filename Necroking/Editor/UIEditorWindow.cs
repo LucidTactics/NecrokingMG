@@ -1493,7 +1493,7 @@ public partial class UIEditorWindow : EditorBase
                         int thumbSize = 18;
                         int thumbX = listX + listW2 - thumbSize - 8;
                         int thumbY = (int)drawY + (itemH - thumbSize) / 2;
-                        _sb.Draw(tex, new Rectangle(thumbX, thumbY, thumbSize, thumbSize), Color.White);
+                        Scope.Draw(tex, new Rectangle(thumbX, thumbY, thumbSize, thumbSize), Color.White);
                         DrawBorder(new Rectangle(thumbX, thumbY, thumbSize, thumbSize), new Color(60, 60, 80));
                     }
                 }
@@ -1655,7 +1655,7 @@ public partial class UIEditorWindow : EditorBase
         }
 
         // Draw texture
-        _sb.Draw(tex,
+        Scope.Draw(tex,
             new Rectangle(x, y, (int)dispW, (int)dispH),
             new Rectangle(0, 0, tex.Width, tex.Height),
             Color.White);
@@ -2083,7 +2083,7 @@ public partial class UIEditorWindow : EditorBase
             if (imgTex != null)
             {
                 var tint = ByteColor(def.TintColor ?? new byte[] { 255, 255, 255, 255 });
-                _sb.Draw(imgTex, elRect, tint);
+                Scope.Draw(imgTex, elRect, tint);
             }
             else
             {
@@ -2150,8 +2150,9 @@ public partial class UIEditorWindow : EditorBase
             string displayText = !string.IsNullOrEmpty(def.DefaultText) ? def.DefaultText : "Sample Text";
             var dynFont = _fontMgr?.GetFont(tr.FontSize, string.IsNullOrEmpty(tr.FontFamily) ? null : tr.FontFamily);
             if (dynFont != null)
-                _sb.DrawString(dynFont, displayText, new Vector2(textRect.X + 4, textRect.Y + 4),
-                    ByteColor(tr.FontColor, 200));
+                // FontStashSharp extension on the raw batch - encode the tint explicitly.
+                Scope.Batch.DrawString(dynFont, displayText, new Vector2(textRect.X + 4, textRect.Y + 4),
+                    Scope.EncodeTint(ByteColor(tr.FontColor, 200)));
             else
                 DrawText(displayText, new Vector2(textRect.X + 4, textRect.Y + 4),
                     ByteColor(tr.FontColor, 200));
@@ -3552,7 +3553,7 @@ public partial class UIEditorWindow : EditorBase
                 else if (elemDef.Type == "image" && !string.IsNullOrEmpty(elemDef.ImagePath))
                 {
                     var imgTex = GetTexture(elemDef.ImagePath, "el:" + elemDef.Id);
-                    if (imgTex != null) { _sb.Draw(imgTex, rect, tint); drawn = true; }
+                    if (imgTex != null) { Scope.Draw(imgTex, rect, tint); drawn = true; }
                 }
                 else if (!string.IsNullOrEmpty(elemDef.NineSlice))
                 {

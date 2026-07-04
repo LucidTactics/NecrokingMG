@@ -30,6 +30,7 @@ public class BuildingMenuUI : Necroking.UI.IModalLayer
     private Inventory _inventory = null!;
     private ItemRegistry _items = null!;
     private SpriteBatch _batch = null!;
+    private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
     private Texture2D _pixel = null!;
     private MagicGlyphSystem? _glyphs;
     private SpellRegistry? _spells;
@@ -407,7 +408,7 @@ public class BuildingMenuUI : Necroking.UI.IModalLayer
                 var r = rects[i];
                 int hmx = (int)_lastInput.MousePos.X, hmy = (int)_lastInput.MousePos.Y;
                 if (r.Contains(hmx, hmy) && canAfford)
-                    DrawRect(r, Color.White * 0.1f);
+                    DrawRect(r, new Color(255, 255, 255, 26));
             }
 
             // Selected highlight
@@ -426,7 +427,7 @@ public class BuildingMenuUI : Necroking.UI.IModalLayer
     }
 
     /// <summary>Draw ghost preview of building at cursor position.</summary>
-    public void DrawGhostPreview(SpriteBatch batch, Texture2D pixel, Vec2 mouseWorld,
+    public void DrawGhostPreview(SpriteScope batch, Texture2D pixel, Vec2 mouseWorld,
         Vector2 screenPos, Camera25D camera, Renderer renderer)
     {
         if (!IsPlacementActive) return;
@@ -446,8 +447,8 @@ public class BuildingMenuUI : Necroking.UI.IModalLayer
             // Ghost tint: green if valid, red if invalid, max alpha 0.3
             byte alpha = 76; // ~0.3 * 255
             Color ghostColor = canPlace
-                ? new Color((byte)(50 * alpha / 255), (byte)(200 * alpha / 255), (byte)(50 * alpha / 255), alpha)
-                : new Color((byte)(200 * alpha / 255), (byte)(50 * alpha / 255), (byte)(50 * alpha / 255), alpha);
+                ? new Color((byte)50, (byte)200, (byte)50, alpha)
+                : new Color((byte)200, (byte)50, (byte)50, alpha);
 
             batch.Draw(tex, screenPos, null, ghostColor, 0f, origin, scale, SpriteEffects.None, 0f);
         }
@@ -503,7 +504,7 @@ public class BuildingMenuUI : Necroking.UI.IModalLayer
 
     private void DrawRect(Rectangle r, Color c)
     {
-        _batch.Draw(_pixel, r, c);
+        Scope.Draw(_pixel, r, c);
     }
 
     private void DrawBorder(Rectangle r, Color c, int t = 1)

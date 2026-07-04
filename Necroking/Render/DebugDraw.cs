@@ -41,7 +41,7 @@ public class DebugDraw
 
     public void SetFont(SpriteFont? font) => _font = font;
 
-    public void Draw(SpriteBatch batch, GraphicsDevice device, Simulation sim, Camera25D cam,
+    public void Draw(SpriteScope batch, GraphicsDevice device, Simulation sim, Camera25D cam,
                      Renderer renderer, DebugFlags flags, bool showUnitRadius = false)
     {
         EnsurePixel(device);
@@ -79,7 +79,7 @@ public class DebugDraw
     /// Draw collision debug overlays based on the current debug mode.
     /// Call after game world drawing but before HUD.
     /// </summary>
-    public void DrawCollisionDebug(SpriteBatch batch, GraphicsDevice device, Simulation sim,
+    public void DrawCollisionDebug(SpriteScope batch, GraphicsDevice device, Simulation sim,
                                     Camera25D cam, Renderer renderer,
                                     CollisionDebugMode mode, EnvironmentSystem? envSystem = null,
                                     Pathfinder? pathfinder = null)
@@ -120,7 +120,7 @@ public class DebugDraw
 
     // ========== Cost Field Overlay ==========
 
-    private void DrawCostFieldOverlay(SpriteBatch batch, Simulation sim, Camera25D cam, Renderer renderer)
+    private void DrawCostFieldOverlay(SpriteScope batch, Simulation sim, Camera25D cam, Renderer renderer)
     {
         if (_pixel == null) return;
         var grid = sim.Grid;
@@ -181,7 +181,7 @@ public class DebugDraw
 
     // ========== Unit ORCA Radii ==========
 
-    private void DrawUnitORCARadii(SpriteBatch batch, Simulation sim, Camera25D cam, Renderer renderer)
+    private void DrawUnitORCARadii(SpriteScope batch, Simulation sim, Camera25D cam, Renderer renderer)
     {
         var units = sim.Units;
         int necroIdx = sim.NecromancerIndex;
@@ -218,7 +218,7 @@ public class DebugDraw
 
     // ========== Velocity Vectors ==========
 
-    private void DrawVelocityVectors(SpriteBatch batch, Simulation sim, Camera25D cam, Renderer renderer)
+    private void DrawVelocityVectors(SpriteScope batch, Simulation sim, Camera25D cam, Renderer renderer)
     {
         var units = sim.Units;
 
@@ -250,7 +250,7 @@ public class DebugDraw
 
     // ========== Occupied Tiles (Environment Objects) ==========
 
-    private void DrawOccupiedTiles(SpriteBatch batch, Simulation sim, Camera25D cam, Renderer renderer,
+    private void DrawOccupiedTiles(SpriteScope batch, Simulation sim, Camera25D cam, Renderer renderer,
                                     EnvironmentSystem? envSystem)
     {
         if (_pixel == null) return;
@@ -345,7 +345,7 @@ public class DebugDraw
         }
     }
 
-    public void DrawCircle(SpriteBatch batch, Renderer renderer, Camera25D cam,
+    public void DrawCircle(SpriteScope batch, Renderer renderer, Camera25D cam,
                            Vec2 worldCenter, float worldRadius, Color color, int segments = 24)
     {
         if (_pixel == null) return;
@@ -361,7 +361,7 @@ public class DebugDraw
         }
     }
 
-    public void DrawArrow(SpriteBatch batch, Vector2 start, Vector2 end, Color color)
+    public void DrawArrow(SpriteScope batch, Vector2 start, Vector2 end, Color color)
     {
         if (_pixel == null) return;
         DrawLine(batch, start, end, color);
@@ -382,7 +382,7 @@ public class DebugDraw
         DrawLine(batch, end, right, color);
     }
 
-    public void DrawLine(SpriteBatch batch, Vector2 start, Vector2 end, Color color)
+    public void DrawLine(SpriteScope batch, Vector2 start, Vector2 end, Color color)
     {
         if (_pixel == null) return;
         var diff = end - start;
@@ -395,7 +395,7 @@ public class DebugDraw
 
     // ========== Chunk Overlay ==========
 
-    private void DrawChunkOverlay(SpriteBatch batch, Simulation sim, Camera25D cam, Renderer renderer,
+    private void DrawChunkOverlay(SpriteScope batch, Simulation sim, Camera25D cam, Renderer renderer,
         Pathfinder? pathfinder)
     {
         if (pathfinder == null) return;

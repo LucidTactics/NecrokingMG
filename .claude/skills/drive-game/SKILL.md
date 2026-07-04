@@ -173,7 +173,9 @@ case "kill_faction":                       // devctl: cmd kill_faction Human
   the necromancer). Spawn humans at a distance, or spawn undead for a friendly scene. Types:
   Necromancer, Skeleton, Abomination, Militia, Soldier, Knight, Archer, Dynamic.
 - **World coordinates (Vec2).** Read `state` for the necromancer's `x,y` and anchor
-  spawns/camera off it (default map necromancer ≈ 2096,1882).
+  spawns/camera off it (default map necromancer ≈ 2096,1882). `empty_test` is a small
+  64×64 map — necromancer at 32,32, and out-of-range spawn coords get clamped to the
+  map edge (units end up off-camera looking "invisible"), so ALWAYS `state` first.
 - A screenshot is captured one frame later in `Draw`; the command reply only returns once
   the PNG is written, so the returned path is ready to `Read` immediately.
 

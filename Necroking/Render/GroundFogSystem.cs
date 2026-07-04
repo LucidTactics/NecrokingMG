@@ -203,7 +203,7 @@ public class GroundFogSystem
     public void CollectBack(SpriteQueuePass world, Color ambient)
     {
         if (_banks.Count == 0 || _glow == null || _camera == null || _renderer == null) return;
-        _cbBlanket ??= (in SpriteScope s, int bi, int _) => DrawBlanket(s.Batch, bi, _lastAmbient);
+        _cbBlanket ??= (SpriteScope s, int bi, int _) => DrawBlanket(s, bi, _lastAmbient);
         _lastAmbient = ambient;
         for (int bi = 0; bi < _banks.Count; bi++)
             world.SubmitCallback(WorldLayer.FogBack, _banks[bi].Center.Y, _cbBlanket, bi, 0);
@@ -211,15 +211,16 @@ public class GroundFogSystem
 
     private Color _lastAmbient = Color.White;
 
-    private void DrawBlanket(SpriteBatch batch, int bi, Color ambient)
+    private void DrawBlanket(SpriteScope batch, int bi, Color ambient)
     {
         if (bi >= _banks.Count || _glow == null) return;
         var b = _banks[bi];
         var sp = _renderer!.WorldToScreen(b.Center, 0f, _camera!);
-        float alpha = BlanketAlpha * b.Density;
-        var col = ColorUtils.Premultiply(
-            (byte)(FogColor.R * ambient.R / 255), (byte)(FogColor.G * ambient.G / 255),
-            (byte)(FogColor.B * ambient.B / 255), alpha);
+        float alpha = MathHelper.Clamp(BlanketAlpha * b.Density, 0f, 1f);
+        // Straight alpha; the draw surface encodes it for the open material.
+        var col = new Color(
+            FogColor.R * ambient.R / 255, FogColor.G * ambient.G / 255,
+            FogColor.B * ambient.B / 255, (int)(alpha * 255));
         // Ground-plane ellipse: X spans the bank, Y squashed by the isometric ratio.
         float pxW = b.Radius * 2.4f * _camera!.Zoom;
         float pxH = pxW * _camera.YRatio * 0.55f;
@@ -258,9 +259,10 @@ public class GroundFogSystem
             var src = _cloud.GetFrameRect(frame);
             float scale = (w.WorldSize * zoom) / frameW;
 
-            var col = ColorUtils.Premultiply(
-                (byte)(FogColor.R * ambient.R / 255), (byte)(FogColor.G * ambient.G / 255),
-                (byte)(FogColor.B * ambient.B / 255), alpha);
+            // Straight alpha; the queue flush encodes it for the FogWisp material.
+            var col = new Color(
+                FogColor.R * ambient.R / 255, FogColor.G * ambient.G / 255,
+                FogColor.B * ambient.B / 255, (int)(MathHelper.Clamp(alpha, 0f, 1f) * 255));
 
             // Forward-biased sort Y (half a wisp ahead), same convention as the
             // reanim dust: the wisp's visual mass hangs below/ahead of its center.

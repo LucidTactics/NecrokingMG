@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Necroking.Render;
 
 namespace Necroking.UI;
 
@@ -50,7 +51,7 @@ public class NineSlice
         TileEdges = tileEdges;
     }
 
-    public void Draw(SpriteBatch batch, Rectangle dest, Color? tint = null, float scale = 1f)
+    public void Draw(SpriteScope batch, Rectangle dest, Color? tint = null, float scale = 1f)
     {
         if (Texture == null) return;
         var c = tint ?? Color.White;
@@ -140,7 +141,7 @@ public class NineSlice
     /// <summary>Repeat an edge source horizontally across [x0, x0+totalW), each
     /// copy <paramref name="unit"/> px wide (the source scaled to native), clipping
     /// the final partial copy so the pattern stays continuous.</summary>
-    private static void TileH(SpriteBatch b, Texture2D tex, int x0, int y, int totalW, int h,
+    private static void TileH(SpriteScope b, Texture2D tex, int x0, int y, int totalW, int h,
         Rectangle src, int unit, Color c)
     {
         for (int x = x0; x < x0 + totalW; x += unit)
@@ -152,7 +153,7 @@ public class NineSlice
     }
 
     /// <summary>Repeat an edge source vertically across [y0, y0+totalH).</summary>
-    private static void TileV(SpriteBatch b, Texture2D tex, int x, int y0, int w, int totalH,
+    private static void TileV(SpriteScope b, Texture2D tex, int x, int y0, int w, int totalH,
         Rectangle src, int unit, Color c)
     {
         for (int y = y0; y < y0 + totalH; y += unit)

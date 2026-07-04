@@ -41,15 +41,24 @@ public delegate void MaterialParamSetter(XnaEffect effect);
 /// <summary>A composite draw occupying one sortable slot: draws its sprites
 /// in call order into the open batch via the scope. <paramref name="a"/>/<paramref name="b"/>
 /// carry payload indices (unit index, puff sub-index…) so callback instances can
-/// be cached once instead of closing over per-item state.</summary>
-public delegate void SpriteDrawCallback(in SpriteScope scope, int a, int b);
+/// be cached once instead of closing over per-item state.
+/// The scope is passed by value — it is a cheap handle; the active material
+/// lives in <see cref="Materials.Open"/>, not in the scope.</summary>
+public delegate void SpriteDrawCallback(SpriteScope scope, int a, int b);
 
 /// <summary>
-/// Handed to callbacks. Wraps the open batch; the ONLY sanctioned way a
-/// callback may deviate from the pass material is PushMaterial/PopMaterial —
-/// the resume state is carried in the scope, computed by the executor, never
-/// guessed by the call site (this retires the EffectBatch.BeginEffect pattern
-/// and its wrong-restore bug class).
+/// THE draw surface: wraps the open batch and knows which <see cref="Material"/>
+/// is active, so every color funnels through <see cref="Material.Tint"/> in one
+/// place. Draw/DrawString take STRAIGHT-alpha colors — a plain
+/// <c>new Color(r, g, b, 128)</c> is correct by default; never hand-premultiply
+/// (that was the recurring washed-out-hue / double-dim bug class). Colors that
+/// are already a material-native encoding (HDR vertex pack, the additive-via-A=0
+/// trick) go through <see cref="Batch"/> instead, which bypasses conversion.
+///
+/// The ONLY sanctioned way to deviate from the pass material is
+/// PushMaterial/PopMaterial — the resume state is carried in the scope, computed
+/// by the executor, never guessed by the call site (this retires the
+/// EffectBatch.BeginEffect pattern and its wrong-restore bug class).
 /// </summary>
 public readonly struct SpriteScope
 {
@@ -62,7 +71,44 @@ public readonly struct SpriteScope
         _resume = resume;
     }
 
+    /// <summary>Any batch can be viewed as a draw surface: encoding follows the
+    /// globally tracked open material either way, so passing a raw SpriteBatch
+    /// where a scope is expected is always color-correct. (The reverse — getting
+    /// the raw batch out of a scope — stays explicit via <see cref="Batch"/>.)</summary>
+    public static implicit operator SpriteScope(SpriteBatch batch)
+        => new(batch, Materials.Open ?? Materials.Hud);
+
+    /// <summary>The raw batch — the explicit escape hatch. Colors passed here
+    /// bypass the straight-alpha convention and must already be in the active
+    /// material's native encoding. Also for Immediate-sort per-draw uniform sets.</summary>
     public SpriteBatch Batch => _batch;
+
+    public GraphicsDevice GraphicsDevice => _batch.GraphicsDevice;
+
+    /// <summary>The material whose batch is currently open (tracked globally by
+    /// <see cref="Material.Begin"/>, so Push/Pop/ad-hoc opens can never desync it).</summary>
+    public Material? CurrentMaterial => Materials.Open;
+
+    /// <summary>Encode a straight-alpha color for the open material — identity
+    /// when no material is tracked (raw batch) or the material takes straight tints.</summary>
+    private static Color Encode(Color straight)
+        => Materials.Open is { } m ? m.Tint(straight) : straight;
+
+    /// <summary>Public form of the tint encoding, for draws that must go through
+    /// third-party extension methods on the raw <see cref="Batch"/> (FontStashSharp
+    /// text) but still author straight-alpha colors.</summary>
+    public Color EncodeTint(Color straight) => Encode(straight);
+
+    /// <summary>Open <paramref name="m"/>'s batch and return a scope over it —
+    /// the immediate-mode entry point (HUD/editor passes). Pair with <see cref="End"/>.</summary>
+    public static SpriteScope Begin(SpriteBatch batch, Material m)
+    {
+        m.Begin(batch);
+        return new SpriteScope(batch, m);
+    }
+
+    /// <summary>End the open batch (immediate-mode counterpart of <see cref="Begin"/>).</summary>
+    public void End() => _batch.End();
 
     /// <summary>End the open batch and open <paramref name="m"/> (optionally
     /// setting its per-draw uniforms first). Pair with <see cref="PopMaterial"/>.
@@ -87,7 +133,57 @@ public readonly struct SpriteScope
     public void Suspend() => _batch.End();
 
     /// <summary>Reopen the pass material after a <see cref="Suspend"/>.</summary>
-    public void Resume() => _resume.Begin(_batch);
+    public void Resume()
+    {
+        _resume.Begin(_batch);
+    }
+
+    // --- Converting draw surface: mirrors SpriteBatch.Draw/DrawString so call
+    // sites are drop-in, but colors are STRAIGHT alpha and get encoded by the
+    // active material. ---
+
+    public void Draw(Texture2D texture, Vector2 position, Color color)
+        => _batch.Draw(texture, position, Encode(color));
+
+    public void Draw(Texture2D texture, Vector2 position, Rectangle? sourceRectangle, Color color)
+        => _batch.Draw(texture, position, sourceRectangle, Encode(color));
+
+    public void Draw(Texture2D texture, Vector2 position, Rectangle? sourceRectangle, Color color,
+        float rotation, Vector2 origin, float scale, SpriteEffects effects, float layerDepth)
+        => _batch.Draw(texture, position, sourceRectangle, Encode(color),
+            rotation, origin, scale, effects, layerDepth);
+
+    public void Draw(Texture2D texture, Vector2 position, Rectangle? sourceRectangle, Color color,
+        float rotation, Vector2 origin, Vector2 scale, SpriteEffects effects, float layerDepth)
+        => _batch.Draw(texture, position, sourceRectangle, Encode(color),
+            rotation, origin, scale, effects, layerDepth);
+
+    public void Draw(Texture2D texture, Rectangle destinationRectangle, Color color)
+        => _batch.Draw(texture, destinationRectangle, Encode(color));
+
+    public void Draw(Texture2D texture, Rectangle destinationRectangle, Rectangle? sourceRectangle, Color color)
+        => _batch.Draw(texture, destinationRectangle, sourceRectangle, Encode(color));
+
+    public void Draw(Texture2D texture, Rectangle destinationRectangle, Rectangle? sourceRectangle, Color color,
+        float rotation, Vector2 origin, SpriteEffects effects, float layerDepth)
+        => _batch.Draw(texture, destinationRectangle, sourceRectangle, Encode(color),
+            rotation, origin, effects, layerDepth);
+
+    public void DrawString(SpriteFont spriteFont, string text, Vector2 position, Color color)
+        => _batch.DrawString(spriteFont, text, position, Encode(color));
+
+    public void DrawString(SpriteFont spriteFont, System.Text.StringBuilder text, Vector2 position, Color color)
+        => _batch.DrawString(spriteFont, text, position, Encode(color));
+
+    public void DrawString(SpriteFont spriteFont, string text, Vector2 position, Color color,
+        float rotation, Vector2 origin, float scale, SpriteEffects effects, float layerDepth)
+        => _batch.DrawString(spriteFont, text, position, Encode(color),
+            rotation, origin, scale, effects, layerDepth);
+
+    public void DrawString(SpriteFont spriteFont, string text, Vector2 position, Color color,
+        float rotation, Vector2 origin, Vector2 scale, SpriteEffects effects, float layerDepth)
+        => _batch.DrawString(spriteFont, text, position, Encode(color),
+            rotation, origin, scale, effects, layerDepth);
 }
 
 /// <summary>One submitted draw: a sprite (SpriteBatch.Draw args, screen space)
@@ -280,7 +376,9 @@ public sealed class SpriteQueuePass : RenderPass
             }
             else if (item.Texture != null)
             {
-                batch.Draw(item.Texture, item.Position, item.Source, item.Color,
+                // Submitted colors are straight alpha; the material encodes them
+                // here — the queue-side twin of SpriteScope.Draw's conversion.
+                batch.Draw(item.Texture, item.Position, item.Source, mat.Tint(item.Color),
                     item.Rotation, item.Origin, item.Scale, item.Flip, item.LayerDepth);
             }
         }

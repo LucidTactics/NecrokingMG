@@ -333,7 +333,7 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
                         dark ? new Color(35, 35, 35) : new Color(55, 55, 55));
                 }
 
-            ui.SpriteBatch.Draw(_previewTexture, new Rectangle(drawX, pvDrawY, drawW, drawH), Color.White);
+            ui.Scope.Draw(_previewTexture, new Rectangle(drawX, pvDrawY, drawW, drawH), Color.White);
             ui.DrawText($"{_previewTexture.Width}x{_previewTexture.Height}", new Vector2(previewX + 8, pvDrawY + drawH + 4), EditorBase.TextDim);
 
             // Show filename

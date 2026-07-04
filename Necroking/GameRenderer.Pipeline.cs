@@ -31,10 +31,10 @@ partial class GameRenderer
     /// pass and the fog depth-occluder stamp).</summary>
     private void CollectFxItems(RenderContext ctx)
     {
-        _cbFxAlpha ??= (in SpriteScope _, int _, int _) => DrawEffectsFiltered(0);
-        _cbFxProjectilesHdr ??= (in SpriteScope _, int _, int _) => DrawProjectilesHdr();
-        _cbFxEffectsAdd ??= (in SpriteScope _, int _, int _) => DrawEffectsFiltered(1);
-        _cbFxReanim ??= (in SpriteScope s, int _, int _) =>
+        _cbFxAlpha ??= (SpriteScope _, int _, int _) => DrawEffectsFiltered(0);
+        _cbFxProjectilesHdr ??= (SpriteScope _, int _, int _) => DrawProjectilesHdr();
+        _cbFxEffectsAdd ??= (SpriteScope _, int _, int _) => DrawEffectsFiltered(1);
+        _cbFxReanim ??= (SpriteScope s, int _, int _) =>
         {
             if (_g._gameData.Settings.Performance.DepthSortedFog && _g._depthCutoutEffect != null)
             {
@@ -52,14 +52,14 @@ partial class GameRenderer
                 _g._reanimFx.DrawAdditive(); // reanimation light + green cloud puffs (additive HDR)
             }
         };
-        _cbFxLightning ??= (in SpriteScope _, int _, int _) =>
+        _cbFxLightning ??= (SpriteScope _, int _, int _) =>
         {
             // Lightning bolts and drains use HDR vertex encoding — drawn in the
             // additive HDR batch.
             _g._lightningRenderer.SetGameTime(_g._gameTime);
             _g._lightningRenderer.Draw();
         };
-        _cbFxShapes ??= (in SpriteScope _, int _, int _) =>
+        _cbFxShapes ??= (SpriteScope _, int _, int _) =>
         {
             _g._glyphRenderer.DrawEnergyColumns(_g._sim.MagicGlyphs);
 
@@ -75,7 +75,7 @@ partial class GameRenderer
                     // Draw the shape multiple times additively to push values above 1.0
                     int layers = label.Contains("3x") ? 5 : 1;
                     for (int l = 0; l < layers; l++)
-                        _g._spriteBatch.Draw(_g._pixel, rect, col);
+                        _g.Scope.Draw(_g._pixel, rect, col);
                 }
             }
         };
@@ -285,7 +285,7 @@ partial class GameRenderer
         {
             if (_g._collisionDebugMode != CollisionDebugMode.Off)
             {
-                _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+                Materials.Hud.Begin(_g._spriteBatch);
                 _g._debugDraw.DrawCollisionDebug(_g._spriteBatch, _g.GraphicsDevice, _g._sim, _g._camera, _g._renderer,
                     _g._collisionDebugMode, _g._envSystem, _g._sim.Pathfinder);
                 _g._spriteBatch.End();
@@ -296,7 +296,7 @@ partial class GameRenderer
         {
             if (_g._activeScenario != null && _g._activeScenario.ShowWeaponAttachDebug)
             {
-                _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+                Materials.Hud.Begin(_g._spriteBatch);
                 DrawWeaponAttachDebug();
                 _g._spriteBatch.End();
             }
@@ -312,7 +312,7 @@ partial class GameRenderer
         {
             if (_g._gameplayDebugMode > 0)
             {
-                _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+                Materials.Hud.Begin(_g._spriteBatch);
                 if (_g._gameplayDebugMode == 1)
                     DrawHordeDebug();
                 else if (_g._gameplayDebugMode == 2)
@@ -327,7 +327,7 @@ partial class GameRenderer
             {
                 try
                 {
-                    _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+                    Materials.Hud.Begin(_g._spriteBatch);
                     DrawWindDebug(ctx.ScreenW, ctx.ScreenH);
                     _g._spriteBatch.End();
                 }

@@ -33,14 +33,14 @@ partial class GameRenderer
 
             // Outer purple glow
             float outerR = 6f;
-            _g._spriteBatch.Draw(_g._pixel, new Vector2(sp.X - outerR, sp.Y - outerR), null,
-                Color.FromNonPremultiplied(120, 40, 180, 80), 0f, Vector2.Zero,
+            _g.Scope.Draw(_g._pixel, new Vector2(sp.X - outerR, sp.Y - outerR), null,
+                new Color(120, 40, 180, 80), 0f, Vector2.Zero,
                 new Vector2(outerR * 2, outerR * 2), SpriteEffects.None, 0f);
 
             // Inner white bright
             float innerR = 2f;
-            _g._spriteBatch.Draw(_g._pixel, new Vector2(sp.X - innerR, sp.Y - innerR), null,
-                Color.FromNonPremultiplied(255, 255, 255, 200), 0f, Vector2.Zero,
+            _g.Scope.Draw(_g._pixel, new Vector2(sp.X - innerR, sp.Y - innerR), null,
+                new Color(255, 255, 255, 200), 0f, Vector2.Zero,
                 new Vector2(innerR * 2, innerR * 2), SpriteEffects.None, 0f);
         }
     }
@@ -96,7 +96,7 @@ partial class GameRenderer
                     // Use float-based destination to avoid jitter
                     var destPos = new Vector2(sp.X, sp.Y);
                     var destScale = new Vector2((tileW + 0.5f) / srcW, (tileH + 0.5f) / srcH);
-                    _g._spriteBatch.Draw(tex, destPos, srcRect, Color.White, 0f, Vector2.Zero, destScale, SpriteEffects.None, 0f);
+                    _g.Scope.Draw(tex, destPos, srcRect, Color.White, 0f, Vector2.Zero, destScale, SpriteEffects.None, 0f);
                 }
                 else
                 {
@@ -107,7 +107,7 @@ partial class GameRenderer
                         2 => new Color(70, 65, 55),
                         _ => new Color(55, 95, 45)
                     };
-                    _g._spriteBatch.Draw(_g._pixel, sp, null, color, 0f, Vector2.Zero, new Vector2(tileW + 0.5f, tileH + 0.5f), SpriteEffects.None, 0f);
+                    _g.Scope.Draw(_g._pixel, sp, null, color, 0f, Vector2.Zero, new Vector2(tileW + 0.5f, tileH + 0.5f), SpriteEffects.None, 0f);
                 }
             }
         }
@@ -177,9 +177,10 @@ partial class GameRenderer
         // one fullscreen quad through the ground shader, Opaque + PointClamp.
         _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Opaque, SamplerState.PointClamp,
             null, null, _g._groundEffect);
+        Materials.NoteAdHocBatch(); // opaque ground-shader quad, draws White only
 
         // SpriteBatch.Draw binds _g._groundVertexMapTex to slot 0 (= TilemapSampler)
-        _g._spriteBatch.Draw(_g._groundVertexMapTex!, new Rectangle(0, 0, _g._renderer.ScreenW, _g._renderer.ScreenH), Color.White);
+        _g.Scope.Draw(_g._groundVertexMapTex!, new Rectangle(0, 0, _g._renderer.ScreenW, _g._renderer.ScreenH), Color.White);
 
         _g._spriteBatch.End();
 
@@ -239,7 +240,7 @@ partial class GameRenderer
                     float angle = MathF.Atan2(dy, dx);
                     float avgWidth = (prevW + curW) * 0.5f * _g._camera.Zoom;
 
-                    _g._spriteBatch.Draw(_g._pixel, screenA, null, roadColor,
+                    _g.Scope.Draw(_g._pixel, screenA, null, roadColor,
                         angle, new Vector2(0, 0.5f), new Vector2(segLen + 1f, avgWidth), SpriteEffects.None, 0f);
 
                     prev = cur;
@@ -262,7 +263,7 @@ partial class GameRenderer
                 int x0 = (int)(sp.X - halfW);
                 int w = (int)(halfW * 2f);
                 if (w < 1) w = 1;
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle(x0, (int)sp.Y + dy, w, 1), roadColor);
+                _g.Scope.Draw(_g._pixel, new Rectangle(x0, (int)sp.Y + dy, w, 1), roadColor);
             }
         }
     }
@@ -301,7 +302,7 @@ partial class GameRenderer
                 // Make wall tiles slightly taller to give a wall appearance
                 float wallH = tileH * 1.5f;
                 var wallColor = MultiplyColor(def.Color, _g._ambientColor);
-                _g._spriteBatch.Draw(_g._pixel, new Vector2(sp.X, sp.Y - wallH + tileH), null,
+                _g.Scope.Draw(_g._pixel, new Vector2(sp.X, sp.Y - wallH + tileH), null,
                     wallColor, 0f, Vector2.Zero,
                     new Vector2(tileW + 0.5f, wallH), SpriteEffects.None, 0f);
 
@@ -311,7 +312,7 @@ partial class GameRenderer
                     (byte)(wallColor.G * 0.6f),
                     (byte)(wallColor.B * 0.6f),
                     wallColor.A);
-                _g._spriteBatch.Draw(_g._pixel, new Vector2(sp.X, sp.Y - wallH + tileH), null,
+                _g.Scope.Draw(_g._pixel, new Vector2(sp.X, sp.Y - wallH + tileH), null,
                     darkColor, 0f, Vector2.Zero,
                     new Vector2(tileW + 0.5f, 2f), SpriteEffects.None, 0f);
             }
@@ -321,7 +322,7 @@ partial class GameRenderer
     /// <summary>Draw ground-layer objects (traps) — above dirt, below grass/units.
     /// Runs as the Traps layer item inside the world queue; the scope carries the
     /// resume material for any Push/Pop draw (e.g. a dissolving trap).</summary>
-    private void DrawGroundLayerObjects(in SpriteScope scope)
+    private void DrawGroundLayerObjects(SpriteScope scope)
     {
         for (int i = 0; i < _g._envSystem.ObjectCount; i++)
         {
@@ -350,10 +351,10 @@ partial class GameRenderer
                 // Oriented arrow shaft
                 float angle = MathF.Atan2(proj.Velocity.Y * _g._camera.YRatio, proj.Velocity.X);
                 float len = 12f * _g._camera.Zoom / 32f;
-                _g._spriteBatch.Draw(_g._pixel, sp, null, new Color(200, 180, 120),
+                _g.Scope.Draw(_g._pixel, sp, null, new Color(200, 180, 120),
                     angle, new Vector2(0, 0.5f), new Vector2(len, 1.5f), SpriteEffects.None, 0f);
                 // Arrowhead
-                _g._spriteBatch.Draw(_g._pixel, sp, null, new Color(160, 140, 100),
+                _g.Scope.Draw(_g._pixel, sp, null, new Color(160, 140, 100),
                     angle, new Vector2(-2f, 1.5f), new Vector2(4f, 3f), SpriteEffects.None, 0f);
             }
             else if (proj.Type == ProjectileType.Potion)
@@ -367,14 +368,14 @@ partial class GameRenderer
                     float scale = pixelSize / MathF.Max(tex.Width, tex.Height);
                     var origin = new Vector2(tex.Width / 2f, tex.Height / 2f);
                     float tumble = proj.Age * 6f; // fast spin
-                    _g._spriteBatch.Draw(tex, sp, null, Color.White,
+                    _g.Scope.Draw(tex, sp, null, Color.White,
                         tumble, origin, scale, SpriteEffects.None, 0f);
                 }
                 else
                 {
                     // Fallback colored dot
                     float glowSize = 5f * _g._camera.Zoom / 32f;
-                    _g._spriteBatch.Draw(_g._pixel, sp, null, new Color(100, 200, 100, 200),
+                    _g.Scope.Draw(_g._pixel, sp, null, new Color(100, 200, 100, 200),
                         0f, new Vector2(0.5f, 0.5f), glowSize, SpriteEffects.None, 0f);
                 }
             }
@@ -483,7 +484,7 @@ partial class GameRenderer
                     );
 
                     var color = HdrColor.ToHdrVertex(proj.ParticleColor.ToColor(), trailAlpha, proj.ParticleColor.Intensity);
-                    _g._spriteBatch.Draw(fb.Texture, trailPos, trailSrc, color,
+                    _g.Scope.Draw(fb.Texture, trailPos, trailSrc, color,
                         proj.Age * 2f, origin, scale * trailScale, SpriteEffects.None, 0f);
                 }
             }
@@ -492,7 +493,7 @@ partial class GameRenderer
                 // Fallback glow dot
                 float glowSize = 6f * _g._camera.Zoom / 32f;
                 var color = HdrColor.ToHdrVertex(new Color(255, 120, 40), 200f / 255f, 1f);
-                _g._spriteBatch.Draw(_g._pixel, sp, null, color,
+                _g.Scope.Draw(_g._pixel, sp, null, color,
                     0f, new Vector2(0.5f, 0.5f), glowSize, SpriteEffects.None, 0f);
 
                 // Trail segments
@@ -504,7 +505,7 @@ partial class GameRenderer
                         proj.Height - proj.VelocityZ * t * 0.02f, _g._camera);
                     float trailAlpha = (120f / t) / 255f;
                     var tColor = HdrColor.ToHdrVertex(new Color(255, 100, 30), trailAlpha, 1f);
-                    _g._spriteBatch.Draw(_g._pixel, trailPos, null, tColor,
+                    _g.Scope.Draw(_g._pixel, trailPos, null, tColor,
                         0f, new Vector2(0.5f, 0.5f), trailLen / t, SpriteEffects.None, 0f);
                 }
             }
@@ -536,7 +537,7 @@ partial class GameRenderer
                 Color color = blendMode == 0
                     ? HdrColor.ToHdrVertexAlpha(eff.Tint, alpha, eff.HdrIntensity)
                     : HdrColor.ToHdrVertex(eff.Tint, alpha, eff.HdrIntensity);
-                _g._spriteBatch.Draw(fb.Texture, sp, srcRect, color, 0f, origin, fbScale, SpriteEffects.None, 0f);
+                _g.Scope.Draw(fb.Texture, sp, srcRect, color, 0f, origin, fbScale, SpriteEffects.None, 0f);
             }
             else
             {
@@ -546,7 +547,7 @@ partial class GameRenderer
                     ? HdrColor.ToHdrVertexAlpha(eff.Tint, glowAlpha, eff.HdrIntensity)
                     : HdrColor.ToHdrVertex(eff.Tint, glowAlpha, eff.HdrIntensity);
                 float glowSize = scale * _g._camera.Zoom * 0.5f / 32f;
-                _g._spriteBatch.Draw(_g._glowTex, sp, null, color,
+                _g.Scope.Draw(_g._glowTex, sp, null, color,
                     0f, new Vector2(32f, 32f), glowSize, SpriteEffects.None, 0f);
             }
         }
@@ -602,22 +603,22 @@ partial class GameRenderer
 
             // Shadow pass
             var shadowColor = new Color((byte)0, (byte)0, (byte)0, alpha);
-            _g._spriteBatch.DrawString(_g._font, text, new Vector2(pos.X + 1f, pos.Y + 1f), shadowColor,
+            _g.Scope.DrawString(_g._font, text, new Vector2(pos.X + 1f, pos.Y + 1f), shadowColor,
                 0f, Vector2.Zero, dnScale, SpriteEffects.None, 0f);
 
             // Text pass — alert=red, pickup=gold, poison=green, fatigue=blue, else DamageNumberColor
             Color color;
             if (dn.IsAlert)
-                color = Color.FromNonPremultiplied(255, 80, 80, alpha);
+                color = new Color(255, 80, 80, (int)alpha);
             else if (dn.PickupText != null)
-                color = Color.FromNonPremultiplied(255, 220, 100, alpha);
+                color = new Color(255, 220, 100, (int)alpha);
             else if (dn.IsPoison)
-                color = Color.FromNonPremultiplied(40, 200, 40, alpha);
+                color = new Color(40, 200, 40, (int)alpha);
             else if (dn.IsFatigue)
-                color = Color.FromNonPremultiplied(80, 140, 255, alpha);
+                color = new Color(80, 140, 255, (int)alpha);
             else
-                color = Color.FromNonPremultiplied(dnColor.R, dnColor.G, dnColor.B, alpha);
-            _g._spriteBatch.DrawString(_g._font, text, pos, color,
+                color = new Color(dnColor.R, dnColor.G, dnColor.B, alpha);
+            _g.Scope.DrawString(_g._font, text, pos, color,
                 0f, Vector2.Zero, dnScale, SpriteEffects.None, 0f);
         }
     }

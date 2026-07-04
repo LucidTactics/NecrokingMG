@@ -118,11 +118,11 @@ partial class GameRenderer
 
             var rect = new Rectangle(x, y, toastW, toastH);
             // Drop shadow
-            _g._spriteBatch.Draw(_g._pixel, new Rectangle(rect.X + 3, rect.Y + 3, rect.Width, rect.Height),
+            _g.Scope.Draw(_g._pixel, new Rectangle(rect.X + 3, rect.Y + 3, rect.Width, rect.Height),
                 new Color((byte)0, (byte)0, (byte)0, (byte)(160 * alpha)));
-            _g._spriteBatch.Draw(_g._pixel, rect, new Color(leatherMid, alpha));
+            _g.Scope.Draw(_g._pixel, rect, new Color(leatherMid, alpha));
             // Top gold accent band
-            _g._spriteBatch.Draw(_g._pixel, new Rectangle(rect.X, rect.Y, rect.Width, 2),
+            _g.Scope.Draw(_g._pixel, new Rectangle(rect.X, rect.Y, rect.Width, 2),
                 new Color(gold, alpha));
             // Border
             DrawToastBorder(rect, new Color(goldDim, alpha));
@@ -150,7 +150,7 @@ partial class GameRenderer
     }
 
     private void DrawTextRounded(SpriteFont f, string text, Vector2 pos, Color color)
-        => _g._spriteBatch.DrawString(f, text, new Vector2((int)pos.X, (int)pos.Y), color);
+        => _g.Scope.DrawString(f, text, new Vector2((int)pos.X, (int)pos.Y), color);
 
     private static string SanitizeAscii(string text)
     {
@@ -202,7 +202,7 @@ partial class GameRenderer
         for (int dy = -r; dy <= r; dy++)
             for (int dx = -r; dx <= r; dx++)
                 if (dx * dx + dy * dy <= r * r)
-                    _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)pos.X + dx, (int)pos.Y + dy, 1, 1), color);
+                    _g.Scope.Draw(_g._pixel, new Rectangle((int)pos.X + dx, (int)pos.Y + dy, 1, 1), color);
     }
 
     private void DrawWindDebug(int screenW, int screenH)
@@ -246,7 +246,7 @@ partial class GameRenderer
                 byte g = (byte)(55 + (int)(200 * gust));
                 byte b = (byte)(55 + (int)(80 * (1f - gust)));
                 byte a = (byte)(40 + (int)(80 * gust));
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle(px, py, pw, ph), new Color(r, g, b, a));
+                _g.Scope.Draw(_g._pixel, new Rectangle(px, py, pw, ph), new Color(r, g, b, a));
             }
         }
 
@@ -269,15 +269,15 @@ partial class GameRenderer
         DrawDebugLine(tip, tip + new Vector2(MathF.Cos(headAngle2) * headLen, MathF.Sin(headAngle2) * headLen), Color.White);
 
         // Background circle for arrow
-        _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)arrowX - 45, (int)arrowY - 45, 90, 90), new Color(0, 0, 0, 120));
+        _g.Scope.Draw(_g._pixel, new Rectangle((int)arrowX - 45, (int)arrowY - 45, 90, 90), new Color(0, 0, 0, 120));
 
         // Label
         if (_g._smallFont != null)
         {
             float angleDeg = windAngle * 180f / MathF.PI;
-            _g._spriteBatch.DrawString(_g._smallFont, $"Wind {angleDeg:F0} deg",
+            _g.Scope.DrawString(_g._smallFont, $"Wind {angleDeg:F0} deg",
                 new Vector2(16, 108), Color.White);
-            _g._spriteBatch.DrawString(_g._smallFont, "F6: Wind Debug",
+            _g.Scope.DrawString(_g._smallFont, "F6: Wind Debug",
                 new Vector2(16, 122), new Color(180, 180, 180));
         }
     }
@@ -288,7 +288,7 @@ partial class GameRenderer
         float len = MathF.Sqrt(dx * dx + dy * dy);
         if (len < 0.5f) return;
         float angle = MathF.Atan2(dy, dx);
-        _g._spriteBatch.Draw(_g._pixel, a, null, color, angle, Vector2.Zero, new Vector2(len, 1f), SpriteEffects.None, 0f);
+        _g.Scope.Draw(_g._pixel, a, null, color, angle, Vector2.Zero, new Vector2(len, 1f), SpriteEffects.None, 0f);
     }
 
     /// <summary>Draw one F7 horde ring (a circle outline) plus a label at its north
@@ -301,7 +301,7 @@ partial class GameRenderer
         var top = _g._camera.WorldToScreen(center + new Vec2(0f, -radius), 0f, screenW, screenH);
         var sz = _g._smallFont.MeasureString(label);
         var labelColor = new Color(color.R, color.G, color.B, (byte)255);
-        _g._spriteBatch.DrawString(_g._smallFont, label,
+        _g.Scope.DrawString(_g._smallFont, label,
             new Vector2((int)(top.X - sz.X / 2f), (int)(top.Y - sz.Y - 1)), labelColor);
     }
 
@@ -353,8 +353,8 @@ partial class GameRenderer
                 var cmdSp = _g._camera.WorldToScreen(cmdTarget, 0f, screenW, screenH);
                 var cmdCol = new Color(255, 90, 235, 210);
                 // Command-point marker (larger cross to distinguish from slot crosses)
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)cmdSp.X - 4, (int)cmdSp.Y, 9, 1), cmdCol);
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)cmdSp.X, (int)cmdSp.Y - 4, 1, 9), cmdCol);
+                _g.Scope.Draw(_g._pixel, new Rectangle((int)cmdSp.X - 4, (int)cmdSp.Y, 9, 1), cmdCol);
+                _g.Scope.Draw(_g._pixel, new Rectangle((int)cmdSp.X, (int)cmdSp.Y - 4, 1, 9), cmdCol);
                 _g._debugDraw.DrawArrow(_g._spriteBatch, unitSp, cmdSp, cmdCol);
             }
             // Line to slot target (formation followers only)
@@ -362,8 +362,8 @@ partial class GameRenderer
             {
                 var slotSp = _g._camera.WorldToScreen(slotPos, 0f, screenW, screenH);
                 // Slot marker (small cross)
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)slotSp.X - 3, (int)slotSp.Y, 7, 1), new Color(100, 200, 100, 150));
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)slotSp.X, (int)slotSp.Y - 3, 1, 7), new Color(100, 200, 100, 150));
+                _g.Scope.Draw(_g._pixel, new Rectangle((int)slotSp.X - 3, (int)slotSp.Y, 7, 1), new Color(100, 200, 100, 150));
+                _g.Scope.Draw(_g._pixel, new Rectangle((int)slotSp.X, (int)slotSp.Y - 3, 1, 7), new Color(100, 200, 100, 150));
                 // Line from unit to slot
                 Color lineCol = unit.State switch
                 {
@@ -381,14 +381,14 @@ partial class GameRenderer
             if (_g._smallFont != null)
             {
                 string stateLabel = commanded ? "Commanded" : unit.State.ToString();
-                _g._spriteBatch.DrawString(_g._smallFont, stateLabel,
+                _g.Scope.DrawString(_g._smallFont, stateLabel,
                     new Vector2(unitSp.X + 8, unitSp.Y - 16), new Color(200, 200, 200, 200));
             }
         }
 
         // Mode label
         if (_g._smallFont != null)
-            _g._spriteBatch.DrawString(_g._smallFont, "[F7] Debug: Horde",
+            _g.Scope.DrawString(_g._smallFont, "[F7] Debug: Horde",
                 new Vector2(10, 26), new Color(100, 255, 100, 200));
     }
 
@@ -512,12 +512,12 @@ partial class GameRenderer
             // Approximate width for anchoring — SpriteFont.MeasureString is accurate
             // but per-unit MeasureString every frame is hot-path waste.
             var textPos = new Vector2(sp.X - info.Length, sp.Y - 28);
-            _g._spriteBatch.DrawString(_g._smallFont, info, textPos, new Color(255, 255, 200, 220));
+            _g.Scope.DrawString(_g._smallFont, info, textPos, new Color(255, 255, 200, 220));
         }
 
         // Mode label
         if (_g._smallFont != null)
-            _g._spriteBatch.DrawString(_g._smallFont, "[F7] Debug: Unit Info",
+            _g.Scope.DrawString(_g._smallFont, "[F7] Debug: Unit Info",
                 new Vector2(10, 26), new Color(80, 200, 255, 200));
     }
 
@@ -605,7 +605,7 @@ partial class GameRenderer
         int ty = boxY + pad;
         foreach (var (text, color) in lines)
         {
-            _g._spriteBatch.DrawString(f, SanitizeAscii(text),
+            _g.Scope.DrawString(f, SanitizeAscii(text),
                 new Vector2(boxX + pad, ty), color);
             ty += lineH + gap;
         }
@@ -789,7 +789,7 @@ partial class GameRenderer
     private void DrawPauseMenu(int screenW, int screenH)
     {
         if (_g._gameData.Settings.General.PauseDimBackground)
-            _g._spriteBatch.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
+            _g.Scope.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
 
         int boxW = 350;
         int btnCount = 10; // Resume + 5 editors + Settings + Multiplayer + Main Menu + Quit (hit-tests: Game1.cs pause-menu click block — keep in lockstep!)
@@ -941,9 +941,9 @@ partial class GameRenderer
         int mx = (int)_g._input.MousePos.X, my = (int)_g._input.MousePos.Y;
         bool hover = mx >= x && mx < x + w && my >= y && my < y + h;
         Color bg = hover ? new Color(90, 60, 120, 240) : new Color(60, 40, 80, 220);
-        _g._spriteBatch.Draw(_g._pixel, new Rectangle(x, y, w, h), bg);
-        _g._spriteBatch.Draw(_g._pixel, new Rectangle(x, y, w, 2), new Color(220, 180, 100, hover ? 255 : 120));
-        _g._spriteBatch.Draw(_g._pixel, new Rectangle(x, y + h - 2, w, 2), new Color(220, 180, 100, hover ? 255 : 60));
+        _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, h), bg);
+        _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, 2), new Color(220, 180, 100, hover ? 255 : 120));
+        _g.Scope.Draw(_g._pixel, new Rectangle(x, y + h - 2, w, 2), new Color(220, 180, 100, hover ? 255 : 60));
 
         if (_g._font != null)
         {
@@ -961,9 +961,9 @@ partial class GameRenderer
         int mx = (int)_g._input.MousePos.X, my = (int)_g._input.MousePos.Y;
         bool hover = mx >= x && mx < x + w && my >= y && my < y + h;
         Color bg = hover ? new Color(90, 60, 120, 240) : new Color(60, 40, 80, 220);
-        _g._spriteBatch.Draw(_g._pixel, new Rectangle(x, y, w, h), bg);
-        _g._spriteBatch.Draw(_g._pixel, new Rectangle(x, y, w, 2), new Color(220, 180, 100, hover ? 255 : 120));
-        _g._spriteBatch.Draw(_g._pixel, new Rectangle(x, y + h - 2, w, 2), new Color(220, 180, 100, hover ? 255 : 60));
+        _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, h), bg);
+        _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, 2), new Color(220, 180, 100, hover ? 255 : 120));
+        _g.Scope.Draw(_g._pixel, new Rectangle(x, y + h - 2, w, 2), new Color(220, 180, 100, hover ? 255 : 60));
 
         if (_g._font != null)
         {
@@ -976,7 +976,7 @@ partial class GameRenderer
 
     private void DrawGameOver(int screenW, int screenH)
     {
-        _g._spriteBatch.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 160));
+        _g.Scope.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 160));
         if (_g._largeFont != null)
         {
             string title = "NECROMANCER FALLEN";
@@ -994,13 +994,13 @@ partial class GameRenderer
     private void DrawText(SpriteFont? font, string text, Vector2 pos, Color color)
     {
         if (font != null)
-            _g._spriteBatch.DrawString(font, text, pos, color);
+            _g.Scope.DrawString(font, text, pos, color);
     }
 
     private void DrawText(SpriteFont? font, string text, Vector2 pos, Color color, float scale)
     {
         if (font != null)
-            _g._spriteBatch.DrawString(font, text, pos, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+            _g.Scope.DrawString(font, text, pos, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
     }
 
     /// <summary>Draw a filled panel (rectangle) with an optional accent bar at the top (or bottom).
@@ -1008,11 +1008,11 @@ partial class GameRenderer
     /// The accent bar is drawn on top of the fill at the specified height (default 2px).</summary>
     private void DrawPanel(Rectangle r, Color fill, Color accent, int accentH = 2, bool bottomAccent = false)
     {
-        _g._spriteBatch.Draw(_g._pixel, r, fill);
+        _g.Scope.Draw(_g._pixel, r, fill);
         if (bottomAccent)
-            _g._spriteBatch.Draw(_g._pixel, new Rectangle(r.X, r.Bottom - accentH, r.Width, accentH), accent);
+            _g.Scope.Draw(_g._pixel, new Rectangle(r.X, r.Bottom - accentH, r.Width, accentH), accent);
         else
-            _g._spriteBatch.Draw(_g._pixel, new Rectangle(r.X, r.Y, r.Width, accentH), accent);
+            _g.Scope.Draw(_g._pixel, new Rectangle(r.X, r.Y, r.Width, accentH), accent);
     }
 
     /// <summary>Draw the menu background: cover-scale bg image (or fallback fill) + dark overlay for contrast.
@@ -1026,16 +1026,16 @@ partial class GameRenderer
                                       (float)screenH / _g._mainMenuBg.Height);
             float bgW = _g._mainMenuBg.Width * bgScale;
             float bgH = _g._mainMenuBg.Height * bgScale;
-            _g._spriteBatch.Draw(_g._mainMenuBg,
+            _g.Scope.Draw(_g._mainMenuBg,
                 new Rectangle((int)((screenW - bgW) * 0.5f), (int)((screenH - bgH) * 0.5f),
                               (int)bgW, (int)bgH),
                 Color.White);
         }
         else
         {
-            _g._spriteBatch.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(20, 15, 30));
+            _g.Scope.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(20, 15, 30));
         }
         // Dark overlay for contrast
-        _g._spriteBatch.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 120));
+        _g.Scope.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 120));
     }
 }

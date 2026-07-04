@@ -32,12 +32,14 @@ internal static class EffectBatch
     public static BlendState HudBlend => Materials.Hud.Blend;
     public static SamplerState HudSampler => Materials.Hud.Sampler;
 
-    /// <summary>Begin the scene pass with its canonical state.</summary>
+    /// <summary>Begin the scene pass with its canonical state (via Material.Begin
+    /// so <see cref="Materials.Open"/> stays accurate for color encoding).</summary>
     public static void BeginScenePass(SpriteBatch batch)
-        => batch.Begin(SpriteSortMode.Deferred, SceneBlend, SceneSampler);
+        => Materials.Scene.Begin(batch);
 
-    /// <summary>Begin the HUD pass with its canonical state.</summary>
+    /// <summary>Begin the HUD pass with its canonical state (via Material.Begin
+    /// so <see cref="Materials.Open"/> stays accurate for color encoding).</summary>
     public static void BeginHudPass(SpriteBatch batch)
-        => batch.Begin(SpriteSortMode.Deferred, HudBlend, HudSampler);
+        => Materials.Hud.Begin(batch);
 
 }

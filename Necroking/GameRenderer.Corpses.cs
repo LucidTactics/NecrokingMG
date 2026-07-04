@@ -28,7 +28,7 @@ partial class GameRenderer
     // the crossfaded body color + green energy in the bulge gaps, and traces a pulsing green outline
     // on the morphed edge. Returns false if the shader / morph data is unavailable (caller falls
     // back to an alpha crossfade). Draws in its own batch (like DrawSpriteOutline), then restores.
-    private bool DrawReanimMorph(in SpriteScope scope,
+    private bool DrawReanimMorph(SpriteScope scope,
         SpriteAtlas atlasDeath, int deathAtlasId, SpriteFrame death, bool deathFlip,
         SpriteAtlas atlasStandup, int standupAtlasId, SpriteFrame standup, bool standupFlip,
         Vector2 sp, float scale, Color tint, float morphT,
@@ -66,7 +66,8 @@ partial class GameRenderer
         // (Point would turn the SDF blocky).
 
         scope.PushMaterial(Materials.MorphSdf);
-        scope.Batch.Draw(md.ColorA, sp, null, tint, 0f, new Vector2(md.PivotX, md.PivotY), scale, SpriteEffects.None, 0f);
+        // scope.Draw premultiplies the straight tint for the morph shader.
+        scope.Draw(md.ColorA, sp, null, tint, 0f, new Vector2(md.PivotX, md.PivotY), scale, SpriteEffects.None, 0f);
         scope.PopMaterial();
         return true;
     }
@@ -105,7 +106,7 @@ partial class GameRenderer
         return result;
     }
 
-    private void DrawCorpses(in SpriteScope scope)
+    private void DrawCorpses(SpriteScope scope)
     {
         // Hover-highlight target (captured below as its sprite is drawn).
         Corpse? hoveredCorpse = (_g._gameData.Settings.Tooltips.ShowHoverHighlight
@@ -379,7 +380,7 @@ partial class GameRenderer
             float pivotY = 1f - frame.PivotY;
             var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
             var effects = fr.FlipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-            _g._spriteBatch.Draw(tex, screenPos, frame.Rect, _g._ambientColor, rotation, origin, scale, effects, 0f);
+            _g.Scope.Draw(tex, screenPos, frame.Rect, _g._ambientColor, rotation, origin, scale, effects, 0f);
         }
     }
 
@@ -390,8 +391,8 @@ partial class GameRenderer
         float barX = screenPos.X - barW / 2f;
         float barY = screenPos.Y - 18f;
 
-        _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)barX - 1, (int)barY - 1, (int)barW + 2, (int)barH + 2), new Color(0, 0, 0, 180));
-        _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)barX, (int)barY, (int)(barW * progress), (int)barH), new Color(220, 180, 40));
+        _g.Scope.Draw(_g._pixel, new Rectangle((int)barX - 1, (int)barY - 1, (int)barW + 2, (int)barH + 2), new Color(0, 0, 0, 180));
+        _g.Scope.Draw(_g._pixel, new Rectangle((int)barX, (int)barY, (int)(barW * progress), (int)barH), new Color(220, 180, 40));
     }
 
     private void DrawBuildProgressBar(Vector2 screenPos, float progress, float worldRadius = 0f)
@@ -412,8 +413,8 @@ partial class GameRenderer
         float barH = 3f;
         float barX = screenPos.X - barW / 2f;
 
-        _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)barX - 1, (int)barY - 1, (int)barW + 2, (int)barH + 2), new Color(0, 0, 0, 180));
-        _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)barX, (int)barY, (int)(barW * progress), (int)barH), new Color(80, 180, 220));
+        _g.Scope.Draw(_g._pixel, new Rectangle((int)barX - 1, (int)barY - 1, (int)barW + 2, (int)barH + 2), new Color(0, 0, 0, 180));
+        _g.Scope.Draw(_g._pixel, new Rectangle((int)barX, (int)barY, (int)(barW * progress), (int)barH), new Color(80, 180, 220));
     }
 
     private void DrawCarriedBodyBag(int unitIdx, Vector2 unitScreenPos, float unitScale, float facingAngle)
@@ -519,7 +520,7 @@ partial class GameRenderer
         float pivotY = 1f - frame.PivotY; // spritemeta pivots are bottom-left origin
         var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-        _g._spriteBatch.Draw(tex, screenPos, frame.Rect, _g._ambientColor, rotation, origin, scale, effects, 0f);
+        _g.Scope.Draw(tex, screenPos, frame.Rect, _g._ambientColor, rotation, origin, scale, effects, 0f);
     }
 
     /// <summary>Opaque-pixel centroid of a frame, in frame-local top-left pixels.
@@ -849,7 +850,7 @@ partial class GameRenderer
         float originX = flipX ? (frame.Rect.Width - centroid.X) : centroid.X;
         var origin = new Vector2(originX, centroid.Y);
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-        _g._spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
+        _g.Scope.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
 
         // Hover-highlight: this draw uses a centroid origin (not the pivot), so
         // build the box from that rather than SpriteFrameAABB.

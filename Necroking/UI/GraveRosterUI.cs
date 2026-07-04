@@ -14,6 +14,7 @@ namespace Necroking.UI;
 public class GraveRosterUI : IModalLayer
 {
     private SpriteBatch _batch = null!;
+    private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
     private Texture2D _pixel = null!;
     private RuntimeWidgetRenderer _r = null!;
     private WorkerSystem _ws = null!;
@@ -102,7 +103,7 @@ public class GraveRosterUI : IModalLayer
     {
         if (!_visible || _graveObjIdx < 0) return;
         var panel = new Rectangle(_x, _y, _w, _h);
-        _batch.Draw(_pixel, panel, new Color(22, 20, 26, 235));
+        Scope.Draw(_pixel, panel, new Color(22, 20, 26, 235));
         Border(panel, new Color(150, 140, 160, 220), 2);
 
         Text("Empty Grave", _x + Pad, _y + 6, FsTitle, new Color(228, 222, 232));
@@ -121,7 +122,7 @@ public class GraveRosterUI : IModalLayer
 
         // Divider + label.
         int dy = hy + RowH + 6;
-        _batch.Draw(_pixel, new Rectangle(_x + Pad, dy, _w - 2 * Pad, 1), new Color(90, 85, 95, 200));
+        Scope.Draw(_pixel, new Rectangle(_x + Pad, dy, _w - 2 * Pad, 1), new Color(90, 85, 95, 200));
         Text("Assign humanoid undead:", _x + Pad, dy + 7, FsSmall, new Color(172, 167, 182));
 
         // Candidate list.
@@ -132,7 +133,7 @@ public class GraveRosterUI : IModalLayer
             if (idx >= candidates.Count) break;
             int rowY = ListTop + r * RowH;
             var rowRect = new Rectangle(_x + Pad, rowY, _w - 2 * Pad, RowH - 4);
-            _batch.Draw(_pixel, rowRect, new Color(38, 36, 44, 220));
+            Scope.Draw(_pixel, rowRect, new Color(38, 36, 44, 220));
             Border(rowRect, new Color(70, 66, 80, 160), 1);
             Text(candidates[idx].Name, _x + Pad + 8, rowY + 5, FsBody, new Color(218, 218, 223));
             DrawButton(RowActionRect(rowY), "Assign", new Color(58, 84, 64, 235));
@@ -153,7 +154,7 @@ public class GraveRosterUI : IModalLayer
 
     private void DrawButton(Rectangle r, string label, Color fill)
     {
-        _batch.Draw(_pixel, r, fill);
+        Scope.Draw(_pixel, r, fill);
         Border(r, new Color(206, 206, 214, 200), 1);
         var sz = _r.MeasureText(label, FsBtn);
         _r.DrawText(label, (int)(r.X + (r.Width - sz.X) / 2f), (int)(r.Y + (r.Height - sz.Y) / 2f), FsBtn, new Color(232, 232, 236));

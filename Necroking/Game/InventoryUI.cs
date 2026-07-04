@@ -32,6 +32,7 @@ public class InventoryUI : Necroking.UI.IModalLayer
     private Inventory _inventory;
     private ItemRegistry _items;
     private SpriteBatch? _batch;
+    private Render.SpriteScope Scope => _batch!;  // straight-alpha draw surface (implicit conversion)
     private Texture2D? _pixel;
     private InputState? _lastInput;
 
@@ -264,7 +265,7 @@ public class InventoryUI : Necroking.UI.IModalLayer
             var r = rects[ci];
             if (r.Contains(mx, my))
             {
-                _batch.Draw(_pixel, r, Color.White * 0.1f);
+                Scope.Draw(_pixel, r, new Color(255, 255, 255, 26));
                 hoveredSlot = i;
                 break;
             }
@@ -318,7 +319,7 @@ public class InventoryUI : Necroking.UI.IModalLayer
         tx = System.Math.Max(4, tx);
         ty = System.Math.Max(4, ty);
 
-        _batch.Draw(_pixel, new Rectangle(tx, ty, TipW, height), TipBg);
+        Scope.Draw(_pixel, new Rectangle(tx, ty, TipW, height), TipBg);
         DrawTipBorder(tx, ty, TipW, height, TipBorder, 2);
 
         int cy = ty + Pad;
@@ -339,7 +340,7 @@ public class InventoryUI : Necroking.UI.IModalLayer
         }
 
         cy += 3;
-        _batch.Draw(_pixel, new Rectangle(tx + Pad, cy, innerW, 1), TipBorder);
+        Scope.Draw(_pixel, new Rectangle(tx + Pad, cy, innerW, 1), TipBorder);
         cy += 5;
         foreach (var (label, value, color) in lines)
         {
@@ -353,10 +354,10 @@ public class InventoryUI : Necroking.UI.IModalLayer
     private void DrawTipBorder(int x, int y, int w, int h, Color c, int t)
     {
         if (_batch == null || _pixel == null) return;
-        _batch.Draw(_pixel, new Rectangle(x, y, w, t), c);
-        _batch.Draw(_pixel, new Rectangle(x, y + h - t, w, t), c);
-        _batch.Draw(_pixel, new Rectangle(x, y + t, t, h - t * 2), c);
-        _batch.Draw(_pixel, new Rectangle(x + w - t, y + t, t, h - t * 2), c);
+        Scope.Draw(_pixel, new Rectangle(x, y, w, t), c);
+        Scope.Draw(_pixel, new Rectangle(x, y + h - t, w, t), c);
+        Scope.Draw(_pixel, new Rectangle(x, y + t, t, h - t * 2), c);
+        Scope.Draw(_pixel, new Rectangle(x + w - t, y + t, t, h - t * 2), c);
     }
 
     /// <summary>Greedy word-wrap to a pixel width using the widget font.</summary>

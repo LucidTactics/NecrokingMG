@@ -417,7 +417,7 @@ public class DeathFogSystem
 
     /// <summary>Draw a translucent heat-map quad per non-zero cell. Caller must
     /// have an active SpriteBatch with PointClamp/AlphaBlend (the standard pass).</summary>
-    public void DrawDebug(SpriteBatch batch, Texture2D pixel, Render.Renderer renderer,
+    public void DrawDebug(Render.SpriteScope batch, Texture2D pixel, Render.Renderer renderer,
         Render.Camera25D camera)
     {
         if (!DebugVisible || _read.Length == 0) return;

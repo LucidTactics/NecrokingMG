@@ -40,7 +40,7 @@ partial class GameRenderer
         if (_g._menuState == MenuState.MainMenu)
         {
             _g.GraphicsDevice.Clear(new Color(20, 15, 30));
-            _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+            Materials.Hud.Begin(_g._spriteBatch);
             DrawMainMenu(screenW, screenH);
             _g._spriteBatch.End();
             _g.CompletePendingDevScreenshot();
@@ -51,7 +51,7 @@ partial class GameRenderer
         if (_g._menuState == MenuState.ScenarioList)
         {
             _g.GraphicsDevice.Clear(new Color(20, 15, 30));
-            _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+            Materials.Hud.Begin(_g._spriteBatch);
             DrawScenarioList(screenW, screenH);
             _g._spriteBatch.End();
             _g.CompletePendingDevScreenshot();
@@ -120,7 +120,7 @@ partial class GameRenderer
     /// stress labels. Body moved verbatim out of Draw() (step 0); owns its batch.</summary>
     private void DrawDeathFogDebugOverlay()
     {
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+        Materials.Hud.Begin(_g._spriteBatch);
         _g._deathFog.DrawDebug(_g._spriteBatch, _g._pixel, _g._renderer, _g._camera);
 
         // Per-corruptable-object stress label: "stress/threshold" when stress > 0,
@@ -164,10 +164,10 @@ partial class GameRenderer
             {
                 var size = _g._smallFont.MeasureString(label);
                 var pos = new Vector2((int)(sp.X - size.X * 0.5f), (int)(sp.Y - 16));
-                _g._spriteBatch.Draw(_g._pixel,
+                _g.Scope.Draw(_g._pixel,
                     new Rectangle((int)pos.X - 2, (int)pos.Y - 1, (int)size.X + 4, (int)size.Y + 2),
                     new Color(0, 0, 0, 180));
-                _g._spriteBatch.DrawString(_g._smallFont, label, pos, labelColor);
+                _g.Scope.DrawString(_g._smallFont, label, pos, labelColor);
             }
         }
 
@@ -178,7 +178,7 @@ partial class GameRenderer
     /// unit names. Body moved verbatim out of Draw() (step 0); owns its batch.</summary>
     private void DrawAltNameLabels(int screenW, int screenH)
     {
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+        Materials.Hud.Begin(_g._spriteBatch);
 
         // Draws a centered name label at a world position, boxed for legibility.
         // Returns silently if the position is off-screen or the label is empty.
@@ -189,9 +189,9 @@ partial class GameRenderer
             if (sp.X <= -100 || sp.X >= screenW + 100 || sp.Y <= -100 || sp.Y >= screenH + 100) return;
             var textSize = _g._smallFont != null ? _g._smallFont.MeasureString(label) : new Vector2(label.Length * 6, 12);
             var textPos = new Vector2((int)(sp.X - textSize.X * 0.5f), (int)(sp.Y + 4));
-            _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)textPos.X - 2, (int)textPos.Y - 1, (int)textSize.X + 4, (int)textSize.Y + 2), new Color(0, 0, 0, 160));
+            _g.Scope.Draw(_g._pixel, new Rectangle((int)textPos.X - 2, (int)textPos.Y - 1, (int)textSize.X + 4, (int)textSize.Y + 2), new Color(0, 0, 0, 160));
             if (_g._smallFont != null)
-                _g._spriteBatch.DrawString(_g._smallFont, label, textPos, color);
+                _g.Scope.DrawString(_g._smallFont, label, textPos, color);
         }
 
         for (int oi = 0; oi < _g._envSystem.ObjectCount; oi++)

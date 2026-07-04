@@ -1438,18 +1438,15 @@ public class UnitEditorWindow
         var hiltScreen = WeaponPointToScreen(wpFrame.Hilt.X, wpFrame.Hilt.Y);
         var tipScreen = WeaponPointToScreen(wpFrame.Tip.X, wpFrame.Tip.Y);
 
-        // SpriteBatch runs with BlendState.AlphaBlend (premultiplied
-        // convention), so build via FromNonPremultiplied — otherwise the
-        // alpha slider in the colour swatch has no visible effect and
-        // partially-transparent values render as solid.
-        var lineColor = Color.FromNonPremultiplied(_weaponLineColor.R, _weaponLineColor.G, _weaponLineColor.B, _weaponLineColor.A);
+        // Straight alpha — the draw surface premultiplies for the open material.
+        var lineColor = _weaponLineColor.ToColor();
         _ui.DrawLine(hiltScreen, tipScreen, lineColor, 2);
 
         // U02: Draw circles at hilt and tip positions (4px radius approximated with line segments).
         // Reuse the swatch alpha so you can see through the markers too.
         byte a = _weaponLineColor.A;
-        DrawCircleOverlay(hiltScreen, 4, Color.FromNonPremultiplied(80, 200, 255, a));
-        DrawCircleOverlay(tipScreen,  4, Color.FromNonPremultiplied(255, 200, 80, a));
+        DrawCircleOverlay(hiltScreen, 4, new Color((byte)80, (byte)200, (byte)255, a));
+        DrawCircleOverlay(tipScreen,  4, new Color((byte)255, (byte)200, (byte)80, a));
     }
 
     /// <summary>Draw a circle at the given screen position using line segments.</summary>
@@ -2336,7 +2333,7 @@ public class UnitEditorWindow
             {
                 int padX = (cellW - 24) / 2;
                 int padY = (cellH - 24) / 2;
-                _ui.SpriteBatch.Draw(tex, new Rectangle(iconRect.X + padX, iconRect.Y + padY, 24, 24),
+                _ui.Scope.Draw(tex, new Rectangle(iconRect.X + padX, iconRect.Y + padY, 24, 24),
                     Microsoft.Xna.Framework.Color.White);
             }
             else

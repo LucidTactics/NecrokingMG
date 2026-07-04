@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Necroking.Core;
 // The project has its own Necroking.Render.Effect (game effects), so the shader
@@ -43,10 +44,19 @@ public sealed class Material
     /// never merges consecutive items of this material.</summary>
     public readonly bool RequiresPerDrawParams;
 
+    /// <summary>True when this material's blend/shader expects a PREMULTIPLIED
+    /// vertex tint (the One/InvSrcAlpha premult pair, or a shader that multiplies
+    /// the premult texel by vertex color). Call sites always author STRAIGHT
+    /// alpha; the draw layer applies <see cref="Tint"/> so the conversion happens
+    /// in exactly one place. False for straight-alpha blends (NonPremultiplied),
+    /// additive (SrcAlpha/One already applies alpha), and materials whose vertex
+    /// color is a special encoding (HDR pack, depth-only).</summary>
+    public readonly bool PremultiplyTint;
+
     internal Material(string name, ushort id, XnaEffect? effect, BlendState blend,
         SamplerState sampler, DepthStencilState depthStencil, RasterizerState? rasterizer,
         SpriteSortMode sortMode, (int, SamplerState)[]? extraSamplerSlots,
-        bool requiresPerDrawParams)
+        bool requiresPerDrawParams, bool premultiplyTint)
     {
         Name = name;
         Id = id;
@@ -58,14 +68,25 @@ public sealed class Material
         SortMode = sortMode;
         ExtraSamplerSlots = extraSamplerSlots ?? Array.Empty<(int, SamplerState)>();
         RequiresPerDrawParams = requiresPerDrawParams;
+        PremultiplyTint = premultiplyTint;
     }
 
-    /// <summary>Open a SpriteBatch with this material's full state.</summary>
+    /// <summary>Encode a straight-alpha tint into this material's native form —
+    /// premultiplied when <see cref="PremultiplyTint"/>, unchanged otherwise.
+    /// The single conversion point behind SpriteScope.Draw and the queue flush.</summary>
+    public Color Tint(Color straight)
+        => PremultiplyTint ? ColorUtils.Premultiply(straight) : straight;
+
+    /// <summary>Open a SpriteBatch with this material's full state. Also stamps
+    /// <see cref="Materials.Open"/> — the single fact the draw surfaces consult
+    /// to encode colors, which is why ALL batch opens must go through a
+    /// Material (never ad-hoc <c>batch.Begin</c> in scene/UI code).</summary>
     public void Begin(SpriteBatch batch)
     {
         batch.Begin(SortMode, Blend, Sampler, DepthStencil, Rasterizer, Effect);
         foreach (var (slot, sampler) in ExtraSamplerSlots)
             batch.GraphicsDevice.SamplerStates[slot] = sampler;
+        Materials.Open = this;
     }
 }
 
@@ -81,14 +102,33 @@ public static class Materials
 {
     private static readonly List<Material> All = new();
 
+    /// <summary>The material whose batch was opened most recently (rendering is
+    /// single-threaded, so this IS the open batch's material as long as every
+    /// Begin routes through <see cref="Material.Begin"/>). Null until the first
+    /// material opens, or meaningless while a raw ad-hoc batch is open — draw
+    /// surfaces treat null as "no conversion", matching raw-batch behavior.
+    /// Infrastructure that opens raw batches with special semantics (bloom mip
+    /// chain, RT preview passes) should set this null via <see cref="NoteAdHocBatch"/>
+    /// if scope draws could run before the next material opens.</summary>
+    public static Material? Open { get; internal set; }
+
+    /// <summary>Mark that a raw (non-Material) batch was opened, so scope draws
+    /// stop converting until the next Material.Begin.</summary>
+    public static void NoteAdHocBatch() => Open = null;
+
     public static Material Register(string name, XnaEffect? effect, BlendState blend,
         SamplerState sampler, DepthStencilState? depthStencil = null,
         RasterizerState? rasterizer = null, SpriteSortMode sortMode = SpriteSortMode.Deferred,
-        (int, SamplerState)[]? extraSamplerSlots = null, bool perDrawParams = false)
+        (int, SamplerState)[]? extraSamplerSlots = null, bool perDrawParams = false,
+        bool? premultiplyTint = null)
     {
+        // Default: the shared AlphaBlend state is the premult pair (One/InvSrcAlpha)
+        // → vertex tints need premultiplying. Everything else (NonPremultiplied,
+        // Additive, custom blends) takes tints as-authored unless overridden.
         var m = new Material(name, (ushort)All.Count, effect, blend, sampler,
             depthStencil ?? DepthStencilState.None, rasterizer, sortMode,
-            extraSamplerSlots, perDrawParams);
+            extraSamplerSlots, perDrawParams,
+            premultiplyTint ?? ReferenceEquals(blend, BlendState.AlphaBlend));
         All.Add(m);
         return m;
     }
@@ -109,6 +149,14 @@ public static class Materials
     /// <summary>Plain additive shapes (energy columns, debug shapes) — no shader.</summary>
     public static readonly Material AdditiveShapes =
         Register("AdditiveShapes", null, BlendState.Additive, SamplerState.LinearClamp);
+
+    private static readonly RasterizerState ScissorRaster = new() { ScissorTestEnable = true };
+
+    /// <summary>HUD state with scissor clipping enabled (editor BeginClip regions).
+    /// The scissor RECT is device state, set by the caller before Begin.</summary>
+    public static readonly Material HudScissor =
+        Register("HudScissor", null, BlendState.AlphaBlend, SamplerState.PointClamp,
+            rasterizer: ScissorRaster);
 
     /// <summary>Ground-fog wisps: alpha-blended, DEPTH-TESTED (read-only)
     /// against the unit silhouettes stamped by the fog occluder pass — a wisp
@@ -195,7 +243,11 @@ public static class Materials
             var alphaFx = hdrSprite.Clone();
             alphaFx.Parameters["MaxIntensity"]?.SetValue(HdrColor.MaxHdrIntensity);
             alphaFx.Parameters["AlphaMode"]?.SetValue(1f);
-            HdrAlpha = Register("HdrAlpha", alphaFx, BlendState.AlphaBlend, SamplerState.LinearClamp);
+            // premultiplyTint: false — HDR vertex colors are a special encoding
+            // (HdrColor.ToHdrVertex* packs intensity into the channels); the
+            // shader does its own premultiply. Never auto-convert them.
+            HdrAlpha = Register("HdrAlpha", alphaFx, BlendState.AlphaBlend, SamplerState.LinearClamp,
+                premultiplyTint: false);
 
             var addFx = hdrSprite.Clone();
             addFx.Parameters["MaxIntensity"]?.SetValue(HdrColor.MaxHdrIntensity);

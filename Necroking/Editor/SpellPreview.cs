@@ -33,6 +33,7 @@ public class SpellPreview
 
     private GraphicsDevice _gd = null!;
     private SpriteBatch _sb = null!;
+    private Render.SpriteScope Scope => _sb;  // straight-alpha draw surface (implicit conversion)
     private RenderTarget2D? _rt;
     private Texture2D _pixel = null!;
     private Texture2D _glowTex = null!;
@@ -500,7 +501,7 @@ public class SpellPreview
         }
 
         // Alpha blend pass: ground, markers, projectiles, effects
-        _sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp);
+        Render.Materials.Hud.Begin(_sb);
         DrawGround();
         DrawMarkers();
         DrawProjectiles();
@@ -514,10 +515,12 @@ public class SpellPreview
             _hdrSpriteEffect.Parameters["AlphaMode"]?.SetValue(0f);
             _sb.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp,
                 effect: _hdrSpriteEffect);
+            Render.Materials.NoteAdHocBatch(); // HDR-encoded colors — no tint conversion
         }
         else
         {
             _sb.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp);
+            Render.Materials.NoteAdHocBatch(); // additive pass — colors pass through raw
         }
 
         DrawStrikes();
@@ -579,14 +582,14 @@ public class SpellPreview
         // Draw a ground line
         int groundY = (int)(_previewHeight * 0.5f + 0.8f * CameraZoom * CameraYRatio);
         var groundColor = new Color(40, 45, 55);
-        _sb.Draw(_pixel, new Rectangle(0, groundY, _previewWidth, 1), groundColor);
+        Scope.Draw(_pixel, new Rectangle(0, groundY, _previewWidth, 1), groundColor);
 
         // Ground gradient below
         for (int i = 0; i < 30; i++)
         {
             float a = 1f - i / 30f;
             var c = new Color(35, 38, 48) * (a * 0.3f);
-            _sb.Draw(_pixel, new Rectangle(0, groundY + i, _previewWidth, 1), c);
+            Scope.Draw(_pixel, new Rectangle(0, groundY + i, _previewWidth, 1), c);
         }
 
         // Grid dots
@@ -594,7 +597,7 @@ public class SpellPreview
         for (float wx = -5f; wx <= 5f; wx += 1f)
         {
             var sp = WorldToScreen(wx, 0);
-            _sb.Draw(_pixel, new Rectangle((int)sp.X, groundY, 1, 1), gridColor);
+            Scope.Draw(_pixel, new Rectangle((int)sp.X, groundY, 1, 1), gridColor);
         }
     }
 
@@ -619,9 +622,9 @@ public class SpellPreview
         for (int i = 0; i <= size; i++)
         {
             int w = size - i;
-            _sb.Draw(_pixel, new Rectangle((int)center.X - w, (int)center.Y - i, w * 2 + 1, 1), color);
+            Scope.Draw(_pixel, new Rectangle((int)center.X - w, (int)center.Y - i, w * 2 + 1, 1), color);
             if (i > 0)
-                _sb.Draw(_pixel, new Rectangle((int)center.X - w, (int)center.Y + i, w * 2 + 1, 1), color);
+                Scope.Draw(_pixel, new Rectangle((int)center.X - w, (int)center.Y + i, w * 2 + 1, 1), color);
         }
     }
 
@@ -642,7 +645,7 @@ public class SpellPreview
             // Shadow on ground (always drawn in alpha pass)
             var shadowPos = WorldToScreen(p.Position.X, p.Position.Y);
             int groundY = (int)(_previewHeight * 0.5f + 0.8f * CameraZoom * CameraYRatio);
-            _sb.Draw(_pixel, new Rectangle((int)shadowPos.X - 2, groundY, 4, 1),
+            Scope.Draw(_pixel, new Rectangle((int)shadowPos.X - 2, groundY, 4, 1),
                 new Color(0, 0, 0, 60));
 
             // If flipbook available, skip alpha-pass dot — flipbook draws in HDR additive pass
@@ -654,7 +657,7 @@ public class SpellPreview
             var screen = WorldToScreenWithHeight(p.Position.X, p.Position.Y, p.Height);
             float glowSize = 6f * CameraZoom / 32f * p.Scale;
             var projColor = p.ProjectileColor.ToColor();
-            _sb.Draw(_pixel, screen, null, projColor,
+            Scope.Draw(_pixel, screen, null, projColor,
                 0f, new Vector2(0.5f, 0.5f), glowSize * 0.5f, SpriteEffects.None, 0f);
 
             var trailDir = p.Velocity;
@@ -668,7 +671,7 @@ public class SpellPreview
                                          p.Position.Y - trailDir.Y * t * 0.3f);
                     var ts = WorldToScreenWithHeight(tp.X, tp.Y, Math.Max(0, p.Height - p.VelocityZ * t * 0.02f));
                     byte alpha = (byte)(120 / t);
-                    _sb.Draw(_pixel, ts, null, new Color(projColor.R, projColor.G, projColor.B, alpha),
+                    Scope.Draw(_pixel, ts, null, new Color(projColor.R, projColor.G, projColor.B, alpha),
                         0f, new Vector2(0.5f, 0.5f), trailLen / t, SpriteEffects.None, 0f);
                 }
             }
@@ -714,7 +717,7 @@ public class SpellPreview
                         screen.Y - velDir.Y * trailOffset * CameraYRatio);
 
                     var color = HdrColor.ToHdrVertex(p.ProjectileColor.ToColor(), trailAlpha, p.ProjectileColor.Intensity);
-                    _sb.Draw(fb.Texture, trailPos, trailSrc, color,
+                    Scope.Draw(fb.Texture, trailPos, trailSrc, color,
                         p.Age * 2f, origin, scale * trailScale, SpriteEffects.None, 0f);
                 }
             }
@@ -723,7 +726,7 @@ public class SpellPreview
                 // Fallback: radial glow dot
                 float glowSize = 8f * CameraZoom / 32f * p.Scale;
                 var glowColor = HdrColor.ToHdrVertex(p.ProjectileColor.ToColor(), 160f / 255f, p.ProjectileColor.Intensity);
-                _sb.Draw(_glowTex, screen, null, glowColor,
+                Scope.Draw(_glowTex, screen, null, glowColor,
                     p.Age * 2f, new Vector2(32f, 32f), glowSize / 32f, SpriteEffects.None, 0f);
             }
         }
@@ -746,7 +749,7 @@ public class SpellPreview
                     if (radius < 4f) radius = 4f;
                     var gc = s.Style.GlowColor;
                     var telegraphColor = HdrColor.ToHdrVertex(gc.ToColor(), pulse * 0.4f, gc.Intensity * 0.5f);
-                    _sb.Draw(_glowTex, new Vector2(screen.X, groundY), null, telegraphColor,
+                    Scope.Draw(_glowTex, new Vector2(screen.X, groundY), null, telegraphColor,
                         0f, new Vector2(32f, 32f), new Vector2(radius * 2 / 32f, radius * CameraYRatio / 32f),
                         SpriteEffects.None, 0f);
                 }
@@ -771,7 +774,7 @@ public class SpellPreview
                     // Impact glow
                     float radius = Math.Max(8f, s.AoeRadius * CameraZoom);
                     var splashColor = HdrColor.ToHdrVertex(s.Style.CoreColor.ToColor(), fade, s.Style.CoreColor.Intensity);
-                    _sb.Draw(_glowTex, groundPos, null, splashColor,
+                    Scope.Draw(_glowTex, groundPos, null, splashColor,
                         0f, new Vector2(32f, 32f), new Vector2(radius / 32f, radius * CameraYRatio * 0.5f / 32f),
                         SpriteEffects.None, 0f);
                 }
@@ -829,7 +832,7 @@ public class SpellPreview
                 // Expanding ring
                 float radius = t * 30f * e.Scale;
                 float fade = 1f - t;
-                DrawCircleOutline(screen, (int)radius, e.EffectColor * fade, 2);
+                DrawCircleOutline(screen, (int)radius, Core.ColorUtils.Fade(e.EffectColor, fade), 2);
 
                 // Inner glow
                 float innerRadius = t * 15f * e.Scale;
@@ -841,7 +844,7 @@ public class SpellPreview
                     float angle = s * PI * 0.5f + _elapsed * 3f;
                     float r = radius * 0.7f;
                     var sparkle = screen + new Vector2(MathF.Cos(angle) * r, MathF.Sin(angle) * r * 0.5f);
-                    _sb.Draw(_pixel, new Rectangle((int)sparkle.X - 1, (int)sparkle.Y - 1, 3, 3),
+                    Scope.Draw(_pixel, new Rectangle((int)sparkle.X - 1, (int)sparkle.Y - 1, 3, 3),
                         e.EffectColor * (fade * 0.8f));
                 }
             }
@@ -861,11 +864,11 @@ public class SpellPreview
 
             // Expanding ring
             float radius = t * 15f * h.Scale;
-            DrawCircleOutline(screen, (int)radius, h.EffectColor * fade, 2);
+            DrawCircleOutline(screen, (int)radius, Core.ColorUtils.Fade(h.EffectColor, fade), 2);
 
             // Core flash dot
             float flashSize = (1f - t * t) * 4f * h.Scale;
-            _sb.Draw(_pixel, screen, null,
+            Scope.Draw(_pixel, screen, null,
                 h.EffectColor * (fade * 0.7f),
                 0f, new Vector2(0.5f, 0.5f), flashSize, SpriteEffects.None, 0f);
         }
@@ -888,7 +891,7 @@ public class SpellPreview
             // Radial glow burst
             float glowScale = (0.3f + t * 0.7f) * h.Scale * 0.6f;
             byte alpha = (byte)(200 * fade);
-            _sb.Draw(_glowTex, screen, null,
+            Scope.Draw(_glowTex, screen, null,
                 new Color(h.EffectColor.R, h.EffectColor.G, h.EffectColor.B, alpha),
                 0f, new Vector2(32f, 32f), glowScale, SpriteEffects.None, 0f);
         }
@@ -907,7 +910,7 @@ public class SpellPreview
         float length = diff.Length();
         if (length < 0.5f) return;
         float angle = MathF.Atan2(diff.Y, diff.X);
-        _sb.Draw(_pixel, a, null, color,
+        Scope.Draw(_pixel, a, null, color,
             angle, new Vector2(0, 0.5f), new Vector2(length, Math.Max(1f, thickness)),
             SpriteEffects.None, 0f);
     }

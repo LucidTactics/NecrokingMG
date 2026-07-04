@@ -28,7 +28,7 @@ public class ShadowRenderer
     }
 
     internal void Draw(
-        in SpriteScope scope,
+        SpriteScope scope,
         GraphicsDevice device,
         SpriteBatch spriteBatch,
         Texture2D glowTex,
@@ -174,7 +174,7 @@ public class ShadowRenderer
     }
 
     private void DrawShaderShadows(
-        in SpriteScope scope,
+        SpriteScope scope,
         GraphicsDevice device,
         SpriteBatch spriteBatch,
         Texture2D glowTex,

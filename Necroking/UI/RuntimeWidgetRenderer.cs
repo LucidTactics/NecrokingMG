@@ -21,6 +21,7 @@ public class RuntimeWidgetRenderer
 {
     private GraphicsDevice _device;
     private SpriteBatch _batch;
+    private Render.SpriteScope Scope => _batch!;  // straight-alpha draw surface (implicit conversion)
     private FontManager? _fontMgr;
     private Texture2D? _pixel;
 
@@ -484,7 +485,7 @@ public class RuntimeWidgetRenderer
                     {
                         // Harmonized lookup falls back to the raw texture (overrides miss the cache)
                         var imgTex = GetTexture(imgPath, "el:" + elemDef.Id);
-                        if (imgTex != null) { _batch.Draw(imgTex, rect, tint); drawn = true; }
+                        if (imgTex != null) { Scope.Draw(imgTex, rect, tint); drawn = true; }
                     }
                 }
                 else if (!string.IsNullOrEmpty(elemDef.NineSlice))
@@ -508,8 +509,9 @@ public class RuntimeWidgetRenderer
             {
                 var font = _fontMgr?.GetFont(14);
                 if (font != null)
+                    // FontStashSharp extension on the raw batch - encode the tint explicitly.
                     _batch.DrawString(font, child.DefaultText,
-                        new Vector2((int)(rect.X + 4), (int)(rect.Y + rect.Height / 2f - 7)), new Color(200, 200, 200, 180));
+                        new Vector2((int)(rect.X + 4), (int)(rect.Y + rect.Height / 2f - 7)), Scope.EncodeTint(new Color(200, 200, 200, 180)));
             }
         }
     }
@@ -558,10 +560,10 @@ public class RuntimeWidgetRenderer
             "center" => new Rectangle(rect.X - t / 2, rect.Y - t / 2, rect.Width + t, rect.Height + t),
             _ => rect
         };
-        _batch.Draw(_pixel, new Rectangle(sr.X, sr.Y, sr.Width, t), strokeCol);
-        _batch.Draw(_pixel, new Rectangle(sr.X, sr.Y + sr.Height - t, sr.Width, t), strokeCol);
-        _batch.Draw(_pixel, new Rectangle(sr.X, sr.Y + t, t, sr.Height - t * 2), strokeCol);
-        _batch.Draw(_pixel, new Rectangle(sr.X + sr.Width - t, sr.Y + t, t, sr.Height - t * 2), strokeCol);
+        Scope.Draw(_pixel, new Rectangle(sr.X, sr.Y, sr.Width, t), strokeCol);
+        Scope.Draw(_pixel, new Rectangle(sr.X, sr.Y + sr.Height - t, sr.Width, t), strokeCol);
+        Scope.Draw(_pixel, new Rectangle(sr.X, sr.Y + t, t, sr.Height - t * 2), strokeCol);
+        Scope.Draw(_pixel, new Rectangle(sr.X + sr.Width - t, sr.Y + t, t, sr.Height - t * 2), strokeCol);
     }
 
     // ═══════════════════════════════════════
@@ -635,11 +637,11 @@ public class RuntimeWidgetRenderer
         if (defMaxH > 0 && rect.Height < defMaxH)
         {
             int srcH = (int)System.Math.Round(tex.Height * (rect.Height / (float)defMaxH));
-            _batch.Draw(tex, rect, new Rectangle(0, 0, tex.Width, System.Math.Max(1, srcH)), color);
+            Scope.Draw(tex, rect, new Rectangle(0, 0, tex.Width, System.Math.Max(1, srcH)), color);
         }
         else
         {
-            _batch.Draw(tex, rect, color);
+            Scope.Draw(tex, rect, color);
         }
     }
 
@@ -680,7 +682,7 @@ public class RuntimeWidgetRenderer
         if (_batch == null) return;
         var tex = GetOrLoadTexture(iconPath);
         if (tex == null) return;
-        _batch.Draw(tex, new Rectangle(x, y, w, h), Color.White);
+        Scope.Draw(tex, new Rectangle(x, y, w, h), Color.White);
     }
 
     /// <summary>Draw a named image element into a rect using the SAME pipeline
@@ -711,9 +713,9 @@ public class RuntimeWidgetRenderer
         if (srcInset > 0f)
         {
             int ix = (int)(tex.Width * srcInset), iy = (int)(tex.Height * srcInset);
-            _batch.Draw(tex, rect, new Rectangle(ix, iy, tex.Width - 2 * ix, tex.Height - 2 * iy), tint);
+            Scope.Draw(tex, rect, new Rectangle(ix, iy, tex.Width - 2 * ix, tex.Height - 2 * iy), tint);
         }
-        else _batch.Draw(tex, rect, tint);
+        else Scope.Draw(tex, rect, tint);
     }
 
     /// <summary>Draw a named nine-slice (from nine_slices.json — e.g. frame_fancy,
@@ -735,7 +737,8 @@ public class RuntimeWidgetRenderer
         if (_batch == null || string.IsNullOrEmpty(text)) return;
         var font = _fontMgr?.GetFont(fontSize, string.IsNullOrEmpty(fontFamily) ? null : fontFamily);
         if (font == null) return;
-        _batch.DrawString(font, text, new Vector2(x, y), color);
+        // FontStashSharp extension on the raw batch - encode the tint explicitly.
+        _batch.DrawString(font, text, new Vector2(x, y), Scope.EncodeTint(color));
     }
 
     /// <summary>Measure a line of text in the given font (for layout).</summary>

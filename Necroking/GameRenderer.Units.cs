@@ -86,9 +86,9 @@ partial class GameRenderer
     /// DepthItem sort including its determinism tiebreaker.</summary>
     private void CollectWorldItems(RenderContext ctx)
     {
-        _cbRoads ??= (in SpriteScope _, int _, int _) => DrawRoads();
-        _cbTraps ??= (in SpriteScope s, int _, int _) => DrawGroundLayerObjects(s);
-        _cbGlyphs ??= (in SpriteScope s, int _, int _) =>
+        _cbRoads ??= (SpriteScope _, int _, int _) => DrawRoads();
+        _cbTraps ??= (SpriteScope s, int _, int _) => DrawGroundLayerObjects(s);
+        _cbGlyphs ??= (SpriteScope s, int _, int _) =>
         {
             _g._glyphRenderer.DrawGround(s, _g._sim.MagicGlyphs);
             // Build progress bars for blueprint glyphs — shown from the moment
@@ -103,21 +103,21 @@ partial class GameRenderer
                 }
             }
         };
-        _cbWalls ??= (in SpriteScope _, int _, int _) => DrawWalls();
+        _cbWalls ??= (SpriteScope _, int _, int _) => DrawWalls();
         // ShadowRenderer suspends the batch to draw raw quads; the scope owns
         // the resume state.
-        _cbShadows ??= (in SpriteScope s, int _, int _) =>
+        _cbShadows ??= (SpriteScope s, int _, int _) =>
             _g._shadowRenderer.Draw(s, _g.GraphicsDevice, _g._spriteBatch, _g._glowTex, _g._camera, _g._renderer, _g._sim, _g._gameData, _g._unitAnims, _g._atlases, _g._envSystem, _g._fogOfWar, _g._groundSystem, _g._deathFog, _g._corpseAnims, _g._reanimFx);
-        _cbHoverMarkers ??= (in SpriteScope _, int _, int _) => DrawHoverGroundMarkers();
-        _cbCorpses ??= (in SpriteScope s, int _, int _) => DrawCorpses(s);
-        _cbProjectilesRope ??= (in SpriteScope _, int _, int _) =>
+        _cbHoverMarkers ??= (SpriteScope _, int _, int _) => DrawHoverGroundMarkers();
+        _cbCorpses ??= (SpriteScope s, int _, int _) => DrawCorpses(s);
+        _cbProjectilesRope ??= (SpriteScope _, int _, int _) =>
         {
             DrawProjectiles();
             DrawSoulOrbs();
             // Drag rope (necromancer → roped corpse)
             DrawRope();
         };
-        _cbRain ??= (in SpriteScope _, int _, int _) => _g._weatherRenderer.DrawRain(_ctx.ScreenW, _ctx.ScreenH);
+        _cbRain ??= (SpriteScope _, int _, int _) => _g._weatherRenderer.DrawRain(_ctx.ScreenW, _ctx.ScreenH);
 
         var q = _worldPass!;
         // Ordering safety: block layers use whole-layer callback slots today;
@@ -147,17 +147,17 @@ partial class GameRenderer
     /// DrawUnitsAndObjects minus sorting and dispatch.</summary>
     private void CollectYSortItems(RenderContext ctx)
     {
-        _cbUnit ??= (in SpriteScope s, int a, int _) => DrawSingleUnit(s, a);
-        _cbEnvObject ??= (in SpriteScope s, int a, int _) => DrawSingleEnvObject(s, a);
-        _cbCloudPuff ??= (in SpriteScope _, int a, int b) => _g._poisonCloudRenderer.DrawSinglePuff(a, b);
+        _cbUnit ??= (SpriteScope s, int a, int _) => DrawSingleUnit(s, a);
+        _cbEnvObject ??= (SpriteScope s, int a, int _) => DrawSingleEnvObject(s, a);
+        _cbCloudPuff ??= (SpriteScope _, int a, int b) => _g._poisonCloudRenderer.DrawSinglePuff(a, b);
         // no_ground dev screenshots suppress grass too, for the clean
         // black-background look scenarios produce.
-        _cbGrassTuft ??= (in SpriteScope _, int a, int _) =>
+        _cbGrassTuft ??= (SpriteScope _, int a, int _) =>
         {
             if (!_g._devShotNoGround) _g._grassRenderer.DrawSingleTuft(_g._spriteBatch, a);
         };
-        _cbDeathFogPuff ??= (in SpriteScope _, int a, int _) => _g._deathFogRenderer.DrawSinglePuff(a);
-        _cbReanimDust ??= (in SpriteScope _, int a, int _) => _g._reanimFx.DrawSingleDust(a);
+        _cbDeathFogPuff ??= (SpriteScope _, int a, int _) => _g._deathFogRenderer.DrawSinglePuff(a);
+        _cbReanimDust ??= (SpriteScope _, int a, int _) => _g._reanimFx.DrawSingleDust(a);
 
         var queue = _worldPass!;
 
@@ -320,7 +320,7 @@ partial class GameRenderer
         else _occlusionFade[i] = fade;
     }
 
-    private void DrawSingleUnit(in SpriteScope scope, int i)
+    private void DrawSingleUnit(SpriteScope scope, int i)
     {
         // Fog of war: hide non-undead units (and their buffs, which draw inside
         // this method) when they're not currently in any undead's detection range.
@@ -362,9 +362,10 @@ partial class GameRenderer
             }
         }
 
-        // Ghost mode: semi-transparent blue-shifted sprite
+        // Ghost mode: semi-transparent blue-shifted sprite (straight alpha; the
+        // draw surface encodes it for the open material)
         if (_g._sim.Units[i].GhostMode)
-            tint = Color.FromNonPremultiplied(
+            tint = new Color(
                 Math.Min(255, (int)(tint.R * 0.7f + 80)),
                 Math.Min(255, (int)(tint.G * 0.7f + 100)),
                 Math.Min(255, (int)(tint.B * 0.7f + 120)), 100);
@@ -603,9 +604,9 @@ partial class GameRenderer
             const byte SymAlpha = 128;      // ~0.5 alpha
             string sym = _g._sim.Units[i].StatusSymbol == (byte)UnitStatusSymbol.Notice ? "?" : "!";
             Color symColor = _g._sim.Units[i].StatusSymbol == (byte)UnitStatusSymbol.Notice
-                ? Color.FromNonPremultiplied(255, 240, 80, SymAlpha)   // yellow ?
-                : Color.FromNonPremultiplied(255, 80, 60, SymAlpha);   // red !
-            Color outline = Color.FromNonPremultiplied(0, 0, 0, SymAlpha);
+                ? new Color(255, 240, 80, (int)SymAlpha)   // yellow ?
+                : new Color(255, 80, 60, (int)SymAlpha);   // red !
+            Color outline = new Color(0, 0, 0, (int)SymAlpha);
             var textSize = _g._largeFont.MeasureString(sym);
             int symX = (int)(sp_upper.X - textSize.X * 0.5f);
             int symY = (int)(sp_upper.Y - textSize.Y - 0.25f * _g._camera.Zoom * _g._camera.YRatio);
@@ -615,14 +616,14 @@ partial class GameRenderer
             for (int ox = -2; ox <= 2; ox++)
                 for (int oy = -2; oy <= 2; oy++)
                     if ((ox != 0 || oy != 0) && ox * ox + oy * oy <= 4)
-                        _g._spriteBatch.DrawString(_g._largeFont, sym,
+                        _g.Scope.DrawString(_g._largeFont, sym,
                             symPos + new Vector2(ox, oy), outline,
                             0f, Vector2.Zero, SymScale, SpriteEffects.None, 0f);
 
             // Faux-bold: draw colored fill twice with 1px horizontal offset
-            _g._spriteBatch.DrawString(_g._largeFont, sym, symPos, symColor,
+            _g.Scope.DrawString(_g._largeFont, sym, symPos, symColor,
                 0f, Vector2.Zero, SymScale, SpriteEffects.None, 0f);
-            _g._spriteBatch.DrawString(_g._largeFont, sym, symPos + new Vector2(1, 0), symColor,
+            _g.Scope.DrawString(_g._largeFont, sym, symPos + new Vector2(1, 0), symColor,
                 0f, Vector2.Zero, SymScale, SpriteEffects.None, 0f);
         }
 
@@ -642,12 +643,12 @@ partial class GameRenderer
             var size = _g._smallFont.MeasureString(label);
             var labelPos = new Vector2((int)(sp.X - size.X * 0.5f),
                                        (int)(sp.Y - pixelH - size.Y * 0.5f));
-            DrawText(_g._smallFont, label, labelPos, Color.FromNonPremultiplied(255, 220, 140, 220));
+            DrawText(_g._smallFont, label, labelPos, new Color(255, 220, 140, 220));
         }
 
     }
 
-    private void DrawSingleEnvObject(in SpriteScope scope, int i)
+    private void DrawSingleEnvObject(SpriteScope scope, int i)
     {
         var obj = _g._envSystem.Objects[i];
         var def = _g._envSystem.Defs[obj.DefIndex];
@@ -743,11 +744,11 @@ partial class GameRenderer
         tint = MultiplyColor(tint, _g._ambientColor);
 
         // Occlusion fade — semi-transparent while this object hides the player
-        // (uniform RGBA scale = correct fade for premultiplied textures).
+        // (straight-alpha fade: scale A only; the draw surface premultiplies).
         if (_occlusionFade.TryGetValue(i, out float occFade))
-            tint *= occFade;
+            tint = ColorUtils.Fade(tint, occFade);
 
-        _g._spriteBatch.Draw(tex, screenPos, sourceRect, tint, rotation, origin, scale,
+        _g.Scope.Draw(tex, screenPos, sourceRect, tint, rotation, origin, scale,
             flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
 
         // Hover-highlight: capture this object's exact on-screen sprite box. Env
@@ -810,7 +811,7 @@ partial class GameRenderer
     /// true if drawn; false if the caller should fall back to the regular path
     /// (e.g. live or dead texture missing).
     /// </summary>
-    private bool DrawDissolvingTree(in SpriteScope scope, int i, in PlacedObjectRuntime rt)
+    private bool DrawDissolvingTree(SpriteScope scope, int i, in PlacedObjectRuntime rt)
     {
         var obj = _g._envSystem.Objects[i];
         var def = _g._envSystem.Defs[obj.DefIndex];
@@ -872,7 +873,8 @@ partial class GameRenderer
         // Flush the open batch, draw through the dissolve material, resume —
         // the scope computes the resume state (no more guessed restores).
         scope.PushMaterial(Materials.DissolveTree!);
-        scope.Batch.Draw(deadTex, screenPos, null, tint, 0f, origin, scale,
+        // scope.Draw premultiplies the straight tint for the dissolve shader.
+        scope.Draw(deadTex, screenPos, null, tint, 0f, origin, scale,
             flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
         scope.PopMaterial();
         return true;
@@ -970,7 +972,7 @@ partial class GameRenderer
         // Centered draw — origin at sprite center so we can position by box center.
         var origin = new Vector2(frame.Rect.Width / 2f, frame.Rect.Height / 2f);
         var center = new Vector2(dest.X + dest.Width / 2f, dest.Y + dest.Height / 2f);
-        _g._spriteBatch.Draw(tex, center, frame.Rect, Color.White, 0f, origin, scale,
+        _g.Scope.Draw(tex, center, frame.Rect, Color.White, 0f, origin, scale,
             SpriteEffects.None, 0f);
     }
 
@@ -986,7 +988,7 @@ partial class GameRenderer
 
         var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-        _g._spriteBatch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
+        _g.Scope.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
     }
 
     /// <summary>Ground-Y → SpriteBatch layerDepth, CAMERA-RELATIVE. Larger world Y (drawn in front /
@@ -1036,7 +1038,7 @@ partial class GameRenderer
             var effects = fr.FlipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
             // Depth from RenderPos.Y (not Position.Y) so a lunging unit's stamp is
             // depth-valued where its sprite is actually drawn.
-            _g._spriteBatch.Draw(tex, sp, frame.Rect, Color.White, 0f, origin, scale, effects,
+            _g.Scope.Draw(tex, sp, frame.Rect, Color.White, 0f, origin, scale, effects,
                 FogDepthForY(u.RenderPos.Y, _g._camera.Position.Y));
         }
 
@@ -1156,9 +1158,8 @@ partial class GameRenderer
             int shape = variant / 4;
             if (shape != 1 && shape != 2) return;
             HoverStyle(variant % 4, out int thick, out byte alpha);
-            // FromNonPremultiplied: the hover passes use premultiplied AlphaBlend, so scale RGB by
-            // alpha — otherwise a low alpha washes the colour out (lighter hue) instead of fading it.
-            var c = Color.FromNonPremultiplied(255, 230, 120, alpha);
+            // Straight alpha — the draw surface premultiplies for the open material.
+            var c = new Color(255, 230, 120, (int)alpha);
             b.Inflate(2, 2);
             if (shape == 1) DrawCornersVariant(b, c, thick);
             else            DrawRectVariant(b, c, thick);
@@ -1283,9 +1284,8 @@ partial class GameRenderer
             int shape = variant / 4;
             if (shape != 0 && shape != 3 && shape != 4) return;   // ground shapes only
             HoverStyle(variant % 4, out int thick, out byte alpha);
-            // FromNonPremultiplied: the hover passes use premultiplied AlphaBlend, so scale RGB by
-            // alpha — otherwise a low alpha washes the colour out (lighter hue) instead of fading it.
-            var c = Color.FromNonPremultiplied(255, 230, 120, alpha);
+            // Straight alpha — the draw surface premultiplies for the open material.
+            var c = new Color(255, 230, 120, (int)alpha);
             // Constant pixel thickness (the style's thick/thin px) — does NOT scale with the marker
             // size, so a big building's outline is the same weight as a small unit's. Matches the
             // screen-space Corners/Rectangle variants.
@@ -1368,7 +1368,7 @@ partial class GameRenderer
     }
 
     private void FillRect(int x, int y, int w, int h, Color c)
-        => _g._spriteBatch.Draw(_g._pixel, new Rectangle(x, y, w, h), c);
+        => _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, h), c);
 
     /// <summary>Full rectangle outline of thickness t (drawn as four filled bars).</summary>
     private void DrawRectVariant(Rectangle r, Color c, int t)
@@ -1413,7 +1413,7 @@ partial class GameRenderer
         float len = d.Length();
         if (len < 0.5f) return;
         float angle = MathF.Atan2(d.Y, d.X);
-        _g._spriteBatch.Draw(_g._pixel, a, null, c, angle, new Vector2(0f, 0.5f),
+        _g.Scope.Draw(_g._pixel, a, null, c, angle, new Vector2(0f, 0.5f),
             new Vector2(len, thickness), SpriteEffects.None, 0f);
     }
 
@@ -1429,8 +1429,8 @@ partial class GameRenderer
                 ? "Hover override: highlight OFF"
                 : $"Hover override {_g._hoverHighlightVariant + 1}/20: {_hoverShapeNames[_g._hoverHighlightVariant / 4]} - {_hoverStyleNames[_g._hoverHighlightVariant % 4]}";
         var pos = new Vector2((int)18, (int)112);
-        _g._spriteBatch.DrawString(_g._font, label, pos + new Vector2(1, 1), new Color(0, 0, 0, 190));
-        _g._spriteBatch.DrawString(_g._font, label, pos, new Color(255, 235, 150));
+        _g.Scope.DrawString(_g._font, label, pos + new Vector2(1, 1), new Color(0, 0, 0, 190));
+        _g.Scope.DrawString(_g._font, label, pos, new Color(255, 235, 150));
     }
 
     // Flash the depth-sorted-fog state (ON/OFF) for a couple seconds after the 'H' toggle.
@@ -1441,8 +1441,8 @@ partial class GameRenderer
         string label = on ? "Depth-sorted fog: ON  (unit occludes smoke)"
                           : "Depth-sorted fog: OFF  (smoke on top)";
         var pos = new Vector2((int)18, (int)134);
-        _g._spriteBatch.DrawString(_g._font, label, pos + new Vector2(1, 1), new Color(0, 0, 0, 190));
-        _g._spriteBatch.DrawString(_g._font, label, pos, on ? new Color(150, 235, 180) : new Color(230, 200, 170));
+        _g.Scope.DrawString(_g._font, label, pos + new Vector2(1, 1), new Color(0, 0, 0, 190));
+        _g.Scope.DrawString(_g._font, label, pos, on ? new Color(150, 235, 180) : new Color(230, 200, 170));
     }
 
     /// <summary>Draw a 2D line by rotating the _g._pixel sprite. Cheap, AA-free.</summary>
@@ -1452,11 +1452,11 @@ partial class GameRenderer
         float len = d.Length();
         if (len < 0.5f) return;
         float angle = MathF.Atan2(d.Y, d.X);
-        _g._spriteBatch.Draw(_g._pixel, a, null, c, angle, Vector2.Zero,
+        _g.Scope.Draw(_g._pixel, a, null, c, angle, Vector2.Zero,
             new Vector2(len, thickness), SpriteEffects.None, 0f);
     }
 
-    private void DrawWadingSpriteFrame(in SpriteScope scope, SpriteAtlas atlas, SpriteFrame frame,
+    private void DrawWadingSpriteFrame(SpriteScope scope, SpriteAtlas atlas, SpriteFrame frame,
                                         Vector2 screenPos,
                                         float scale, bool flipX, Color tint,
                                         float waterlineCenterV, float topWaterlineCenterV,
@@ -1504,7 +1504,8 @@ partial class GameRenderer
         float pivotY = 1f - frame.PivotY;
         var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-        scope.Batch.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
+        // scope.Draw premultiplies the straight tint for the wading shader.
+        scope.Draw(tex, screenPos, frame.Rect, tint, 0f, origin, scale, effects, 0f);
 
         scope.PopMaterial();
     }
@@ -1519,7 +1520,7 @@ partial class GameRenderer
     /// Draw a pulsing outline around a sprite using the OutlineFlat shader.
     /// Renders the sprite 8 times at directional offsets with a flat color.
     /// </summary>
-    private void DrawSpriteOutline(in SpriteScope scope, SpriteAtlas atlas, SpriteFrame frame,
+    private void DrawSpriteOutline(SpriteScope scope, SpriteAtlas atlas, SpriteFrame frame,
                                     Vector2 screenPos,
                                     float scale, bool flipX, HdrColor color1, HdrColor color2,
                                     float outlineWidth, float pulseWidth, float pulseSpeed,
@@ -1557,14 +1558,14 @@ partial class GameRenderer
         {
             float dx = _outlineDirs[d][0] * offset;
             float dy = _outlineDirs[d][1] * offset;
-            scope.Batch.Draw(tex, new Vector2(screenPos.X + dx, screenPos.Y + dy),
+            scope.Draw(tex, new Vector2(screenPos.X + dx, screenPos.Y + dy),
                 frame.Rect, Color.White, 0f, origin, scale, effects, 0f);
         }
 
         scope.PopMaterial();
     }
 
-    private void DrawUnitPulsingOutline(in SpriteScope scope, int unitIdx, SpriteAtlas atlas,
+    private void DrawUnitPulsingOutline(SpriteScope scope, int unitIdx, SpriteAtlas atlas,
                                          SpriteFrame frame,
                                          Vector2 screenPos, float scale, bool flipX)
     {
@@ -1581,7 +1582,7 @@ partial class GameRenderer
         }
     }
 
-    private void DrawGhostOutline(in SpriteScope scope, SpriteAtlas atlas, SpriteFrame frame,
+    private void DrawGhostOutline(SpriteScope scope, SpriteAtlas atlas, SpriteFrame frame,
                                     Vector2 screenPos, float scale, bool flipX)
     {
         DrawSpriteOutline(scope, atlas, frame, screenPos, scale, flipX,
@@ -1609,10 +1610,10 @@ partial class GameRenderer
         float barX = screenPos.X - barW / 2f;
         float barY = screenPos.Y - barOffset;
 
-        _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)barX - 1, (int)barY - 1, (int)barW + 2, (int)barH + 2), new Color(0, 0, 0, 160));
+        _g.Scope.Draw(_g._pixel, new Rectangle((int)barX - 1, (int)barY - 1, (int)barW + 2, (int)barH + 2), new Color(0, 0, 0, 160));
 
         Color hpColor = hpRatio > 0.5f ? new Color(60, 180, 60) : (hpRatio > 0.25f ? new Color(200, 180, 40) : new Color(200, 40, 40));
-        _g._spriteBatch.Draw(_g._pixel, new Rectangle((int)barX, (int)barY, (int)(barW * hpRatio), (int)barH), hpColor);
+        _g.Scope.Draw(_g._pixel, new Rectangle((int)barX, (int)barY, (int)(barW * hpRatio), (int)barH), hpColor);
     }
 
     private void DrawSpellCategoryIcon(string category, int cx, int cy)
@@ -1623,38 +1624,38 @@ partial class GameRenderer
                 for (int dy2 = -6; dy2 <= 6; dy2++)
                     for (int dx2 = -6; dx2 <= 6; dx2++)
                         if (dx2 * dx2 + dy2 * dy2 <= 36)
-                            _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1), new Color(255, 140, 30, 200));
+                            _g.Scope.Draw(_g._pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1), new Color(255, 140, 30, 200));
                 break;
             case "Buff":
                 for (int dy2 = -6; dy2 <= 6; dy2++)
                     for (int dx2 = -6; dx2 <= 6; dx2++)
                         if (dx2 * dx2 + dy2 * dy2 <= 36)
-                            _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1), new Color(60, 200, 60, 200));
+                            _g.Scope.Draw(_g._pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1), new Color(60, 200, 60, 200));
                 break;
             case "Strike":
             {
                 var lc = new Color(255, 230, 50, 220);
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx + 2, cy - 8, 3, 5), lc);
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 2, cy - 3, 6, 2), lc);
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 3, cy - 1, 3, 5), lc);
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 4, cy + 4, 4, 2), lc);
+                _g.Scope.Draw(_g._pixel, new Rectangle(cx + 2, cy - 8, 3, 5), lc);
+                _g.Scope.Draw(_g._pixel, new Rectangle(cx - 2, cy - 3, 6, 2), lc);
+                _g.Scope.Draw(_g._pixel, new Rectangle(cx - 3, cy - 1, 3, 5), lc);
+                _g.Scope.Draw(_g._pixel, new Rectangle(cx - 4, cy + 4, 4, 2), lc);
                 break;
             }
             case "Summon":
                 for (int dy2 = -6; dy2 <= 6; dy2++)
                     for (int dx2 = -6; dx2 <= 6; dx2++)
                         if (dx2 * dx2 + dy2 * dy2 <= 36)
-                            _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1), new Color(160, 60, 200, 200));
+                            _g.Scope.Draw(_g._pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1), new Color(160, 60, 200, 200));
                 break;
             case "Beam":
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 8, cy - 1, 16, 3), new Color(60, 120, 255, 220));
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 6, cy - 2, 12, 1), new Color(100, 160, 255, 150));
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 6, cy + 2, 12, 1), new Color(100, 160, 255, 150));
+                _g.Scope.Draw(_g._pixel, new Rectangle(cx - 8, cy - 1, 16, 3), new Color(60, 120, 255, 220));
+                _g.Scope.Draw(_g._pixel, new Rectangle(cx - 6, cy - 2, 12, 1), new Color(100, 160, 255, 150));
+                _g.Scope.Draw(_g._pixel, new Rectangle(cx - 6, cy + 2, 12, 1), new Color(100, 160, 255, 150));
                 break;
             case "Drain":
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 8, cy - 1, 16, 3), new Color(220, 40, 40, 220));
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 6, cy - 2, 12, 1), new Color(255, 80, 80, 150));
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 6, cy + 2, 12, 1), new Color(255, 80, 80, 150));
+                _g.Scope.Draw(_g._pixel, new Rectangle(cx - 8, cy - 1, 16, 3), new Color(220, 40, 40, 220));
+                _g.Scope.Draw(_g._pixel, new Rectangle(cx - 6, cy - 2, 12, 1), new Color(255, 80, 80, 150));
+                _g.Scope.Draw(_g._pixel, new Rectangle(cx - 6, cy + 2, 12, 1), new Color(255, 80, 80, 150));
                 break;
             case "Cloud":
                 // Poison cloud icon: hazy green circle
@@ -1665,13 +1666,13 @@ partial class GameRenderer
                         if (dsq <= 49)
                         {
                             int alpha = dsq < 16 ? 200 : (dsq < 36 ? 140 : 80);
-                            _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1),
+                            _g.Scope.Draw(_g._pixel, new Rectangle(cx + dx2, cy + dy2, 1, 1),
                                 new Color(80, 200, 60, alpha));
                         }
                     }
                 break;
             default:
-                _g._spriteBatch.Draw(_g._pixel, new Rectangle(cx - 6, cy - 6, 12, 12), new Color(180, 180, 180, 150));
+                _g.Scope.Draw(_g._pixel, new Rectangle(cx - 6, cy - 6, 12, 12), new Color(180, 180, 180, 150));
                 break;
         }
     }

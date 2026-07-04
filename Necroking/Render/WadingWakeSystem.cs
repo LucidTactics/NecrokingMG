@@ -874,7 +874,7 @@ public class WadingWakeSystem
         float facingDeg, float bodyLengthWorld,
         float waterlineWorldHeight,
         bool wadingActive,
-        SpriteBatch sb, Texture2D pixel,
+        Render.SpriteScope sb, Texture2D pixel,
         Renderer renderer, Camera25D camera)
     {
         EnsureCapacity(unitIdx);
@@ -983,7 +983,7 @@ public class WadingWakeSystem
     /// update step — UpdateAndDrawBack already did that this frame.</summary>
     public void DrawFront(
         int unitIdx,
-        SpriteBatch sb, Renderer renderer, Camera25D camera)
+        Render.SpriteScope sb, Renderer renderer, Camera25D camera)
     {
         if (unitIdx < 0 || unitIdx >= _perUnit.Count) return;
         var state = _perUnit[unitIdx];
@@ -1625,7 +1625,7 @@ public class WadingWakeSystem
 
     private void DrawParticles(
         WakeEmitterState state,
-        SpriteBatch sb, Texture2D softCircleTex,
+        Render.SpriteScope sb, Texture2D softCircleTex,
         Renderer renderer, Camera25D camera,
         bool drawFront)
     {
@@ -1745,11 +1745,9 @@ public class WadingWakeSystem
                     src = new Rectangle(0, 0, softCircleTex.Width, softCircleTex.Height);
                     break;
             }
-            // White tint with the per-particle alpha for fade. With
-            // premultiplied alpha blend, Color.White * a/255 gives
-            // (a, a, a, a) which preserves the baked texture's color
-            // and scales it by the particle's fade.
-            var tint = new Color(a, a, a, a);
+            // Straight-alpha white fade; the draw surface encodes it for the
+            // open material (premultiplied in the scene pass).
+            var tint = new Color((byte)255, (byte)255, (byte)255, a);
 
             var sp = renderer.WorldToScreen(p.Pos, p.WorldHeight, camera);
             // Scale: target pixel size on screen, divided by source frame

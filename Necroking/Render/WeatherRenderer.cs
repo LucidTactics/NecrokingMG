@@ -18,6 +18,7 @@ public class WeatherRenderer
 
     // Dependencies set via SetContext each frame
     private SpriteBatch _spriteBatch = null!;
+    private SpriteScope Scope => _spriteBatch;  // straight-alpha draw surface (implicit conversion)
     private Texture2D _pixel = null!;
     private Texture2D _glowTex = null!;
     private Camera25D _camera = null!;
@@ -81,7 +82,7 @@ public class WeatherRenderer
     /// Draw fog/haze/brightness overlay. Called in the HUD pass after bloom.
     /// Manages its own SpriteBatch state (ends and restarts the current batch for shader use).
     /// </summary>
-    public void DrawFog(in SpriteScope scope, int screenW, int screenH)
+    public void DrawFog(SpriteScope scope, int screenW, int screenH)
     {
         var fx = GetEffectiveEffects();
         if (fx == null) return;
@@ -136,7 +137,7 @@ public class WeatherRenderer
                 _fogMaterial ??= Materials.Register("WeatherFog", _fogEffect,
                     BlendState.AlphaBlend, SamplerState.PointClamp, perDrawParams: true);
                 scope.PushMaterial(_fogMaterial);
-                _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), Color.White);
+                Scope.Draw(_pixel, new Rectangle(0, 0, screenW, screenH), Color.White);
                 scope.PopMaterial();
             }
             else
@@ -146,7 +147,7 @@ public class WeatherRenderer
                 {
                     float fogAlpha = MathF.Min(fx.FogDensity * 0.5f + fx.HazeStrength * 0.3f, 0.4f);
                     byte fR = (byte)(fx.FogR * 255), fG = (byte)(fx.FogG * 255), fB = (byte)(fx.FogB * 255);
-                    _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH),
+                    Scope.Draw(_pixel, new Rectangle(0, 0, screenW, screenH),
                         new Color(fR, fG, fB, (byte)(fogAlpha * 255)));
                 }
                 // Brightness and tint are now applied pre-bloom as ambient light on sprites.
@@ -154,7 +155,7 @@ public class WeatherRenderer
                 if (_flashIntensity > 0.01f)
                 {
                     byte flashA = (byte)(MathUtil.Clamp(_flashIntensity * 0.8f, 0f, 1f) * 255);
-                    _spriteBatch.Draw(_pixel, new Rectangle(0, 0, screenW, screenH),
+                    Scope.Draw(_pixel, new Rectangle(0, 0, screenW, screenH),
                         new Color(flashA, flashA, flashA, flashA));
                 }
             }
@@ -345,7 +346,7 @@ public class WeatherRenderer
                 if (sLen < 0.5f) continue;
 
                 float af = alpha / 255f;
-                _spriteBatch.Draw(_pixel, topSp, null,
+                Scope.Draw(_pixel, topSp, null,
                     new Color((byte)(colR * af), (byte)(colG * af), (byte)(colB * af), alpha),
                     MathF.Atan2(dy, dx), Vector2.Zero,
                     new Vector2(sLen, thickness), SpriteEffects.None, 0f);
@@ -362,10 +363,10 @@ public class WeatherRenderer
                 if (sAlpha == 0) continue;
 
                 float eW = radius * 2f, eH = radius * yRatio * 2f;
-                _spriteBatch.Draw(_glowTex, new Rectangle(
+                Scope.Draw(_glowTex, new Rectangle(
                     (int)(groundScreen.X - eW * 0.5f), (int)(groundScreen.Y - eH * 0.5f),
                     (int)MathF.Max(1, eW), (int)MathF.Max(1, eH)),
-                    null, Color.FromNonPremultiplied(200, 215, 235, sAlpha),
+                    null, new Color((byte)200, (byte)215, (byte)235, sAlpha),
                     0f, Vector2.Zero, SpriteEffects.None, 0f);
             }
         }
