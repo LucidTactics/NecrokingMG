@@ -30,13 +30,10 @@ public struct ORCAParams
     public float TimeHorizon;
     public float MaxSpeed;
     public float Radius;
-    public int MaxNeighbors;
     public int Priority;
-
-    public static ORCAParams Default => new()
-    {
-        TimeHorizon = 3f, MaxSpeed = 3f, Radius = 0.3f, MaxNeighbors = 10, Priority = 0
-    };
+    // (MaxNeighbors and the unused Default preset were deleted 2026-07-04 —
+    //  neighbor caps live at the gather site in Simulation: TopK dynamic + 6
+    //  static; the solver itself takes whatever list it's given.)
 }
 
 public static class Orca
@@ -47,11 +44,12 @@ public static class Orca
     // we ever parallelize unit movement these should go [ThreadStatic].
     // Previously `new List<ORCALine>(neighbors.Count)` allocated a list per
     // unit per tick (~u=600 calls ⇒ 600 small-list allocs/tick of GC pressure).
-    // NOTE: LinearProgram3Fallback's projLines can NOT use a shared static,
-    // because LinearProgram2D called from the fallback may recursively re-enter
-    // LinearProgram3Fallback on the same list — clearing the list the outer
-    // call is still iterating. See bugfix commit.
+    // _projLinesScratch is safe to share since the 2026-07-04 RVO2-canonical
+    // restructure: LP2D no longer calls the LP3 fallback (it returns a fail
+    // index and the CALLER invokes LP3, whose inner LP2D failure rolls back
+    // instead of recursing), so re-entry is structurally impossible.
     private static readonly List<ORCALine> _orcaLinesScratch = new();
+    private static readonly List<ORCALine> _projLinesScratch = new();
 
     private static float Det(Vec2 a, Vec2 b) => a.X * b.Y - a.Y * b.X;
 
@@ -63,8 +61,39 @@ public static class Orca
         orcaLines.Clear();
         float invTimeHorizon = 1f / param.TimeHorizon;
 
-        foreach (var neighbor in neighbors)
+        // Static (obstacle) lines FIRST — RVO2's numObstLines convention. The
+        // infeasibility fallback keeps [0, numStaticLines) hard and relaxes
+        // only agent lines, so crowd pressure can never squeeze a velocity
+        // INTO a tree/rock (the old fallback relaxed every constraint).
+        int numStaticLines = 0;
+        for (int n = 0; n < neighbors.Count; n++)
         {
+            if (!neighbors[n].IsStatic) continue;
+            orcaLines.Add(MakeLine(neighbors[n], position, currentVelocity, param, invTimeHorizon, dt));
+            numStaticLines++;
+        }
+        for (int n = 0; n < neighbors.Count; n++)
+        {
+            if (neighbors[n].IsStatic) continue;
+            orcaLines.Add(MakeLine(neighbors[n], position, currentVelocity, param, invTimeHorizon, dt));
+        }
+
+        Vec2 vel = default;
+        int lineFail = LinearProgram2D(orcaLines, param.MaxSpeed, preferredVelocity, false, ref vel);
+        if (lineFail < orcaLines.Count)
+            LinearProgram3(orcaLines, numStaticLines, lineFail, param.MaxSpeed, ref vel);
+
+        // Guard against NaN/infinity from degenerate cases
+        if (float.IsNaN(vel.X) || float.IsNaN(vel.Y) || float.IsInfinity(vel.X) || float.IsInfinity(vel.Y))
+            return Vec2.Zero;
+        return vel;
+    }
+
+    /// <summary>Construct one neighbor's ORCA half-plane constraint — canonical
+    /// RVO2 construction (cutoff-circle / leg projection / colliding push).</summary>
+    private static ORCALine MakeLine(ORCANeighbor neighbor, Vec2 position, Vec2 currentVelocity,
+        ORCAParams param, float invTimeHorizon, float dt)
+    {
             Vec2 relPos = neighbor.Position - position;
             Vec2 relVel = currentVelocity - neighbor.Velocity;
             float distSq = relPos.LengthSq();
@@ -103,7 +132,6 @@ public static class Orca
                 }
                 else
                 {
-                    float dist = MathF.Sqrt(distSq);
                     float leg = MathF.Sqrt(MathF.Max(0f, distSq - combinedRadiusSq));
 
                     if (Det(relPos, w) > 0f)
@@ -142,23 +170,31 @@ public static class Orca
                 }
                 else
                 {
-                    Vec2 pushDir = relPos.LengthSq() > Epsilon
-                        ? relPos.Normalized()
-                        : new Vec2(1f, 0f);
+                    // Degenerate w — mirror the healthy branch above: with
+                    // relVel≈0, w = -relPos·invDT, so the push must point AWAY
+                    // from the neighbor (the old +relPos sign drove the unit
+                    // deeper into the overlap).
+                    Vec2 pushDir;
+                    if (relPos.LengthSq() > Epsilon)
+                    {
+                        pushDir = relPos.Normalized() * -1f;
+                    }
+                    else
+                    {
+                        // Exactly coincident: derive the arbitrary direction from
+                        // the neighbor's id so the two sides pick different escape
+                        // vectors — a shared constant translated the pair together
+                        // forever without separating.
+                        float ang = (neighbor.Id * 2654435761u & 0xFFFFu) * (MathF.PI * 2f / 65536f);
+                        pushDir = new Vec2(MathF.Cos(ang), MathF.Sin(ang));
+                    }
                     line.Direction = new Vec2(pushDir.Y, -pushDir.X);
                     Vec2 u = pushDir * (combinedRadius * invDT);
                     line.Point = currentVelocity + u * responsibility;
                 }
             }
 
-            orcaLines.Add(line);
-        }
-
-        var vel = LinearProgram2D(orcaLines, param.MaxSpeed, preferredVelocity, false);
-        // Guard against NaN/infinity from degenerate cases
-        if (float.IsNaN(vel.X) || float.IsNaN(vel.Y) || float.IsInfinity(vel.X) || float.IsInfinity(vel.Y))
-            return Vec2.Zero;
-        return vel;
+            return line;
     }
 
     private static bool LinearProgram1D(
@@ -207,11 +243,16 @@ public static class Orca
         return true;
     }
 
-    private static Vec2 LinearProgram2D(
-        List<ORCALine> lines, float maxSpeed, Vec2 optVel, bool directionOpt)
+    /// <summary>2D linear program: velocity closest to optVel subject to the
+    /// half-plane constraints and the maxSpeed disc. Canonical RVO2 form:
+    /// returns lines.Count on success, or the index of the failing line — the
+    /// CALLER decides whether to run the LP3 relaxation (the old auto-recursion
+    /// into the fallback both forced a per-iteration allocation and "relaxed"
+    /// projected artifact lines, which is meaningless w.r.t. the original
+    /// problem). result holds the best feasible point found so far either way.</summary>
+    private static int LinearProgram2D(
+        List<ORCALine> lines, float maxSpeed, Vec2 optVel, bool directionOpt, ref Vec2 result)
     {
-        Vec2 result;
-
         if (directionOpt)
             result = optVel * maxSpeed;
         else if (optVel.LengthSq() > maxSpeed * maxSpeed)
@@ -227,40 +268,39 @@ public static class Orca
                 if (!LinearProgram1D(lines, i, maxSpeed, optVel, directionOpt, ref result))
                 {
                     result = tempResult;
-                    LinearProgram3Fallback(lines, i, maxSpeed, ref result);
-                    return result;
+                    return i;
                 }
             }
         }
 
-        return result;
+        return lines.Count;
     }
 
     /// <summary>
-    /// Fallback when the 2D half-plane LP is infeasible. Relaxes each
-    /// constraint in turn by projecting the others onto it and running a
-    /// direction-optimized 2D LP. Rarely hit — only when multiple neighbors
-    /// produce contradictory velocity obstacles that can't all be satisfied
-    /// at max speed.
+    /// Infeasible-case relaxation (canonical RVO2 linearProgram3): starting at
+    /// the first failed line, minimize the maximum violation of the AGENT
+    /// lines while keeping the first numStaticLines obstacle lines hard —
+    /// dense crowd pressure at a tree line yields "wait / slide along the
+    /// tree", never "press into the tree". The inner LP2D failure restores
+    /// the previous result instead of recursing (re-entry is structurally
+    /// impossible), which is why projLines can be shared scratch now.
     /// </summary>
-    private static void LinearProgram3Fallback(
-        List<ORCALine> lines, int beginLine, float maxSpeed, ref Vec2 result)
+    private static void LinearProgram3(
+        List<ORCALine> lines, int numStaticLines, int beginLine, float maxSpeed, ref Vec2 result)
     {
         float distance = 0f;
 
         for (int i = beginLine; i < lines.Count; i++)
         {
-            float d = Det(lines[i].Direction, lines[i].Point - result);
-            if (d > distance)
+            if (Det(lines[i].Direction, lines[i].Point - result) > distance)
             {
-                // Allocate per-iteration: this path can recursively re-enter
-                // via LinearProgram2D, and a shared static list would get
-                // cleared out from under the outer iteration. The fallback
-                // runs only when LP1D fails, so it's rare enough that the
-                // allocation doesn't matter.
-                var projLines = new List<ORCALine>();
+                var projLines = _projLinesScratch;
+                projLines.Clear();
+                // Obstacle lines stay hard.
+                for (int j = 0; j < numStaticLines; j++)
+                    projLines.Add(lines[j]);
 
-                for (int j = 0; j < i; j++)
+                for (int j = numStaticLines; j < i; j++)
                 {
                     ORCALine newLine;
                     float crossVal = Det(lines[i].Direction, lines[j].Direction);
@@ -281,12 +321,17 @@ public static class Orca
                     projLines.Add(newLine);
                 }
 
-                Vec2 optDir = new(-lines[i].Direction.Y, lines[i].Direction.X);
-                if (optDir.LengthSq() > Epsilon)
-                    result = LinearProgram2D(projLines, maxSpeed, optDir, true);
+                Vec2 tempResult = result;
+                if (LinearProgram2D(projLines, maxSpeed,
+                        new Vec2(-lines[i].Direction.Y, lines[i].Direction.X), true, ref result) < projLines.Count)
+                {
+                    // "This should in principle not happen" (RVO2): the result
+                    // is already on projLines' boundary; a failure here is
+                    // numerical. Keep the previous best rather than recursing.
+                    result = tempResult;
+                }
 
                 distance = Det(lines[i].Direction, lines[i].Point - result);
-                if (distance < 0f) distance = 0f;
             }
         }
     }

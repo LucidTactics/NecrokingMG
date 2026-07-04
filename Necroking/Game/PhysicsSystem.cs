@@ -29,7 +29,11 @@ public class PhysicsSystem
 
     private struct PhysicsBody
     {
-        public int UnitIdx;
+        // Stable unit id, NOT an array index. UnitArrays.RemoveUnit swap-and-pops
+        // indices, so an index stored across ticks can silently rebind to a
+        // different unit (or fall out of range, leaving the real unit frozen
+        // with InPhysics=true). Resolve to an index each update instead.
+        public uint UnitId;
         public Vec2 VelocityXY;
         public float VelocityZ;
         public float Drag;
@@ -115,7 +119,7 @@ public class PhysicsSystem
 
         _bodies.Add(new PhysicsBody
         {
-            UnitIdx = unitIdx,
+            UnitId = units[unitIdx].Id,
             VelocityXY = launchXY,
             VelocityZ = launchZ,
             Drag = DefaultDrag * dragMul,
@@ -157,11 +161,19 @@ public class PhysicsSystem
         return launched;
     }
 
+    // Scratch for quadtree candidate gathering in CheckUnitCollisions.
+    private readonly List<uint> _collisionScratch = new();
+    // Conservative upper bound on any unit's radius, for the candidate query
+    // (GreatBoar is 0.85; margin for future large units).
+    private const float MaxUnitRadius = 1.5f;
+
     /// <summary>
     /// Update all active physics bodies. Call from Simulation.Tick between
-    /// UpdateMovement and UpdateCombat.
+    /// UpdateMovement and UpdateCombat. Pass the frame's quadtree so chain
+    /// collisions query neighbors instead of scanning every unit per body.
     /// </summary>
-    public void Update(float dt, UnitArrays units, float worldMaxX, float worldMaxY)
+    public void Update(float dt, UnitArrays units, float worldMaxX, float worldMaxY,
+        Spatial.Quadtree? quadtree = null)
     {
         if (_bodies.Count > 0 && dt > 0.05f)
             DebugLog.Log("physics", $"[FRAME] dt={dt * 1000:F0}ms bodies={_bodies.Count} — SLOW FRAME");
@@ -169,8 +181,10 @@ public class PhysicsSystem
         for (int bi = _bodies.Count - 1; bi >= 0; bi--)
         {
             var body = _bodies[bi];
-            if (!body.Active || body.UnitIdx >= units.Count)
+            int idx = body.Active ? UnitUtil.ResolveUnitIndex(units, body.UnitId) : -1;
+            if (idx < 0)
             {
+                // Unit no longer exists (removed) or body deactivated — drop the body.
                 _bodies.RemoveAt(bi);
                 continue;
             }
@@ -179,13 +193,11 @@ public class PhysicsSystem
             // Without this, a unit killed by an impulse-then-damage caller
             // (trample, which runs BEFORE the physics tick) loses its velocity
             // before the corpse is created. Skip integration; the body will be
-            // collected via TryRemoveBody from RemoveDeadUnits.
-            if (!units[body.UnitIdx].Alive)
+            // collected via RemoveBody from RemoveDeadUnits.
+            if (!units[idx].Alive)
             {
                 continue;
             }
-
-            int idx = body.UnitIdx;
 
             // Integrate velocity
             units[idx].Position += body.VelocityXY * dt;
@@ -212,7 +224,7 @@ public class PhysicsSystem
             // Only check after launch grace expires and near ground level.
             if (body.LaunchGrace <= 0f && units[idx].Z < 1.5f)
             {
-                CheckUnitCollisions(ref body, units, dt);
+                CheckUnitCollisions(ref body, idx, units, dt, quadtree);
             }
 
             // --- Map-bounds clamp (the load-bearing half of the wall TODO) ---
@@ -241,9 +253,9 @@ public class PhysicsSystem
         }
     }
 
-    private void CheckUnitCollisions(ref PhysicsBody body, UnitArrays units, float dt)
+    private void CheckUnitCollisions(ref PhysicsBody body, int flyerIdx, UnitArrays units, float dt,
+        Spatial.Quadtree? quadtree)
     {
-        int flyerIdx = body.UnitIdx;
         float flyerSpeed = body.VelocityXY.Length();
         if (flyerSpeed < MinTransferSpeed) return; // too slow to register
 
@@ -251,8 +263,29 @@ public class PhysicsSystem
 
         float flyerMass = MassOf(units[flyerIdx]);
 
-        for (int i = 0; i < units.Count; i++)
+        // Candidate set: quadtree neighbors within combined-radius reach when a
+        // tree is available (rebuilt at tick start, so positions are at most one
+        // tick stale — the combined-radius test below is exact either way);
+        // full scan as fallback.
+        int candidateCount;
+        if (quadtree != null && !quadtree.IsEmpty)
         {
+            _collisionScratch.Clear();
+            quadtree.QueryRadius(units[flyerIdx].Position,
+                units[flyerIdx].Radius + MaxUnitRadius + flyerSpeed * dt, _collisionScratch);
+            candidateCount = _collisionScratch.Count;
+        }
+        else
+        {
+            candidateCount = units.Count;
+        }
+
+        for (int ci = 0; ci < candidateCount; ci++)
+        {
+            int i = quadtree != null && !quadtree.IsEmpty
+                ? UnitUtil.ResolveUnitIndex(units, _collisionScratch[ci])
+                : ci;
+            if (i < 0) continue;
             if (i == flyerIdx || !units[i].Alive || units[i].InPhysics) continue;
             // Chargers (Trample) phase through smaller units by design.
             if (units[i].ChargePhase == 1 || units[i].ChargePhase == 3) continue;
@@ -334,6 +367,7 @@ public class PhysicsSystem
         units[idx].InPhysics = false;
         units[idx].Velocity = Vec2.Zero;
         units[idx].PreferredVel = Vec2.Zero;
+        units[idx].StuckTime = 0f; // fresh start — no stale escape bias from before the launch
 
         // Apply knockdown buff — incap state, animation, and recovery all handled by buff system
         if (_knockdownBuff != null)
@@ -350,11 +384,11 @@ public class PhysicsSystem
     /// Get physics velocity for a unit (if it has an active body).
     /// Used to transfer momentum to corpses when units die mid-flight.
     /// </summary>
-    public bool TryGetBodyVelocity(int unitIdx, out Vec2 velocityXY, out float velocityZ)
+    public bool TryGetBodyVelocity(uint unitId, out Vec2 velocityXY, out float velocityZ)
     {
         for (int i = 0; i < _bodies.Count; i++)
         {
-            if (_bodies[i].Active && _bodies[i].UnitIdx == unitIdx)
+            if (_bodies[i].Active && _bodies[i].UnitId == unitId)
             {
                 velocityXY = _bodies[i].VelocityXY;
                 velocityZ = _bodies[i].VelocityZ;
@@ -369,11 +403,11 @@ public class PhysicsSystem
     /// <summary>Remove the physics body for a unit. Called by RemoveDeadUnits
     /// after the corpse has captured the velocity, so we don't leak bodies
     /// pointing to recycled unit indices.</summary>
-    public void RemoveBody(int unitIdx)
+    public void RemoveBody(uint unitId)
     {
         for (int i = _bodies.Count - 1; i >= 0; i--)
         {
-            if (_bodies[i].UnitIdx == unitIdx)
+            if (_bodies[i].UnitId == unitId)
             {
                 _bodies.RemoveAt(i);
                 return;
@@ -384,11 +418,11 @@ public class PhysicsSystem
     /// <summary>Read the per-body physics tuning (gravity/drag scales) so a corpse
     /// can inherit the same arc when its unit dies mid-flight. Returns 1.0/1.0
     /// (default tuning) when no body exists for the unit.</summary>
-    public bool TryGetBodyTuning(int unitIdx, out float gravityMul, out float dragMul)
+    public bool TryGetBodyTuning(uint unitId, out float gravityMul, out float dragMul)
     {
         for (int i = 0; i < _bodies.Count; i++)
         {
-            if (_bodies[i].Active && _bodies[i].UnitIdx == unitIdx)
+            if (_bodies[i].Active && _bodies[i].UnitId == unitId)
             {
                 gravityMul = _bodies[i].GravityMul > 0f ? _bodies[i].GravityMul : 1f;
                 dragMul = _bodies[i].Drag / DefaultDrag;

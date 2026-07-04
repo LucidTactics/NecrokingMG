@@ -64,11 +64,13 @@ public class Pathfinder
         }
     }
 
-    // Per-unit imaginary chunk state
-    private readonly Dictionary<int, ImaginaryChunk> _unitImagChunks = new();
+    // Per-unit imaginary chunk state. Keyed by stable Unit.Id — NOT array index.
+    // UnitArrays.RemoveUnit swap-and-pops indices, so index-keyed entries would
+    // silently transfer to whichever unit inherits a dead unit's slot.
+    private readonly Dictionary<uint, ImaginaryChunk> _unitImagChunks = new();
 
-    // Per-unit decision tracking (for debug)
-    private readonly Dictionary<int, PathDecisionInfo> _unitDecisions = new();
+    // Per-unit decision tracking (for debug). Keyed by stable Unit.Id.
+    private readonly Dictionary<uint, PathDecisionInfo> _unitDecisions = new();
 
     private struct SectorRoute
     {
@@ -90,6 +92,12 @@ public class Pathfinder
         public int ChunkW, ChunkH;
         public int TargetTX, TargetTY;
         public bool Active;
+        // Negative-result memo: the last (unit tile, target tile) pair for which
+        // the chunk Dijkstra failed to produce a direction. Without this, a unit
+        // whose target is walled off re-ran the full 64x64 compute EVERY tick
+        // (fail -> beeline into the wall -> same tiles next tick -> fail...).
+        public int FailedUnitTX = -1, FailedUnitTY = -1;
+        public int FailedTargetTX = -1, FailedTargetTY = -1;
     }
 
     // 8-directional offsets
@@ -106,6 +114,16 @@ public class Pathfinder
     private static readonly int[] Dx4 = { 0, 1, 0, -1 };
     private static readonly int[] Dy4 = { -1, 0, 1, 0 };
     private static readonly int[] Opposite4 = { 2, 3, 0, 1 };
+    // Exit direction for each border index (N/E/S/W) — hoisted so the flow
+    // post-process loops don't allocate a fresh array per miss.
+    private static readonly FlowDir[] BorderExitDirs = { FlowDir.N, FlowDir.E, FlowDir.S, FlowDir.W };
+
+    /// <summary>Milliseconds since a Stopwatch.GetTimestamp() sample. Replaces
+    /// per-call Stopwatch.StartNew() — that allocates a Stopwatch instance on
+    /// every GetDirection / flow-miss / imag-chunk call, purely for diagnostics.</summary>
+    private static double ElapsedMs(long startTimestamp)
+        => (System.Diagnostics.Stopwatch.GetTimestamp() - startTimestamp)
+           * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
 
     // --- Budgeted pathfinding (optional) ---
     // When enabled, synchronous GetFlow* calls check a per-tick Dijkstra time
@@ -148,15 +166,15 @@ public class Pathfinder
     public TileGrid? Grid => _grid;
 
     /// <summary>Get imaginary chunk bounds for debug visualization. Returns (baseX, baseY, w, h, active) or null.</summary>
-    public (int baseX, int baseY, int w, int h, bool active)? GetImaginaryChunkInfo(int unitIdx)
+    public (int baseX, int baseY, int w, int h, bool active)? GetImaginaryChunkInfo(uint unitId)
     {
-        if (_unitImagChunks.TryGetValue(unitIdx, out var ic) && ic.Active)
+        if (_unitImagChunks.TryGetValue(unitId, out var ic) && ic.Active)
             return (ic.BaseX, ic.BaseY, ic.ChunkW, ic.ChunkH, ic.Active);
         return null;
     }
 
-    /// <summary>Get all active imaginary chunk unit indices for debug overlay.</summary>
-    public IEnumerable<int> GetActiveImaginaryChunkUnits()
+    /// <summary>Get all active imaginary chunk unit ids for debug overlay.</summary>
+    public IEnumerable<uint> GetActiveImaginaryChunkUnits()
     {
         foreach (var kv in _unitImagChunks)
             if (kv.Value.Active) yield return kv.Key;
@@ -178,6 +196,7 @@ public class Pathfinder
         _staleFlowCache.Clear();
         _pendingRequests.Clear();
         _unitImagChunks.Clear();
+        _unitDecisions.Clear(); // debug overlay: don't show pre-rebuild decisions
         // s_keysEverSeen tracks "has this key ever been requested in this run"
         // for miss-cause telemetry; after Rebuild all prior keys point into a
         // now-destroyed grid, so the classifier should start fresh.
@@ -195,49 +214,149 @@ public class Pathfinder
         _sectorConnected = new bool[TerrainCosts.NumSizeTiers, count, 4];
 
         for (int tier = 0; tier < TerrainCosts.NumSizeTiers; tier++)
-        {
             for (int sy = 0; sy < _sectorCountY; sy++)
-            {
                 for (int sx = 0; sx < _sectorCountX; sx++)
-                {
-                    int idx = SectorIdx(sx, sy);
-                    int baseX = sx * SectorSize;
-                    int baseY = sy * SectorSize;
-                    int endX = Math.Min(baseX + SectorSize, _grid.Width);
-                    int endY = Math.Min(baseY + SectorSize, _grid.Height);
+                    RescanSectorConnectivity(tier, sx, sy);
+    }
 
-                    // North
-                    if (sy > 0)
-                        for (int x = baseX; x < endX; x++)
-                            if (_grid.GetCost(x, baseY, tier) != 255 && _grid.GetCost(x, baseY - 1, tier) != 255)
-                            { _sectorConnected[tier, idx, 0] = true; break; }
+    /// <summary>Recompute one sector's 4 border-connectivity flags for one tier.
+    /// Shared by the full BuildConnectivity and by InvalidateRegion's targeted
+    /// rescan. Returns true if any flag changed.</summary>
+    private bool RescanSectorConnectivity(int tier, int sx, int sy)
+    {
+        if (_grid == null || _sectorConnected == null) return false;
+        int idx = SectorIdx(sx, sy);
+        int baseX = sx * SectorSize;
+        int baseY = sy * SectorSize;
+        int endX = Math.Min(baseX + SectorSize, _grid.Width);
+        int endY = Math.Min(baseY + SectorSize, _grid.Height);
 
-                    // East
-                    if (sx < _sectorCountX - 1)
-                    {
-                        int lastCol = endX - 1;
-                        for (int y = baseY; y < endY; y++)
-                            if (_grid.GetCost(lastCol, y, tier) != 255 && _grid.GetCost(lastCol + 1, y, tier) != 255)
-                            { _sectorConnected[tier, idx, 1] = true; break; }
-                    }
+        bool n = false, e = false, s = false, w = false;
 
-                    // South
-                    if (sy < _sectorCountY - 1)
-                    {
-                        int lastRow = endY - 1;
-                        for (int x = baseX; x < endX; x++)
-                            if (_grid.GetCost(x, lastRow, tier) != 255 && _grid.GetCost(x, lastRow + 1, tier) != 255)
-                            { _sectorConnected[tier, idx, 2] = true; break; }
-                    }
+        // North
+        if (sy > 0)
+            for (int x = baseX; x < endX; x++)
+                if (_grid.GetCost(x, baseY, tier) != 255 && _grid.GetCost(x, baseY - 1, tier) != 255)
+                { n = true; break; }
 
-                    // West
-                    if (sx > 0)
-                        for (int y = baseY; y < endY; y++)
-                            if (_grid.GetCost(baseX, y, tier) != 255 && _grid.GetCost(baseX - 1, y, tier) != 255)
-                            { _sectorConnected[tier, idx, 3] = true; break; }
-                }
+        // East
+        if (sx < _sectorCountX - 1)
+        {
+            int lastCol = endX - 1;
+            for (int y = baseY; y < endY; y++)
+                if (_grid.GetCost(lastCol, y, tier) != 255 && _grid.GetCost(lastCol + 1, y, tier) != 255)
+                { e = true; break; }
+        }
+
+        // South
+        if (sy < _sectorCountY - 1)
+        {
+            int lastRow = endY - 1;
+            for (int x = baseX; x < endX; x++)
+                if (_grid.GetCost(x, lastRow, tier) != 255 && _grid.GetCost(x, lastRow + 1, tier) != 255)
+                { s = true; break; }
+        }
+
+        // West
+        if (sx > 0)
+            for (int y = baseY; y < endY; y++)
+                if (_grid.GetCost(baseX, y, tier) != 255 && _grid.GetCost(baseX - 1, y, tier) != 255)
+                { w = true; break; }
+
+        bool changed = _sectorConnected[tier, idx, 0] != n || _sectorConnected[tier, idx, 1] != e
+                    || _sectorConnected[tier, idx, 2] != s || _sectorConnected[tier, idx, 3] != w;
+        _sectorConnected[tier, idx, 0] = n;
+        _sectorConnected[tier, idx, 1] = e;
+        _sectorConnected[tier, idx, 2] = s;
+        _sectorConnected[tier, idx, 3] = w;
+        return changed;
+    }
+
+    // Scratch lists for InvalidateRegion (single-threaded sim assumption,
+    // same as the rest of the pathfinder).
+    private readonly List<FlowKey> _regionKeyScratch = new();
+    private readonly List<uint> _regionImagScratch = new();
+
+    /// <summary>Targeted invalidation for a collision change confined to a tile
+    /// AABB (env object added/removed/collected). Replaces the full Rebuild()
+    /// (~450ms on a 4097² map: whole-grid rebake + every cache cleared) with:
+    /// drop flow fields of touched sectors, rescan connectivity for touched
+    /// sectors, clear routes only if connectivity actually flipped, drop
+    /// intersecting imaginary chunks, and reset failure memos (a removed
+    /// obstacle can make a memoized-unreachable target reachable). The caller
+    /// is responsible for having re-baked the tier cost fields for the region
+    /// first (EnvironmentSystem.RebakeCollisionRegion).</summary>
+    public void InvalidateRegion(int minTX, int minTY, int maxTX, int maxTY)
+    {
+        if (_grid == null || _sectorConnected == null) return;
+
+        int s0x = Math.Clamp(minTX / SectorSize, 0, _sectorCountX - 1);
+        int s1x = Math.Clamp(maxTX / SectorSize, 0, _sectorCountX - 1);
+        int s0y = Math.Clamp(minTY / SectorSize, 0, _sectorCountY - 1);
+        int s1y = Math.Clamp(maxTY / SectorSize, 0, _sectorCountY - 1);
+
+        // 1. Drop flow fields (live, stale, pending) for touched sectors.
+        //    Outright, not moved-to-stale: the grid changed under them, so a
+        //    stale copy would steer units through the new obstacle.
+        _regionKeyScratch.Clear();
+        foreach (var kv in _flowCache)
+            if (kv.Key.SectorX >= s0x && kv.Key.SectorX <= s1x &&
+                kv.Key.SectorY >= s0y && kv.Key.SectorY <= s1y)
+                _regionKeyScratch.Add(kv.Key);
+        foreach (var k in _regionKeyScratch) _flowCache.Remove(k);
+
+        _regionKeyScratch.Clear();
+        foreach (var kv in _staleFlowCache)
+            if (kv.Key.SectorX >= s0x && kv.Key.SectorX <= s1x &&
+                kv.Key.SectorY >= s0y && kv.Key.SectorY <= s1y)
+                _regionKeyScratch.Add(kv.Key);
+        foreach (var k in _regionKeyScratch) _staleFlowCache.Remove(k);
+
+        _regionKeyScratch.Clear();
+        foreach (var kv in _pendingRequests)
+            if (kv.Key.SectorX >= s0x && kv.Key.SectorX <= s1x &&
+                kv.Key.SectorY >= s0y && kv.Key.SectorY <= s1y)
+                _regionKeyScratch.Add(kv.Key);
+        foreach (var k in _regionKeyScratch) _pendingRequests.Remove(k);
+
+        // 2. Rescan connectivity for touched sectors. No ±1 ring needed: a
+        //    sector's flags read at most one tile INTO each neighbor, and a
+        //    change confined to [minTX..maxTX] can only flip flags of sectors
+        //    the rect itself touches — but the rect passed in already includes
+        //    the stamp inflation, and a border pair's flag is stored on BOTH
+        //    sides, so rescan one ring around to be safe (cheap: O(64) per
+        //    sector side).
+        bool connChanged = false;
+        for (int tier = 0; tier < TerrainCosts.NumSizeTiers; tier++)
+            for (int sy = Math.Max(0, s0y - 1); sy <= Math.Min(_sectorCountY - 1, s1y + 1); sy++)
+                for (int sx = Math.Max(0, s0x - 1); sx <= Math.Min(_sectorCountX - 1, s1x + 1); sx++)
+                    connChanged |= RescanSectorConnectivity(tier, sx, sy);
+
+        // 3. Routes encode global sector paths; any flipped edge can reroute
+        //    arbitrary destinations. Only pay the clear when something flipped.
+        if (connChanged) _routeCache.Clear();
+
+        // 4. Imaginary chunks whose window intersects the rect are stale.
+        //    Failure memos are reset on ALL entries — a removed obstacle can
+        //    unblock a memoized-unreachable target anywhere; re-failing costs
+        //    one chunk compute per affected unit, once.
+        _regionImagScratch.Clear();
+        foreach (var kv in _unitImagChunks)
+        {
+            var ic = kv.Value;
+            if (ic.Active &&
+                ic.BaseX <= maxTX && ic.BaseX + ic.ChunkW > minTX &&
+                ic.BaseY <= maxTY && ic.BaseY + ic.ChunkH > minTY)
+            {
+                _regionImagScratch.Add(kv.Key);
+            }
+            else
+            {
+                ic.FailedUnitTX = -1; ic.FailedUnitTY = -1;
+                ic.FailedTargetTX = -1; ic.FailedTargetTY = -1;
             }
         }
+        foreach (var k in _regionImagScratch) _unitImagChunks.Remove(k);
     }
 
     // --- Sector-level BFS routing ---
@@ -299,42 +418,54 @@ public class Pathfinder
     }
 
     // =========================================================================
-    // Sector Dijkstra with escape propagation
+    // Window Dijkstra core (shared by sector flows and imaginary chunks)
     // =========================================================================
 
+    // Pooled scratch for RunWindowDijkstra (single-threaded sim assumption,
+    // same as the rest of the pathfinder). The cost array is pure scratch —
+    // it never escapes the core or its callers. The PQ is fully drained by
+    // the main pass, so the escape-propagation pass reuses the same instance.
+    // `dirs` is deliberately NOT pooled: result arrays escape into _flowCache
+    // and ImaginaryChunk objects, so each call needs a fresh allocation.
+    private readonly float[] _costScratch = new float[SectorSize * SectorSize];
+    private readonly PriorityQueue<int, float> _pqScratch = new();
+    // Pooled goal-index list for the imaginary-chunk callers (the sector flow
+    // callers build their own goal lists because they also carry init costs).
+    private readonly List<int> _goalScratch = new();
+
     /// <summary>
-    /// Core Dijkstra within a sector. Computes flow directions from goal tiles.
-    /// Includes escape propagation for tier-inflated tiles.
+    /// Shared window Dijkstra: fills <paramref name="cost"/> with InfCost,
+    /// seeds the goal tiles (local indices with SectorSize stride) that are
+    /// tier- OR base-passable (base-passable covers tier-inflated target
+    /// tiles), runs the 8-dir Dijkstra with diagonal corner-cut rejection,
+    /// extends costs into tier-inflated but base-passable tiles (escape
+    /// propagation, uniform StepMul8 costs), and builds the direction field
+    /// (with plateau fallback) into <paramref name="dirs"/>.
+    /// Returns false when no goal could be seeded — cost stays all-Inf and
+    /// dirs all-None. Chunk callers rely on that to preserve their historical
+    /// "no seedable goal → bail without memoizing a failure" early-out.
     /// </summary>
-    private CachedFlow ComputeSectorFlow(int sx, int sy, List<int> goalLocalIndices, int tier, uint frame,
-                                          List<float>? goalInitCosts = null)
+    private bool RunWindowDijkstra(int baseX, int baseY, int winW, int winH, int tier,
+                                   List<int> goals, List<float>? goalCosts,
+                                   float[] cost, FlowDir[] dirs)
     {
-        DiagDijkstraInvocations++;
-        int cells = SectorSize * SectorSize;
-        var flow = new CachedFlow { Dirs = new FlowDir[cells], FrameAccessed = frame };
-        if (_grid == null || goalLocalIndices.Count == 0) return flow;
+        if (_grid == null) return false;
 
-        float[] cost = new float[cells];
         Array.Fill(cost, GameConstants.InfCost);
+        var openList = _pqScratch;
+        openList.Clear();
 
-        var openList = new PriorityQueue<int, float>();
-
-        int baseX = sx * SectorSize;
-        int baseY = sy * SectorSize;
-        int sectorW = Math.Min(SectorSize, _grid.Width - baseX);
-        int sectorH = Math.Min(SectorSize, _grid.Height - baseY);
-
-        for (int i = 0; i < goalLocalIndices.Count; i++)
+        for (int i = 0; i < goals.Count; i++)
         {
-            int g = goalLocalIndices[i];
+            int g = goals[i];
             int lx = g % SectorSize, ly = g / SectorSize;
-            if (lx >= sectorW || ly >= sectorH) continue;
+            if (lx >= winW || ly >= winH) continue;
             int gx = baseX + lx, gy = baseY + ly;
             if (!_grid.InBounds(gx, gy)) continue;
             // Accept if tier-passable OR base-passable (for tier-inflated target tiles)
             if (_grid.GetCost(gx, gy, tier) != 255 || _grid.GetCost(gx, gy) != 255)
             {
-                float initCost = (goalInitCosts != null && i < goalInitCosts.Count) ? goalInitCosts[i] : 0f;
+                float initCost = (goalCosts != null && i < goalCosts.Count) ? goalCosts[i] : 0f;
                 if (initCost < cost[g])
                 {
                     cost[g] = initCost;
@@ -343,17 +474,19 @@ public class Pathfinder
             }
         }
 
+        if (openList.Count == 0) return false;
+
         // 8-directional Dijkstra
-        while (openList.Count > 0)
+        while (openList.TryDequeue(out int idx, out float pri))
         {
-            int idx = openList.Dequeue();
+            if (pri > cost[idx]) continue; // stale PQ entry (tile relaxed since enqueue)
             float c = cost[idx];
             int lx = idx % SectorSize, ly = idx / SectorSize;
 
             for (int d = 0; d < 8; d++)
             {
                 int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                if (nlx < 0 || nlx >= sectorW || nly < 0 || nly >= sectorH) continue;
+                if (nlx < 0 || nlx >= winW || nly < 0 || nly >= winH) continue;
 
                 int gx = baseX + nlx, gy = baseY + nly;
                 byte nc = _grid.GetCost(gx, gy, tier);
@@ -364,8 +497,8 @@ public class Pathfinder
                 {
                     int cax = lx + Dx8[d], cay = ly;
                     int cbx = lx, cby = ly + Dy8[d];
-                    if (cax >= 0 && cax < sectorW && _grid.GetCost(baseX + cax, baseY + cay, tier) == 255) continue;
-                    if (cby >= 0 && cby < sectorH && _grid.GetCost(baseX + cbx, baseY + cby, tier) == 255) continue;
+                    if (cax >= 0 && cax < winW && _grid.GetCost(baseX + cax, baseY + cay, tier) == 255) continue;
+                    if (cby >= 0 && cby < winH && _grid.GetCost(baseX + cbx, baseY + cby, tier) == 255) continue;
                 }
 
                 int nidx = nly * SectorSize + nlx;
@@ -380,52 +513,27 @@ public class Pathfinder
 
         // === Escape propagation ===
         // Extend costs into tier-impassable but base-passable tiles so units
-        // in inflated zones get proper directions toward the goal.
+        // in inflated zones get proper directions toward the goal. Reuses the
+        // main PQ — it is empty here.
+        var escapePQ = openList;
+        for (int ly = 0; ly < winH; ly++)
         {
-            var escapePQ = new PriorityQueue<int, float>();
-            for (int ly = 0; ly < sectorH; ly++)
+            for (int lx = 0; lx < winW; lx++)
             {
-                for (int lx = 0; lx < sectorW; lx++)
-                {
-                    int idx = ly * SectorSize + lx;
-                    if (cost[idx] >= GameConstants.InfCost) continue;
-
-                    for (int d = 0; d < 8; d++)
-                    {
-                        int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                        if (nlx < 0 || nlx >= sectorW || nly < 0 || nly >= sectorH) continue;
-                        int nidx = nly * SectorSize + nlx;
-                        if (cost[nidx] < GameConstants.InfCost) continue; // already has cost
-                        int ngx = baseX + nlx, ngy = baseY + nly;
-                        if (_grid.GetCost(ngx, ngy, tier) != 255) continue; // not inflated
-                        if (_grid.GetCost(ngx, ngy) == 255) continue; // truly impassable
-
-                        float newCost = cost[idx] + StepMul8[d];
-                        if (newCost < cost[nidx])
-                        {
-                            cost[nidx] = newCost;
-                            escapePQ.Enqueue(nidx, newCost);
-                        }
-                    }
-                }
-            }
-
-            while (escapePQ.Count > 0)
-            {
-                int idx = escapePQ.Dequeue();
-                float c = cost[idx];
-                int lx = idx % SectorSize, ly = idx / SectorSize;
+                int idx = ly * SectorSize + lx;
+                if (cost[idx] >= GameConstants.InfCost) continue;
 
                 for (int d = 0; d < 8; d++)
                 {
                     int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                    if (nlx < 0 || nlx >= sectorW || nly < 0 || nly >= sectorH) continue;
+                    if (nlx < 0 || nlx >= winW || nly < 0 || nly >= winH) continue;
                     int nidx = nly * SectorSize + nlx;
-                    if (cost[nidx] < GameConstants.InfCost) continue;
+                    if (cost[nidx] < GameConstants.InfCost) continue; // already has cost
                     int ngx = baseX + nlx, ngy = baseY + nly;
+                    if (_grid.GetCost(ngx, ngy, tier) != 255) continue; // not inflated
                     if (_grid.GetCost(ngx, ngy) == 255) continue; // truly impassable
 
-                    float newCost = c + StepMul8[d];
+                    float newCost = cost[idx] + StepMul8[d];
                     if (newCost < cost[nidx])
                     {
                         cost[nidx] = newCost;
@@ -435,15 +543,63 @@ public class Pathfinder
             }
         }
 
+        while (escapePQ.TryDequeue(out int idx, out float pri))
+        {
+            if (pri > cost[idx]) continue; // stale PQ entry
+            float c = cost[idx];
+            int lx = idx % SectorSize, ly = idx / SectorSize;
+
+            for (int d = 0; d < 8; d++)
+            {
+                int nlx = lx + Dx8[d], nly = ly + Dy8[d];
+                if (nlx < 0 || nlx >= winW || nly < 0 || nly >= winH) continue;
+                int nidx = nly * SectorSize + nlx;
+                if (cost[nidx] < GameConstants.InfCost) continue;
+                int ngx = baseX + nlx, ngy = baseY + nly;
+                if (_grid.GetCost(ngx, ngy) == 255) continue; // truly impassable
+
+                float newCost = c + StepMul8[d];
+                if (newCost < cost[nidx])
+                {
+                    cost[nidx] = newCost;
+                    escapePQ.Enqueue(nidx, newCost);
+                }
+            }
+        }
+
         // Build direction field
-        BuildDirectionField(flow.Dirs, cost, baseX, baseY, sectorW, sectorH, tier);
+        BuildDirectionField(dirs, cost, baseX, baseY, winW, winH, tier);
+        return true;
+    }
+
+    /// <summary>
+    /// Core Dijkstra within a sector. Computes flow directions from goal tiles.
+    /// Thin wrapper over RunWindowDijkstra: window = whole sector, clamped at
+    /// the map edge for partial sectors.
+    /// </summary>
+    private CachedFlow ComputeSectorFlow(int sx, int sy, List<int> goalLocalIndices, int tier, uint frame,
+                                          List<float>? goalInitCosts = null)
+    {
+        DiagDijkstraInvocations++;
+        int cells = SectorSize * SectorSize;
+        // Fresh dirs array per call — it goes into the flow cache (never pooled).
+        var flow = new CachedFlow { Dirs = new FlowDir[cells], FrameAccessed = frame };
+        if (_grid == null || goalLocalIndices.Count == 0) return flow;
+
+        int baseX = sx * SectorSize;
+        int baseY = sy * SectorSize;
+        int sectorW = Math.Min(SectorSize, _grid.Width - baseX);
+        int sectorH = Math.Min(SectorSize, _grid.Height - baseY);
+
+        RunWindowDijkstra(baseX, baseY, sectorW, sectorH, tier,
+                          goalLocalIndices, goalInitCosts, _costScratch, flow.Dirs);
         return flow;
     }
 
     /// <summary>
-    /// Build direction field from integration cost array.
-    /// Each tile points toward the neighbor with strictly lower cost.
-    /// Includes plateau fallback for flat-cost regions.
+    /// Build direction field from integration cost array (any window; local
+    /// indices use SectorSize stride). Each tile points toward the neighbor
+    /// with strictly lower cost. Includes plateau fallback for flat-cost regions.
     /// </summary>
     private void BuildDirectionField(FlowDir[] dirs, float[] cost, int baseX, int baseY,
                                       int sectorW, int sectorH, int tier)
@@ -526,6 +682,17 @@ public class Pathfinder
     private CachedFlow GetFlowToTile(int sx, int sy, int localTX, int localTY, int tier, uint frame,
                                      Vec2 unitPos = default, Vec2 targetPos = default)
     {
+        // Quantize the target to a 2x2 tile bucket and seed EVERY passable tile
+        // of the bucket as a cost-0 goal. Per-exact-tile keys meant a unit
+        // chasing a moving target re-ran a full sector Dijkstra every time the
+        // target crossed a tile line, and units with targets one tile apart
+        // shared nothing — the single biggest Dijkstra-count driver. The field
+        // steers to within ~1.4 tiles of the true target; callers beeline the
+        // final 3 tiles, and the imag-chunk path covers the one caller that
+        // doesn't. Key encodes the bucket's top-left member, so the pending-
+        // request decode (ProcessPendingRequest) re-quantizes idempotently.
+        localTX &= ~1;
+        localTY &= ~1;
         var key = MakeFlowKey(sx, sy, 1, localTY * SectorSize + localTX, -1, tier);
         if (_flowCache.TryGetValue(key, out var cached))
         {
@@ -549,118 +716,41 @@ public class Pathfinder
             _lastQueryDeferred = true;
             if (_staleFlowCache.TryGetValue(key, out var stale))
             {
+                // CachedFlow is a struct: write the touched copy back, or the
+                // access bump is lost and an actively-used stale entry still
+                // ages out of EvictStaleFlowFields mid-use.
                 stale.FrameAccessed = frame;
+                _staleFlowCache[key] = stale;
                 return stale;
             }
             return default;
         }
 
         int baseX = sx * SectorSize, baseY = sy * SectorSize;
-        int targetGlobalX = baseX + localTX;
-        int targetGlobalY = baseY + localTY;
 
         var goals = new List<int>();
         var goalCosts = new List<float>();
 
-        // Seed the actual target tile if base-passable
-        if (_grid.InBounds(targetGlobalX, targetGlobalY) &&
-            _grid.GetCost(targetGlobalX, targetGlobalY) != 255)
+        // Seed every base-passable tile of the 2x2 bucket (see quantization
+        // note above) so the shared field is valid for any target inside it.
+        for (int oy = 0; oy < 2; oy++)
         {
-            goals.Add(localTY * SectorSize + localTX);
-            goalCosts.Add(0f);
-        }
-
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        var flow = ComputeSectorFlow(sx, sy, goals, tier, frame, goalCosts);
-        sw.Stop();
-        ChargeDijkstraMs((float)sw.Elapsed.TotalMilliseconds);
-
-        _flowCache[key] = flow;
-        _staleFlowCache.Remove(key);
-        return flow;
-    }
-
-    private CachedFlow GetFlowToBorder(int sx, int sy, int borderDir, int tier, uint frame,
-                                       Vec2 unitPos = default, Vec2 targetPos = default)
-    {
-        var key = MakeFlowKey(sx, sy, 0, borderDir, -1, tier);
-        if (_flowCache.TryGetValue(key, out var cached))
-        {
-            DiagFlowCacheHits++;
-            cached.FrameAccessed = frame;
-            _flowCache[key] = cached;
-            return cached;
-        }
-        DiagFlowCacheMisses++;
-        DiagMissBorder++;
-        if (s_keysEverSeen.Add(key)) DiagMissNewKey++; else DiagMissEvicted++;
-
-        if (_grid == null) return new CachedFlow { Dirs = new FlowDir[SectorSize * SectorSize] };
-
-        if (!HasDijkstraBudget())
-        {
-            EnqueueMiss(key, sx, sy, unitPos, targetPos);
-            _lastQueryDeferred = true;
-            if (_staleFlowCache.TryGetValue(key, out var stale))
+            for (int ox = 0; ox < 2; ox++)
             {
-                stale.FrameAccessed = frame;
-                return stale;
+                int ltx = localTX + ox, lty = localTY + oy;
+                if (ltx >= SectorSize || lty >= SectorSize) continue;
+                int gx = baseX + ltx, gy = baseY + lty;
+                if (_grid.InBounds(gx, gy) && _grid.GetCost(gx, gy) != 255)
+                {
+                    goals.Add(lty * SectorSize + ltx);
+                    goalCosts.Add(0f);
+                }
             }
-            return default;
         }
 
-        int baseX = sx * SectorSize, baseY = sy * SectorSize;
-        int endX = Math.Min(baseX + SectorSize, _grid.Width);
-        int endY = Math.Min(baseY + SectorSize, _grid.Height);
-
-        var goals = new List<int>();
-        switch (borderDir)
-        {
-            case 0: // North
-                for (int x = baseX; x < endX; x++)
-                    if (_grid.GetCost(x, baseY, tier) != 255 &&
-                        baseY > 0 && _grid.GetCost(x, baseY - 1, tier) != 255)
-                        goals.Add(0 * SectorSize + (x - baseX));
-                break;
-            case 1: // East
-                for (int y = baseY; y < endY; y++)
-                {
-                    int x = endX - 1;
-                    if (_grid.GetCost(x, y, tier) != 255 &&
-                        x + 1 < _grid.Width && _grid.GetCost(x + 1, y, tier) != 255)
-                        goals.Add((y - baseY) * SectorSize + (x - baseX));
-                }
-                break;
-            case 2: // South
-                for (int x = baseX; x < endX; x++)
-                {
-                    int y = endY - 1;
-                    if (_grid.GetCost(x, y, tier) != 255 &&
-                        y + 1 < _grid.Height && _grid.GetCost(x, y + 1, tier) != 255)
-                        goals.Add((y - baseY) * SectorSize + (x - baseX));
-                }
-                break;
-            case 3: // West
-                for (int y = baseY; y < endY; y++)
-                    if (_grid.GetCost(baseX, y, tier) != 255 &&
-                        baseX > 0 && _grid.GetCost(baseX - 1, y, tier) != 255)
-                        goals.Add((y - baseY) * SectorSize + 0);
-                break;
-        }
-
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        var flow = ComputeSectorFlow(sx, sy, goals, tier, frame);
-
-        // Post-process: border goal tiles get exit direction
-        FlowDir[] borderExitDir = { FlowDir.N, FlowDir.E, FlowDir.S, FlowDir.W };
-        FlowDir exitDir = borderExitDir[borderDir];
-        foreach (int g in goals)
-        {
-            if (flow.Dirs[g] == FlowDir.None)
-                flow.Dirs[g] = exitDir;
-        }
-        sw.Stop();
-        ChargeDijkstraMs((float)sw.Elapsed.TotalMilliseconds);
+        long sw0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        var flow = ComputeSectorFlow(sx, sy, goals, tier, frame, goalCosts);
+        ChargeDijkstraMs((float)ElapsedMs(sw0));
 
         _flowCache[key] = flow;
         _staleFlowCache.Remove(key);
@@ -679,6 +769,13 @@ public class Pathfinder
                                              Vec2 unitPos = default, Vec2 targetPos = default)
     {
         int combinedMask = borderMask | (lateralMask << 4) | (extendedMask << 8);
+        // Quantize the clamped bias tile to an 8-tile band (band center). It's
+        // only a geometric tie-breaker among exit borders, and exact-tile keys
+        // fragmented the cache: targets due east of a sector all shared
+        // clampedLTX=63 but split across 64 clampedLTY rows — 64 Dijkstras +
+        // 64 x 4KB entries where 8 banded ones steer indistinguishably.
+        if (clampedLocalTX >= 0) clampedLocalTX = Math.Min(SectorSize - 1, (clampedLocalTX & ~7) + 4);
+        if (clampedLocalTY >= 0) clampedLocalTY = Math.Min(SectorSize - 1, (clampedLocalTY & ~7) + 4);
         int clampedIdx = (clampedLocalTX >= 0 && clampedLocalTY >= 0)
             ? clampedLocalTY * SectorSize + clampedLocalTX : -1;
         var key = MakeFlowKey(sx, sy, 2, combinedMask, clampedIdx, tier);
@@ -702,7 +799,11 @@ public class Pathfinder
             _lastQueryDeferred = true;
             if (_staleFlowCache.TryGetValue(key, out var stale))
             {
+                // CachedFlow is a struct: write the touched copy back, or the
+                // access bump is lost and an actively-used stale entry still
+                // ages out of EvictStaleFlowFields mid-use.
                 stale.FrameAccessed = frame;
+                _staleFlowCache[key] = stale;
                 return stale;
             }
             return default;
@@ -791,20 +892,18 @@ public class Pathfinder
             }
         }
 
-        var sw = System.Diagnostics.Stopwatch.StartNew();
+        long sw0 = System.Diagnostics.Stopwatch.GetTimestamp();
         var flow = ComputeSectorFlow(sx, sy, goals, tier, frame, goalCosts);
 
         // Post-process: border goal tiles get their respective exit direction
-        FlowDir[] borderExitDir = { FlowDir.N, FlowDir.E, FlowDir.S, FlowDir.W };
         for (int i = 0; i < goals.Count; i++)
         {
             int dir = goalBorderDir[i];
             bool isPrimary = ((borderMask >> dir) & 1) != 0;
             if (isPrimary || flow.Dirs[goals[i]] == FlowDir.None)
-                flow.Dirs[goals[i]] = borderExitDir[dir];
+                flow.Dirs[goals[i]] = BorderExitDirs[dir];
         }
-        sw.Stop();
-        ChargeDijkstraMs((float)sw.Elapsed.TotalMilliseconds);
+        ChargeDijkstraMs((float)ElapsedMs(sw0));
 
         _flowCache[key] = flow;
         _staleFlowCache.Remove(key);
@@ -820,17 +919,27 @@ public class Pathfinder
     /// target tile (if inside) or border tiles facing the target (if outside).
     /// Returns direction at unit's position. Stores chunk per-unit for persistence.
     /// </summary>
-    private Vec2 GetLocalChunkDirection(Vec2 unitPos, Vec2 targetPos, int tier, int unitIdx = -1, bool activate = true)
+    private Vec2 GetLocalChunkDirection(Vec2 unitPos, Vec2 targetPos, int tier, uint unitId = GameConstants.InvalidUnit)
     {
-        DiagImagChunkComputes++;
-        var _diagSw = System.Diagnostics.Stopwatch.StartNew();
-        try {
         if (_grid == null) return Vec2.Zero;
 
         int unitTX = (int)(unitPos.X / GameConstants.TileSize);
         int unitTY = (int)(unitPos.Y / GameConstants.TileSize);
         int targetTX = (int)(targetPos.X / GameConstants.TileSize);
         int targetTY = (int)(targetPos.Y / GameConstants.TileSize);
+
+        // Negative-result memo: if the last compute for this exact (unit tile,
+        // target tile) pair failed, don't burn another full chunk Dijkstra —
+        // nothing changed. Cleared on success and on Rebuild().
+        if (unitId != GameConstants.InvalidUnit
+            && _unitImagChunks.TryGetValue(unitId, out var memo)
+            && memo.FailedUnitTX == unitTX && memo.FailedUnitTY == unitTY
+            && memo.FailedTargetTX == targetTX && memo.FailedTargetTY == targetTY)
+            return Vec2.Zero;
+
+        DiagImagChunkComputes++;
+        long _diagSw0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        try {
 
         // Center the chunk on the unit, clamped to map bounds
         int halfSize = SectorSize / 2;
@@ -846,25 +955,24 @@ public class Pathfinder
         int localUY = Math.Clamp(unitTY - baseY, 0, chunkH - 1);
 
         int cells = SectorSize * SectorSize;
-        float[] cost = new float[cells];
-        Array.Fill(cost, GameConstants.InfCost);
-
-        var openList = new PriorityQueue<int, float>();
 
         bool targetInChunk = targetTX >= baseX && targetTX < endX &&
                              targetTY >= baseY && targetTY < endY;
+
+        // Goal seeding (chunk-specific: target tile if inside the window, else
+        // target-facing border tiles). Passability of each goal tile itself
+        // (tier- OR base-passable) is checked by RunWindowDijkstra; the border
+        // loops additionally require the tile to be tier-passable and the
+        // adjacent OUTSIDE tile to be base-passable, which is stricter and
+        // stays here.
+        var goals = _goalScratch;
+        goals.Clear();
 
         if (targetInChunk)
         {
             int localTX = targetTX - baseX;
             int localTY = targetTY - baseY;
-            int goalIdx = localTY * SectorSize + localTX;
-            int gx = baseX + localTX, gy = baseY + localTY;
-            if (_grid.GetCost(gx, gy, tier) != 255 || _grid.GetCost(gx, gy) != 255)
-            {
-                cost[goalIdx] = 0f;
-                openList.Enqueue(goalIdx, 0f);
-            }
+            goals.Add(localTY * SectorSize + localTX);
         }
         else
         {
@@ -883,11 +991,7 @@ public class Pathfinder
                     int gx = baseX + lx, gy = baseY;
                     if (_grid.GetCost(gx, gy, tier) == 255) continue;
                     if (_grid.GetCost(gx, gy - 1) != 255)
-                    {
-                        int idx = 0 * SectorSize + lx;
-                        cost[idx] = 0f;
-                        openList.Enqueue(idx, 0f);
-                    }
+                        goals.Add(0 * SectorSize + lx);
                 }
             }
             if (seedS && endY < _grid.Height)
@@ -897,11 +1001,7 @@ public class Pathfinder
                     int gx = baseX + lx, gy = endY - 1;
                     if (_grid.GetCost(gx, gy, tier) == 255) continue;
                     if (_grid.GetCost(gx, gy + 1) != 255)
-                    {
-                        int idx = (chunkH - 1) * SectorSize + lx;
-                        cost[idx] = 0f;
-                        openList.Enqueue(idx, 0f);
-                    }
+                        goals.Add((chunkH - 1) * SectorSize + lx);
                 }
             }
             if (seedW && baseX > 0)
@@ -911,11 +1011,7 @@ public class Pathfinder
                     int gx = baseX, gy = baseY + ly;
                     if (_grid.GetCost(gx, gy, tier) == 255) continue;
                     if (_grid.GetCost(gx - 1, gy) != 255)
-                    {
-                        int idx = ly * SectorSize + 0;
-                        cost[idx] = 0f;
-                        openList.Enqueue(idx, 0f);
-                    }
+                        goals.Add(ly * SectorSize + 0);
                 }
             }
             if (seedE && endX < _grid.Width)
@@ -925,86 +1021,69 @@ public class Pathfinder
                     int gx = endX - 1, gy = baseY + ly;
                     if (_grid.GetCost(gx, gy, tier) == 255) continue;
                     if (_grid.GetCost(gx + 1, gy) != 255)
-                    {
-                        int idx = ly * SectorSize + (chunkW - 1);
-                        cost[idx] = 0f;
-                        openList.Enqueue(idx, 0f);
-                    }
+                        goals.Add(ly * SectorSize + (chunkW - 1));
                 }
             }
         }
 
-        if (openList.Count == 0) return Vec2.Zero;
-
-        // Dijkstra within chunk
-        while (openList.Count > 0)
-        {
-            int idx = openList.Dequeue();
-            float c = cost[idx];
-            int lx = idx % SectorSize, ly = idx / SectorSize;
-
-            for (int d = 0; d < 8; d++)
-            {
-                int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                if (nlx < 0 || nlx >= chunkW || nly < 0 || nly >= chunkH) continue;
-
-                int gx = baseX + nlx, gy = baseY + nly;
-                byte nc = _grid.GetCost(gx, gy, tier);
-                if (nc == 255) continue;
-
-                // Diagonal corner-cutting
-                if (d % 2 == 1)
-                {
-                    int cAlx = lx + Dx8[d], cAly = ly;
-                    int cBlx = lx, cBly = ly + Dy8[d];
-                    if (cAlx >= 0 && cAlx < chunkW && _grid.GetCost(baseX + cAlx, baseY + cAly, tier) == 255) continue;
-                    if (cBly >= 0 && cBly < chunkH && _grid.GetCost(baseX + cBlx, baseY + cBly, tier) == 255) continue;
-                }
-
-                int nidx = nly * SectorSize + nlx;
-                float newCost = c + nc * StepMul8[d];
-                if (newCost < cost[nidx])
-                {
-                    cost[nidx] = newCost;
-                    openList.Enqueue(nidx, newCost);
-                }
-            }
-        }
-
-        // Escape propagation for tier-inflated tiles
-        RunEscapePropagation(cost, baseX, baseY, chunkW, chunkH, tier);
-
-        // Build direction field
+        // Fresh dirs array per call — it may be stored in the ImaginaryChunk
+        // (never pooled). Cost is pooled scratch; safe to read until the next
+        // RunWindowDijkstra call (single-threaded).
         var dirs = new FlowDir[cells];
-        BuildChunkDirectionField(dirs, cost, baseX, baseY, chunkW, chunkH, tier);
+        float[] cost = _costScratch;
+        if (!RunWindowDijkstra(baseX, baseY, chunkW, chunkH, tier, goals, null, cost, dirs))
+            return Vec2.Zero; // no seedable goal — historical early-out, no failure memo
 
         // Extract direction at unit's tile
         int unitTileIdx = localUY * SectorSize + localUX;
-        if (cost[unitTileIdx] >= GameConstants.InfCost) return Vec2.Zero;
+        FlowDir bestDir = cost[unitTileIdx] >= GameConstants.InfCost
+            ? FlowDir.None
+            : dirs[unitTileIdx];
 
-        FlowDir bestDir = dirs[unitTileIdx];
-
-        // Store chunk per-unit for persistence
-        if (unitIdx >= 0 && bestDir != FlowDir.None)
+        if (unitId != GameConstants.InvalidUnit)
         {
-            if (!_unitImagChunks.TryGetValue(unitIdx, out var ic))
+            if (!_unitImagChunks.TryGetValue(unitId, out var ic))
             {
                 ic = new ImaginaryChunk();
-                _unitImagChunks[unitIdx] = ic;
+                _unitImagChunks[unitId] = ic;
             }
-            ic.Dirs = dirs;
-            ic.BaseX = baseX;
-            ic.BaseY = baseY;
-            ic.ChunkW = chunkW;
-            ic.ChunkH = chunkH;
-            ic.TargetTX = targetTX;
-            ic.TargetTY = targetTY;
-            ic.Active = activate;
+            if (bestDir != FlowDir.None)
+            {
+                // Store chunk per-unit for persistence; clear any failure memo.
+                ic.Dirs = dirs;
+                ic.BaseX = baseX;
+                ic.BaseY = baseY;
+                ic.ChunkW = chunkW;
+                ic.ChunkH = chunkH;
+                ic.TargetTX = targetTX;
+                ic.TargetTY = targetTY;
+                ic.Active = true;
+                ic.FailedUnitTX = -1; ic.FailedUnitTY = -1;
+                ic.FailedTargetTX = -1; ic.FailedTargetTY = -1;
+            }
+            else
+            {
+                // Unreachable (or plateau at the unit tile): memoize the failure
+                // so the next tick's identical query is a dictionary hit, not a
+                // full 64x64 Dijkstra.
+                ic.Active = false;
+                ic.FailedUnitTX = unitTX; ic.FailedUnitTY = unitTY;
+                ic.FailedTargetTX = targetTX; ic.FailedTargetTY = targetTY;
+            }
         }
 
         return FlowDirUtil.ToVec(bestDir);
         }
-        finally { DiagImagChunkMs += _diagSw.Elapsed.TotalMilliseconds; }
+        finally
+        {
+            double elapsed = ElapsedMs(_diagSw0);
+            DiagImagChunkMs += elapsed;
+            // Charge the budget: an imag-chunk compute costs about the same as
+            // the sector Dijkstra the budget exists to bound. Without this, N
+            // units running chunk computes in one tick passed HasDijkstraBudget()
+            // every time and the budget only throttled flow misses.
+            ChargeDijkstraMs((float)elapsed);
+        }
     }
 
     /// <summary>
@@ -1013,7 +1092,7 @@ public class Pathfinder
     private Vec2 RecomputeImaginaryChunkFlow(ImaginaryChunk ic, Vec2 unitPos, Vec2 targetPos, int tier)
     {
         DiagImagChunkRecomputes++;
-        var _diagSw = System.Diagnostics.Stopwatch.StartNew();
+        long _diagSw0 = System.Diagnostics.Stopwatch.GetTimestamp();
         try {
         if (_grid == null) return Vec2.Zero;
 
@@ -1031,25 +1110,21 @@ public class Pathfinder
 
         tier = Math.Clamp(tier, 0, TerrainCosts.NumSizeTiers - 1);
         int cells = SectorSize * SectorSize;
-        float[] cost = new float[cells];
-        Array.Fill(cost, GameConstants.InfCost);
-
-        var openList = new PriorityQueue<int, float>();
 
         bool targetInChunk = targetTX >= baseX && targetTX < endX &&
                              targetTY >= baseY && targetTY < endY;
+
+        // Goal seeding — same pattern as GetLocalChunkDirection (target tile if
+        // inside, else target-facing borders), over the existing chunk bounds.
+        // See the seeding comment there for the passability-check split.
+        var goals = _goalScratch;
+        goals.Clear();
 
         if (targetInChunk)
         {
             int localTX = targetTX - baseX;
             int localTY = targetTY - baseY;
-            int goalIdx = localTY * SectorSize + localTX;
-            int gx = baseX + localTX, gy = baseY + localTY;
-            if (_grid.GetCost(gx, gy, tier) != 255 || _grid.GetCost(gx, gy) != 255)
-            {
-                cost[goalIdx] = 0f;
-                openList.Enqueue(goalIdx, 0f);
-            }
+            goals.Add(localTY * SectorSize + localTX);
         }
         else
         {
@@ -1066,7 +1141,7 @@ public class Pathfinder
                     int gx = baseX + lx, gy = baseY;
                     if (_grid.GetCost(gx, gy, tier) == 255) continue;
                     if (_grid.GetCost(gx, gy - 1) != 255)
-                    { int idx = lx; cost[idx] = 0f; openList.Enqueue(idx, 0f); }
+                        goals.Add(lx);
                 }
 
             if (seedS && endY < _grid.Height)
@@ -1075,7 +1150,7 @@ public class Pathfinder
                     int gx = baseX + lx, gy = endY - 1;
                     if (_grid.GetCost(gx, gy, tier) == 255) continue;
                     if (_grid.GetCost(gx, gy + 1) != 255)
-                    { int idx = (chunkH - 1) * SectorSize + lx; cost[idx] = 0f; openList.Enqueue(idx, 0f); }
+                        goals.Add((chunkH - 1) * SectorSize + lx);
                 }
 
             if (seedW && baseX > 0)
@@ -1084,7 +1159,7 @@ public class Pathfinder
                     int gx = baseX, gy = baseY + ly;
                     if (_grid.GetCost(gx, gy, tier) == 255) continue;
                     if (_grid.GetCost(gx - 1, gy) != 255)
-                    { int idx = ly * SectorSize; cost[idx] = 0f; openList.Enqueue(idx, 0f); }
+                        goals.Add(ly * SectorSize);
                 }
 
             if (seedE && endX < _grid.Width)
@@ -1093,52 +1168,15 @@ public class Pathfinder
                     int gx = endX - 1, gy = baseY + ly;
                     if (_grid.GetCost(gx, gy, tier) == 255) continue;
                     if (_grid.GetCost(gx + 1, gy) != 255)
-                    { int idx = ly * SectorSize + (chunkW - 1); cost[idx] = 0f; openList.Enqueue(idx, 0f); }
+                        goals.Add(ly * SectorSize + (chunkW - 1));
                 }
         }
 
-        if (openList.Count == 0) return Vec2.Zero;
-
-        // Dijkstra
-        while (openList.Count > 0)
-        {
-            int idx = openList.Dequeue();
-            float c = cost[idx];
-            int lx = idx % SectorSize, ly = idx / SectorSize;
-
-            for (int d = 0; d < 8; d++)
-            {
-                int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                if (nlx < 0 || nlx >= chunkW || nly < 0 || nly >= chunkH) continue;
-
-                int gx = baseX + nlx, gy = baseY + nly;
-                byte nc = _grid.GetCost(gx, gy, tier);
-                if (nc == 255) continue;
-
-                if (d % 2 == 1)
-                {
-                    int cAlx = lx + Dx8[d], cAly = ly;
-                    int cBlx = lx, cBly = ly + Dy8[d];
-                    if (cAlx >= 0 && cAlx < chunkW && _grid.GetCost(baseX + cAlx, baseY + cAly, tier) == 255) continue;
-                    if (cBly >= 0 && cBly < chunkH && _grid.GetCost(baseX + cBlx, baseY + cBly, tier) == 255) continue;
-                }
-
-                int nidx = nly * SectorSize + nlx;
-                float newCost = c + nc * StepMul8[d];
-                if (newCost < cost[nidx])
-                {
-                    cost[nidx] = newCost;
-                    openList.Enqueue(nidx, newCost);
-                }
-            }
-        }
-
-        // Escape propagation
-        RunEscapePropagation(cost, baseX, baseY, chunkW, chunkH, tier);
-
-        // Build direction field
+        // Fresh dirs array per call — stored in the ImaginaryChunk (never pooled).
         var dirs = new FlowDir[cells];
-        BuildChunkDirectionField(dirs, cost, baseX, baseY, chunkW, chunkH, tier);
+        float[] cost = _costScratch;
+        if (!RunWindowDijkstra(baseX, baseY, chunkW, chunkH, tier, goals, null, cost, dirs))
+            return Vec2.Zero; // no seedable goal — historical early-out, chunk state untouched
 
         // Update chunk state
         ic.Dirs = dirs;
@@ -1150,130 +1188,17 @@ public class Pathfinder
 
         return FlowDirUtil.ToVec(ic.Dirs[unitTileIdx]);
         }
-        finally { DiagImagChunkMs += _diagSw.Elapsed.TotalMilliseconds; }
-    }
-
-    /// <summary>
-    /// Escape propagation: extend costs into tier-impassable but base-passable tiles.
-    /// </summary>
-    private void RunEscapePropagation(float[] cost, int baseX, int baseY, int chunkW, int chunkH, int tier)
-    {
-        if (_grid == null) return;
-
-        var escapePQ = new PriorityQueue<int, float>();
-        for (int ly = 0; ly < chunkH; ly++)
+        finally
         {
-            for (int lx = 0; lx < chunkW; lx++)
-            {
-                int idx = ly * SectorSize + lx;
-                if (cost[idx] >= GameConstants.InfCost) continue;
-
-                for (int d = 0; d < 8; d++)
-                {
-                    int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                    if (nlx < 0 || nlx >= chunkW || nly < 0 || nly >= chunkH) continue;
-                    int nidx = nly * SectorSize + nlx;
-                    if (cost[nidx] < GameConstants.InfCost) continue;
-                    int ngx = baseX + nlx, ngy = baseY + nly;
-                    if (_grid.GetCost(ngx, ngy, tier) != 255) continue; // not inflated
-                    if (_grid.GetCost(ngx, ngy) == 255) continue; // truly impassable
-
-                    float newCost = cost[idx] + StepMul8[d];
-                    if (newCost < cost[nidx])
-                    {
-                        cost[nidx] = newCost;
-                        escapePQ.Enqueue(nidx, newCost);
-                    }
-                }
-            }
-        }
-
-        while (escapePQ.Count > 0)
-        {
-            int idx = escapePQ.Dequeue();
-            float c = cost[idx];
-            int lx = idx % SectorSize, ly = idx / SectorSize;
-
-            for (int d = 0; d < 8; d++)
-            {
-                int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                if (nlx < 0 || nlx >= chunkW || nly < 0 || nly >= chunkH) continue;
-                int nidx = nly * SectorSize + nlx;
-                if (cost[nidx] < GameConstants.InfCost) continue;
-                int ngx = baseX + nlx, ngy = baseY + nly;
-                if (_grid.GetCost(ngx, ngy) == 255) continue;
-
-                float newCost = c + StepMul8[d];
-                if (newCost < cost[nidx])
-                {
-                    cost[nidx] = newCost;
-                    escapePQ.Enqueue(nidx, newCost);
-                }
-            }
+            double elapsed = ElapsedMs(_diagSw0);
+            DiagImagChunkMs += elapsed;
+            ChargeDijkstraMs((float)elapsed); // same reasoning as GetLocalChunkDirection
         }
     }
 
-    /// <summary>
-    /// Build direction field for a chunk (same as sector but with chunk dimensions).
-    /// </summary>
-    private void BuildChunkDirectionField(FlowDir[] dirs, float[] cost, int baseX, int baseY,
-                                           int chunkW, int chunkH, int tier)
-    {
-        if (_grid == null) return;
-
-        for (int ly = 0; ly < chunkH; ly++)
-        {
-            for (int lx = 0; lx < chunkW; lx++)
-            {
-                int idx = ly * SectorSize + lx;
-                if (cost[idx] >= GameConstants.InfCost) continue;
-
-                float bc = cost[idx];
-                FlowDir bd = FlowDir.None;
-
-                for (int d = 0; d < 8; d++)
-                {
-                    int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                    if (nlx < 0 || nlx >= chunkW || nly < 0 || nly >= chunkH) continue;
-
-                    if (d % 2 == 1)
-                    {
-                        int cax = lx + Dx8[d], cay = ly;
-                        int cbx = lx, cby = ly + Dy8[d];
-                        if (cax >= 0 && cax < chunkW && _grid.GetCost(baseX + cax, baseY + cay, tier) == 255) continue;
-                        if (cby >= 0 && cby < chunkH && _grid.GetCost(baseX + cbx, baseY + cby, tier) == 255) continue;
-                    }
-
-                    float nc = cost[nly * SectorSize + nlx];
-                    if (nc < bc) { bc = nc; bd = FlowDirs8[d]; }
-                }
-
-                // Plateau fallback
-                if (bd == FlowDir.None && cost[idx] > 0f)
-                {
-                    float lowest = GameConstants.InfCost;
-                    for (int d = 0; d < 8; d++)
-                    {
-                        int nlx = lx + Dx8[d], nly = ly + Dy8[d];
-                        if (nlx < 0 || nlx >= chunkW || nly < 0 || nly >= chunkH) continue;
-
-                        if (d % 2 == 1)
-                        {
-                            int cax = lx + Dx8[d], cay = ly;
-                            int cbx = lx, cby = ly + Dy8[d];
-                            if (cax >= 0 && cax < chunkW && _grid.GetCost(baseX + cax, baseY + cay, tier) == 255) continue;
-                            if (cby >= 0 && cby < chunkH && _grid.GetCost(baseX + cbx, baseY + cby, tier) == 255) continue;
-                        }
-
-                        float nc = cost[nly * SectorSize + nlx];
-                        if (nc < lowest) { lowest = nc; bd = FlowDirs8[d]; }
-                    }
-                }
-
-                dirs[idx] = bd;
-            }
-        }
-    }
+    // (RunEscapePropagation and BuildChunkDirectionField — chunk-window copies
+    //  of the sector escape pass and BuildDirectionField — were folded into
+    //  RunWindowDijkstra / BuildDirectionField, 2026-07-04.)
 
     // =========================================================================
     // Main API
@@ -1300,14 +1225,13 @@ public class Pathfinder
     public static int DiagCacheEvictions;
     // Per-flow-type miss counters (reset per tick):
     public static int DiagMissTile;           // GetFlowToTile (same-sector, target tile as goal)
-    public static int DiagMissBorder;         // GetFlowToBorder (cross-sector via single border)
     public static int DiagMissMultiBorder;    // GetFlowToMultiBorder (cross-sector with weighted borders)
     // Tracks every FlowKey ever seen. Used to tell "new-key" vs "was-here-got-evicted".
     private static readonly System.Collections.Generic.HashSet<FlowKey> s_keysEverSeen = new();
 
-    public Vec2 GetDirection(Vec2 unitPos, Vec2 targetPos, uint frame, int sizeTier = 0, int unitIdx = -1)
+    public Vec2 GetDirection(Vec2 unitPos, Vec2 targetPos, uint frame, int sizeTier = 0, uint unitId = GameConstants.InvalidUnit)
     {
-        var diagSw = System.Diagnostics.Stopwatch.StartNew();
+        long diagSw0 = System.Diagnostics.Stopwatch.GetTimestamp();
         DiagCallsThisTick++;
         try
         {
@@ -1319,7 +1243,7 @@ public class Pathfinder
         _lastQueryDeferred = false;
 
         // --- Per-unit persistent imaginary chunk ---
-        if (unitIdx >= 0 && _unitImagChunks.TryGetValue(unitIdx, out var existingIc) && existingIc.Active)
+        if (unitId != GameConstants.InvalidUnit && _unitImagChunks.TryGetValue(unitId, out var existingIc) && existingIc.Active)
         {
             int uTX = (int)(unitPos.X / GameConstants.TileSize);
             int uTY = (int)(unitPos.Y / GameConstants.TileSize);
@@ -1358,7 +1282,7 @@ public class Pathfinder
                         Vec2 dir = RecomputeImaginaryChunkFlow(existingIc, unitPos, targetPos, sizeTier);
                         if (dir.LengthSq() > 0.001f)
                         {
-                            RecordDecision(unitIdx, PathDecision.ImagChunkRecompute);
+                            RecordDecision(unitId, PathDecision.ImagChunkRecompute);
                             return dir;
                         }
                         existingIc.Active = false;
@@ -1371,7 +1295,7 @@ public class Pathfinder
                     Vec2 dir = FlowDirUtil.ToVec(fd);
                     if (dir.LengthSq() > 0.001f)
                     {
-                        RecordDecision(unitIdx, PathDecision.ImagChunkPersist);
+                        RecordDecision(unitId, PathDecision.ImagChunkPersist);
                         return dir;
                     }
                     existingIc.Active = false;
@@ -1411,16 +1335,16 @@ public class Pathfinder
                 else
                 {
                     // No tile flow at unit tile — use imaginary chunk
-                    Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
+                    Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitId);
                     if (localDir.LengthSq() > 0.001f)
                     {
-                        RecordDecision(unitIdx, PathDecision.SameSectorImagChunk);
+                        RecordDecision(unitId, PathDecision.SameSectorImagChunk);
                         return localDir;
                     }
                     // Beeline
                     var bee = targetPos - unitPos;
                     float beeLen = bee.Length();
-                    RecordDecision(unitIdx, PathDecision.Unreachable);
+                    RecordDecision(unitId, PathDecision.Unreachable);
                     return beeLen > 0.01f ? bee * (1f / beeLen) : Vec2.Zero;
                 }
             }
@@ -1464,15 +1388,15 @@ public class Pathfinder
                 if (!hasFlow)
                 {
                     // Try imaginary chunk before beeline
-                    Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
+                    Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitId);
                     if (localDir.LengthSq() > 0.001f)
                     {
-                        RecordDecision(unitIdx, PathDecision.UnreachableImagChunk);
+                        RecordDecision(unitId, PathDecision.UnreachableImagChunk);
                         return localDir;
                     }
                     var dd = targetPos - unitPos;
                     float len = dd.Length();
-                    RecordDecision(unitIdx, PathDecision.Unreachable);
+                    RecordDecision(unitId, PathDecision.Unreachable);
                     return len > 0.01f ? dd * (1f / len) : Vec2.Zero;
                 }
             }
@@ -1498,20 +1422,20 @@ public class Pathfinder
                         extendedMask |= (byte)(1 << d);
                 }
 
-                if (borderMask != 0)
-                {
-                    int clampedLTX = Math.Clamp((int)(targetPos.X / GameConstants.TileSize) - unitSX * SectorSize, 0, SectorSize - 1);
-                    int clampedLTY = Math.Clamp((int)(targetPos.Y / GameConstants.TileSize) - unitSY * SectorSize, 0, SectorSize - 1);
-                    flow = GetFlowToMultiBorder(unitSX, unitSY, borderMask, lateralMask, extendedMask,
-                                                sizeTier, frame, clampedLTX, clampedLTY, unitPos, targetPos);
-                    hasFlow = true;
-                }
-                else
-                {
-                    // Fallback to single border
-                    flow = GetFlowToBorder(unitSX, unitSY, route.NextDir[unitSector], sizeTier, frame, unitPos, targetPos);
-                    hasFlow = true;
-                }
+                // Unreachable armor: BFS guarantees a neighbor with
+                // HopDist == myDist-1 in a connected direction (connectivity is
+                // symmetric by construction), so borderMask always has that bit.
+                // If it were ever empty, synthesize it from the route direction
+                // rather than keeping a whole dead single-border flow variant
+                // (GetFlowToBorder, deleted 2026-07-04) around for it.
+                if (borderMask == 0 && route.NextDir[unitSector] >= 0)
+                    borderMask = (byte)(1 << route.NextDir[unitSector]);
+
+                int clampedLTX = Math.Clamp((int)(targetPos.X / GameConstants.TileSize) - unitSX * SectorSize, 0, SectorSize - 1);
+                int clampedLTY = Math.Clamp((int)(targetPos.Y / GameConstants.TileSize) - unitSY * SectorSize, 0, SectorSize - 1);
+                flow = GetFlowToMultiBorder(unitSX, unitSY, borderMask, lateralMask, extendedMask,
+                                            sizeTier, frame, clampedLTX, clampedLTY, unitPos, targetPos);
+                hasFlow = true;
             }
         }
 
@@ -1527,19 +1451,19 @@ public class Pathfinder
                 float beeDLen = beeD.Length();
                 if (beeDLen > 0.01f)
                 {
-                    RecordDecision(unitIdx, PathDecision.Beeline);
+                    RecordDecision(unitId, PathDecision.Beeline);
                     return beeD * (1f / beeDLen);
                 }
-                RecordDecision(unitIdx, PathDecision.None);
+                RecordDecision(unitId, PathDecision.None);
                 return Vec2.Zero;
             }
-            Vec2 localDir = GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
+            Vec2 localDir = GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitId);
             if (localDir.LengthSq() > 0.001f)
             {
-                RecordDecision(unitIdx, PathDecision.NoFlow);
+                RecordDecision(unitId, PathDecision.NoFlow);
                 return localDir;
             }
-            RecordDecision(unitIdx, PathDecision.None);
+            RecordDecision(unitId, PathDecision.None);
             return Vec2.Zero;
         }
 
@@ -1603,7 +1527,7 @@ public class Pathfinder
 
             if (bestDir.LengthSq() > 0.001f)
             {
-                RecordDecision(unitIdx, PathDecision.BFSFallback);
+                RecordDecision(unitId, PathDecision.BFSFallback);
                 return bestDir;
             }
 
@@ -1675,17 +1599,17 @@ public class Pathfinder
 
                 if (fbBestDir.LengthSq() > 0.001f)
                 {
-                    RecordDecision(unitIdx, PathDecision.TierFallback, -1, -1, fallbackTier);
+                    RecordDecision(unitId, PathDecision.TierFallback, -1, -1, fallbackTier);
                     return fbBestDir;
                 }
             }
 
             // Try imaginary chunk
             {
-                Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitIdx);
+                Vec2 localDir = _lastQueryDeferred ? Vec2.Zero : GetLocalChunkDirection(unitPos, targetPos, sizeTier, unitId);
                 if (localDir.LengthSq() > 0.001f)
                 {
-                    RecordDecision(unitIdx, PathDecision.ImagChunkFallback);
+                    RecordDecision(unitId, PathDecision.ImagChunkFallback);
                     return localDir;
                 }
             }
@@ -1730,7 +1654,7 @@ public class Pathfinder
 
                 if (boundaryDir.LengthSq() > 0.001f)
                 {
-                    RecordDecision(unitIdx, PathDecision.BoundaryEscape);
+                    RecordDecision(unitId, PathDecision.BoundaryEscape);
                     return boundaryDir;
                 }
             }
@@ -1738,26 +1662,26 @@ public class Pathfinder
             // Last resort: beeline
             var diff = targetPos - unitPos;
             float diffLen = diff.Length();
-            RecordDecision(unitIdx, PathDecision.Beeline);
+            RecordDecision(unitId, PathDecision.Beeline);
             return diffLen > 0.01f ? diff * (1f / diffLen) : Vec2.Zero;
         }
 
         // Normal flow direction
-        RecordDecision(unitIdx, unitSector == targetSector ? PathDecision.TileFlow : PathDecision.BorderFlow);
+        RecordDecision(unitId, unitSector == targetSector ? PathDecision.TileFlow : PathDecision.BorderFlow);
         return finalDir;
         }
         finally
         {
-            DiagTotalMsThisTick += diagSw.Elapsed.TotalMilliseconds;
+            DiagTotalMsThisTick += ElapsedMs(diagSw0);
         }
     }
 
     // --- Decision tracking ---
 
-    private void RecordDecision(int unitIdx, PathDecision decision, int bfsLX = -1, int bfsLY = -1, int fbTier = -1)
+    private void RecordDecision(uint unitId, PathDecision decision, int bfsLX = -1, int bfsLY = -1, int fbTier = -1)
     {
-        if (unitIdx >= 0)
-            _unitDecisions[unitIdx] = new PathDecisionInfo
+        if (unitId != GameConstants.InvalidUnit)
+            _unitDecisions[unitId] = new PathDecisionInfo
             {
                 Decision = decision,
                 BfsTargetLocalX = bfsLX,
@@ -1766,14 +1690,18 @@ public class Pathfinder
             };
     }
 
-    public PathDecisionInfo? GetUnitDecision(int unitIdx)
+    public PathDecisionInfo? GetUnitDecision(uint unitId)
     {
-        return _unitDecisions.TryGetValue(unitIdx, out var info) ? info : null;
+        return _unitDecisions.TryGetValue(unitId, out var info) ? info : null;
     }
 
-    public void ClearImaginaryChunk(int unitIdx)
+    /// <summary>Drop a unit's persistent imaginary chunk and debug decision.
+    /// Call when a unit is removed so the dictionaries don't accumulate
+    /// entries for ids that will never query again.</summary>
+    public void ClearImaginaryChunk(uint unitId)
     {
-        _unitImagChunks.Remove(unitIdx);
+        _unitImagChunks.Remove(unitId);
+        _unitDecisions.Remove(unitId);
     }
 
     // --- Budgeted pathfinding ---
@@ -1813,9 +1741,8 @@ public class Pathfinder
         // FlowKey round-trips: TargetData encodes per-type params, invertibly.
         switch (key.TargetType)
         {
-            case 0: // border
-                GetFlowToBorder(key.SectorX, key.SectorY, key.TargetData, key.SizeTier, frame);
-                break;
+            // (TargetType 0 was the single-border flow — deleted 2026-07-04;
+            // nothing enqueues type-0 keys anymore.)
             case 1: // tile
                 int tLY = key.TargetData / SectorSize;
                 int tLX = key.TargetData - tLY * SectorSize;
@@ -1897,21 +1824,9 @@ public class Pathfinder
     }
 
     // --- Cache eviction ---
-
-    public void EvictFlowFields(int maxCached = 384)
-    {
-        while (_flowCache.Count > maxCached)
-        {
-            FlowKey oldestKey = default;
-            uint oldestFrame = uint.MaxValue;
-            foreach (var (k, v) in _flowCache)
-                if (v.FrameAccessed < oldestFrame) { oldestFrame = v.FrameAccessed; oldestKey = k; }
-            if (_flowCache.TryGetValue(oldestKey, out var victim))
-                _staleFlowCache[oldestKey] = victim;
-            _flowCache.Remove(oldestKey);
-            DiagCacheEvictions++;
-        }
-    }
+    // (The old size-capped EvictFlowFields/EvictRoutes were deleted 2026-07-04:
+    //  neither ever had a caller, and both were O(n) full scans per evicted
+    //  entry. Age-based eviction below is the one live policy.)
 
     /// <summary>
     /// Age-based eviction: remove flow-cache entries that no unit has looked at
@@ -1951,20 +1866,19 @@ public class Pathfinder
         if (staleToRemove != null)
             foreach (var k in staleToRemove)
                 _staleFlowCache.Remove(k);
+
+        // Routes age out on the same loose horizon. They previously had NO
+        // eviction at all — a session visiting many distinct destinations
+        // accumulated (sectors x tiers)-sized arrays forever.
+        List<int>? routesToRemove = null;
+        foreach (var (k, v) in _routeCache)
+            if (currentFrame - v.FrameAccessed > staleMax)
+                (routesToRemove ??= new List<int>()).Add(k);
+        if (routesToRemove != null)
+            foreach (var k in routesToRemove)
+                _routeCache.Remove(k);
     }
 
     /// <summary>Current flow-cache entry count. Diagnostic probe.</summary>
     public int FlowCacheSize => _flowCache.Count;
-
-    public void EvictRoutes(int maxCached = 96)
-    {
-        while (_routeCache.Count > maxCached)
-        {
-            int oldestKey = 0;
-            uint oldestFrame = uint.MaxValue;
-            foreach (var (k, v) in _routeCache)
-                if (v.FrameAccessed < oldestFrame) { oldestFrame = v.FrameAccessed; oldestKey = k; }
-            _routeCache.Remove(oldestKey);
-        }
-    }
 }

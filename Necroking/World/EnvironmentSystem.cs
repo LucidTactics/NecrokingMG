@@ -512,8 +512,46 @@ public class EnvironmentSystem
     private int _nextObjectID;
 
     /// <summary>Called when collision state changes (object placed/removed/collected/destroyed/respawned).
-    /// Wire this to RebuildPathfinder so the pathfinding grid stays in sync.</summary>
+    /// Wire this to RebuildPathfinder so the pathfinding grid stays in sync.
+    /// Fallback-only when <see cref="OnCollisionRegionDirty"/> is wired: single-object
+    /// changes then fire the region callback instead (see FireCollisionsDirty).</summary>
     public Action? OnCollisionsDirty;
+
+    /// <summary>Region-scoped collision-dirty event: (minTX, minTY, maxTX, maxTY)
+    /// tile AABB covering the changed object's collision circle at MAX tier
+    /// inflation. Preferred over <see cref="OnCollisionsDirty"/> when wired —
+    /// lets the sim do a dirty-region rebake + targeted pathfinder invalidation
+    /// (~ms) instead of the full-map rebuild (~450ms on 4097²).</summary>
+    public Action<int, int, int, int>? OnCollisionRegionDirty;
+
+    /// <summary>Fire the collision-dirty signal for one object's circle.
+    /// Prefers the region callback; falls back to the legacy full-rebuild one.</summary>
+    private void FireCollisionsDirty(float cx, float cy, float collisionRadius)
+    {
+        if (OnCollisionRegionDirty == null)
+        {
+            OnCollisionsDirty?.Invoke();
+            return;
+        }
+        // Cover the largest tier inflation plus a 1-tile safety rim so the
+        // region reset provably contains every tile the stamp ever touched.
+        float cr = collisionRadius + TerrainCosts.SizeTierRadius[TerrainCosts.NumSizeTiers - 1];
+        OnCollisionRegionDirty(
+            (int)MathF.Floor(cx - cr) - 1, (int)MathF.Floor(cy - cr) - 1,
+            (int)MathF.Ceiling(cx + cr) + 1, (int)MathF.Ceiling(cy + cr) + 1);
+    }
+
+    /// <summary>Object-index convenience for <see cref="FireCollisionsDirty(float,float,float)"/>.
+    /// The object must still be present in _objects.</summary>
+    private void FireCollisionsDirty(int objIdx)
+    {
+        var obj = _objects[objIdx];
+        var def = _defs[obj.DefIndex];
+        float es = def.Scale * obj.Scale;
+        FireCollisionsDirty(obj.X + def.CollisionOffsetX * es,
+                            obj.Y + def.CollisionOffsetY * es,
+                            def.CollisionRadius * es);
+    }
 
     public void Init(float worldMaxY, GraphicsDevice? device = null) { _worldMaxY = worldMaxY; _device = device; }
 
@@ -560,7 +598,7 @@ public class EnvironmentSystem
         _tableState.Add(tableState);
 
         if (_defs[defIndex].CollisionRadius > 0)
-            OnCollisionsDirty?.Invoke();
+            FireCollisionsDirty(_objects.Count - 1);
 
         return _objects.Count - 1;
     }
@@ -568,14 +606,21 @@ public class EnvironmentSystem
     public void RemoveObject(int index)
     {
         if (index < 0 || index >= _objects.Count) return;
-        bool hadCollision = _defs[_objects[index].DefIndex].CollisionRadius > 0;
+        var remObj = _objects[index];
+        var remDef = _defs[remObj.DefIndex];
+        bool hadCollision = remDef.CollisionRadius > 0;
+        // Capture the circle BEFORE removal — the region fire below needs it.
+        float remES = remDef.Scale * remObj.Scale;
+        float remCX = remObj.X + remDef.CollisionOffsetX * remES;
+        float remCY = remObj.Y + remDef.CollisionOffsetY * remES;
+        float remCR = remDef.CollisionRadius * remES;
         _objects.RemoveAt(index);
         if (index < _objectRuntime.Count) _objectRuntime.RemoveAt(index);
         if (index < _processState.Count) _processState.RemoveAt(index);
         if (index < _tableState.Count) _tableState.RemoveAt(index);
 
         if (hadCollision)
-            OnCollisionsDirty?.Invoke();
+            FireCollisionsDirty(remCX, remCY, remCR);
     }
 
     /// <summary>Mark an object as destroyed (Alive=false). Clears collision and hides it.
@@ -589,7 +634,7 @@ public class EnvironmentSystem
         _objectRuntime[objIdx] = rt;
 
         if (_defs[_objects[objIdx].DefIndex].CollisionRadius > 0)
-            OnCollisionsDirty?.Invoke();
+            FireCollisionsDirty(objIdx);
     }
 
     public void ClearObjects() { _objects.Clear(); _objectRuntime.Clear(); _processState.Clear(); _tableState.Clear(); }
@@ -645,7 +690,7 @@ public class EnvironmentSystem
         _objectRuntime[objIdx] = rt;
 
         if (def.CollisionRadius > 0)
-            OnCollisionsDirty?.Invoke();
+            FireCollisionsDirty(objIdx);
 
         return def.ForagableType;
     }
@@ -655,7 +700,6 @@ public class EnvironmentSystem
     /// </summary>
     public void UpdateForagables(float dt)
     {
-        bool anyRespawned = false;
         for (int i = 0; i < _objectRuntime.Count; i++)
         {
             if (!_objectRuntime[i].Collected) continue;
@@ -667,13 +711,13 @@ public class EnvironmentSystem
             {
                 rt.Collected = false;
                 rt.RespawnTimer = 0f;
+                // Per-object region fire; the sim unions same-tick regions, so
+                // several respawns in one tick still cost one rebake.
                 if (_defs[_objects[i].DefIndex].CollisionRadius > 0)
-                    anyRespawned = true;
+                    FireCollisionsDirty(i);
             }
             _objectRuntime[i] = rt;
         }
-        if (anyRespawned)
-            OnCollisionsDirty?.Invoke();
     }
 
     /// <summary>Tick berry-bush state machines. NoBerry bushes count up to
@@ -989,7 +1033,8 @@ public class EnvironmentSystem
                     if (rt.TrapStateTimer <= 0f)
                     {
                         rt.Alive = false;
-                        OnCollisionsDirty?.Invoke();
+                        if (def.CollisionRadius > 0)
+                            FireCollisionsDirty(i);
                     }
                     break;
                 }
@@ -1100,6 +1145,33 @@ public class EnvironmentSystem
 
         for (int i = 0; i < _objects.Count; i++)
             StampObjectCollisionInto(grid, i);
+    }
+
+    /// <summary>Dirty-region version of <see cref="BakeCollisions"/>: reset the
+    /// tile AABB back to the walls/terrain base cost, then re-stamp every
+    /// still-colliding object whose (max-tier-inflated) circle intersects it.
+    /// Stamps may write outside the region — harmless, those tiles were
+    /// already stamped and stay stamped. O(region + N_objects AABB checks)
+    /// instead of O(whole map × tiers + all stamps).</summary>
+    public void RebakeCollisionRegion(TileGrid grid, int minTX, int minTY, int maxTX, int maxTY)
+    {
+        grid.RebuildTieredCostFieldsRegion(minTX, minTY, maxTX, maxTY);
+
+        float maxInflate = TerrainCosts.SizeTierRadius[TerrainCosts.NumSizeTiers - 1];
+        for (int i = 0; i < _objects.Count; i++)
+        {
+            var obj = _objects[i];
+            var def = _defs[obj.DefIndex];
+            if (def.CollisionRadius <= 0) continue;
+            float es = def.Scale * obj.Scale;
+            float cx = obj.X + def.CollisionOffsetX * es;
+            float cy = obj.Y + def.CollisionOffsetY * es;
+            float cr = def.CollisionRadius * es + maxInflate;
+            // Tile-space AABB overlap test (tile t covers [t, t+1)).
+            if (cx + cr < minTX || cx - cr > maxTX + 1 ||
+                cy + cr < minTY || cy - cr > maxTY + 1) continue;
+            StampObjectCollisionInto(grid, i); // skips Collected / !Alive internally
+        }
     }
 
     /// <summary>Incremental version of <see cref="BakeCollisions"/> — stamps a

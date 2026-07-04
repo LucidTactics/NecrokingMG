@@ -67,10 +67,10 @@ public static class FacingUtil
     /// <summary>Per-unit TurnSpeed with fallback to the global default.</summary>
     public static float ResolveTurnSpeed(Unit unit, GameData? gameData)
     {
-        float global = gameData?.Settings.Combat.TurnSpeed ?? DefaultTurnSpeed;
-        var def = gameData?.Units.Get(unit.UnitDefID);
+        // Memoized def lookup — this runs per facing unit per frame.
+        var def = UnitUtil.ResolveDef(unit, gameData);
         if (def?.TurnSpeed.HasValue == true) return def.TurnSpeed.Value;
-        return global;
+        return gameData?.Settings.Combat.TurnSpeed ?? DefaultTurnSpeed;
     }
 
     /// <summary>Unit direction vector for a FacingAngle in DEGREES (the engine's facing
