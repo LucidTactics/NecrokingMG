@@ -385,10 +385,11 @@ public sealed class NetSession
     public string StatusLine => Mode switch
     {
         // ASCII only: the game font has no em-dash glyph (renders as '?').
+        NetMode.Host when _peerIds.Count == 0 => "HOSTING - waiting for players to connect...",
         NetMode.Host => $"HOSTING - {_peerIds.Count} player(s) connected",
         NetMode.Client when LocalPlayerId != UnassignedId =>
             $"CONNECTED as player {LocalPlayerId} - {_remotePlayers.Count} other player(s)",
-        NetMode.Client => "connecting...",
+        NetMode.Client => "waiting for connection...",
         _ => "offline",
     };
 

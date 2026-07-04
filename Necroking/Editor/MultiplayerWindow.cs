@@ -108,12 +108,13 @@ public class MultiplayerWindow
         _ui.DrawText(_session.StatusLine, new Vector2(x, y), EditorBase.TextBright);
         y += 22;
 
-        // Last few log lines, newest at the bottom.
+        // Last few log lines, newest at the bottom. Errors stand out in red.
         var log = _session.Log;
         int logLines = 6;
         for (int i = System.Math.Max(0, log.Count - logLines); i < log.Count; i++)
         {
-            _ui.DrawText(log[i], new Vector2(x, y), EditorBase.TextDim);
+            Color lineColor = IsErrorLine(log[i]) ? EditorBase.DangerColor : EditorBase.TextDim;
+            _ui.DrawText(log[i], new Vector2(x, y), lineColor);
             y += 16;
         }
 
@@ -124,4 +125,16 @@ public class MultiplayerWindow
 
     private static int ParsePort(string text)
         => int.TryParse(text.Trim(), out int p) && p is > 0 and < 65536 ? p : NetProtocol.DefaultPort;
+
+    /// <summary>Heuristic: does this NetSession log line describe a failure?
+    /// The log is plain strings (see NetSession.AddLog), so we match on the
+    /// wording those AddLog calls use for problems.</summary>
+    private static bool IsErrorLine(string line)
+    {
+        foreach (var kw in new[] { "failed", "invalid", "error", "rejected",
+                                   "lost", "no host", "bad packet", "in use" })
+            if (line.Contains(kw, System.StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
+    }
 }
