@@ -162,10 +162,9 @@ public partial class Game1
         var pca = _pendingCastAnim.Value;
         GetChannelStates(pca.CastAnim, out var startS, out var loopS, out var finishS);
 
-        // Keep facing the target for the whole channel.
-        var dir = pca.Target - _sim.Units[necroIdx].Position;
-        if (dir.LengthSq() > 0.0001f)
-            _sim.UnitsMut[necroIdx].FacingAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
+        // Facing toward the target for the whole channel is owned by
+        // UpdateFacingAngles' cast-plant branch (fast TurnToward, no raw snap) —
+        // TickCastPlant feeds it the frozen aim angle every frame.
 
         // PlaybackSpeed (the Start/Loop/Finish time-stretch) is applied in the per-unit
         // anim loop right before ctrl.Update — see the necromancer channel override there.
@@ -195,14 +194,19 @@ public partial class Game1
                 {
                     var spell = _gameData.Spells.Get(pca.SpellID);
                     if (spell != null) ExecuteSpellEffect(spell, necroIdx, pca.Target, pca.Slot);
-                    if (finishS.HasValue)
+                    // Tail-cancel (Q3, Settings.Animation.CastTailCancel): with
+                    // movement input held, skip the Finish anim — the payoff has
+                    // already popped; the player is running again this frame.
+                    bool tailCancel = (_gameData.Settings.Animation?.CastTailCancel ?? true)
+                        && _sim.NecroMoveInputActive;
+                    if (finishS.HasValue && !tailCancel)
                     {
                         pca.ChannelPhase = 2;
                         ctrl.ForceState(finishS.Value);
                     }
                     else
                     {
-                        ctrl.ForceState(AnimState.Idle);
+                        ctrl.ForceState(tailCancel ? AnimState.Walk : AnimState.Idle);
                         ctrl.PlaybackSpeed = 1f; // clear the channel time-stretch
                         RemoveCastingBuffAll(necroIdx);
                         _pendingCastAnim = null;
@@ -248,8 +252,79 @@ public partial class Game1
         }
     }
 
+    /// <summary>Per-frame cast-plant driver (todos/player_cast_plant.md). Runs at
+    /// the top of UpdateAnimations, every frame:
+    ///  - syncs the sim-side plant flag + aim angle with the pending cast
+    ///    (declarative — the plant can never outlive or lag the cast, whichever
+    ///    of the several end paths fires),
+    ///  - cancels + REFUNDS the cast on a hard interrupt (knockdown/knockback) —
+    ///    previously a knockdown mid-cast still fired the spell via the
+    ///    left-Spell1 safety net,
+    ///  - releases the queued cast anim once the brake passes the speed gate
+    ///    (Q1: gate ≈ walking speed, so walking casts start the same frame and
+    ///    only a sprint pays a ~0.1s visible skid).</summary>
+    private void TickCastPlant()
+    {
+        if (_pendingCastAnim == null)
+        {
+            _sim.SetNecromancerCasting(false);
+            return;
+        }
+        int necroIdx = FindNecromancer();
+        if (necroIdx < 0)
+        {
+            _pendingCastAnim = null;
+            _sim.SetNecromancerCasting(false);
+            return;
+        }
+
+        // Hard interrupt: knockdown / knockback cancels the cast and refunds
+        // mana + cooldown (Q4) — an interrupted cast that stays spent feels bad.
+        if (_sim.Units[necroIdx].Incap.Active || _sim.Units[necroIdx].InPhysics)
+        {
+            var cancelled = _pendingCastAnim.Value;
+            SpellCaster.RefundSpellCast(cancelled.SpellID, _gameData.Spells, _sim.NecroState,
+                _sim.Units, necroIdx, _gameData);
+            RemoveCastingBuffAll(necroIdx);
+            _pendingCastAnim = null;
+            _sim.SetNecromancerCasting(false);
+            return;
+        }
+
+        var pca = _pendingCastAnim.Value;
+        var aimDir = pca.Target - _sim.Units[necroIdx].Position;
+        _sim.SetNecromancerCasting(true, aimDir.LengthSq() > 0.0001f
+            ? MathF.Atan2(aimDir.Y, aimDir.X) * 180f / MathF.PI : float.NaN);
+
+        if (!pca.WaitingForPlant) return;
+
+        // Anim-start gate: "some decel achieved" = at/below walking speed.
+        float gate = _sim.Units[necroIdx].Stats.CombatSpeed
+            * (_gameData.Settings.Animation?.CastPlantGateSpeedMult ?? 1.15f);
+        if (_sim.Units[necroIdx].Velocity.Length() > gate) return;
+
+        pca.WaitingForPlant = false;
+        _pendingCastAnim = pca;
+        uint uid = _sim.Units[necroIdx].Id;
+        if (_unitAnims.TryGetValue(uid, out var anim))
+        {
+            if (IsChanneledCast(pca.CastAnim))
+            {
+                GetChannelStates(pca.CastAnim, out var startS, out _, out _);
+                anim.Ctrl.ForceState(startS);
+            }
+            else
+            {
+                anim.Ctrl.RequestState(AnimState.Spell1);
+            }
+            _unitAnims[uid] = anim;
+        }
+    }
+
     private void UpdateAnimations(float dt)
     {
+        TickCastPlant();
+
         for (int i = 0; i < _sim.Units.Count; i++)
         {
             if (!_sim.Units[i].Alive) continue;
@@ -514,8 +589,12 @@ public partial class Game1
                     float spd = (animDur > cycle && cycle > 0f) ? animDur / cycle : 1f;
                     AnimResolver.SetOverride(_sim.UnitsMut[i], AnimRequest.Combat(atkState, spd));
                 }
-                else if (_sim.Units[i].InCombat && _sim.Units[i].AttackCooldown > 0f)
+                else if (_sim.Units[i].InCombat && _sim.Units[i].AttackCooldown > 0f
+                    && !_sim.Units[i].Fleeing && !_sim.Units[i].Routing)
                 {
+                    // (Fleeing/routing units skip the pre-roll: they're exempt from
+                    // the InCombat movement plant, so a windup here would play while
+                    // running — the exact sliding artifact the movement gate forbids.)
                     // Pre-roll: start attack animation early so its effect_time lines up
                     // with the end of the cooldown. Use the FIRST non-pounce weapon's
                     // anim (most units have one melee weapon; wolves have Bite then Pounce
@@ -762,6 +841,18 @@ public partial class Game1
                     if (spell != null)
                         ExecuteSpellEffect(spell, i, pca.Target, pca.Slot);
                     _pendingCastAnim = null;
+                    // Tail-cancel (Q3, Settings.Animation.CastTailCancel): the spell
+                    // has fired; with movement input held, cut the Spell1 recovery
+                    // tail straight into locomotion — otherwise the plant would end
+                    // here while the tail keeps playing (a fresh slide), or the
+                    // player would stand locked through frames that no longer do
+                    // anything. The gait picker corrects Walk→Jog/Run next frame.
+                    if ((_gameData.Settings.Animation?.CastTailCancel ?? true)
+                        && _sim.NecroMoveInputActive)
+                    {
+                        RemoveCastingBuffAll(i);
+                        animData.Ctrl.ForceState(AnimState.Walk);
+                    }
                 }
                 else if (hasPendingAttack)
                 {
@@ -772,8 +863,17 @@ public partial class Game1
             _unitAnims[uid] = animData;
         }
 
+        // While WaitingForPlant the cast anim hasn't started (the player is still
+        // braking): the channel machine must not run (it would ForceState the
+        // Start anim immediately) and the left-Spell1 safety net must not fire
+        // (the necromancer is legitimately NOT in Spell1 yet — the net would
+        // execute the spell instantly at press).
+        if (_pendingCastAnim != null && _pendingCastAnim.Value.WaitingForPlant)
+        {
+            // braking — handled by TickCastPlant
+        }
         // Channeled reanimation casts run their own Start→Loop→Finish machine.
-        if (_pendingCastAnim != null && IsChanneledCast(_pendingCastAnim.Value.CastAnim))
+        else if (_pendingCastAnim != null && IsChanneledCast(_pendingCastAnim.Value.CastAnim))
         {
             UpdateChanneledCast(dt);
         }

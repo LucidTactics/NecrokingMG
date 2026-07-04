@@ -15,13 +15,21 @@ namespace Necroking.Render;
 //
 //  Priority scale (higher always wins):
 //      0  Locomotion (Idle, Walk/Jog/Run)
-//      1  Action     (Sit, Sleep, Feeding, Carry)
-//      2  Combat     (Attack1-3, Dodge, BlockReact, hit reacts)
+//      1  Action     (Sit, Sleep, Feeding, Carry — routine channel)
+//         Reaction   (Dodge, BlockReact flinch — override channel; deliberately
+//                     BELOW Combat so a landed hit or whiffed-at dodge can never
+//                     visually cancel an in-progress attack swing)
+//      2  Combat     (Attack1-3, attack pre-roll)
 //      3  Forced/Hold (Death, Fall, Knockdown, Stunned, Standup)
 //
-//  Construct requests via AnimRequest.Locomotion / Action / Combat / Forced /
-//  Hold — DO NOT pass raw Priority ints to AnimRequest.SetOverride. The factory
-//  methods enforce the priority/kind pairing.
+//  Construct requests via AnimRequest.Locomotion / Action / Reaction / Combat /
+//  Forced / Hold — DO NOT pass raw Priority ints to AnimRequest.SetOverride. The
+//  factory methods enforce the priority/kind pairing.
+//
+//  Reactions (Dodge, BlockReact) additionally share one per-unit cooldown —
+//  Unit.ReactionCooldownTimer, set via the DamageSystem.ApplyHitReactAnim /
+//  ApplyDodgeAnim helpers (NEVER SetOverride a reaction directly) — so a
+//  surrounded unit plays at most one reaction per window instead of twitching.
 //
 //  OverrideKind controls lifecycle:
 //      OneShot   — auto-clears after the anim plays and controller leaves it.
@@ -155,6 +163,15 @@ public struct AnimRequest
         { State = state, Priority = 1, Interrupt = false,
           Kind = duration > 0 ? OverrideKind.TimedHold : OverrideKind.Hold,
           Duration = duration, PlaybackSpeed = 1f };
+
+    /// <summary>Priority-1 one-shot reaction (Dodge, BlockReact flinch). Below
+    /// Combat so it can never visually cancel an in-progress attack swing; an
+    /// attack request replaces a playing reaction, never vice versa. Route via
+    /// DamageSystem.ApplyHitReactAnim / ApplyDodgeAnim (shared cooldown + gates),
+    /// not directly.</summary>
+    public static AnimRequest Reaction(AnimState state) => new()
+        { State = state, Priority = 1, Interrupt = true, Kind = OverrideKind.OneShot,
+          Duration = 0, PlaybackSpeed = 1f };
 
     public static AnimRequest Combat(AnimState state, float playbackSpeed = 1f) => new()
         { State = state, Priority = 2, Interrupt = true, Kind = OverrideKind.OneShot,
@@ -388,6 +405,26 @@ public class AnimController
         }
         // Nothing matched the expected scheme — use any authored angle.
         foreach (var (a, _) in _resolvedAnim.AngleFrames) { _resolvedFallbackAngle = a; return; }
+    }
+
+    /// <summary>
+    /// True if the sprite has a REAL clip for this state — authored directly, via
+    /// the attack-anim override (e.g. wolf "AttackBite"), or via the legitimate
+    /// fallback chain (Run→Walk, Knockdown→Death, …). The renderer's last resort of
+    /// silently showing the Idle clip does NOT count: a state that would render
+    /// Idle is "missing" for override-acceptance purposes (AnimResolver drops such
+    /// overrides so the unit honestly plays its routine anim instead of an
+    /// idle-posed lie). Returns true when sprite data isn't loaded — never block
+    /// gameplay logic on a renderer that isn't set up.
+    /// </summary>
+    public bool HasRealAnim(AnimState state)
+    {
+        if (_spriteData == null) return true;
+        if (_attackAnimOverride != null && IsAttackState(state)
+            && _spriteData.GetAnim(_attackAnimOverride) != null) return true;
+        if (_spriteData.GetAnim(StateToAnimName(state)) != null) return true;
+        string? fallback = GetFallbackAnimName(state);
+        return fallback != null && _spriteData.GetAnim(fallback) != null;
     }
 
     private AnimationData? ResolveAnimForState(AnimState state)
@@ -1094,11 +1131,22 @@ public class AnimController
         _ => AnimPlayMode.PlayOnceTransition
     };
 
+    /// <summary>
+    /// True for states authored for a STATIONARY body — playing one of these while
+    /// the unit translates across the ground produces the "sliding" artifact.
+    /// Consumed by AnimResolver.SetOverride's movement gate (Rule 1: a state that
+    /// suppresses the locomotion animation must not play while the unit is actually
+    /// moving unless something is stopping the movement). Locomotion-compatible
+    /// states (Idle/Walk/Jog/Run/Carry/Hover/Panic/Fall) return false.
+    /// </summary>
     public static bool IsMovementLocked(AnimState state) => state switch
     {
         AnimState.Attack1 or AnimState.Attack2 or AnimState.Attack3
             or AnimState.Spell1 or AnimState.Special1 or AnimState.Ranged1
-            or AnimState.BlockBreak or AnimState.Knockdown or AnimState.Standup
+            or AnimState.Block or AnimState.BlockBreak or AnimState.BlockReact
+            or AnimState.Dodge or AnimState.Stunned
+            or AnimState.Knockdown or AnimState.Standup
+            or AnimState.Sit or AnimState.Sleep or AnimState.Feeding
             or AnimState.JumpTakeoff or AnimState.JumpLoop or AnimState.JumpLand
             or AnimState.JumpAttackSetup or AnimState.JumpAttackHit
             or AnimState.Death

@@ -83,6 +83,9 @@ public class MapEditorWindow
     private TileGrid _tileGrid => _game._sim.Grid;
     private Camera25D _camera => _game._camera;
     private SpriteBatch _spriteBatch => _game._spriteBatch;
+    // Straight-alpha draw surface — all draw calls go through this (colors get
+    // encoded per the open material); _spriteBatch stays only for Init plumbing.
+    private Render.SpriteScope Scope => _spriteBatch;
     private Texture2D _pixel => _game._pixel;
     private SpriteFont? _font => _game._font;
     private SpriteFont? _smallFont => _game._smallFont;
@@ -1162,14 +1165,14 @@ public class MapEditorWindow
         DrawWorldOverlaysForActiveTab(screenW, screenH);
 
         // Panel background
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, panelY, PanelWidth, panelH), BgColor);
+        Scope.Draw(_pixel, new Rectangle(panelX, panelY, PanelWidth, panelH), BgColor);
 
         // Tab rows
         DrawTabRows(panelX, panelY);
 
         // Separator under tabs
         int tabsBottom = panelY + TabRowHeight * 2;
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, tabsBottom, PanelWidth, 1), SeparatorColor);
+        Scope.Draw(_pixel, new Rectangle(panelX, tabsBottom, PanelWidth, 1), SeparatorColor);
 
         // Content area (reserve 92px for bottom bar: filename + buttons + shortcuts + status)
         int contentY = tabsBottom + 2;
@@ -1232,7 +1235,7 @@ public class MapEditorWindow
         // Bottom bar: map filename, Save/Load buttons, undo info, status message
         int bottomH = 90; // height of the bottom section
         int bottomY = panelY + panelH - bottomH;
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, bottomY, PanelWidth, 1), SeparatorColor);
+        Scope.Draw(_pixel, new Rectangle(panelX, bottomY, PanelWidth, 1), SeparatorColor);
         bottomY += 2;
 
         // Map filename text field
@@ -1334,10 +1337,10 @@ public class MapEditorWindow
 
             bool hovered = IsInRect(mouse, rect);
             if (!active && hovered) bg = ButtonHoverColor;
-            _spriteBatch.Draw(_pixel, rect, bg);
+            Scope.Draw(_pixel, rect, bg);
 
             if (active)
-                _spriteBatch.Draw(_pixel, new Rectangle(rect.X, rect.Y + TabRowHeight - 2, tabW1, 2), new Color(180, 140, 80));
+                Scope.Draw(_pixel, new Rectangle(rect.X, rect.Y + TabRowHeight - 2, tabW1, 2), new Color(180, 140, 80));
 
             DrawTextCentered(TabRow1[i], rect, TextColor);
         }
@@ -1354,10 +1357,10 @@ public class MapEditorWindow
 
             bool hovered = IsInRect(mouse, rect);
             if (!active && hovered) bg = ButtonHoverColor;
-            _spriteBatch.Draw(_pixel, rect, bg);
+            Scope.Draw(_pixel, rect, bg);
 
             if (active)
-                _spriteBatch.Draw(_pixel, new Rectangle(rect.X, rect.Y + TabRowHeight - 2, tabW2, 2), new Color(180, 140, 80));
+                Scope.Draw(_pixel, new Rectangle(rect.X, rect.Y + TabRowHeight - 2, tabW2, 2), new Color(180, 140, 80));
 
             DrawTextCentered(TabRow2[i], rect, TextColor);
         }
@@ -1572,7 +1575,7 @@ public class MapEditorWindow
 
             var bgColor = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
             if (bgColor != Color.Transparent)
-                _spriteBatch.Draw(_pixel, btnRect, bgColor);
+                Scope.Draw(_pixel, btnRect, bgColor);
 
             string prefix = selected ? "[*] " : "[ ] ";
             DrawSmallText(prefix + def.Name, panelX + Margin + 4, y + 3, TextColor);
@@ -1591,7 +1594,7 @@ public class MapEditorWindow
         // Selected ground type editable properties
         if (SelectedGroundType >= 0 && SelectedGroundType < _groundSystem.TypeCount && _eb != null)
         {
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX, addY, PanelWidth, 1), SeparatorColor);
+            Scope.Draw(_pixel, new Rectangle(panelX, addY, PanelWidth, 1), SeparatorColor);
             addY += 4;
             var def = _groundSystem.GetTypeDef(SelectedGroundType);
             int fw = PanelWidth - Margin * 2;
@@ -1640,7 +1643,7 @@ public class MapEditorWindow
 
         // Info
         addY += ButtonHeight + 8;
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, addY, PanelWidth, 1), SeparatorColor);
+        Scope.Draw(_pixel, new Rectangle(panelX, addY, PanelWidth, 1), SeparatorColor);
         addY += 4;
         DrawSmallText($"World: {_groundSystem.WorldW}x{_groundSystem.WorldH}", panelX + Margin, addY, TextDim);
         addY += LineHeight;
@@ -1873,9 +1876,9 @@ public class MapEditorWindow
             var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
             var bg = _grassEraserSelected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
             if (bg != Color.Transparent)
-                _spriteBatch.Draw(_pixel, btnRect, bg);
+                Scope.Draw(_pixel, btnRect, bg);
             // X swatch for eraser
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), new Color(180, 60, 60));
+            Scope.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), new Color(180, 60, 60));
             DrawSmallText("Eraser", panelX + Margin + 24, y + 3, TextColor);
         }
         y += ButtonHeight + 4;
@@ -1885,8 +1888,8 @@ public class MapEditorWindow
             var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
             var bg = _grassGridDebugEnabled ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
             if (bg != Color.Transparent)
-                _spriteBatch.Draw(_pixel, btnRect, bg);
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), new Color(200, 200, 120));
+                Scope.Draw(_pixel, btnRect, bg);
+            Scope.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), new Color(200, 200, 120));
             DrawSmallText(_grassGridDebugEnabled ? "Hide Cell Grid" : "Show Cell Grid",
                 panelX + Margin + 24, y + 3, TextColor);
         }
@@ -1903,11 +1906,11 @@ public class MapEditorWindow
 
             var bg = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
             if (bg != Color.Transparent)
-                _spriteBatch.Draw(_pixel, btnRect, bg);
+                Scope.Draw(_pixel, btnRect, bg);
 
             // Default tint swatch (left), corrupted tint swatch (right of it).
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), gt.DefaultTint);
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 22, y + 4, 14, 14), gt.CorruptedTint);
+            Scope.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), gt.DefaultTint);
+            Scope.Draw(_pixel, new Rectangle(panelX + Margin + 22, y + 4, 14, 14), gt.CorruptedTint);
 
             DrawSmallText(gt.Name, panelX + Margin + 42, y + 3, TextColor);
             y += ButtonHeight + 2;
@@ -1926,7 +1929,7 @@ public class MapEditorWindow
         // Selected type properties (editable)
         if (!_grassEraserSelected && SelectedGrassType >= 0 && SelectedGrassType < _grassTypes.Count && _eb != null)
         {
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+            Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
             y += 4;
             var gt = _grassTypes[SelectedGrassType];
             int fw = PanelWidth - Margin * 2;
@@ -2021,7 +2024,7 @@ public class MapEditorWindow
         else if (!_grassEraserSelected && SelectedGrassType >= 0 && SelectedGrassType < _grassTypes.Count)
         {
             // Fallback if no EditorBase
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+            Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
             y += 4;
             var gt = _grassTypes[SelectedGrassType];
             DrawSmallText($"Name: {gt.Name}", panelX + Margin, y, TextBright); y += LineHeight;
@@ -2114,7 +2117,7 @@ public class MapEditorWindow
             int ix = (int)MathF.Min(xL, xR);
             int iw = (int)MathF.Abs(xR - xL);
             if (iw > 0)
-                _spriteBatch.Draw(_pixel, new Rectangle(ix, y, iw, 1), fill);
+                Scope.Draw(_pixel, new Rectangle(ix, y, iw, 1), fill);
         }
     }
 
@@ -2803,7 +2806,7 @@ public class MapEditorWindow
             bool active = i == SelectedEnvCategory;
             var btnRect = new Rectangle(panelX + Margin + col * catBtnW, contentY + row * (ButtonHeight + 2), catBtnW - 2, ButtonHeight);
             var bg = active ? TabActiveColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : TabInactiveColor);
-            _spriteBatch.Draw(_pixel, btnRect, bg);
+            Scope.Draw(_pixel, btnRect, bg);
             DrawTextCentered(categories[i], btnRect, TextColor);
         }
         contentY += catRows * (ButtonHeight + 2) + 2;
@@ -2813,8 +2816,8 @@ public class MapEditorWindow
         {
             var singleRect = new Rectangle(panelX + Margin, contentY, halfW - 1, ButtonHeight);
             var paintRect = new Rectangle(panelX + Margin + halfW, contentY, halfW - 1, ButtonHeight);
-            _spriteBatch.Draw(_pixel, singleRect, !_objectPaintMode ? TabActiveColor : TabInactiveColor);
-            _spriteBatch.Draw(_pixel, paintRect, _objectPaintMode ? TabActiveColor : TabInactiveColor);
+            Scope.Draw(_pixel, singleRect, !_objectPaintMode ? TabActiveColor : TabInactiveColor);
+            Scope.Draw(_pixel, paintRect, _objectPaintMode ? TabActiveColor : TabInactiveColor);
             DrawTextCentered("Single", singleRect, TextColor);
             DrawTextCentered("Paint", paintRect, TextColor);
         }
@@ -2869,7 +2872,7 @@ public class MapEditorWindow
         }
 
         // Separator
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, contentY - 2, PanelWidth, 1), SeparatorColor);
+        Scope.Draw(_pixel, new Rectangle(panelX, contentY - 2, PanelWidth, 1), SeparatorColor);
 
         // M17: Check if category is "Groups"
         bool isGroupMode = SelectedEnvCategory < categories.Count && categories[SelectedEnvCategory] == "Groups";
@@ -2889,7 +2892,7 @@ public class MapEditorWindow
 
                 var bgColor = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
                 if (bgColor != Color.Transparent)
-                    _spriteBatch.Draw(_pixel, btnRect, bgColor);
+                    Scope.Draw(_pixel, btnRect, bgColor);
 
                 // Count defs in group
                 int defCount = 0;
@@ -2906,7 +2909,7 @@ public class MapEditorWindow
                 if (groupIdx >= 0 && groupIdx < groups.Count)
                 {
                     int propY = contentTop + contentH - 140;
-                    _spriteBatch.Draw(_pixel, new Rectangle(panelX, propY - 4, PanelWidth, 1), SeparatorColor);
+                    Scope.Draw(_pixel, new Rectangle(panelX, propY - 4, PanelWidth, 1), SeparatorColor);
                     propY += 2;
                     DrawSmallText($"Group: {groups[groupIdx]}", panelX + Margin, propY, TextBright); propY += LineHeight;
                     DrawSmallText("Uses weighted random selection", panelX + Margin, propY, TextColor); propY += LineHeight;
@@ -2931,7 +2934,7 @@ public class MapEditorWindow
 
                 var bgColor = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
                 if (bgColor != Color.Transparent)
-                    _spriteBatch.Draw(_pixel, btnRect, bgColor);
+                    Scope.Draw(_pixel, btnRect, bgColor);
 
                 // RM09: Display as "[category] name" instead of "name [B]"
                 string label = $"[{def.Category}] {def.Name}";
@@ -2942,7 +2945,7 @@ public class MapEditorWindow
             if (SelectedEnvDefIndex >= 0 && SelectedEnvDefIndex < _envSystem.DefCount)
             {
                 int propY = contentTop + contentH - 140;
-                _spriteBatch.Draw(_pixel, new Rectangle(panelX, propY - 4, PanelWidth, 1), SeparatorColor);
+                Scope.Draw(_pixel, new Rectangle(panelX, propY - 4, PanelWidth, 1), SeparatorColor);
                 propY += 2;
 
                 var selDef = _envSystem.GetDef(SelectedEnvDefIndex);
@@ -3192,8 +3195,8 @@ public class MapEditorWindow
             bool selected = SelectedWallType == 0;
             var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
             var bg = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
-            if (bg != Color.Transparent) _spriteBatch.Draw(_pixel, btnRect, bg);
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), DangerColor);
+            if (bg != Color.Transparent) Scope.Draw(_pixel, btnRect, bg);
+            Scope.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), DangerColor);
             DrawSmallText("Erase Walls", panelX + Margin + 24, y + 3, TextColor);
         }
         y += ButtonHeight + 4;
@@ -3208,10 +3211,10 @@ public class MapEditorWindow
             var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
 
             var bg = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
-            if (bg != Color.Transparent) _spriteBatch.Draw(_pixel, btnRect, bg);
+            if (bg != Color.Transparent) Scope.Draw(_pixel, btnRect, bg);
 
             // Color swatch
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), def.Color);
+            Scope.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), def.Color);
             DrawSmallText($"{def.Name} (HP:{def.MaxHP})", panelX + Margin + 24, y + 3, TextColor);
             y += ButtonHeight + 2;
         }
@@ -3435,7 +3438,7 @@ public class MapEditorWindow
             var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
 
             var bg = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
-            if (bg != Color.Transparent) _spriteBatch.Draw(_pixel, btnRect, bg);
+            if (bg != Color.Transparent) Scope.Draw(_pixel, btnRect, bg);
 
             string label = string.IsNullOrEmpty(road.Name) ? road.Id : road.Name;
             DrawSmallText($"{label} ({road.Points.Count} pts)", panelX + Margin + 4, y + 3,
@@ -3456,7 +3459,7 @@ public class MapEditorWindow
         // Selected road properties (editable)
         if (SelectedRoadIndex >= 0 && SelectedRoadIndex < _roadSystem.RoadCount)
         {
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+            Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
             y += 4;
             var road = _roadSystem.GetRoad(SelectedRoadIndex);
             int fw = PanelWidth - Margin * 2;
@@ -3536,7 +3539,7 @@ public class MapEditorWindow
 
         // M15: Road Texture Defs section - editable names
         y += 4;
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+        Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
         y += 4;
         DrawSmallText($"Road Texture Defs ({_roadSystem.TextureDefCount})", panelX + Margin, y, AccentColor);
         y += LineHeight;
@@ -3566,7 +3569,7 @@ public class MapEditorWindow
 
         // Junctions header
         y += 4;
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+        Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
         y += 4;
         DrawSmallText("Junctions", panelX + Margin, y, AccentColor); y += LineHeight;
         DrawButtonRect("+ Add Junction", panelX + Margin, y, 120, ButtonHeight, ButtonBg);
@@ -3589,7 +3592,7 @@ public class MapEditorWindow
         if (SelectedJunctionIndex >= 0 && SelectedJunctionIndex < _roadSystem.JunctionCount && _eb != null)
         {
             y += 4;
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+            Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
             y += 4;
             var junc = _roadSystem.GetJunction(SelectedJunctionIndex);
             int fw = PanelWidth - Margin * 2;
@@ -3625,7 +3628,7 @@ public class MapEditorWindow
             {
                 var sp = _camera.WorldToScreen(road.Points[i].Position, 0, screenW, screenH);
                 int sz = i == SelectedRoadPoint ? 8 : 6;
-                _spriteBatch.Draw(_pixel, new Rectangle((int)sp.X - sz / 2, (int)sp.Y - sz / 2, sz, sz), RoadPointColor);
+                Scope.Draw(_pixel, new Rectangle((int)sp.X - sz / 2, (int)sp.Y - sz / 2, sz, sz), RoadPointColor);
 
                 // Line between points
                 if (i > 0)
@@ -3642,7 +3645,7 @@ public class MapEditorWindow
             var junc = _roadSystem.GetJunction(i);
             var sp = _camera.WorldToScreen(junc.Position, 0, screenW, screenH);
             int sz = i == SelectedJunctionIndex ? 10 : 7;
-            _spriteBatch.Draw(_pixel, new Rectangle((int)sp.X - sz / 2, (int)sp.Y - sz / 2, sz, sz), JunctionColor);
+            Scope.Draw(_pixel, new Rectangle((int)sp.X - sz / 2, (int)sp.Y - sz / 2, sz, sz), JunctionColor);
         }
     }
 
@@ -3914,7 +3917,7 @@ public class MapEditorWindow
             bool selected = i == SelectedRegionIndex;
             var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
             var bg = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
-            if (bg != Color.Transparent) _spriteBatch.Draw(_pixel, btnRect, bg);
+            if (bg != Color.Transparent) Scope.Draw(_pixel, btnRect, bg);
 
             DrawSmallText($"{regions[i].Name} ({regions[i].Id})", panelX + Margin + 4, y + 3,
                 selected ? TextBright : TextColor);
@@ -3929,7 +3932,7 @@ public class MapEditorWindow
         // Selected region properties (editable)
         if (SelectedRegionIndex >= 0 && SelectedRegionIndex < regions.Count)
         {
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+            Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
             y += 4;
             var region = _triggerSystem.RegionsMut[SelectedRegionIndex];
             int fw = PanelWidth - Margin * 2;
@@ -3990,7 +3993,7 @@ public class MapEditorWindow
         }
 
         // Patrol Routes section
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+        Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
         y += 4;
         DrawSmallText($"Patrol Routes ({_triggerSystem.PatrolRoutes.Count})", panelX + Margin, y, AccentColor);
         y += LineHeight;
@@ -4003,7 +4006,7 @@ public class MapEditorWindow
             var prBtnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
             var prBg = selected ? HighlightColor : (IsInRect(mouse, prBtnRect) ? ButtonHoverColor : Color.Transparent);
             if (prBg != Color.Transparent)
-                _spriteBatch.Draw(_pixel, prBtnRect, prBg);
+                Scope.Draw(_pixel, prBtnRect, prBg);
             DrawSmallText($"{patrolRoutes[i].Name} ({patrolRoutes[i].Waypoints.Count} wps)",
                 panelX + Margin + 4, y + 3, selected ? TextBright : TextColor);
             y += ButtonHeight + 2;
@@ -4096,7 +4099,7 @@ public class MapEditorWindow
                 {
                     var fill = selected ? new Color(80, 200, 80, 40) : RegionRectColor;
                     var border = selected ? new Color(120, 255, 120, 220) : RegionRectBorder;
-                    _spriteBatch.Draw(_pixel, new Rectangle(rx, ry, rw, rh), fill);
+                    Scope.Draw(_pixel, new Rectangle(rx, ry, rw, rh), fill);
                     DrawRectBorder(rx, ry, rw, rh, border);
                 }
 
@@ -4159,7 +4162,7 @@ public class MapEditorWindow
             {
                 var sp = _camera.WorldToScreen(route.Waypoints[wi], 0, screenW, screenH);
                 int sz = wi == SelectedWaypointIndex && ri == SelectedPatrolRoute ? 8 : 5;
-                _spriteBatch.Draw(_pixel, new Rectangle((int)sp.X - sz / 2, (int)sp.Y - sz / 2, sz, sz), WaypointColor);
+                Scope.Draw(_pixel, new Rectangle((int)sp.X - sz / 2, (int)sp.Y - sz / 2, sz, sz), WaypointColor);
 
                 if (wi > 0)
                 {
@@ -4173,7 +4176,7 @@ public class MapEditorWindow
     /// <summary>M26: Draw a small square handle indicator at the given screen position.</summary>
     private void DrawRegionHandleSquare(int cx, int cy, int halfSz, Color color)
     {
-        _spriteBatch.Draw(_pixel, new Rectangle(cx - halfSz, cy - halfSz, halfSz * 2, halfSz * 2), color);
+        Scope.Draw(_pixel, new Rectangle(cx - halfSz, cy - halfSz, halfSz * 2, halfSz * 2), color);
         // Border
         DrawRectBorder(cx - halfSz, cy - halfSz, halfSz * 2, halfSz * 2, new Color(0, 0, 0, 180));
     }
@@ -4337,7 +4340,7 @@ public class MapEditorWindow
             _zoneDrawMode = !_zoneDrawMode;
         y += ButtonHeight + 8;
 
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+        Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
         y += 4;
 
         // Zone list — rows are invisible buttons (EditorBase edge-detects the click)
@@ -4355,7 +4358,7 @@ public class MapEditorWindow
             if (_eb.DrawButton("", panelX + Margin, y, fw, ButtonHeight,
                 selected ? HighlightColor : Color.Transparent))
                 SelectedZoneIndex = i;
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX + Margin + 3, y + 4, 12, ButtonHeight - 8),
+            Scope.Draw(_pixel, new Rectangle(panelX + Margin + 3, y + 4, 12, ButtonHeight - 8),
                 ZoneColors.Base(zones[i].Kind));
             DrawSmallText($"{zones[i].Name} ({zones[i].Kind})", panelX + Margin + 20, y + 3,
                 selected ? TextBright : TextColor);
@@ -4374,7 +4377,7 @@ public class MapEditorWindow
             }
             y += ButtonHeight + 8;
 
-            _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+            Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
             y += 4;
             var z = _zoneSystem.ZonesMut[SelectedZoneIndex];
             int idx = SelectedZoneIndex;
@@ -4430,9 +4433,9 @@ public class MapEditorWindow
         var z = _zoneSystem.ZonesMut[SelectedZoneIndex];
         int idx = SelectedZoneIndex;
 
-        _spriteBatch.Draw(_pixel, rect, BgColor);
+        Scope.Draw(_pixel, rect, BgColor);
         DrawRectBorder(rect.X, rect.Y, rect.Width, rect.Height, SeparatorColor);
-        _spriteBatch.Draw(_pixel, new Rectangle(rect.X, rect.Y, rect.Width, HeaderHeight), HeaderBg);
+        Scope.Draw(_pixel, new Rectangle(rect.X, rect.Y, rect.Width, HeaderHeight), HeaderBg);
         DrawSmallText($"{z.Kind}: {z.Name}", rect.X + Margin, rect.Y + 6, TextBright);
 
         if (z.Kind != ZoneKind.Village)
@@ -4459,7 +4462,7 @@ public class MapEditorWindow
         z.Population.Watchdog = Math.Max(0, _eb.DrawIntField($"zone_pop_watchdog_{idx}", "Watchdogs", z.Population.Watchdog, x, y, fw));
         y += FieldHeight + 6;
 
-        _spriteBatch.Draw(_pixel, new Rectangle(rect.X, y, rect.Width, 1), SeparatorColor);
+        Scope.Draw(_pixel, new Rectangle(rect.X, y, rect.Width, 1), SeparatorColor);
         y += 4;
 
         // Live contents summary — what's authored inside the rect right now. Shows
@@ -4634,7 +4637,7 @@ public class MapEditorWindow
                 x + 78, y + 4, TextDim);
             y += ButtonHeight + 4;
 
-            _spriteBatch.Draw(_pixel, new Rectangle(rect.X, y, rect.Width, 1), SeparatorColor);
+            Scope.Draw(_pixel, new Rectangle(rect.X, y, rect.Width, 1), SeparatorColor);
             y += 4;
         }
 
@@ -4670,7 +4673,7 @@ public class MapEditorWindow
             int rw = (int)(br.X - tl.X), rh = (int)(br.Y - tl.Y);
             if (rw <= 0 || rh <= 0) continue;
 
-            _spriteBatch.Draw(_pixel, new Rectangle(rx, ry, rw, rh), ZoneColors.Fill(z.Kind, selected));
+            Scope.Draw(_pixel, new Rectangle(rx, ry, rw, rh), ZoneColors.Fill(z.Kind, selected));
             // 2px opaque border: outer + 1px inset
             var border = ZoneColors.Border(z.Kind, selected);
             DrawRectBorder(rx, ry, rw, rh, border);
@@ -4720,7 +4723,7 @@ public class MapEditorWindow
             int rw = (int)(br.X - tl.X), rh = (int)(br.Y - tl.Y);
             if (rw > 0 && rh > 0)
             {
-                _spriteBatch.Draw(_pixel, new Rectangle(rx, ry, rw, rh), ZoneColors.Fill(kind, selected: true));
+                Scope.Draw(_pixel, new Rectangle(rx, ry, rw, rh), ZoneColors.Fill(kind, selected: true));
                 DrawRectBorder(rx, ry, rw, rh, ZoneColors.Border(kind, selected: true));
             }
         }
@@ -4939,13 +4942,13 @@ public class MapEditorWindow
         {
             var defsRect = new Rectangle(panelX + Margin, contentY, halfW - 1, ButtonHeight);
             var instRect = new Rectangle(panelX + Margin + halfW, contentY, halfW - 1, ButtonHeight);
-            _spriteBatch.Draw(_pixel, defsRect, _triggerSubSection == 0 ? TabActiveColor : TabInactiveColor);
-            _spriteBatch.Draw(_pixel, instRect, _triggerSubSection == 1 ? TabActiveColor : TabInactiveColor);
+            Scope.Draw(_pixel, defsRect, _triggerSubSection == 0 ? TabActiveColor : TabInactiveColor);
+            Scope.Draw(_pixel, instRect, _triggerSubSection == 1 ? TabActiveColor : TabInactiveColor);
             DrawTextCentered($"Defs ({_triggerSystem.Triggers.Count})", defsRect, TextColor);
             DrawTextCentered($"Instances ({_triggerSystem.Instances.Count})", instRect, TextColor);
         }
         contentY += ButtonHeight + 4;
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, contentY - 2, PanelWidth, 1), SeparatorColor);
+        Scope.Draw(_pixel, new Rectangle(panelX, contentY - 2, PanelWidth, 1), SeparatorColor);
 
         float scroll = _tabScroll[6];
         int y = contentY - (int)scroll;
@@ -4963,7 +4966,7 @@ public class MapEditorWindow
                 var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
 
                 var bg = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
-                if (bg != Color.Transparent) _spriteBatch.Draw(_pixel, btnRect, bg);
+                if (bg != Color.Transparent) Scope.Draw(_pixel, btnRect, bg);
 
                 string label = $"{def.Name} ({def.Id})";
                 DrawSmallText(label, panelX + Margin + 4, y + 3, selected ? TextBright : TextColor);
@@ -4979,7 +4982,7 @@ public class MapEditorWindow
             // Properties for selected def (editable)
             if (SelectedTriggerDefIndex >= 0 && SelectedTriggerDefIndex < _triggerSystem.Triggers.Count)
             {
-                _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+                Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
                 y += 4;
                 var def = _triggerSystem.TriggersMut[SelectedTriggerDefIndex];
                 int fw = PanelWidth - Margin * 2;
@@ -5144,7 +5147,7 @@ public class MapEditorWindow
                 var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
 
                 var bg = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
-                if (bg != Color.Transparent) _spriteBatch.Draw(_pixel, btnRect, bg);
+                if (bg != Color.Transparent) Scope.Draw(_pixel, btnRect, bg);
 
                 DrawSmallText($"{inst.InstanceID} -> {inst.ParentTriggerID}",
                     panelX + Margin + 4, y + 3, selected ? TextBright : TextColor);
@@ -5160,7 +5163,7 @@ public class MapEditorWindow
             // Properties for selected instance (editable)
             if (SelectedTriggerInstanceIndex >= 0 && SelectedTriggerInstanceIndex < _triggerSystem.Instances.Count)
             {
-                _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+                Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
                 y += 4;
                 var inst = _triggerSystem.InstancesMut[SelectedTriggerInstanceIndex];
                 int fw = PanelWidth - Margin * 2;
@@ -5524,11 +5527,11 @@ public class MapEditorWindow
             int itemY = curY + i * itemH;
 
             if (selected)
-                _spriteBatch.Draw(_pixel, new Rectangle(x, itemY, w, itemH), new Color(60, 60, 100, 200));
+                Scope.Draw(_pixel, new Rectangle(x, itemY, w, itemH), new Color(60, 60, 100, 200));
 
             bool hovered = mouse.X >= x && mouse.X < x + w && mouse.Y >= itemY && mouse.Y < itemY + itemH;
             if (hovered && !selected)
-                _spriteBatch.Draw(_pixel, new Rectangle(x, itemY, w, itemH), new Color(40, 40, 70, 150));
+                Scope.Draw(_pixel, new Rectangle(x, itemY, w, itemH), new Color(40, 40, 70, 150));
 
             // TextColor to match every other list in this panel (TextDim is the
             // label/hint color and made the unit rows look greyed-out/disabled).
@@ -5590,13 +5593,13 @@ public class MapEditorWindow
                 // bodies read differently from living placements at a glance.
                 markerColor = new Color(170, 165, 150, 220);
                 labelColor = markerColor;
-                _spriteBatch.Draw(_pixel, new Rectangle((int)(sp.X - r), (int)(sp.Y - 1), (int)(r * 2), 2), markerColor);
-                _spriteBatch.Draw(_pixel, new Rectangle((int)(sp.X - 1), (int)(sp.Y - r), 2, (int)(r * 2)), markerColor);
+                Scope.Draw(_pixel, new Rectangle((int)(sp.X - r), (int)(sp.Y - 1), (int)(r * 2), 2), markerColor);
+                Scope.Draw(_pixel, new Rectangle((int)(sp.X - 1), (int)(sp.Y - r), 2, (int)(r * 2)), markerColor);
             }
             else
             {
                 // Diamond marker
-                _spriteBatch.Draw(_pixel, new Rectangle((int)(sp.X - r), (int)(sp.Y - r / 2), (int)(r * 2), (int)r), markerColor);
+                Scope.Draw(_pixel, new Rectangle((int)(sp.X - r), (int)(sp.Y - r / 2), (int)(r * 2), (int)r), markerColor);
             }
             // Label
             if (_smallFont != null)
@@ -5606,7 +5609,7 @@ public class MapEditorWindow
                 if (label.Length > 10) label = label[..10];
                 // Explicitly tag corpses so they're identifiable like living units are.
                 if (pu.IsCorpse) label += " (corpse)";
-                _spriteBatch.DrawString(_smallFont, label, new Vector2((int)(sp.X + 8), (int)(sp.Y - 6)), labelColor);
+                Scope.DrawString(_smallFont, label, new Vector2((int)(sp.X + 8), (int)(sp.Y - 6)), labelColor);
             }
         }
     }
@@ -5810,7 +5813,7 @@ public class MapEditorWindow
         }
         y += ButtonHeight + 8;
 
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+        Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
         y += 4;
 
         // Style list — invisible row buttons with the name drawn on top (zones-list style).
@@ -5845,7 +5848,7 @@ public class MapEditorWindow
         }
         y += ButtonHeight + 8;
 
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+        Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
         y += 4;
 
         st.Name = _eb.DrawTextField($"procgen_name_{idx}", "Name", st.Name, panelX + Margin, y, fw);
@@ -5853,7 +5856,7 @@ public class MapEditorWindow
 
         y = DrawProcGenPoolSection(idx, "large", "Large objects", st.LargeDefIds, ref st.LargeDensity, panelX, y);
 
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+        Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
         y += 4;
 
         y = DrawProcGenPoolSection(idx, "small", "Small objects", st.SmallDefIds, ref st.SmallDensity, panelX, y);
@@ -6498,12 +6501,12 @@ public class MapEditorWindow
 
         // - button
         var minusRect = new Rectangle(panelX + Margin, y, 30, ButtonHeight);
-        _spriteBatch.Draw(_pixel, minusRect, IsInRect(mouse, minusRect) ? ButtonHoverColor : ButtonBg);
+        Scope.Draw(_pixel, minusRect, IsInRect(mouse, minusRect) ? ButtonHoverColor : ButtonBg);
         DrawTextCentered("-", minusRect, TextColor);
 
         // + button
         var plusRect = new Rectangle(panelX + PanelWidth - Margin - 30, y, 30, ButtonHeight);
-        _spriteBatch.Draw(_pixel, plusRect, IsInRect(mouse, plusRect) ? ButtonHoverColor : ButtonBg);
+        Scope.Draw(_pixel, plusRect, IsInRect(mouse, plusRect) ? ButtonHoverColor : ButtonBg);
         DrawTextCentered("+", plusRect, TextColor);
 
         // Handle clicks (inert while an overlay owns input, so a click on a
@@ -6522,11 +6525,11 @@ public class MapEditorWindow
         DrawSmallText($"Size: {_autoGroundSize}", panelX + Margin + 40, y + 3, TextColor);
 
         var minusRect = new Rectangle(panelX + Margin, y, 30, ButtonHeight);
-        _spriteBatch.Draw(_pixel, minusRect, IsInRect(mouse, minusRect) ? ButtonHoverColor : ButtonBg);
+        Scope.Draw(_pixel, minusRect, IsInRect(mouse, minusRect) ? ButtonHoverColor : ButtonBg);
         DrawTextCentered("-", minusRect, TextColor);
 
         var plusRect = new Rectangle(panelX + PanelWidth - Margin - 30, y, 30, ButtonHeight);
-        _spriteBatch.Draw(_pixel, plusRect, IsInRect(mouse, plusRect) ? ButtonHoverColor : ButtonBg);
+        Scope.Draw(_pixel, plusRect, IsInRect(mouse, plusRect) ? ButtonHoverColor : ButtonBg);
         DrawTextCentered("+", plusRect, TextColor);
 
         if (!IsAnyPopupBlocking() && _eb._input.LeftPressed)
@@ -6573,7 +6576,7 @@ public class MapEditorWindow
                 int rw = (int)(br.X - tl.X), rh = (int)(br.Y - tl.Y);
                 if (rw > 0 && rh > 0)
                 {
-                    _spriteBatch.Draw(_pixel, new Rectangle(rx, ry, rw, rh), BrushCursorFill);
+                    Scope.Draw(_pixel, new Rectangle(rx, ry, rw, rh), BrushCursorFill);
                     DrawRectBorder(rx, ry, rw, rh, BrushCursorEdge);
                 }
             }
@@ -6586,7 +6589,7 @@ public class MapEditorWindow
 
     private void DrawSectionHeader(int panelX, ref int y, string text)
     {
-        _spriteBatch.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, HeaderHeight), HeaderBg);
+        Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, HeaderHeight), HeaderBg);
         DrawSmallText(text, panelX + Margin, y + 6, TextBright);
         y += HeaderHeight + 4;
     }
@@ -6595,7 +6598,7 @@ public class MapEditorWindow
     {
         var font = _smallFont ?? _font;
         if (font != null)
-            _spriteBatch.DrawString(font, text, new Vector2(x, y), color);
+            Scope.DrawString(font, text, new Vector2(x, y), color);
     }
 
     private void DrawTextCentered(string text, Rectangle rect, Color color)
@@ -6603,7 +6606,7 @@ public class MapEditorWindow
         var font = _smallFont ?? _font;
         if (font == null) return;
         var size = font.MeasureString(text);
-        _spriteBatch.DrawString(font, text,
+        Scope.DrawString(font, text,
             new Vector2((int)(rect.X + (rect.Width - size.X) / 2f), (int)(rect.Y + (rect.Height - size.Y) / 2f)), color);
     }
 
@@ -6612,7 +6615,7 @@ public class MapEditorWindow
         var mouse = _eb._input.Mouse;
         var rect = new Rectangle(x, y, w, h);
         bool hovered = IsInRect(mouse, rect);
-        _spriteBatch.Draw(_pixel, rect, hovered ? ButtonHoverColor : bg);
+        Scope.Draw(_pixel, rect, hovered ? ButtonHoverColor : bg);
         DrawTextCentered(text, rect, TextColor);
     }
 
@@ -6628,7 +6631,7 @@ public class MapEditorWindow
         if (len < 1f) return;
 
         float angle = MathF.Atan2(dy, dx);
-        _spriteBatch.Draw(_pixel, new Rectangle((int)a.X, (int)a.Y, (int)len, 1),
+        Scope.Draw(_pixel, new Rectangle((int)a.X, (int)a.Y, (int)len, 1),
             null, color, angle, Vector2.Zero, SpriteEffects.None, 0);
     }
 

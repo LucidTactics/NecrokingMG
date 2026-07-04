@@ -457,8 +457,10 @@ public class Simulation
             _units[i].BlockReacting = false;
             if (_units[i].HitReactTimer > 0f)
                 _units[i].HitReactTimer = MathF.Max(0f, _units[i].HitReactTimer - dt);
-            if (_units[i].FlinchRefractoryTimer > 0f)
-                _units[i].FlinchRefractoryTimer = MathF.Max(0f, _units[i].FlinchRefractoryTimer - dt);
+            if (_units[i].ReactionCooldownTimer > 0f)
+                _units[i].ReactionCooldownTimer = MathF.Max(0f, _units[i].ReactionCooldownTimer - dt);
+            if (_units[i].HitFlashTimer > 0f)
+                _units[i].HitFlashTimer = MathF.Max(0f, _units[i].HitFlashTimer - dt);
         }
 
         // Update mana and cooldowns. BonusManaRegen is the dynamic add (e.g.
@@ -934,6 +936,25 @@ public class Simulation
         _necroFacingOverride = angleDeg;
     }
 
+    // --- Cast plant (see todos/player_cast_plant.md) ---
+    // While the player has a pending spell cast, movement input is ignored and the
+    // necromancer brakes to a stop (Settings.Animation.CastBrakeMultiplier × decel)
+    // while turning toward the frozen cast aim (CastTurnBoost × turn speed). The
+    // sprint ramp decays at half rate so cast-weaving doesn't eat the whole ramp.
+    // Game1 owns the pending-cast lifecycle and syncs this flag every frame
+    // (declaratively — no lifecycle bugs when the cast ends on any of its paths).
+    private bool _necroCastPlant;
+    private float _necroCastAimAngle = float.NaN;
+    public bool NecroCastPlant => _necroCastPlant;
+    /// <summary>True while the player's WASD input is nonzero — used by the cast
+    /// tail-cancel to decide whether to cut the recovery into locomotion.</summary>
+    public bool NecroMoveInputActive => _necroMoveInput.LengthSq() > 0.01f;
+    public void SetNecromancerCasting(bool active, float aimAngleDeg = float.NaN)
+    {
+        _necroCastPlant = active;
+        _necroCastAimAngle = aimAngleDeg;
+    }
+
     // --- AI ---
     private void UpdateAI(float dt)
     {
@@ -1009,7 +1030,12 @@ public class Simulation
             if (!_units[i].PendingAttack.IsNone && !(_units[i].AI == AIBehavior.FleeWhenHit
                 || (selfManagesCombat && _units[i].WolfPhase >= WolfDisengage)))
             { _units[i].PreferredVel = Vec2.Zero; continue; }
-            if (_units[i].InCombat && _units[i].AI != AIBehavior.PlayerControlled && !selfManagesCombat)
+            // Fleeing/routing units are exempt from the InCombat plant: a fleeing
+            // unit with a stale/live engagement must keep running, not freeze in
+            // melee doing attack windups. (InCombat itself stays derived so male
+            // deer can still flip Fleeing→FightBack off it.)
+            if (_units[i].InCombat && _units[i].AI != AIBehavior.PlayerControlled && !selfManagesCombat
+                && !_units[i].Fleeing && !_units[i].Routing)
             { _units[i].PreferredVel = Vec2.Zero; continue; }
 
             switch (_units[i].AI)
@@ -1024,6 +1050,10 @@ public class Simulation
                     float rampRate = canSprint
                         ? dt / SprintRampUpSeconds
                         : -dt / SprintRampDownSeconds;
+                    // Cast plant: the ramp decays at HALF rate (and never rises) while
+                    // casting, so a quick cast mid-sprint doesn't cost the whole 3s ramp.
+                    if (_necroCastPlant)
+                        rampRate = -dt / (SprintRampDownSeconds * 2f);
                     _sprintRampValue = Necroking.Core.MathUtil.Clamp(_sprintRampValue + rampRate, 0f, 1f);
                     // Per-unit sprint cap: necromancer evolutions and other player
                     // forms can have different sprint multipliers. Falls back to
@@ -1075,8 +1105,13 @@ public class Simulation
                     }
                     else
                     {
-                        // Normal player control
-                        if (_units[i].CorpseInteractPhase != 0)
+                        // Normal player control. Cast plant: movement input is ignored
+                        // while a cast is pending — PreferredVel=0 lets the boosted
+                        // decel integrate the velocity down smoothly (a skid), unlike
+                        // the melee plant's hard Velocity=0. Held WASD resumes the
+                        // frame the cast releases (input is continuous state, never a
+                        // queued action).
+                        if (_units[i].CorpseInteractPhase != 0 || _necroCastPlant)
                             _units[i].PreferredVel = Vec2.Zero;
                         else
                             _units[i].PreferredVel = _necroMoveInput * speed;
@@ -1689,10 +1724,15 @@ public class Simulation
             // between swings) so melee units "stop to fight" instead of sliding while
             // the attack animation plays. PlayerControlled is exempt — the player is
             // never frozen by their own combat. Ranged units never set EngagedTarget
-            // so they're not InCombat and keep their kite.
+            // so they're not InCombat and keep their kite. Fleeing/routing units are
+            // exempt from the InCombat plant (they must keep running even when a
+            // pursuer is in melee range) — but NOT from the PendingAttack/PostAttack
+            // locks, so a swing that already started still finishes planted before
+            // the unit bolts.
             if (_units[i].Jumping || _units[i].Incap.IsLocked
                 || !_units[i].PendingAttack.IsNone || _units[i].PostAttackTimer > 0f
-                || (_units[i].InCombat && _units[i].AI != AIBehavior.PlayerControlled))
+                || (_units[i].InCombat && _units[i].AI != AIBehavior.PlayerControlled
+                    && !_units[i].Fleeing && !_units[i].Routing))
             {
                 _units[i].Velocity = Vec2.Zero;
                 _units[i].StuckTime = 0f; // frozen, not stuck — don't accrue escape bias
@@ -1957,6 +1997,10 @@ public class Simulation
                 ?? _gameData?.Settings.Combat.MaxDeceleration ?? 25f;
             float maxLateral = accelDef?.MaxLateralAccel
                 ?? _gameData?.Settings.Combat.MaxLateralAccel ?? 15f;
+            // Cast plant: boosted brake so the player skids to a stop inside the
+            // cast wind-up window (~0.1s from a full sprint) instead of coasting.
+            if (_necroCastPlant && _units[i].AI == AIBehavior.PlayerControlled)
+                maxDecel *= _gameData?.Settings.Animation.CastBrakeMultiplier ?? 2f;
 
             // Integrate the accel model in sub-steps of at most 1/20s each.
             // The old single min(dt, 1/20) clamp prevented snap-turns at high
@@ -2428,7 +2472,18 @@ public class Simulation
                 }
 
                 float targetAngle;
-                if (_units[i].FaceVelocityMode && _units[i].Velocity.LengthSq() > 0.01f)
+                float turnMult = 1f;
+                if (_necroCastPlant && !float.IsNaN(_necroCastAimAngle))
+                {
+                    // Cast plant: the body swings to face the frozen cast aim point
+                    // (where the spell will actually go — not the live cursor) at a
+                    // boosted rate, overriding the walk/jog facing hysteresis. The
+                    // pivot overlaps the brake, so even a 180° sprint-cast is aimed
+                    // before the cast anim's effect frame.
+                    targetAngle = _necroCastAimAngle;
+                    turnMult = _gameData?.Settings.Animation.CastTurnBoost ?? 3f;
+                }
+                else if (_units[i].FaceVelocityMode && _units[i].Velocity.LengthSq() > 0.01f)
                 {
                     targetAngle = MathF.Atan2(_units[i].Velocity.Y, _units[i].Velocity.X) * Rad2Deg;
                 }
@@ -2440,7 +2495,7 @@ public class Simulation
                 {
                     continue; // nothing to aim at yet (pre-input frames)
                 }
-                Movement.FacingUtil.TurnToward(_units[i], targetAngle, dt, _gameData);
+                Movement.FacingUtil.TurnToward(_units[i], targetAngle, dt, _gameData, turnMult);
                 continue;
             }
 
@@ -3139,24 +3194,14 @@ public class Simulation
         {
             _units[defenderIdx].Harassment++;
             _units[defenderIdx].Dodging = true;
-            // Don't play a Dodge anim on a prone target — they can't dodge while
-            // knocked down. Leaving the knockdown hold in place. Also skip mid-jump
-            // so the dodge doesn't visually pop the jumper out of the arc.
+            // Visual dodge reaction — gated centrally in ApplyDodgeAnim (prone,
+            // mid-jump, fleeing/routing, shared reaction cooldown) at Reaction
+            // priority so it can't cancel the defender's own in-progress swing.
             // suppressDodgeAnim: trample owns its own dodge anim (snappy 0.4s hop)
             // and only plays it after confirming a safe tile exists, so the standard
             // dodge anim must not flash here.
-            if (!suppressDodgeAnim && !_units[defenderIdx].Incap.Active && _units[defenderIdx].JumpPhase == 0)
-            {
-                // Dodge one-shot at Priority=1 (intentionally below Combat=2 so a
-                // mid-attack dodge doesn't cancel its own swing — the attack anim
-                // continues, the swing just didn't land on the defender because of
-                // the hit/miss roll this method is returning from).
-                Render.AnimResolver.SetOverride(_units[defenderIdx], new Render.AnimRequest
-                {
-                    State = Render.AnimState.Dodge, Priority = 1, Interrupt = true,
-                    Kind = Render.OverrideKind.OneShot, Duration = 0, PlaybackSpeed = 1f
-                });
-            }
+            if (!suppressDodgeAnim)
+                DamageSystem.ApplyDodgeAnim(_units, defenderIdx);
             // Record the swing so retarget-on-hit AI still fires on misses — a missed
             // attack is still active combat engagement. Without this, a low-attack unit
             // (e.g. zombie deer vs high-defense wolf) whiffs repeatedly and the wolf

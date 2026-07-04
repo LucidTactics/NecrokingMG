@@ -18,12 +18,12 @@ public class SettingsWindow
     private GameSystems.DayNightSystem? _dayNightSystem;
 
     // Tab state
-    private enum Tab { Bloom, Shadow, Environment, Weather, General, Horde, FogOfWar, Corruption, Tooltips }
+    private enum Tab { Bloom, Shadow, Environment, Weather, General, Horde, FogOfWar, Corruption, Tooltips, Animation }
     private Tab _activeTab = Tab.Bloom;
-    private static readonly string[] TabNames = { "Bloom", "Shadow", "Environ", "Weather", "General", "Horde", "Fog", "Corrupt", "Tooltips" };
+    private static readonly string[] TabNames = { "Bloom", "Shadow", "Environ", "Weather", "General", "Horde", "Fog", "Corrupt", "Tooltips", "Anim" };
 
     // Scroll state per tab (keyed by tab name)
-    private readonly float[] _tabScroll = new float[9];
+    private readonly float[] _tabScroll = new float[10];
 
     // Scrollbar drag state: which tab's thumb is being dragged (-1 = none) and
     // the pixel offset between the cursor and the thumb top captured at grab time.
@@ -33,7 +33,7 @@ public class SettingsWindow
     // Stable per-tab scroll ids for EditorBase.HandlePanelScroll's content-height
     // cache (which clamps to the end before drawing, avoiding overshoot snap-back).
     private static readonly string[] TabScrollIds =
-        { "set_tab0", "set_tab1", "set_tab2", "set_tab3", "set_tab4", "set_tab5", "set_tab6", "set_tab7", "set_tab8" };
+        { "set_tab0", "set_tab1", "set_tab2", "set_tab3", "set_tab4", "set_tab5", "set_tab6", "set_tab7", "set_tab8", "set_tab9" };
 
     // Track whether we need to save after a frame (dirty flag)
     private bool _dirty;
@@ -218,6 +218,9 @@ public class SettingsWindow
                 break;
             case Tab.Tooltips:
                 totalContentHeight = DrawTooltipsTab(contentX, y, contentW);
+                break;
+            case Tab.Animation:
+                totalContentHeight = DrawAnimationTab(contentX, y, contentW);
                 break;
             default:
                 totalContentHeight = 0;
@@ -581,6 +584,55 @@ public class SettingsWindow
     //  exposes the raw tuning knobs (pick radius, pause) so we can iterate
     //  on the hover/inspect feel aggressively without touching code.
     // ----------------------------------------------------------------
+    /// <summary>Animation-feel settings (Settings.Animation → per-machine
+    /// 'user settings/settings.json'). Cast-plant knobs: casting brakes the
+    /// player to a stop before the cast anim starts — see
+    /// todos/player_cast_plant.md for the design + decision log.</summary>
+    private int DrawAnimationTab(int x, int y, int w)
+    {
+        int startY = y;
+        int rowH = 26;
+        var a = _gameData.Settings.Animation;
+
+        DrawSectionHeader("Player Casting", x, ref y);
+
+        // Q3: recovery frames cancel into locomotion when movement is held.
+        bool tail = _ui.DrawCheckbox("Cancel cast recovery into movement (hold a direction)", a.CastTailCancel, x, y);
+        if (tail != a.CastTailCancel) { a.CastTailCancel = tail; MarkDirty(); }
+        y += rowH;
+
+        // How hard the cast brake stops the run (multiplies normal deceleration).
+        float brake = _ui.DrawSliderFloat("set_anim_castbrake", "Cast Brake (x decel)", a.CastBrakeMultiplier, 1f, 5f, x, y, w);
+        if (MathF.Abs(brake - a.CastBrakeMultiplier) > 0.0001f) { a.CastBrakeMultiplier = brake; MarkDirty(); }
+        y += rowH;
+
+        // How fast the body pivots to the aim point while casting (x turn speed).
+        float turn = _ui.DrawSliderFloat("set_anim_castturn", "Cast Turn Boost (x turn speed)", a.CastTurnBoost, 1f, 6f, x, y, w);
+        if (MathF.Abs(turn - a.CastTurnBoost) > 0.0001f) { a.CastTurnBoost = turn; MarkDirty(); }
+        y += rowH;
+
+        // Anim-start gate as a multiple of base (walking) speed: 1.15 = casts start
+        // at walking pace or slower; lower = must brake closer to a full stop.
+        float gate = _ui.DrawSliderFloat("set_anim_castgate", "Cast Start Gate (x walk speed)", a.CastPlantGateSpeedMult, 0.2f, 2f, x, y, w);
+        if (MathF.Abs(gate - a.CastPlantGateSpeedMult) > 0.0001f) { a.CastPlantGateSpeedMult = gate; MarkDirty(); }
+        y += rowH;
+
+        y += 6;
+        DrawSectionHeader("Hit Feedback", x, ref y);
+
+        // White flash on damaged units — the feedback that survives suppressed
+        // flinches (fleeing / mid-attack / reaction-cooldown units).
+        bool flash = _ui.DrawCheckbox("Flash units white when hit", a.HitFlashEnabled, x, y);
+        if (flash != a.HitFlashEnabled) { a.HitFlashEnabled = flash; MarkDirty(); }
+        y += rowH;
+
+        float fi = _ui.DrawSliderFloat("set_anim_flashint", "Hit Flash Intensity", a.HitFlashIntensity, 0.2f, 1f, x, y, w);
+        if (MathF.Abs(fi - a.HitFlashIntensity) > 0.0001f) { a.HitFlashIntensity = fi; MarkDirty(); }
+        y += rowH;
+
+        return y - startY;
+    }
+
     private int DrawTooltipsTab(int x, int y, int w)
     {
         int startY = y;

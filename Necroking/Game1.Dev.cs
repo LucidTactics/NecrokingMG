@@ -1174,16 +1174,59 @@ public partial class Game1 {
                     c.Args[0].Equals("cancel", StringComparison.OrdinalIgnoreCase) ||
                     c.Args[0].Equals("stop", StringComparison.OrdinalIgnoreCase))) {
                   _devWalkTarget = null;
+                  _devWalkSprint = false;
                   c.Complete(Necroking.Dev.DevServer.Ok("walk_necro cancelled"));
                   break;
                }
                if (c.Args.Length < 2) {
-                  c.Complete(Necroking.Dev.DevServer.Error("walk_necro needs: <x> <y>  (or 'clear')"));
+                  c.Complete(Necroking.Dev.DevServer.Error("walk_necro needs: <x> <y> [sprint=true]  (or 'clear')"));
                   break;
                }
                float wx = DevFloat(c.Args[0]), wy = DevFloat(c.Args[1]);
                _devWalkTarget = new Vec2(wx, wy);
-               c.Complete(Necroking.Dev.DevServer.Ok($"necromancer walking to ({wx},{wy})"));
+               _devWalkSprint = c.OptBool("sprint");
+               c.Complete(Necroking.Dev.DevServer.Ok(
+                  $"necromancer walking to ({wx},{wy}){(_devWalkSprint ? " at sprint" : "")}"));
+               break;
+            }
+
+            // Override the necromancer's horde caps so summon/reanimate spells can
+            // be exercised on the debug necromancer (whose caps are otherwise 0/1).
+            case "set_cap": {   // set_cap <monster> [human]
+               if (c.Args.Length < 1) {
+                  c.Complete(Necroking.Dev.DevServer.Error("set_cap needs: <monsterCap> [humanCap]"));
+                  break;
+               }
+               _sim.NecroState.MonsterCap = (int)DevFloat(c.Args[0]);
+               if (c.Args.Length >= 2) _sim.NecroState.HumanCap = (int)DevFloat(c.Args[1]);
+               c.Complete(Necroking.Dev.DevServer.Ok(
+                  $"caps: monster={_sim.NecroState.MonsterCap} human={_sim.NecroState.HumanCap}"));
+               break;
+            }
+
+            // Cast-plant inspector (todos/player_cast_plant.md): the per-frame
+            // truth needed to verify the brake/gate/release cycle headlessly.
+            case "cast_state": {
+               int ni = _sim.NecromancerIndex;
+               if (ni < 0) { c.Complete(Necroking.Dev.DevServer.Error("no necromancer")); break; }
+               string pending = "null", anim = "null";
+               bool waiting = false;
+               if (_pendingCastAnim != null) {
+                  pending = $"\"{_pendingCastAnim.Value.SpellID}\"";
+                  waiting = _pendingCastAnim.Value.WaitingForPlant;
+               }
+               if (_unitAnims.TryGetValue(_sim.Units[ni].Id, out var na))
+                  anim = $"\"{na.Ctrl.CurrentState}\"";
+               var u = _sim.Units[ni];
+               var ci = System.Globalization.CultureInfo.InvariantCulture;
+               c.Complete(Necroking.Dev.DevServer.OkRaw(
+                  $"{{\"castPlant\":{(_sim.NecroCastPlant ? "true" : "false")}," +
+                  $"\"waitingForPlant\":{(waiting ? "true" : "false")}," +
+                  $"\"pendingSpell\":{pending},\"animState\":{anim}," +
+                  $"\"speed\":{u.Velocity.Length().ToString("F2", ci)}," +
+                  $"\"facing\":{u.FacingAngle.ToString("F1", ci)}," +
+                  $"\"sprintRamp\":{_sim.SprintRampValue.ToString("F2", ci)}," +
+                  $"\"mana\":{_sim.NecroState.Mana.ToString("F1", ci)}}}"));
                break;
             }
 

@@ -395,10 +395,17 @@ public class Unit
     /// render path; set by DamageSystem.ApplyHitReactAnim (which also sets the
     /// archetype OverrideAnim). 0 = not flinching.</summary>
     public float HitReactTimer;
-    /// <summary>Refractory countdown: while > 0 the unit can't START a new flinch, so
-    /// sustained/focus-fire damage can't stun-lock it out of acting. Set whenever a
-    /// flinch is applied; ticked down each frame.</summary>
-    public float FlinchRefractoryTimer;
+    /// <summary>Seconds remaining on the white hit-flash sprite tint. Set on every
+    /// physical impact (DamageSystem.ApplyHitReactAnim, before its anim gates), so a
+    /// hit whose flinch anim is suppressed (fleeing, mid-attack, cooldown) still
+    /// visibly reads as a hit. Cosmetic only — no gameplay reads this.</summary>
+    public float HitFlashTimer;
+    /// <summary>Shared reaction cooldown: while > 0 the unit can't START a new
+    /// reaction anim (BlockReact flinch OR Dodge), so sustained/focus-fire damage
+    /// and repeated whiffs can't twitch-lock it out of acting. Set whenever a
+    /// reaction anim actually plays (DamageSystem.ApplyHitReactAnim /
+    /// ApplyDodgeAnim, TrampleSystem dodge-hop); ticked down each frame.</summary>
+    public float ReactionCooldownTimer;
 
     // Stuck detection for ORCA nudge — seconds spent stuck (dt-accumulated, speed/FPS-invariant)
     public float StuckTime;

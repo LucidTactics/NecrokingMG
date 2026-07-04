@@ -41,35 +41,81 @@ public enum DamageFlags : byte
 /// </summary>
 public static class DamageSystem
 {
-    // --- Hit-reaction (flinch) animation tuning ---
+    // --- Reaction (flinch / dodge) animation tuning ---
     /// <summary>How long the BlockReact flinch shows on the legacy render path.</summary>
     public const float HitReactShowSeconds = 0.35f;
-    /// <summary>A unit can't start another flinch within this window. Prevents focus
-    /// fire from perpetually staggering a unit so it can never swing back.</summary>
-    public const float FlinchRefractorySeconds = 0.6f;
+    /// <summary>A unit can't start another reaction anim (flinch OR dodge) within
+    /// this window. Prevents focus fire / repeated whiffs from perpetually
+    /// twitching a unit so it can never act.</summary>
+    public const float ReactionCooldownSeconds = 0.6f;
+    /// <summary>Duration of the cosmetic white sprite flash on a physical impact.
+    /// This is the feedback channel that survives every reaction-anim suppression
+    /// (fleeing, mid-attack, cooldown) — a hit always visibly lands.</summary>
+    public const float HitFlashSeconds = 0.15f;
+
+    /// <summary>
+    /// Shared gates for both reaction anims (BlockReact flinch, Dodge). A reaction
+    /// is skipped when the unit is:
+    ///   - knocked down / mid-jump (would pop the hold/jump anim),
+    ///   - fleeing or routing (it should keep running, not react — a fleeing unit
+    ///     keeps its run cycle even when hit or whiffed at),
+    ///   - still inside the shared reaction cooldown (twitch guard).
+    /// </summary>
+    private static bool ReactionAllowed(UnitArrays units, int idx)
+    {
+        if (idx < 0 || idx >= units.Count) return false;
+        if (units[idx].Incap.Active || units[idx].JumpPhase != 0) return false;
+        if (units[idx].Fleeing || units[idx].Routing || units[idx].FleeTimer > 0f) return false;
+        if (units[idx].ReactionCooldownTimer > 0f) return false;
+        return true;
+    }
 
     /// <summary>
     /// Apply the on-hit flinch (BlockReact) to a unit, honoring all suppression rules
     /// in ONE place — always call this instead of poking AnimResolver.SetOverride
-    /// directly for a hit reaction. The flinch is skipped when the unit is:
-    ///   - knocked down / mid-jump (a flinch would pop the hold/jump anim),
-    ///   - already fleeing or routing (it should keep running, not flinch — the
-    ///     player asked that a fleeing unit keep its run even when hit),
-    ///   - still inside its flinch refractory window (focus-fire stun-lock guard).
-    /// Poison/fatigue never call this (they're DoT/meters, not impacts), so they no
-    /// longer flinch. Sets HitReactTimer (legacy render) + the BlockReact override
-    /// (archetype render) only when the flinch is actually allowed.
+    /// directly for a hit reaction (gates: see ReactionAllowed). Poison/fatigue never
+    /// call this (they're DoT/meters, not impacts), so they don't flinch.
+    ///
+    /// The flinch goes in at Reaction priority (1), BELOW Combat (2): a unit mid-swing
+    /// keeps its attack anim — the reaction request is simply rejected — and the
+    /// shared cooldown is only started when the reaction actually won the slot, so
+    /// the first hit after the swing ends still flinches.
     /// </summary>
     public static void ApplyHitReactAnim(UnitArrays units, int idx)
     {
         if (idx < 0 || idx >= units.Count) return;
-        if (units[idx].Incap.Active || units[idx].JumpPhase != 0) return;
-        if (units[idx].Fleeing || units[idx].Routing || units[idx].FleeTimer > 0f) return;
-        if (units[idx].FlinchRefractoryTimer > 0f) return;
+        // Cosmetic flash fires on EVERY physical impact, before the anim gates —
+        // a hit whose flinch is suppressed must still read as a hit.
+        units[idx].HitFlashTimer = HitFlashSeconds;
+
+        if (!ReactionAllowed(units, idx)) return;
+
+        var handle = Render.AnimResolver.SetOverride(units[idx],
+            Render.AnimRequest.Reaction(Render.AnimState.BlockReact));
+        if (!handle.IsValid && units[idx].Archetype > 0) return; // lost to a live attack anim
 
         units[idx].HitReactTimer = HitReactShowSeconds;
-        units[idx].FlinchRefractoryTimer = FlinchRefractorySeconds;
-        Render.AnimResolver.SetOverride(units[idx], Render.AnimRequest.Combat(Render.AnimState.BlockReact));
+        units[idx].ReactionCooldownTimer = ReactionCooldownSeconds;
+    }
+
+    /// <summary>
+    /// Apply the whiffed-at Dodge reaction anim (attacker missed the defender).
+    /// Same single-choke-point contract and gates as ApplyHitReactAnim — call this,
+    /// never SetOverride(Dodge) directly. Purely visual: the caller owns the
+    /// gameplay side (Dodging flag, Harassment) unconditionally.
+    /// NOTE: TrampleSystem's dodge-hop does NOT route through here — that dodge is
+    /// a movement-owning gameplay action (Combat priority, owns the hop), not a
+    /// cosmetic reaction; it starts the shared cooldown itself.
+    /// </summary>
+    public static void ApplyDodgeAnim(UnitArrays units, int idx)
+    {
+        if (!ReactionAllowed(units, idx)) return;
+
+        var handle = Render.AnimResolver.SetOverride(units[idx],
+            Render.AnimRequest.Reaction(Render.AnimState.Dodge));
+        if (!handle.IsValid && units[idx].Archetype > 0) return; // lost to a live attack anim
+
+        units[idx].ReactionCooldownTimer = ReactionCooldownSeconds;
     }
 
     /// <summary>

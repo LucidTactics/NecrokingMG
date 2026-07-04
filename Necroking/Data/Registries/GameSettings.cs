@@ -108,6 +108,30 @@ public class GeneralSettings
     [JsonPropertyName("gravity")] public float Gravity { get; set; } = 15f;
 }
 
+/// <summary>Animation-feel settings (esc menu → Animation tab; per-machine via
+/// 'user settings/settings.json').
+///
+/// Cast plant (see todos/player_cast_plant.md): casting brakes the player to a
+/// stop and turns him toward the aim point; the cast animation (and therefore
+/// the spell) starts only once speed drops below the gate. Brake rate =
+/// castBrakeMultiplier × maxDeceleration; turn rate = castTurnBoost × turn
+/// speed; gate = castPlantGateSpeedMult × CombatSpeed (≈ walking speed, so a
+/// walking cast starts instantly and only a sprint pays a brake window).</summary>
+public class AnimationSettings
+{
+    [JsonPropertyName("castBrakeMultiplier")] public float CastBrakeMultiplier { get; set; } = 2.0f;
+    [JsonPropertyName("castTurnBoost")] public float CastTurnBoost { get; set; } = 3.0f;
+    [JsonPropertyName("castPlantGateSpeedMult")] public float CastPlantGateSpeedMult { get; set; } = 1.15f;
+    /// <summary>After the spell fires, cancel the cast animation's recovery tail
+    /// into locomotion when movement input is held — you're running again the
+    /// frame the payoff pops. Off = the tail always plays out (more deliberate).</summary>
+    [JsonPropertyName("castTailCancel")] public bool CastTailCancel { get; set; } = true;
+    /// <summary>White sprite flash on physical impacts (the feedback that survives
+    /// reaction-anim suppression on fleeing / mid-attack / cooldown units).</summary>
+    [JsonPropertyName("hitFlashEnabled")] public bool HitFlashEnabled { get; set; } = true;
+    [JsonPropertyName("hitFlashIntensity")] public float HitFlashIntensity { get; set; } = 0.8f;
+}
+
 public class ShadowSettings
 {
     [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
@@ -349,6 +373,7 @@ public class GameSettingsData
     [JsonPropertyName("dayNight")] public DayNightSettings DayNight { get; set; } = new();
     [JsonPropertyName("display")] public DisplaySettings Display { get; set; } = new();
     [JsonPropertyName("general")] public GeneralSettings General { get; set; } = new();
+    [JsonPropertyName("animation")] public AnimationSettings Animation { get; set; } = new();
     [JsonPropertyName("shadow")] public ShadowSettings Shadow { get; set; } = new();
     [JsonPropertyName("horde")] public HordeSettings Horde { get; set; } = new();
     [JsonPropertyName("combat")] public CombatSettings Combat { get; set; } = new();
@@ -369,6 +394,8 @@ public class GameSettingsData
         // Display defaults (borderless fullscreen) if missing from older settings.json files.
         Display = loaded.Display ?? new DisplaySettings();
         General = loaded.General;
+        // Animation defaults if missing from older settings.json files.
+        Animation = loaded.Animation ?? new AnimationSettings();
         Shadow = loaded.Shadow;
         Horde = loaded.Horde;
         Combat = loaded.Combat;

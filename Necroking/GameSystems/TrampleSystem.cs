@@ -471,9 +471,10 @@ public static class TrampleSystem
 
         // One-shot Dodge anim. Duration holds the override slot for 0.4s — the
         // anim plays at natural rate; if it's shorter it ends early, if longer
-        // it gets cut at 0.4s when the slot expires. Priority=2 (Combat) so it
-        // overrides idle/walk but yields to Forced (e.g. Fall — won't happen
-        // here since we skipped the knockback).
+        // it gets cut at 0.4s when the slot expires. Priority=2 (Combat, NOT the
+        // Reaction tier) because this dodge owns the unit's movement for the hop —
+        // it's a gameplay action, not a cosmetic reaction. Yields to Forced (e.g.
+        // Fall — won't happen here since we skipped the knockback).
         AnimResolver.SetOverride(units[defenderIdx], new AnimRequest
         {
             State = AnimState.Dodge,
@@ -483,6 +484,9 @@ public static class TrampleSystem
             Duration = DodgeDurationSec,
             PlaybackSpeed = 1f,
         });
+        // The hop counts as the unit's reaction for the shared window — don't
+        // stack a flinch/dodge twitch right on top of it.
+        units[defenderIdx].ReactionCooldownTimer = DamageSystem.ReactionCooldownSeconds;
 
         DebugLog.Log("trample",
             $"[Dodge] unit#{defenderIdx} hopping {(bestIsClean ? "clean" : "tight")} " +
