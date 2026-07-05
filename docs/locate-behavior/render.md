@@ -67,7 +67,18 @@ dissolve, morph, outlines, glyphs) or `scope.Suspend()/Resume()` for raw-device 
   the file. Scenario: `ground_fog`.
 - **Occlusion fade** — `GameRenderer.Units.cs::UpdateOcclusionFade` (submit-time): tall env
   objects in front of the necromancer whose screen box overlaps his fade to 40% alpha
-  (exp lerp, per-object state in `_occlusionFade`). Scenario: `occlusion_fade`.
+  (exp lerp, per-object state in `_occlusionFade`). Scenario: `occlusion_fade`. Details:
+  the **single** player box is precomputed once in `CollectWorldItems` (~lines 188-207)
+  from `_g._sim.NecromancerIndex` only — `plLeft/Right/Top/Bottom/plY` (screen box from
+  the necromancer's `WorldToScreen` + `SpriteWorldHeight*Zoom`). `UpdateOcclusionFade`
+  gates on `worldH >= OcclusionMinWorldH (2.5)` and `obj.Y > plY` (object in front), tests
+  AABB overlap, sets `target = OccludedAlpha (0.40)`. Constants `OccludedAlpha`,
+  `OcclusionMinWorldH`, `OcclusionFadeRate` sit just above the method. The fade is
+  **applied** in `DrawSingleEnvObject` (~line 761) via `ColorUtils.Fade(tint, occFade)`.
+  To fade against ALL player units, replace the single-box precompute with a list of
+  boxes for every alive `Faction.Undead` unit (player faction = `Faction.Undead`, see
+  `Data/Enums.cs`), view-cull it, and make `UpdateOcclusionFade` early-out on first
+  overlapping box — mind the O(objects×hordeUnits) cost (see Pitfalls in answer).
 
 ### Batch-state rules (post-redesign)
 - `EffectBatch` is now a thin shim (`BeginScenePass`/`BeginHudPass` delegate to
