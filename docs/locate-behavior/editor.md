@@ -154,9 +154,53 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
   gets that for free too. ProcGen has no left-side panel of its own (unlike Zones), so it needs
   no `IsMouseOverPanel` change — it reuses the existing right-panel check as-is.
 
+- **Auto-ground (Objects tab) = stamp a ground patch under each painted object.** Toggle +
+  controls live in the Objects tab; the state is a set of `MapEditorWindow` instance fields:
+  `_autoGround` (bool toggle), `_autoGroundType` (int index into `_groundSystem` type list),
+  `_autoGroundSize` (int patch radius in ground-vertex units), `_autoGroundNoise` (int #
+  ragged-edge tiles), plus `_autoGroundTypeInit` (one-time default-to-"Dirt" resolve) and
+  `_autoGroundStrokeOld` (`Dictionary<long,byte>?` accumulating pre-stamp vertex values for
+  one stroke's undo). The **core stamp routine is `StampAutoGround(worldX, worldY, oldVals)`** —
+  builds a circular patch of `_autoGroundType` at radius `_autoGroundSize`, grows
+  `_autoGroundNoise` extra edge tiles, records old values into `oldVals` for undo via
+  `SetGroundVertexRecorded`/`GroundVertexKey`, and returns whether anything changed. It reads
+  the four `_autoGround*` instance fields directly and does NOT fire the texture-rebuild
+  callback (`_onVertexMapChanged`) — the caller flushes that once per placement/stroke.
+  **Callers today (both in `UpdateObjectsTab`):** single-click place (bundles the ground
+  stamp with the object placement into an `UndoComposite` of `UndoObjectPlace` +
+  `UndoGroundStroke`), and paint-mode via `PaintObjectsBatch` (accumulates into
+  `_autoGroundStrokeOld`, bundled with `UndoObjectBatchPlace` into an `UndoComposite` on
+  mouse-up). **UI**: `_autoGround = _eb.DrawCheckbox("Auto Ground", …)` gates a sub-section —
+  `DrawAutoGroundSizeControl` (the ± size stepper, clamp 0..20), a ground-type `DrawCombo`
+  over `_groundSystem` type names (default-resolves "Dirt" once via `_autoGroundTypeInit`),
+  and a `DrawIntField("auto_ground_noise", …)`. `AutoGroundSectionHeight()` reserves the
+  vertical space so the def list below shifts down when the toggle is on.
+- **To add per-category autoground to ProcGen (the requested change):**
+  `StampAutoGround` currently hardcodes reading the four `_autoGround*` instance fields, so it
+  can't be reused as-is with different settings per pool. **Extract the parameterized core**
+  — e.g. `StampGroundPatch(worldX, worldY, int typeIdx, int size, int noise, Dictionary<long,byte> oldVals)`
+  — and make the existing `StampAutoGround` a thin wrapper that early-outs on `!_autoGround`
+  and forwards the instance fields. Then `PlaceProcGenPool` (which already places each object
+  and has the `_batchPlacedObjects`/`_autoGroundStrokeOld` accumulator pattern available) can
+  call `StampGroundPatch` with per-pool settings. **Per-category storage** = new fields on
+  `Editor/ProcGenStyle.cs` (`ProcGenStyle` has exactly two "categories": the Large and Small
+  pools) — add e.g. `Large/SmallAutoGround{Enabled,Type,Size,Noise}` (note: ground *type* is
+  an index into `_groundSystem`, but ProcGenStyle is a global registry — store the ground
+  **type name** string, not the volatile index, and resolve it at stamp time, mirroring how
+  the def pools store `List<string>` ids and resolve via `FindDef`/`ResolveProcGenDefs` each
+  tick). Extend `ProcGenStyle.SaveAll`/`LoadAll` for the new fields, and add UI rows in the
+  ProcGen tab's per-pool panel section of `DrawProcGenTab`. **Undo**: thread the ProcGen
+  mouse-up path (in `UpdateProcGenTab`, ~5697) the same way Objects does — accumulate ground
+  old-values into `_autoGroundStrokeOld` during `PlaceProcGenPool` and bundle an
+  `UndoGroundStroke` with the `UndoObjectBatchPlace` into an `UndoComposite` on `leftUp`
+  (today ProcGen pushes only `UndoObjectBatchPlace`, no ground). Also call `_onVertexMapChanged`
+  once after `PaintProcGen` when any ground changed (mirror `PaintObjectsBatch`).
+
 **Look/edit here when…** adding a map-editor tab/category, changing brush painting or
-placement spacing, changing what SaveMap persists, building def-picker UI in a tab panel, or
-adding a new density/procedural placement brush (ProcGen tab, `PaintProcGen`/`PlaceProcGenPool`).
+placement spacing, changing what SaveMap persists, building def-picker UI in a tab panel,
+adding a new density/procedural placement brush (ProcGen tab, `PaintProcGen`/`PlaceProcGenPool`),
+or working on **auto-ground** (the `_autoGround*` fields + `StampAutoGround`/`StampGroundPatch`
++ `UndoGroundStroke` bundling).
 For **any new world-clicking tab**, gate world-affecting input on `!overPanel` (and reuse
 `overPanel`/`popupBlocking` computed once in `Update()`) — do not re-derive panel-hover per tab.
 
