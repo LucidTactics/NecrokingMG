@@ -925,6 +925,47 @@ public partial class Game1 {
                break;
             }
 
+            // Follow/locomotion state dump for diagnosing horde-follow issues:
+            // effort intent + ramp, speed cap, intent vs actual velocity, slot
+            // position/distance, horde state, stuck accrual.
+            case "follow_debug": {
+               var fidxs = DevResolveUnits(c.Args.Length > 0 ? string.Join(" ", c.Args) : "undead");
+               if (fidxs.Count == 0) { c.Complete(Necroking.Dev.DevServer.Error("no unit matched")); break; }
+               var ci3 = System.Globalization.CultureInfo.InvariantCulture;
+               var sb = new System.Text.StringBuilder("[");
+               for (int k = 0; k < fidxs.Count; k++)
+               {
+                  int ui = fidxs[k];
+                  var u = _sim.Units[ui];
+                  Vec2 slotPos = default;
+                  bool hasSlot = _sim.Horde != null && _sim.Horde.GetTargetPosition(u.Id, out slotPos);
+                  float slotDist = hasSlot ? (u.Position - slotPos).Length() : -1f;
+                  string hordeState = "none";
+                  if (_sim.Horde != null)
+                     foreach (var hu in _sim.Horde.HordeUnits)
+                        if (hu.UnitID == u.Id) { hordeState = hu.State.ToString(); break; }
+                  if (k > 0) sb.Append(',');
+                  sb.Append("{" +
+                     $"\"def\":{System.Text.Json.JsonSerializer.Serialize(u.UnitDefID)}," +
+                     $"\"routine\":{u.Routine},\"sub\":{u.Subroutine}," +
+                     $"\"hordeState\":\"{hordeState}\"," +
+                     $"\"effort\":\"{u.MoveEffort}\",\"effortMult\":{u.EffortMult.ToString("F2", ci3)}," +
+                     $"\"maxSpeed\":{u.MaxSpeed.ToString("F2", ci3)}," +
+                     $"\"pos\":[{u.Position.X.ToString("F2", ci3)},{u.Position.Y.ToString("F2", ci3)}]," +
+                     $"\"prefVel\":[{u.PreferredVel.X.ToString("F2", ci3)},{u.PreferredVel.Y.ToString("F2", ci3)}]," +
+                     $"\"vel\":[{u.Velocity.X.ToString("F2", ci3)},{u.Velocity.Y.ToString("F2", ci3)}]," +
+                     $"\"slot\":[{slotPos.X.ToString("F2", ci3)},{slotPos.Y.ToString("F2", ci3)}]," +
+                     $"\"slotDist\":{slotDist.ToString("F2", ci3)}," +
+                     $"\"hasSlot\":{(hasSlot ? "true" : "false")}," +
+                     $"\"stuckTime\":{u.StuckTime.ToString("F2", ci3)}," +
+                     $"\"necroMoving\":{(_sim.Horde?.IsNecroMoving == true ? "true" : "false")}" +
+                     "}");
+               }
+               sb.Append(']');
+               c.Complete(Necroking.Dev.DevServer.OkRaw(sb.ToString()));
+               break;
+            }
+
             // Resolved locomotion profile (feet-lock vels, gait thresholds,
             // calibrated vs CS-derived defaults) + the def's overrides — for
             // diagnosing gait/playback.
