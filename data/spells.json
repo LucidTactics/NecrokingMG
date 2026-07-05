@@ -1558,6 +1558,34 @@
       "cloudTickDamage": 1,
       "cloudSlowBuffID": "buff_miasma_slow",
       "cloudPlaguedBuffID": "buff_plagued"
+    },
+    {
+      "name": "Nimbleness",
+      "id": "quickness_accel",
+      "category": "Buff",
+      "school": "Alteration",
+      "tileTemplate": "buff",
+      "icon": "assets/UI/Icons/Spells/spell_9_copy.png",
+      "manaCost": 1,
+      "primaryPath": "shock",
+      "primaryLevel": 1,
+      "buffID": "quickness_accel",
+      "castFlipbook": {
+        "flipbookID": "cloud03",
+        "fps": 0,
+        "scale": 1,
+        "color": {
+          "r": 85,
+          "g": 105,
+          "b": 231,
+          "a": 255,
+          "intensity": 1
+        },
+        "rotation": 0,
+        "blendMode": "Alpha",
+        "alignment": "Ground",
+        "duration": 0.4
+      }
     }
   ]
 }

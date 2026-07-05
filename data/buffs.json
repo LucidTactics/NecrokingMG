@@ -640,6 +640,44 @@
       ],
       "maxStacks": 100,
       "intrinsic": true
+    },
+    {
+      "id": "quickness_accel",
+      "name": "Nimbleness",
+      "icon": "assets/UI/Icons/Buffs/iron_skin_copy.png",
+      "duration": 60,
+      "effects": [
+        {
+          "type": "Multiply",
+          "stat": "MaxAcceleration",
+          "value": 2
+        }
+      ],
+      "maxStacks": 3,
+      "hasOrbital": true,
+      "orbital": {
+        "flipbookID": "fire_loop",
+        "orbScale": 1,
+        "orbColor": {
+          "r": 92,
+          "g": 103,
+          "b": 234,
+          "a": 255,
+          "intensity": 1
+        },
+        "sunOrbitRadius": 1.2,
+        "sunOrbitSpeed": 0.6,
+        "moonOrbitRadius": 0.15,
+        "moonOrbitSpeed": 3,
+        "orbCount": 1,
+        "orbCountMatchesStacks": true
+      },
+      "unitTint": {
+        "r": 191,
+        "g": 167,
+        "b": 73,
+        "a": 180
+      }
     }
   ]
 }

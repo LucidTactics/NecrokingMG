@@ -1060,7 +1060,8 @@ public class Simulation
                        ? playerDef.SprintSpeedMultiplier
                        : SprintMaxMultiplier;
 
-                    var maxAcceleration = playerDef?.MaxAcceleration ?? _gameData.Settings.Combat.MaxAcceleration;
+                    var maxAcceleration = BuffSystem.GetModifiedExtra(_units, i, "MaxAcceleration",
+                        playerDef?.MaxAcceleration ?? _gameData.Settings.Combat.MaxAcceleration);
                     var maxDeceleration = playerDef?.MaxDeceleration ?? _gameData.Settings.Combat.MaxDeceleration;
 
                     // Ramp duration = time the Newtonian accel model actually needs to
@@ -1077,6 +1078,7 @@ public class Simulation
                     // casting, so a quick cast mid-sprint doesn't cost the whole ramp.
                     if (_necroCastPlant)
                         rampRate = -dt / (sprintRampDownSeconds * 2f);
+                    if (rampRate > 0) _sprintRampValue = MathF.Max(_sprintRampValue, 0.25f);
                     _sprintRampValue = Necroking.Core.MathUtil.Clamp(_sprintRampValue + rampRate, 0f, 1f);
                     float sprintMultiplier = 1f + (maxSprintMult - 1f) * _sprintRampValue;
 
@@ -2005,8 +2007,8 @@ public class Simulation
             }
 
             var accelDef = UnitUtil.ResolveDef(_units[i], _gameData); // memoized — per moving unit per frame
-            float maxAccel = accelDef?.MaxAcceleration
-                ?? _gameData.Settings.Combat.MaxAcceleration;
+            float maxAccel = BuffSystem.GetModifiedExtra(_units, i, "MaxAcceleration",
+                accelDef?.MaxAcceleration ?? _gameData.Settings.Combat.MaxAcceleration);
             float maxDecel = accelDef?.MaxDeceleration
                 ?? _gameData.Settings.Combat.MaxDeceleration;
             float maxLateral = accelDef?.MaxLateralAccel
@@ -2481,7 +2483,7 @@ public class Simulation
                     }
                     else
                     {
-                        if (speed >= enterT) _units[i].FaceVelocityMode = true;
+                        if (speed >= enterT || speed >= 0.2f && _units[i].MaxSpeed > _units[i].Stats.CombatSpeed) _units[i].FaceVelocityMode = true;
                     }
                 }
 
