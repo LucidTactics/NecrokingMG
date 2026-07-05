@@ -2057,11 +2057,9 @@ public class UnitEditorWindow
     /// <summary>Pixel-stride-derived suggestion for CombatSpeed: body velocity
     /// at which walk anim plays feet-locked AND hits <see cref="UnitDef.TargetWalkCycle"/>
     /// (or the artist's authored cycle if TargetWalkCycle is 0). Returns 0
-    /// when calibration data is missing or the unit is in legacy gait mode —
-    /// caller hides the suggestion in that case.</summary>
+    /// when calibration data is missing — caller hides the suggestion.</summary>
     private float ComputeSuggestedCombatSpeed(UnitDef def)
     {
-        if (def.LegacyGaitMode) return 0f;
         var cal = def.SpriteData?.Calibration;
         if (cal == null) return 0f;
         float bodySub = def.IsQuadruped ? cal.IdleFootSpreadPx : 0f;
@@ -2084,11 +2082,6 @@ public class UnitEditorWindow
         // strides, threshold readouts, idle foot-spread, ghost overlay etc.)
         // launch the stride_debug scenario — it visualizes everything against
         // the actual sprite.
-
-        bool newLegacy = _ui.DrawCheckbox("Legacy gait mode (CombatSpeed-derived thresholds — escape hatch)",
-            def.LegacyGaitMode, x, curY);
-        if (newLegacy != def.LegacyGaitMode) { def.LegacyGaitMode = newLegacy; _unsavedChanges = true; }
-        curY += RowH;
 
         bool newQuad = _ui.DrawCheckbox("Quadruped (subtract body length from stride)",
             def.IsQuadruped, x, curY);

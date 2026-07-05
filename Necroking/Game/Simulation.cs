@@ -669,6 +669,9 @@ public class Simulation
         PhaseStart(); UpdateMovement(dt); PhaseEnd("movement");
         PhaseStart(); _physics.Update(dt, _units, _grid.Width * GameConstants.TileSize, _grid.Height * GameConstants.TileSize, _quadtree); PhaseEnd("physics");
         PhaseStart(); _horde.UpdateStates(_units, _quadtree, _necromancerIdx, dt); PhaseEnd("horde_states");
+        // Loco vector + movement-animation tier for ALL units, from this frame's
+        // final Velocity/PreferredVel — the single gait selector.
+        PhaseStart(); Movement.Locomotion.UpdateLocoVectorsAndGait(_units, _gameData); PhaseEnd("loco_gait");
         PhaseStart(); UpdateFacingAngles(dt); PhaseEnd("facing");
         PhaseStart(); UpdateCombat(dt); PhaseEnd("combat");
 

@@ -322,14 +322,7 @@ public class UnitDef : IHasId
     /// Defaults to 1 so every other unit is unchanged.</summary>
     [JsonPropertyName("aggroRangeScale")] public float AggroRangeScale { get; set; } = 1f;
 
-    // Locomotion animation tuning (new pixel-stride system, default ON).
-    /// <summary>When true, this unit reverts to the original CombatSpeed-derived
-    /// gait thresholds and clamped-Lerp playback scaling. Default false = use the
-    /// pixel-stride calibration. Per-unit escape hatch for the cases where the
-    /// new system mis-handles a specific sprite (long downward-pointing weapons,
-    /// unusual silhouettes). See <see cref="Render.StrideCalibration"/>.</summary>
-    [JsonPropertyName("legacyGaitMode")] public bool LegacyGaitMode { get; set; }
-
+    // Locomotion animation tuning (pixel-stride system).
     /// <summary>Marks the unit as a four-legged creature (wolf, deer, bear,
     /// boar, etc.). When true, the locomotion profile subtracts the calibrated
     /// IdleFootSpreadPx (≈ body length, captured from Idle stance) from each

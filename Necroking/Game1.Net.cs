@@ -95,6 +95,9 @@ public partial class Game1
             _sim.UnitsMut[idx].Position = new Vec2(state.X, state.Y);
             _sim.UnitsMut[idx].Z = state.Z;
             _sim.UnitsMut[idx].Velocity = new Vec2(state.VelX, state.VelY);
+            // Mirror intent too so the central loco pass (which gates on
+            // PreferredVel) sees the ghost as deliberately moving.
+            _sim.UnitsMut[idx].PreferredVel = _sim.UnitsMut[idx].Velocity;
             _sim.UnitsMut[idx].FacingAngle = state.Facing;
             _sim.UnitsMut[idx].MoveTarget = _sim.UnitsMut[idx].Position;
             _sim.UnitsMut[idx].SpawnPosition = _sim.UnitsMut[idx].Position;

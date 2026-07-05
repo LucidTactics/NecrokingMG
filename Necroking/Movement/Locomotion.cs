@@ -312,6 +312,76 @@ public static class Locomotion
             u.MaxSpeed = speed;
         }
     }
+
+    // ─── Phase B: loco vector → movement animation ───────────────────────
+
+    private static bool IsLocoClass(AnimState s)
+        => s == AnimState.Idle || s == AnimState.Walk
+        || s == AnimState.Jog || s == AnimState.Run;
+
+    /// <summary>Post-movement pass: compute every unit's smoothed loco vector
+    /// and pick its movement-animation tier from that vector's LENGTH — the
+    /// single gait selector for all units (archetype AI, legacy AI, and the
+    /// player alike). Effort influences the tier only through speed now
+    /// (PreferredVel is built from the effort-ramped MaxSpeed and pulled in by
+    /// the lerp) — no separate bias that could disagree with actual motion.
+    ///
+    /// Only the locomotion channel is steered: a deliberate non-loco
+    /// RoutineAnim (Feed, Sleep, cast poses) and any OverrideAnim are
+    /// untouched. Zero movement INTENT (PreferredVel below
+    /// <see cref="MoveIntentEpsilon"/>) forces Idle so residual momentum
+    /// doesn't walk-in-place.</summary>
+    public static void UpdateLocoVectorsAndGait(UnitArrays units, GameData gameData)
+    {
+        for (int i = 0; i < units.Count; i++)
+        {
+            var u = units[i];
+            if (!u.Alive) continue;
+
+            u.LocoVector = Vec2.Lerp(u.Velocity, u.PreferredVel, LocoLerpFactor);
+
+            var prev = u.RoutineAnim.State;
+            if (!IsLocoClass(prev)) continue;
+
+            float tierSpeed = u.PreferredVel.Length() <= MoveIntentEpsilon
+                ? 0f : u.LocoVector.Length();
+            var profile = ProfileFor(u, gameData);
+            u.RoutineAnim = AnimRequest.Locomotion(profile.PickTier(prev, tierSpeed));
+        }
+    }
+
+    /// <summary>The unit's locomotion profile (gait thresholds + per-gait
+    /// feet-lock velocities), via the memoized def lookup. Units without a def
+    /// (raw scenario spawns) get derived defaults anchored on their live
+    /// CombatSpeed.</summary>
+    public static LocomotionProfile ProfileFor(Unit u, GameData gameData)
+    {
+        var def = gameData != null ? UnitUtil.ResolveDef(u, gameData) : null;
+        return LocomotionProfile.FromUnit(def, u.Stats.CombatSpeed);
+    }
+
+    /// <summary>Playback-rate scalar for a locomotion state at a given velocity
+    /// — <c>speed / animVelForGait</c>, clamped, so the foot cycle locks to
+    /// ground motion. Returns 1 for non-locomotion states (graceful fallback).
+    /// The single playback formula for all units.</summary>
+    public static float ComputePlayback(Unit u, GameData gameData, AnimState state, float speed)
+    {
+        var profile = ProfileFor(u, gameData);
+        float animVel = state switch
+        {
+            AnimState.Walk => profile.AnimWalkVel,
+            AnimState.Jog  => profile.AnimJogVel,
+            AnimState.Run  => profile.AnimRunVel,
+            // Carry isn't a gait variant — reuse Walk feet-lock since the Walk
+            // anim is what plays under it. If we ever author a distinct Carry
+            // anim with its own stride, add a per-state CarryVel field.
+            AnimState.Carry => profile.AnimWalkVel,
+            _ => 0f,
+        };
+        if (animVel <= 0f) return 1f;
+        return MathUtil.Clamp(speed / animVel,
+            LocomotionProfile.WalkFloorPlayback, LocomotionProfile.MaxPlayback);
+    }
 }
 
 /// <summary>
@@ -397,30 +467,21 @@ public static class FacingUtil
 }
 
 /// <summary>
-/// Per-unit locomotion tuning: gait thresholds and (in the new pixel-stride mode)
-/// the per-gait feet-lock velocities. Both <see cref="LocomotionScaling"/> and the
-/// AI's <c>SetLocomotionAnim</c> read from a profile so playback rate and gait
-/// choice always come from the same source of truth.
+/// Per-unit locomotion tuning: gait-tier thresholds and the per-gait feet-lock
+/// velocities. Both the tier picker (<see cref="Locomotion.UpdateLocoVectorsAndGait"/>)
+/// and the playback scaler (<see cref="Locomotion.ComputePlayback"/>) read from
+/// a profile so gait choice and playback rate always come from the same source
+/// of truth.
 ///
-/// Two construction paths:
-///   - <see cref="FromUnit"/> — picks the right mode automatically based on
-///     <see cref="UnitDef.LegacyGaitMode"/> and the availability of stride
-///     calibration data. Use this from gameplay code.
-///   - <see cref="FromBaseSpeed"/> / <see cref="FromAnimVels"/> — direct
-///     constructors for tests and explicit-mode call sites.
-///
-/// New mode (default, when calibration exists and legacy_gait_mode=false):
-///   - Per-gait feet-lock velocities derived from pixel measurements; gait
-///     thresholds sit at the midpoint between adjacent gait velocities so the
-///     playback rate is continuous through transitions (no foot-cycle jump).
+/// Build via <see cref="FromUnit"/>:
+///   - Per-gait feet-lock velocities come from pixel-stride calibration when the
+///     sprite has it; otherwise derived defaults anchored on CombatSpeed
+///     (walk = CS, jog = CS × jogMult, run = CS × sprintMult). Per-gait
+///     <c>AnimXxxVelOverride</c> fields on the def win in both cases.
+///   - Gait thresholds sit at the midpoint between adjacent gait max-velocities
+///     so the playback rate is continuous through transitions.
 ///   - Hysteresis bands stay small — they only need to absorb single-frame
 ///     velocity noise, not hide a frame-reset jolt.
-///
-/// Legacy mode (toggled per-unit via <c>legacyGaitMode</c> JSON field, OR
-/// triggered automatically when sprite calibration is missing):
-///   - Original CombatSpeed-derived thresholds (jog = 4 + base/3, run = 6 + 2*base/3).
-///   - Larger hysteresis bands to suppress the frame-reset visual when crossing.
-///   - LocomotionScaling falls back to its original clamped-Lerp playback formula.
 /// </summary>
 public readonly struct LocomotionProfile
 {
@@ -435,13 +496,12 @@ public readonly struct LocomotionProfile
     public const float IdleWalkExit = 0.03f;
 
     // Clamps on the playback-rate scaling. Below the floor, the cycle looks frozen;
-    // above the ceiling, it looks cartoonishly sped up. Shared between modes.
+    // above the ceiling, it looks cartoonishly sped up.
     // MaxPlayback=3.0 gives headroom for the sprint case (vel=4×MS hitting Run gait):
     // even at the worst case where pixel-derived runVel underestimates, 4×MS / runVel
     // stays under 3.0 in practice.
     public const float WalkFloorPlayback = 0.25f;
     public const float MaxPlayback = 3.0f;
-    public const float RunFullSpeedDelta = 7f; // (legacy only) units past runThreshold until Run reaches 1.0x
 
     // Default per-effort velocity multipliers used when a UnitDef doesn't
     // specify its own. Biped pattern: jog ≈ 2× walk, sprint ≈ 4× walk. Per-
@@ -451,14 +511,10 @@ public readonly struct LocomotionProfile
     public const float DefaultJogMult = 2.0f;
     public const float DefaultSprintMult = 4.0f;
 
-    /// <summary>True if this profile uses the original CombatSpeed-derived formula
-    /// (no pixel-stride data). LocomotionScaling branches on this.</summary>
-    public readonly bool IsLegacy;
-
     /// <summary>Per-gait feet-lock velocity (world units / sec) — the velocity at
     /// which the gait's authored sprite cycle exactly matches ground motion.
-    /// Only populated in new mode (IsLegacy=false). At runtime, playback rate
-    /// for a gait = unit.velocity / animVelForGait, clamped.</summary>
+    /// At runtime, playback rate for a gait = unit.velocity / animVelForGait,
+    /// clamped.</summary>
     public readonly float AnimWalkVel;
     public readonly float AnimJogVel;
     public readonly float AnimRunVel;
@@ -468,11 +524,10 @@ public readonly struct LocomotionProfile
     public readonly float JogHysteresis;
     public readonly float RunHysteresis;
 
-    private LocomotionProfile(bool isLegacy,
+    private LocomotionProfile(
         float animWalk, float animJog, float animRun,
         float jogThreshold, float runThreshold, float jogHys, float runHys)
     {
-        IsLegacy = isLegacy;
         AnimWalkVel = animWalk;
         AnimJogVel = animJog;
         AnimRunVel = animRun;
@@ -482,11 +537,13 @@ public readonly struct LocomotionProfile
         RunHysteresis = runHys;
     }
 
-    /// <summary>Build the right profile for a UnitDef. Prefers the new
-    /// pixel-stride system; falls back to legacy CombatSpeed formula when the
-    /// unit opts out (<c>legacyGaitMode=true</c>) or when calibration data is
-    /// missing. Per-gait override values on the UnitDef win over auto-computed
-    /// values when present.
+    /// <summary>Build the profile for a UnitDef. Per-gait feet-lock velocities
+    /// come from pixel-stride calibration when the sprite has it; without
+    /// calibration (or without a def at all — raw scenario spawns) they fall
+    /// back to derived defaults anchored on CombatSpeed (walk = CS, jog =
+    /// CS × jogMult, run = CS × sprintMult — i.e. "the anim plays at 1.0× when
+    /// moving at that gait's max effort speed"). Per-gait override values on
+    /// the def win over auto-computed values in both cases.
     ///
     /// Two decoupled anchors:
     ///   - <b>Playback anchor</b> for each gait is the pixel-derived feet-lock
@@ -506,33 +563,37 @@ public readonly struct LocomotionProfile
     /// editor surfaces this discrepancy. Per-gait <c>AnimXxxVelOverride</c>
     /// fields let the designer force playback to a custom value if they want
     /// natural cadence at the cost of skating.</summary>
-    public static LocomotionProfile FromUnit(UnitDef def)
+    public static LocomotionProfile FromUnit(UnitDef def, float fallbackCombatSpeed = 8f)
     {
-        float baseSpeed = def.Stats?.CombatSpeed ?? 8f;
-        // Need valid pixel velocities to use the new mode. If any gait is missing
-        // (or legacy mode / no calibration), drop back to legacy.
-        if (!TryComputePixelVels(def, out float pixelWalk, out float pixelJog, out float pixelRun))
-            return FromBaseSpeed(baseSpeed);
+        float baseSpeed = def?.Stats?.CombatSpeed ?? fallbackCombatSpeed;
+        float jogMult = def?.JogSpeedMultiplier > 0f
+            ? def.JogSpeedMultiplier : DefaultJogMult;
+        float sprintMult = def?.SprintSpeedMultiplier > 0f
+            ? def.SprintSpeedMultiplier : DefaultSprintMult;
 
-        // Playback anchors = pixel-derived per-gait feet-lock velocities. Override
-        // fields win when set (designer escape hatch — e.g. force walk to lock at
-        // CombatSpeed instead, trading groundedness for natural cadence).
-        float walk = def.AnimWalkVelOverride ?? pixelWalk;
-        float jog  = def.AnimJogVelOverride  ?? pixelJog;
-        float run  = def.AnimRunVelOverride  ?? pixelRun;
+        // Playback anchors: pixel-derived feet-lock velocities when calibrated,
+        // else CombatSpeed-derived defaults. Override fields win when set
+        // (designer escape hatch — e.g. force walk to lock at CombatSpeed
+        // instead, trading groundedness for natural cadence).
+        float pixelWalk, pixelJog, pixelRun;
+        if (def == null || !TryComputePixelVels(def, out pixelWalk, out pixelJog, out pixelRun))
+        {
+            pixelWalk = baseSpeed;
+            pixelJog  = baseSpeed * jogMult;
+            pixelRun  = baseSpeed * sprintMult;
+        }
+        float walk = def?.AnimWalkVelOverride ?? pixelWalk;
+        float jog  = def?.AnimJogVelOverride  ?? pixelJog;
+        float run  = def?.AnimRunVelOverride  ?? pixelRun;
 
         // Threshold anchor = CombatSpeed, modulated by per-unit jog/sprint
         // multipliers. JogThreshold = midpoint between walk-max (CS) and jog-max
         // (CS × jogMult). RunThreshold = midpoint between jog-max and sprint-max
         // (CS × sprintMult). For biped (2/4): 1.5xCS and 3xCS. For quadruped
         // (3/9): 2xCS and 6xCS.
-        float jogMult = def.JogSpeedMultiplier > 0f
-            ? def.JogSpeedMultiplier : DefaultJogMult;
-        float sprintMult = def.SprintSpeedMultiplier > 0f
-            ? def.SprintSpeedMultiplier : DefaultSprintMult;
         float jogThresh = baseSpeed * (1f + jogMult) * 0.5f;
         float runThresh = baseSpeed * (jogMult + sprintMult) * 0.5f;
-        return BuildNewModeProfile(walk, jog, run, jogThresh, runThresh);
+        return Build(walk, jog, run, jogThresh, runThresh);
     }
 
     /// <summary>Raw pixel-stride-derived feet-lock velocity for each gait, BEFORE
@@ -559,7 +620,7 @@ public readonly struct LocomotionProfile
         out float pixelWalk, out float pixelJog, out float pixelRun)
     {
         pixelWalk = pixelJog = pixelRun = 0f;
-        if (def.LegacyGaitMode || def.SpriteData?.Calibration == null) return false;
+        if (def.SpriteData?.Calibration == null) return false;
 
         var cal = def.SpriteData.Calibration;
         float bodySub = def.IsQuadruped ? cal.IdleFootSpreadPx : 0f;
@@ -570,58 +631,28 @@ public readonly struct LocomotionProfile
         return pixelWalk > 0f && pixelJog > 0f && pixelRun > 0f;
     }
 
-    /// <summary>Build a new-mode profile directly from per-gait feet-lock
-    /// velocities. Thresholds derived from a per-unit anchor + biped-default
-    /// multipliers (jog at 1.5×anchor, run at 3×anchor). For per-unit-tuned
-    /// thresholds (different jog/sprint multipliers like quadruped 3/9), use
-    /// the FromUnit path which feeds the right values to
-    /// <see cref="BuildNewModeProfile"/>.</summary>
-    public static LocomotionProfile FromAnimVels(float walk, float jog, float run,
-        float? thresholdAnchor = null)
-    {
-        float anchor = thresholdAnchor ?? walk;
-        // Biped defaults: jog at midpoint of (1, jogMult=2) = 1.5x anchor;
-        // run at midpoint of (2, sprintMult=4) = 3x anchor.
-        float jogThresh = anchor * (1f + DefaultJogMult) * 0.5f;
-        float runThresh = anchor * (DefaultJogMult + DefaultSprintMult) * 0.5f;
-        return BuildNewModeProfile(walk, jog, run, jogThresh, runThresh);
-    }
-
-    /// <summary>Final assembly of a new-mode profile given per-gait feet-lock
+    /// <summary>Final assembly of a profile given per-gait feet-lock
     /// velocities and pre-computed gait thresholds. Hysteresis bands derived
     /// from gait-velocity spread.</summary>
-    private static LocomotionProfile BuildNewModeProfile(
+    private static LocomotionProfile Build(
         float walk, float jog, float run, float jogThresh, float runThresh)
     {
-        // Hysteresis is small in new mode — just enough to suppress single-frame
-        // velocity noise (ORCA jitter, accel ramp wobble). The visual hitch that
-        // legacy needed big bands for (frame-reset on SwitchState) is handled by
-        // AnimController's foot-phase carryover.
+        // Hysteresis is small — just enough to suppress single-frame velocity
+        // noise (ORCA jitter, accel ramp wobble). The frame-reset visual hitch
+        // is handled by AnimController's foot-phase carryover.
         float jogHys = MathUtil.Clamp((jog - walk) * 0.05f, 0.05f, 0.5f);
         float runHys = MathUtil.Clamp((run - jog) * 0.05f, 0.05f, 0.5f);
-        return new LocomotionProfile(false, walk, jog, run, jogThresh, runThresh, jogHys, runHys);
+        return new LocomotionProfile(walk, jog, run, jogThresh, runThresh, jogHys, runHys);
     }
 
-    /// <summary>Legacy CombatSpeed-derived profile. Original formula kept
-    /// verbatim so opting a unit out of the new system reproduces today's
-    /// behavior exactly.</summary>
-    public static LocomotionProfile FromBaseSpeed(float baseSpeed)
+    /// <summary>Pick the locomotion state tier for the given speed, respecting
+    /// hysteresis around thresholds. Speed is the length of the unit's smoothed
+    /// loco vector — Lerp(Velocity, PreferredVel, 0.2) — so movement INTENT
+    /// already pulls the pick slightly ahead of measured velocity; there is no
+    /// separate effort bias.</summary>
+    public AnimState PickTier(AnimState prev, float speed)
     {
-        float jog = 4f + baseSpeed / 3f;
-        float run = 6f + 2f * baseSpeed / 3f;
-        float band = MathUtil.Clamp(0.5f + baseSpeed * 0.05f, 0.4f, 1.5f);
-        return new LocomotionProfile(true, 0f, 0f, 0f, jog, run, band, band);
-    }
-
-    /// <summary>Pick the locomotion state tier for the given speed + AI intent,
-    /// respecting hysteresis around thresholds. MoveEffort biases the choice
-    /// toward a target gait without changing the actual velocity — a "Sprint"
-    /// intent picks Run even when speed is still ramping up, but the playback
-    /// rate (computed by LocomotionScaling from raw velocity) still matches
-    /// foot motion to ground motion.</summary>
-    public AnimState PickTier(AnimState prev, float speed, MoveEffort effort = MoveEffort.Normal)
-    {
-        float biasedSpeed = ApplyEffortBias(speed, effort);
+        float biasedSpeed = speed;
 
         bool prevIsLoco = prev == AnimState.Idle || prev == AnimState.Walk
             || prev == AnimState.Jog || prev == AnimState.Run;
@@ -663,146 +694,4 @@ public readonly struct LocomotionProfile
         return AnimState.Idle;
     }
 
-    /// <summary>Bias raw velocity toward a target value driven by AI intent. The
-    /// lerp factors are deliberately small — intent nudges the pick at the
-    /// boundaries without overriding clear cases. Modeled on the Nightfall Rogue
-    /// MoveEffort biases (BattleRenderer.AnimationForRelativeSpeed).</summary>
-    private float ApplyEffortBias(float speed, MoveEffort effort)
-    {
-        switch (effort)
-        {
-            case MoveEffort.Walk:
-                // Pull toward mid-walk: keeps the unit walking even when velocity
-                // briefly spikes toward jog (e.g. ORCA push, pathing shortcut).
-                return MathUtil.Lerp(speed, JogThreshold * 0.7f, 0.05f);
-            case MoveEffort.Hurry:
-                // Pull toward jog: snap into Jog earlier on intent.
-                return MathUtil.Lerp(speed, JogThreshold + 0.5f, 0.25f);
-            case MoveEffort.Sprint:
-                // Pull past the run threshold so a charging unit picks Run on
-                // intent, even while velocity is still ramping.
-                return MathUtil.Lerp(speed, RunThreshold + RunFullSpeedDelta * 0.5f, 0.15f);
-            default:
-                return speed;
-        }
-    }
-}
-
-/// <summary>
-/// Per-frame playback-rate scaling for locomotion anims (Walk / Jog / Run / Carry)
-/// so the on-screen foot-cycle frequency matches actual movement velocity. The
-/// formula is selected by the <see cref="LocomotionProfile.IsLegacy"/> flag:
-///
-///   - New mode (default): <c>playback = velocity / animVelForGait</c>, where
-///     <c>animVelForGait</c> is the per-gait feet-lock velocity from the
-///     pixel-stride calibration. Clamped to a sensible playback envelope.
-///     This is mathematically the right thing — when velocity equals the
-///     anim's authored stride velocity, playback = 1.0 and feet lock to ground
-///     by construction. Above/below, the rate scales linearly and feet stay
-///     locked across the full velocity range. No skating.
-///
-///   - Legacy mode: original clamped-Lerp formula tied to gait thresholds.
-///     Not feet-locked (the playback rate at threshold = 1.0 is just a
-///     convention, not a calibrated value). Kept for the per-unit legacy_gait_mode
-///     opt-out and as the fallback when stride calibration isn't available.
-///
-/// Both modes share the same <see cref="LocomotionProfile"/> constants for
-/// playback floor/ceiling, so a unit toggled between modes never produces a
-/// playback rate outside the expected envelope.
-/// </summary>
-public static class LocomotionScaling
-{
-    /// <summary>Compute the playback-speed scalar for a locomotion state at a
-    /// given velocity. Returns 1.0 for non-locomotion states or when required
-    /// metadata is missing (graceful fallback).</summary>
-    public static float ComputeLocomotionPlayback(
-        AnimController ctrl, in LocomotionProfile profile, AnimState state, float speed)
-    {
-        if (profile.IsLegacy)
-            return ComputeLegacyPlayback(ctrl, profile, state, speed);
-
-        return ComputeNewPlayback(profile, state, speed);
-    }
-
-    /// <summary>New mode: playback rate is directly proportional to velocity, with
-    /// the per-gait <c>AnimVel</c> as the unit-scale factor that locks feet to
-    /// ground. One formula for all three gaits; the per-gait differentiation
-    /// lives entirely in the calibration value (each gait was authored with its
-    /// own stride length and cycle duration, so its AnimVel encodes both).</summary>
-    private static float ComputeNewPlayback(in LocomotionProfile profile, AnimState state, float speed)
-    {
-        float animVel = state switch
-        {
-            AnimState.Walk => profile.AnimWalkVel,
-            AnimState.Jog  => profile.AnimJogVel,
-            AnimState.Run  => profile.AnimRunVel,
-            // Carry isn't a gait variant — reuse Walk feet-lock since the Walk
-            // anim is what plays under it. If we ever author a distinct Carry
-            // anim with its own stride, add a per-state CarryVel field.
-            AnimState.Carry => profile.AnimWalkVel,
-            _ => 0f,
-        };
-        if (animVel <= 0f) return 1f;
-        return MathUtil.Clamp(speed / animVel,
-            LocomotionProfile.WalkFloorPlayback, LocomotionProfile.MaxPlayback);
-    }
-
-    /// <summary>Legacy mode: original clamped-Lerp formula preserved verbatim. At
-    /// each gait threshold the new state's initial playback is chosen so its
-    /// foot-cycle rate equals the outgoing state's rate — but only as a foot-rate
-    /// hack, not a real feet-to-ground lock. Skating is the visible failure mode
-    /// of this formula; the new mode replaces it.</summary>
-    private static float ComputeLegacyPlayback(
-        AnimController ctrl, in LocomotionProfile profile, AnimState state, float speed)
-    {
-        float jogThreshold = profile.JogThreshold;
-        float runThreshold = profile.RunThreshold;
-        float walkFloor = LocomotionProfile.WalkFloorPlayback;
-        float maxPlay = LocomotionProfile.MaxPlayback;
-
-        switch (state)
-        {
-            case AnimState.Walk:
-            {
-                float span = jogThreshold - LocomotionProfile.IdleWalkEnter;
-                if (span <= 0.01f) return 1f;
-                float t = (speed - LocomotionProfile.IdleWalkEnter) / span;
-                return MathUtil.Clamp(MathUtil.Lerp(walkFloor, 1f, t), walkFloor, maxPlay);
-            }
-
-            case AnimState.Jog:
-            {
-                float walkCycle = ctrl.GetTotalDurationSeconds(AnimState.Walk);
-                float jogCycle  = ctrl.GetTotalDurationSeconds(AnimState.Jog);
-                if (walkCycle <= 0f || jogCycle <= 0f) return 1f;
-                float jogStart = walkCycle / jogCycle;
-                float span = runThreshold - jogThreshold;
-                if (span <= 0.01f) return 1f;
-                float t = (speed - jogThreshold) / span;
-                return MathUtil.Clamp(MathUtil.Lerp(jogStart, 1f, t), walkFloor, maxPlay);
-            }
-
-            case AnimState.Run:
-            {
-                float jogCycle = ctrl.GetTotalDurationSeconds(AnimState.Jog);
-                float runCycle = ctrl.GetTotalDurationSeconds(AnimState.Run);
-                if (jogCycle <= 0f || runCycle <= 0f) return 1f;
-                float runStart = runCycle / jogCycle;
-                float t = (speed - runThreshold) / LocomotionProfile.RunFullSpeedDelta;
-                return MathUtil.Clamp(MathUtil.Lerp(runStart, 1f, t), walkFloor, maxPlay);
-            }
-
-            case AnimState.Carry:
-            {
-                // Legacy Carry scaling — single-state floor→1.0 across the unit's
-                // expected speed range. Uses jogThreshold as the "full speed" anchor
-                // since CombatSpeed in legacy mode falls inside the jog band.
-                if (jogThreshold <= 0.01f) return 1f;
-                return MathUtil.Clamp(speed / jogThreshold, walkFloor, maxPlay);
-            }
-
-            default:
-                return 1f;
-        }
-    }
 }

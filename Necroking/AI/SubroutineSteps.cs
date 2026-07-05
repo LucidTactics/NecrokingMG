@@ -229,7 +229,7 @@ public static class SubroutineSteps
         if (targetIdx < 0)
         {
             ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
-            SetLocomotionAnim(ref ctx, 0f);
+            SetLocomotionAnim(ref ctx);
             return;
         }
 
@@ -242,11 +242,10 @@ public static class SubroutineSteps
         }
         else
         {
-            // In melee range — hold position and explicitly go to Idle. Without this,
-            // RoutineAnim stays Walk/Run from the previous MoveToward call; between
-            // OverrideAnim attack anims the unit briefly walks-in-place at velocity 0.
+            // In melee range — hold position; the central gait pass sees zero
+            // intent and drops the locomotion channel to Idle.
             ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
-            SetLocomotionAnim(ref ctx, 0f);
+            SetLocomotionAnim(ref ctx);
         }
 
         // Set engaged target so combat system fires
@@ -283,7 +282,7 @@ public static class SubroutineSteps
         }
         else
             ctx.Units[i].PreferredVel = Vec2.Zero;
-        SetLocomotionAnim(ref ctx, PickTierSpeed(ctx.Units[i]));
+        SetLocomotionAnim(ref ctx);
     }
 
     public static bool Disengage_Complete(ref AIContext ctx, float backoffDist)
@@ -327,23 +326,7 @@ public static class SubroutineSteps
         }
         else
             ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
-        SetLocomotionAnim(ref ctx, PickTierSpeed(ctx.Units[ctx.UnitIndex]));
-    }
-
-    // Below this much movement *intent* (PreferredVel magnitude, wu/s) a unit is
-    // treated as standing still — filters residual-momentum slide so a stopped or
-    // can't-pathfind unit shows Idle, not walk-in-place. Must stay well under the
-    // slowest deliberate locomotion (deer feed at ~0.1 wu/s) or slow movers get
-    // wrongly pinned to Idle while visibly sliding across the ground.
-    private const float MoveIntentEpsilon = 0.05f;
-
-    // Tier-speed helper: use actual Velocity for state tier, but gate Idle on
-    // PreferredVel so zero-intent units don't walk-in-place from residual momentum.
-    private static float PickTierSpeed(Movement.Unit u)
-    {
-        float preferred = u.PreferredVel.Length();
-        if (preferred <= MoveIntentEpsilon) return 0f;
-        return u.Velocity.Length();
+        SetLocomotionAnim(ref ctx);
     }
 
     public static bool WaitForCooldown_Ready(ref AIContext ctx)
@@ -441,30 +424,26 @@ public static class SubroutineSteps
             ctx.Units[i].PreferredVel = Vec2.Zero;
         }
 
-        // Pick locomotion state from actual Velocity (post-accel curve) so units
-        // ramp Idle → Walk → Jog → Run as they accelerate, instead of snapping to
-        // the final tier on tick 1 based on requested MaxSpeed. PickTierSpeed still
-        // gates Idle on PreferredVel so a unit that can't pathfind (zero dir) shows
-        // Idle instead of walk-in-place despite momentum.
-        SetLocomotionAnim(ref ctx, PickTierSpeed(ctx.Units[i]));
+        // Return the routine channel to locomotion; the actual tier is picked
+        // centrally (post-movement) by Locomotion.UpdateLocoVectorsAndGait from
+        // the smoothed loco vector.
+        SetLocomotionAnim(ref ctx);
     }
 
     /// <summary>
-    /// Set the routine animation to the appropriate locomotion state based on speed.
-    /// Tier thresholds and hysteresis come from the shared LocomotionProfile so this
-    /// and LocomotionScaling can't drift apart. The unit's MoveEffort biases the
-    /// pick (Walk effort stays in Walk gait at high speed; Sprint snaps to Run
-    /// even before velocity catches up).
+    /// Mark the routine channel as locomotion. The actual Idle/Walk/Jog/Run
+    /// tier is picked centrally each tick by
+    /// <see cref="Locomotion.UpdateLocoVectorsAndGait"/> (which only steers
+    /// loco-class RoutineAnims) — this just ensures the channel isn't stuck on
+    /// a deliberate non-loco pose (Feed, Sleep, alert) after a routine ends.
     /// </summary>
-    public static void SetLocomotionAnim(ref AIContext ctx, float speed)
+    public static void SetLocomotionAnim(ref AIContext ctx)
     {
-        var def = ctx.GameData.Units.Get(ctx.Units[ctx.UnitIndex].UnitDefID);
-        var profile = def != null
-            ? LocomotionProfile.FromUnit(def)
-            : LocomotionProfile.FromBaseSpeed(ctx.Units[ctx.UnitIndex].Stats.CombatSpeed);
         AnimState prev = ctx.Units[ctx.UnitIndex].RoutineAnim.State;
-        AnimState state = profile.PickTier(prev, speed, ctx.Units[ctx.UnitIndex].MoveEffort);
-        ctx.Units[ctx.UnitIndex].RoutineAnim = AnimRequest.Locomotion(state);
+        bool locoClass = prev == AnimState.Idle || prev == AnimState.Walk
+            || prev == AnimState.Jog || prev == AnimState.Run;
+        if (!locoClass)
+            ctx.Units[ctx.UnitIndex].RoutineAnim = AnimRequest.Locomotion(AnimState.Idle);
     }
 
     /// <summary>Set routine anim to Idle and zero velocity.</summary>
