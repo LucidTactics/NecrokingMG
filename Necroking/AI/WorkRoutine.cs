@@ -111,8 +111,8 @@ public static class WorkRoutine
 
     public static void FaceTowards(ref AIContext ctx, Vec2 target)
     {
-        var dir = target - ctx.MyPos;
-        if (dir.LengthSq() > 0.01f)
-            ctx.Units[ctx.UnitIndex].FacingAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
+        // Rate-capped like every other voluntary facing change (was a raw
+        // FacingAngle snap that bypassed the TurnSpeed cap).
+        Movement.FacingUtil.TurnTowardPosition(ctx.Units[ctx.UnitIndex], target, ctx.Dt, ctx.GameData);
     }
 }

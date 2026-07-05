@@ -594,15 +594,16 @@ public class Simulation
         // paralysis + player drag/ghost). Runs BEFORE UpdateAI so the AI builds
         // PreferredVel from a cap that already includes every modifier; a
         // same-frame SetEffort just moves the ramp target for next tick.
-        PhaseStart();
-        Movement.Locomotion.UpdateSpeeds(_units, _gameData, _grid, dt, new PlayerLocoInput
+        var locoInput = new PlayerLocoInput
         {
             WantSprint = _necroRunning && !_necroRopeTaut,
             CastPlant = _necroCastPlant,
             DragSlow = _necroDragSlow,
             FacingOverrideDeg = _necroFacingOverride,
             CastAimAngleDeg = _necroCastAimAngle,
-        });
+        };
+        PhaseStart();
+        Movement.Locomotion.UpdateSpeeds(_units, _gameData, _grid, dt, locoInput);
         PhaseEnd("loco_speeds");
 
         PhaseStart(); UpdateAI(dt); PhaseEnd("ai");
@@ -672,7 +673,9 @@ public class Simulation
         // Loco vector + movement-animation tier for ALL units, from this frame's
         // final Velocity/PreferredVel — the single gait selector.
         PhaseStart(); Movement.Locomotion.UpdateLocoVectorsAndGait(_units, _gameData); PhaseEnd("loco_gait");
-        PhaseStart(); UpdateFacingAngles(dt); PhaseEnd("facing");
+        // Facing priority ladder (also central) — movement facing follows the
+        // loco vector so body direction and gait always agree.
+        PhaseStart(); Movement.Locomotion.UpdateFacing(_units, dt, _gameData, locoInput); PhaseEnd("facing");
         PhaseStart(); UpdateCombat(dt); PhaseEnd("combat");
 
         // Tick pending zombie raises. Game1 routes them through the composite reanimation effect
@@ -2361,134 +2364,8 @@ public class Simulation
     }
 
     // --- Facing Angles ---
-    // Delegates the per-unit rotation math to Movement.FacingUtil so the turn
-    // rate cap is applied identically everywhere (UpdateFacingAngles, handler
-    // FacePosition calls, legacy caster snap). Only the TARGET-ANGLE-SELECTION
-    // priority logic lives here — the rotation step is shared.
-    private void UpdateFacingAngles(float dt)
-    {
-        for (int i = 0; i < _units.Count; i++)
-        {
-            if (!_units[i].Alive) continue;
-            // FacingUtil.TurnToward enforces these guards too, but short-circuiting
-            // at this level saves the target-angle resolution for units that can't
-            // rotate anyway.
-            if (_units[i].Incap.IsLocked) continue;
-            if (_units[i].JumpPhase >= 2) continue;
-            if (_units[i].ChargePhase > 0) continue; // TrampleSystem owns facing during charge
-            // Tumbling ragdolls keep the facing they were launched with —
-            // PhysicsSystem writes Velocity each tick, and letting the
-            // face-away-from-attacker priority act on it turned launched units
-            // to face their flight direction mid-arc (visible pop on launch).
-            if (_units[i].InPhysics) continue;
-
-            // Player-controlled (necromancer): two facing sources, hysteresis between
-            // them. Walk gait → face the mouse (cursor angle stored in
-            // _necroFacingOverride). Jog/Run gait → face actual velocity direction so
-            // sprinting backward doesn't reverse-play the animation. Turn rate is
-            // applied either way.
-            if (_units[i].AI == AIBehavior.PlayerControlled)
-            {
-                if (_units[i].IsLockedByAction()) continue;
-
-                var def = _gameData.Units.Get(_units[i].UnitDefID);
-                if (def != null)
-                {
-                    var profile = Movement.LocomotionProfile.FromUnit(def);
-                    float speed = _units[i].Velocity.Length();
-                    float enterT = profile.JogThreshold + profile.JogHysteresis;
-                    float exitT  = profile.JogThreshold - profile.JogHysteresis;
-                    if (_units[i].FaceVelocityMode)
-                    {
-                        if (speed <= exitT) _units[i].FaceVelocityMode = false;
-                    }
-                    else
-                    {
-                        if (speed >= enterT || speed >= 0.2f && _units[i].MaxSpeed > _units[i].Stats.CombatSpeed) _units[i].FaceVelocityMode = true;
-                    }
-                }
-
-                float targetAngle;
-                float turnMult = 1f;
-                if (_necroCastPlant && !float.IsNaN(_necroCastAimAngle))
-                {
-                    // Cast plant: the body swings to face the frozen cast aim point
-                    // (where the spell will actually go — not the live cursor) at a
-                    // boosted rate, overriding the walk/jog facing hysteresis. The
-                    // pivot overlaps the brake, so even a 180° sprint-cast is aimed
-                    // before the cast anim's effect frame.
-                    targetAngle = _necroCastAimAngle;
-                    turnMult = _gameData.Settings.Animation.CastTurnBoost;
-                }
-                else if (_units[i].FaceVelocityMode && _units[i].Velocity.LengthSq() > 0.01f)
-                {
-                    targetAngle = MathF.Atan2(_units[i].Velocity.Y, _units[i].Velocity.X) * Rad2Deg;
-                }
-                else if (!float.IsNaN(_necroFacingOverride))
-                {
-                    targetAngle = _necroFacingOverride;
-                }
-                else
-                {
-                    continue; // nothing to aim at yet (pre-input frames)
-                }
-                Movement.FacingUtil.TurnToward(_units[i], targetAngle, dt, _gameData, turnMult);
-                continue;
-            }
-
-            // Priority 1: turn toward the engaged target — UNLESS we're actively
-            // fleeing it. A unit retreating from its engaged target (e.g. a deer
-            // bolting from an attacker) should face where it's GOING, not look back
-            // over its shoulder; otherwise it runs away while facing the threat,
-            // which reads as a backwards run under a forward-run animation. When the
-            // velocity points away from the target we fall through to Priority 2
-            // (face movement direction). Stationary-but-engaged units (a wolf waiting
-            // out its cooldown) keep facing the target since velocity ~ 0.
-            if (!_units[i].EngagedTarget.IsNone && _units[i].EngagedTarget.IsUnit)
-            {
-                int ti = ResolveUnitTarget(_units[i].EngagedTarget);
-                if (ti >= 0)
-                {
-                    Vec2 toTarget = _units[ti].Position - _units[i].Position;
-                    Vec2 vel = _units[i].Velocity;
-                    bool fleeingTarget = vel.LengthSq() > 0.25f && vel.Dot(toTarget) < 0f;
-                    if (!fleeingTarget)
-                    {
-                        Movement.FacingUtil.TurnTowardPosition(_units[i], _units[ti].Position, dt, _gameData);
-                        continue;
-                    }
-                }
-            }
-
-            // Priority 2: Face movement direction. Prefer actual velocity over
-            // intended direction so the body matches motion — important under
-            // the Newtonian movement model where Velocity lags PreferredVel
-            // during turns / decel. Only fall back to PreferredVel when the
-            // unit is essentially stopped (about-to-start-moving anticipation).
-            // The old threshold (0.316 wu/s mag) was safe only when Velocity
-            // and PreferredVel were instantly aligned; under accel/decel it
-            // caused the body to snap to PreferredVel direction while still
-            // drifting along Velocity.
-            Vec2 faceDir = _units[i].Velocity;
-            if (faceDir.LengthSq() < 0.0025f) // < 0.05 wu/s — essentially stopped
-                faceDir = _units[i].PreferredVel;
-
-            // Priority 3: Stationary with a combat target (e.g. wolf waiting for
-            // cooldown) — keep facing the target so the idle frame reads naturally.
-            if (faceDir.LengthSq() < 0.0025f && _units[i].Target.IsUnit)
-            {
-                int ti = ResolveUnitTarget(_units[i].Target);
-                if (ti >= 0)
-                    faceDir = _units[ti].Position - _units[i].Position;
-            }
-
-            if (faceDir.LengthSq() > 0.0025f)
-            {
-                float targetAngle = MathF.Atan2(faceDir.Y, faceDir.X) * Rad2Deg;
-                Movement.FacingUtil.TurnToward(_units[i], targetAngle, dt, _gameData);
-            }
-        }
-    }
+    // The facing priority ladder lives in Movement.Locomotion.UpdateFacing
+    // (called from Tick) — the single home for effort/speed/gait/facing.
 
     /// <summary>
     /// Check if unit i is approximately facing unit target index ti.
