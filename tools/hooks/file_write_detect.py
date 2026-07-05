@@ -72,6 +72,11 @@ CREATORS = {
     "split", "csplit",                   # emit multiple output files
     "mktemp",                            # creates a temp file/dir
     "ln", "link", "symlink",             # create/clobber links
+    "mklink", "junction",                # Windows link creation (cmd mklink /J /D,
+                                         # sysinternals junction.exe). A junction into a
+                                         # real folder turns a later recursive delete into
+                                         # destruction of the TARGET (assets/ wipe via
+                                         # `git worktree remove --force`, 2026-07-05).
     "mkfifo", "mknod", "mkdir", "mktemp",
     "shred",                             # overwrites file contents (then optionally -u)
     "wipe", "srm",                       # secure-delete = overwrite

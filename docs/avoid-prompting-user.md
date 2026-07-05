@@ -163,3 +163,28 @@ broad.
 - **Reminder:** the hook denies a `python -c …` that hand-rolls a syntax check
   (`ast.parse(`, `import py_compile`, `py_compile.compile(`) and points back at
   `python -m py_compile`. The whitelisted `-m py_compile` form is explicitly left alone.
+
+### Windows junctions & worktree removal (assets/ wipe, 2026-07-05)
+
+- **Junction/symlink creation** (`mklink`, sysinternals `junction`, PowerShell
+  `New-Item -ItemType Junction/SymbolicLink`) → **prompts with a warning**, in any
+  nesting (`cmd /c "mklink …"` included). Links into real folders let recursive deletes
+  destroy the link TARGET. Copy files instead.
+- **`git worktree remove --force`** → **denied + redirected** to
+  `python tools/safe_worktree_remove.py <path>` (force-allowed for any python spelling,
+  incl. a full path to an embeddable python.exe), which removes reparse points as links
+  before delegating to git. Non-force removal is left to prompt (git refuses dirty trees
+  itself).
+
+## The hook fails CLOSED now (`run_guard.sh`)
+
+The hook entry in `.claude/settings.json` runs `tools/hooks/run_guard.sh`, not `python`
+directly. Why: on a machine without python (or with only the Windows Store shim), the
+old direct invocation errored and Claude Code silently proceeded with **no Bash guard at
+all** — that unguarded state is what allowed the 2026-07-05 assets/ wipe. The wrapper
+tries `$CLAUDE_GUARD_PYTHON`, `py`, `python3`, `python`, then known embeddable installs
+(probing by *executing*, since the Store shim exists but doesn't run); if none work it
+emits an **ask** decision on every Bash call with instructions — loud and safe instead
+of silently unguarded. Machines without a system python can drop in an embeddable build
+(a plain unzip, e.g. `C:\Users\<user>\Tools\python-3.11-embed`, with `python311._pth`
+deleted so same-dir imports work) and add its path to the wrapper's candidate list.

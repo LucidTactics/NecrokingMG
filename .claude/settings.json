@@ -4,7 +4,7 @@
       {
         "hooks": [
           {
-            "command": "python \"$CLAUDE_PROJECT_DIR/tools/hooks/bash_prompt_guard.py\"",
+            "command": "sh \"$CLAUDE_PROJECT_DIR/tools/hooks/run_guard.sh\"",
             "shell": "bash",
             "timeout": 10,
             "type": "command"

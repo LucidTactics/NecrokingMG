@@ -216,7 +216,34 @@ def rule_python_validate(cmd: str, commands=None):
     return None
 
 
-BASH_RULES = (rule_python_validate,)
+_WT_REMOVE_MSG = (
+    "`git worktree remove --force` recursively deletes the worktree and — on this git "
+    "version — FOLLOWS Windows junctions inside it, destroying the junction TARGET's "
+    "contents (this emptied the 385 MB gitignored assets/ folder on 2026-07-05). Use the "
+    "junction-safe wrapper instead, which removes any reparse points as links first:\n"
+    "    python tools/safe_worktree_remove.py <worktree-path>\n"
+    "(any python works, e.g. C:/Users/Raymo/Tools/python-3.11-embed/python.exe — the "
+    "wrapper is force-allowed, no prompt). If you really mean raw removal, resend "
+    "verbatim to prompt the user."
+)
+
+
+def rule_worktree_remove_force(cmd, commands=None):
+    """Redirect `git worktree remove --force` to the junction-safe wrapper. The non-force
+    form is left alone: git itself refuses it when the worktree contains anything
+    untracked (a junction counts), so it cannot recurse into a link."""
+    if commands is not None:
+        for c in commands:
+            if (c.leader == "git" and "worktree" in c.args and "remove" in c.args
+                    and any(a in ("--force", "-f") for a in c.args)):
+                return _WT_REMOVE_MSG
+        return None
+    if re.search(r"\bgit\s+worktree\s+remove\b(?=.*(\s--force\b|\s-f\b))", cmd):
+        return _WT_REMOVE_MSG
+    return None
+
+
+BASH_RULES = (rule_python_validate, rule_worktree_remove_force)
 
 
 # git subcommands that publish commits to a remote. These must PROMPT even though
@@ -242,6 +269,18 @@ def rule_intended_prompt(seg: str, command=None):
         return ("A push to a remote publishes your commits and needs your explicit "
                 "approval — every other git command is auto-accepted, just this one "
                 "prompts. Approve to proceed.")
+    # Windows link creation — in any form, including nested inside `cmd /c "…"` or a
+    # powershell inline (hence a whole-segment text scan, not just the leader). A junction
+    # or directory symlink pointing at a real folder is a landmine: recursive deleters can
+    # traverse it and destroy the TARGET (assets/ wipe, 2026-07-05). Copy the files
+    # instead; if a link is genuinely needed, the user should knowingly approve it.
+    if re.search(r"\bmklink\b|\bjunction(\.exe)?\s|-ItemType\s+(Junction|SymbolicLink)\b",
+                 seg, re.IGNORECASE):
+        return ("This creates a Windows junction/symlink. Links into real project "
+                "folders are dangerous: recursive deletes (git worktree remove, some "
+                "cleanup tools) can traverse the link and destroy the TARGET's contents "
+                "(this emptied assets/ on 2026-07-05). Prefer COPYING the needed files. "
+                "Approve only if a link is genuinely required.")
     # An otherwise read-only tool used in its mutating mode (`find … -delete`/`-exec`,
     # `sed -i`) must prompt even though the bare tool is read-only-fast-allowed or
     # allow-listed — the mutating flag is the rare, dangerous case we want surfaced
@@ -452,6 +491,24 @@ def _git_subcommand(cmd: str):
             continue
         return t.lower()
     return None
+
+
+def rule_safe_worktree_remove(cmd: str) -> bool:
+    """True for `<any python> tools/safe_worktree_remove.py <path>` — the junction-safe
+    worktree remover that rule_worktree_remove_force redirects to. Force-allowed with any
+    interpreter spelling (python, py, a full path to an embeddable python.exe) so the
+    redirect is self-serve on every machine, no prompt."""
+    toks = _tokenize(cmd)
+    idx = 0
+    while idx < len(toks) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", toks[idx]):
+        idx += 1
+    if idx + 1 >= len(toks):
+        return False
+    base = toks[idx].strip('"\'').rsplit("/", 1)[-1].rsplit("\\", 1)[-1].lower()
+    if not re.fullmatch(r"(python[0-9.]*|py)(\.exe)?", base):
+        return False
+    script = toks[idx + 1].strip('"\'').replace("\\", "/")
+    return script.lower().endswith("tools/safe_worktree_remove.py")
 
 
 def rule_robocopy_into_project(cmd: str, project_dir=None) -> bool:
@@ -778,6 +835,7 @@ def evaluate(tool_name: str, tool_input: dict, mode: str, allow_rules, deny_rule
         return (_allow_listed("Bash", s, allow_rules)
                 or rule_robocopy_into_project(s, pd)
                 or rule_mkdir_into_project(s, pd)
+                or rule_safe_worktree_remove(s)
                 or rule_powershell_readonly(c)
                 # A segment that itself has no side effect (the compound only reached
                 # here because ANOTHER segment mutates) is fine — `tasklist && sed -n…`

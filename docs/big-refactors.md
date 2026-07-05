@@ -62,6 +62,16 @@ and complicates collecting results back into one tree, so for *distinct-file* ed
 "forbid git" approach is simpler and was sufficient. Reach for worktrees when agents might
 touch the *same* file.
 
+**Worktree cleanup — junction landmine (2026-07-05).** NEVER create a Windows
+junction/symlink inside a worktree (e.g. linking the gitignored `assets/` in so an old
+build can load textures — COPY the needed files instead). `git worktree remove --force`
+(verified on git 2.51.2.windows.1) recurses THROUGH junctions and deletes the link
+TARGET's contents — this emptied the real 385 MB `assets/` folder (recovered from the
+shared Drive). The Bash guard now blocks raw `--force` removal and redirects to
+`python tools/safe_worktree_remove.py <path>`, which strips reparse points as links
+first. Non-force `git worktree remove` is safe: git refuses it while anything untracked
+(including a junction) is inside.
+
 ### 3. Give the transform a struct-vs-class-aware safety policy
 This refactor is only semantics-preserving because `Unit` is a **class** (`Units[i]`
 returns a reference; `Units` and `UnitsMut` are the same object). Several agents *guessed*
