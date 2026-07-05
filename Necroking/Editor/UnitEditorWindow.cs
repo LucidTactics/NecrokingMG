@@ -2150,7 +2150,7 @@ public class UnitEditorWindow
         // enable/disable per gait. The auto-derived value is shown per gait so
         // the designer has the baseline to scale from (playback = velocity ÷
         // this value, hence the reminder line).
-        bool hasAutoVels = Render.LocomotionProfile.TryComputePixelVels(
+        bool hasAutoVels = Movement.LocomotionProfile.TryComputePixelVels(
             def, out float autoWalkVel, out float autoJogVel, out float autoRunVel);
         string AutoVel(float v) => hasAutoVels ? v.ToString("F2") : "n/a";
         _ui.DrawText("Anim vel per gait — BIGGER value = SLOWER animation",

@@ -1,8 +1,137 @@
+using System;
 using Necroking.Core;
+using Necroking.Data;
 using Necroking.Data.Registries;
-using Necroking.Movement;
+using Necroking.Render;
 
-namespace Necroking.Render;
+namespace Necroking.Movement;
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Locomotion.cs — THE single home for unit effort, speed, movement animation
+//  and facing selection.
+//
+//  Everything that answers one of these questions lives in this file, and
+//  nowhere else:
+//    - What does an effort level (MoveEffort) mean in velocity terms?
+//    - What is a unit's MaxSpeed right now? (the ONLY writer of Unit.MaxSpeed)
+//    - Which movement animation (Idle/Walk/Jog/Run) plays at a given speed?
+//    - How fast does that animation play back (feet-lock)?
+//    - Which direction does a moving unit face?
+//
+//  Other systems provide INPUTS (effort intent, buff/terrain/potion state,
+//  player input) or consume OUTPUTS (MaxSpeed, RoutineAnim, FacingAngle) —
+//  they never compute any of the above themselves.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// <summary>AI's stated locomotion intent, used as a bias on top of raw velocity
+/// when choosing Walk vs Jog vs Run. Lets a patrol pick Walk gait even when the
+/// path lets it move faster, or lets a charging unit pick Run even before its
+/// actual velocity has reached the run threshold (so the gait switch happens at
+/// the moment of intent, not several frames later when speed catches up).
+///
+/// Imported from the Nightfall Rogue project's MoveEffort concept. Bias is
+/// applied only to the gait-tier picker, NOT to playback rate — feet still
+/// lock to ground motion at actual velocity within whatever gait is chosen.
+/// </summary>
+public enum MoveEffort : byte
+{
+    /// <summary>No intent bias — gait is purely a function of measured velocity.
+    /// The default and the most common case.</summary>
+    Normal = 0,
+    /// <summary>Bias toward Walk gait. Patrolling, cautious approach, sneak.
+    /// A unit that physically COULD jog will still stay in Walk gait unless
+    /// velocity is well above the jog threshold.</summary>
+    Walk = 1,
+    /// <summary>Bias toward Jog gait. "Get there, but don't sprint" — routine
+    /// reposition, formation-up, follow-orders. Snaps into Jog earlier than
+    /// raw velocity would warrant.</summary>
+    Hurry = 2,
+    /// <summary>Bias toward Run gait. Combat charge, urgent retreat, chase.
+    /// Snaps into Run on intent, well before measured velocity catches up.</summary>
+    Sprint = 3,
+}
+
+/// <summary>
+/// Central turn-rate-limited facing helper. Every voluntary facing change on
+/// any unit should go through <see cref="TurnToward"/> or
+/// <see cref="TurnTowardPosition"/> so the angular-velocity cap
+/// (<c>UnitDef.TurnSpeed</c> or <c>GameSettings.Combat.TurnSpeed</c>) is
+/// respected. Before this helper existed, handlers wrote
+/// <c>unit.FacingAngle = ...</c> directly and snapped instantly, bypassing the
+/// rate cap that the central facing pass was supposed to enforce.
+///
+/// PlayerControlled units obey turn rate too: mouse-driven facing rotates
+/// smoothly toward the cursor (and toward velocity direction during jog/run).
+/// Incap-locked and airborne units (JumpPhase ≥ 2) skip the rotation because
+/// their facing is frozen by other systems.
+///
+/// No turn acceleration is modeled — turn speed is a flat deg/s. Units always
+/// rotate at the same rate when they do rotate; they don't ramp up/down.
+/// </summary>
+public static class FacingUtil
+{
+    public const float DefaultTurnSpeed = 360f;
+
+    /// <summary>Signed short-way angle from <paramref name="current"/> to
+    /// <paramref name="target"/>, in the range (-180, 180] degrees.</summary>
+    public static float AngleDiff(float target, float current)
+    {
+        float diff = target - current;
+        while (diff > 180f) diff -= 360f;
+        while (diff < -180f) diff += 360f;
+        return diff;
+    }
+
+    /// <summary>
+    /// Rotate <paramref name="unit"/>'s facing toward <paramref name="targetAngle"/>
+    /// (degrees), clamped by the unit's turn speed × <paramref name="dt"/>.
+    /// Incap'd / airborne units don't rotate.
+    /// </summary>
+    public static void TurnToward(Unit unit, float targetAngle, float dt, GameData gameData,
+        float rateMult = 1f)
+    {
+        // Can't rotate while knocked down / airborne.
+        if (unit.Incap.IsLocked) return;
+        if (unit.JumpPhase >= 2) return;
+
+        float turnSpeed = ResolveTurnSpeed(unit, gameData) * rateMult;
+        float diff = AngleDiff(targetAngle, unit.FacingAngle);
+        float maxTurn = turnSpeed * dt;
+        unit.FacingAngle += MathUtil.Clamp(diff, -maxTurn, maxTurn);
+    }
+
+    /// <summary>Rotate toward the angle pointing from <paramref name="unit"/>
+    /// toward <paramref name="worldTarget"/>. No-op if target is on top of
+    /// the unit.</summary>
+    public static void TurnTowardPosition(Unit unit, Vec2 worldTarget, float dt, GameData gameData)
+    {
+        var dir = worldTarget - unit.Position;
+        if (dir.LengthSq() < 0.01f) return;
+        float angle = System.MathF.Atan2(dir.Y, dir.X) * (180f / System.MathF.PI);
+        TurnToward(unit, angle, dt, gameData);
+    }
+
+    /// <summary>Per-unit TurnSpeed with fallback to the global default.</summary>
+    public static float ResolveTurnSpeed(Unit unit, GameData gameData)
+    {
+        // Memoized def lookup — this runs per facing unit per frame.
+        var def = UnitUtil.ResolveDef(unit, gameData);
+        if (def?.TurnSpeed.HasValue == true) return def.TurnSpeed.Value;
+        return gameData.Settings.Combat.TurnSpeed;
+    }
+
+    /// <summary>Unit direction vector for a FacingAngle in DEGREES (the engine's facing
+    /// convention). Replaces scattered open-coded `new Vec2(Cos(a*PI/180), Sin(a*PI/180))`
+    /// — and the one site that forgot the deg-&gt;rad multiply entirely.</summary>
+    public static Vec2 AngleToDir(float deg)
+    {
+        float rad = deg * (System.MathF.PI / 180f);
+        return new Vec2(System.MathF.Cos(rad), System.MathF.Sin(rad));
+    }
+
+    /// <summary>The direction the unit is currently facing (FacingAngle is in degrees).</summary>
+    public static Vec2 ForwardDir(Unit unit) => AngleToDir(unit.FacingAngle);
+}
 
 /// <summary>
 /// Per-unit locomotion tuning: gait thresholds and (in the new pixel-stride mode)
@@ -292,6 +421,125 @@ public readonly struct LocomotionProfile
                 return MathUtil.Lerp(speed, RunThreshold + RunFullSpeedDelta * 0.5f, 0.15f);
             default:
                 return speed;
+        }
+    }
+}
+
+/// <summary>
+/// Per-frame playback-rate scaling for locomotion anims (Walk / Jog / Run / Carry)
+/// so the on-screen foot-cycle frequency matches actual movement velocity. The
+/// formula is selected by the <see cref="LocomotionProfile.IsLegacy"/> flag:
+///
+///   - New mode (default): <c>playback = velocity / animVelForGait</c>, where
+///     <c>animVelForGait</c> is the per-gait feet-lock velocity from the
+///     pixel-stride calibration. Clamped to a sensible playback envelope.
+///     This is mathematically the right thing — when velocity equals the
+///     anim's authored stride velocity, playback = 1.0 and feet lock to ground
+///     by construction. Above/below, the rate scales linearly and feet stay
+///     locked across the full velocity range. No skating.
+///
+///   - Legacy mode: original clamped-Lerp formula tied to gait thresholds.
+///     Not feet-locked (the playback rate at threshold = 1.0 is just a
+///     convention, not a calibrated value). Kept for the per-unit legacy_gait_mode
+///     opt-out and as the fallback when stride calibration isn't available.
+///
+/// Both modes share the same <see cref="LocomotionProfile"/> constants for
+/// playback floor/ceiling, so a unit toggled between modes never produces a
+/// playback rate outside the expected envelope.
+/// </summary>
+public static class LocomotionScaling
+{
+    /// <summary>Compute the playback-speed scalar for a locomotion state at a
+    /// given velocity. Returns 1.0 for non-locomotion states or when required
+    /// metadata is missing (graceful fallback).</summary>
+    public static float ComputeLocomotionPlayback(
+        AnimController ctrl, in LocomotionProfile profile, AnimState state, float speed)
+    {
+        if (profile.IsLegacy)
+            return ComputeLegacyPlayback(ctrl, profile, state, speed);
+
+        return ComputeNewPlayback(profile, state, speed);
+    }
+
+    /// <summary>New mode: playback rate is directly proportional to velocity, with
+    /// the per-gait <c>AnimVel</c> as the unit-scale factor that locks feet to
+    /// ground. One formula for all three gaits; the per-gait differentiation
+    /// lives entirely in the calibration value (each gait was authored with its
+    /// own stride length and cycle duration, so its AnimVel encodes both).</summary>
+    private static float ComputeNewPlayback(in LocomotionProfile profile, AnimState state, float speed)
+    {
+        float animVel = state switch
+        {
+            AnimState.Walk => profile.AnimWalkVel,
+            AnimState.Jog  => profile.AnimJogVel,
+            AnimState.Run  => profile.AnimRunVel,
+            // Carry isn't a gait variant — reuse Walk feet-lock since the Walk
+            // anim is what plays under it. If we ever author a distinct Carry
+            // anim with its own stride, add a per-state CarryVel field.
+            AnimState.Carry => profile.AnimWalkVel,
+            _ => 0f,
+        };
+        if (animVel <= 0f) return 1f;
+        return MathUtil.Clamp(speed / animVel,
+            LocomotionProfile.WalkFloorPlayback, LocomotionProfile.MaxPlayback);
+    }
+
+    /// <summary>Legacy mode: original clamped-Lerp formula preserved verbatim. At
+    /// each gait threshold the new state's initial playback is chosen so its
+    /// foot-cycle rate equals the outgoing state's rate — but only as a foot-rate
+    /// hack, not a real feet-to-ground lock. Skating is the visible failure mode
+    /// of this formula; the new mode replaces it.</summary>
+    private static float ComputeLegacyPlayback(
+        AnimController ctrl, in LocomotionProfile profile, AnimState state, float speed)
+    {
+        float jogThreshold = profile.JogThreshold;
+        float runThreshold = profile.RunThreshold;
+        float walkFloor = LocomotionProfile.WalkFloorPlayback;
+        float maxPlay = LocomotionProfile.MaxPlayback;
+
+        switch (state)
+        {
+            case AnimState.Walk:
+            {
+                float span = jogThreshold - LocomotionProfile.IdleWalkEnter;
+                if (span <= 0.01f) return 1f;
+                float t = (speed - LocomotionProfile.IdleWalkEnter) / span;
+                return MathUtil.Clamp(MathUtil.Lerp(walkFloor, 1f, t), walkFloor, maxPlay);
+            }
+
+            case AnimState.Jog:
+            {
+                float walkCycle = ctrl.GetTotalDurationSeconds(AnimState.Walk);
+                float jogCycle  = ctrl.GetTotalDurationSeconds(AnimState.Jog);
+                if (walkCycle <= 0f || jogCycle <= 0f) return 1f;
+                float jogStart = walkCycle / jogCycle;
+                float span = runThreshold - jogThreshold;
+                if (span <= 0.01f) return 1f;
+                float t = (speed - jogThreshold) / span;
+                return MathUtil.Clamp(MathUtil.Lerp(jogStart, 1f, t), walkFloor, maxPlay);
+            }
+
+            case AnimState.Run:
+            {
+                float jogCycle = ctrl.GetTotalDurationSeconds(AnimState.Jog);
+                float runCycle = ctrl.GetTotalDurationSeconds(AnimState.Run);
+                if (jogCycle <= 0f || runCycle <= 0f) return 1f;
+                float runStart = runCycle / jogCycle;
+                float t = (speed - runThreshold) / LocomotionProfile.RunFullSpeedDelta;
+                return MathUtil.Clamp(MathUtil.Lerp(runStart, 1f, t), walkFloor, maxPlay);
+            }
+
+            case AnimState.Carry:
+            {
+                // Legacy Carry scaling — single-state floor→1.0 across the unit's
+                // expected speed range. Uses jogThreshold as the "full speed" anchor
+                // since CombatSpeed in legacy mode falls inside the jog band.
+                if (jogThreshold <= 0.01f) return 1f;
+                return MathUtil.Clamp(speed / jogThreshold, walkFloor, maxPlay);
+            }
+
+            default:
+                return 1f;
         }
     }
 }

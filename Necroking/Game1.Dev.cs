@@ -932,7 +932,7 @@ public partial class Game1 {
                if (lidxs.Count == 0) { c.Complete(Necroking.Dev.DevServer.Error("no unit matched")); break; }
                var ldef = _gameData.Units.Get(_sim.Units[lidxs[0]].UnitDefID);
                if (ldef == null) { c.Complete(Necroking.Dev.DevServer.Error("no def")); break; }
-               var prof = Render.LocomotionProfile.FromUnit(ldef);
+               var prof = Movement.LocomotionProfile.FromUnit(ldef);
                var ci2 = System.Globalization.CultureInfo.InvariantCulture;
                bool hasCal = ldef.SpriteData?.Calibration != null;
                string ov(float? v) => v.HasValue ? v.Value.ToString("F2", ci2) : "null";

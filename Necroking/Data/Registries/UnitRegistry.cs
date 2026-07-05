@@ -392,7 +392,7 @@ public class UnitDef : IHasId
 
     /// <summary>Runtime-only — resolved sprite-data reference (atlas → sprite name
     /// lookup), wired up by Game1 once both registries and atlases are loaded.
-    /// Lets <see cref="Render.LocomotionProfile.FromUnit"/> reach calibration data
+    /// Lets <see cref="Movement.LocomotionProfile.FromUnit"/> reach calibration data
     /// without separately plumbing atlas access through the AI / render call sites.
     /// Marked [JsonIgnore] so editor-save passes don't try to serialize it.</summary>
     [JsonIgnore]

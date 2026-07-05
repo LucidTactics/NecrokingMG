@@ -120,7 +120,7 @@ public static class TrampleSystem
         var trampleDef = sim.GameData.Units.Get(units[idx].UnitDefID);
         float sprintMult = (trampleDef?.SprintSpeedMultiplier > 0f)
             ? trampleDef.SprintSpeedMultiplier
-            : Render.LocomotionProfile.DefaultSprintMult;
+            : Movement.LocomotionProfile.DefaultSprintMult;
         float chargeSpeed = units[idx].Stats.CombatSpeed * sprintMult * (1f + weapon.TrampleSpeedBonus);
 
         // Phase 3 — follow-through. Locked direction, no homing, no impact checks.

@@ -2473,7 +2473,7 @@ public class Simulation
                 var def = _gameData.Units.Get(_units[i].UnitDefID);
                 if (def != null)
                 {
-                    var profile = Render.LocomotionProfile.FromUnit(def);
+                    var profile = Movement.LocomotionProfile.FromUnit(def);
                     float speed = _units[i].Velocity.Length();
                     float enterT = profile.JogThreshold + profile.JogHysteresis;
                     float exitT  = profile.JogThreshold - profile.JogHysteresis;
@@ -2799,7 +2799,7 @@ public class Simulation
         // default biped sprint mult (4×) if def doesn't specify.
         float pounceSprintMult = (def?.SprintSpeedMultiplier > 0f)
             ? def.SprintSpeedMultiplier
-            : Render.LocomotionProfile.DefaultSprintMult;
+            : Movement.LocomotionProfile.DefaultSprintMult;
         float pounceSpeed = _units[i].Stats.CombatSpeed * pounceSprintMult;
 
         // Lead the target: aim where it will be when the leap arrives, not
