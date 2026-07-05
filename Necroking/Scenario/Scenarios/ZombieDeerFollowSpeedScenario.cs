@@ -62,7 +62,7 @@ public class ZombieDeerFollowSpeedScenario : ScenarioBase
         units[nIdx].Archetype = 0;
         units[nIdx].AI = AIBehavior.MoveToPoint;
         units[nIdx].MoveTarget = new Vec2(300f, 10f); // far east — keeps walking the whole run
-        units[nIdx].MaxSpeed = NecroNormalSpeed;       // normal pace, no sprint
+        units[nIdx].Stats.CombatSpeed = NecroNormalSpeed; // normal pace, no sprint (MaxSpeed derives from this)
         _necroId = units[nIdx].Id;
         sim.SetNecromancerIndex(nIdx);
 

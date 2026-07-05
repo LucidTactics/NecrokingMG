@@ -80,12 +80,30 @@ public class Unit
     public Data.Registries.UnitDef CachedDef;
     public string? CachedDefKey;
 
-    /// <summary>AI-declared locomotion intent. Read by SetLocomotionAnim when
-    /// picking Walk/Jog/Run gait — biases the choice without overriding the
-    /// raw-velocity floor. Default <see cref="MoveEffort.Normal"/> means
-    /// "no bias, pick gait purely from velocity." Reset per-routine by AI
-    /// when the unit changes posture (patrol → engage → flee).</summary>
+    /// <summary>AI-declared locomotion intent — set via
+    /// <see cref="Locomotion.SetEffort"/>, never directly. Pure INTENT: the
+    /// actual speed cap is derived from it (with ramping and modifiers) by
+    /// <see cref="Locomotion.UpdateSpeeds"/> each tick.</summary>
     public MoveEffort MoveEffort;
+
+    /// <summary>Current ramped effort multiplier (1 = base CombatSpeed, up to
+    /// the effort's jog/sprint multiplier). Integrated toward the MoveEffort
+    /// target at the unit's physical accel/decel rate by
+    /// <see cref="Locomotion.UpdateSpeeds"/> — the generalized form of the old
+    /// player-only sprint ramp. Owned by Locomotion; read-only elsewhere.</summary>
+    public float EffortMult = 1f;
+
+    /// <summary>Optional routine speed cap (fraction of effort-max speed, 1 =
+    /// none), persisted from <see cref="Locomotion.SetEffort"/>'s
+    /// routineCapMult so "lazy stroll" caps survive amortized AI frames.
+    /// Owned by Locomotion.</summary>
+    public float RoutineSpeedCap = 1f;
+
+    /// <summary>This frame's smoothed locomotion vector,
+    /// Lerp(Velocity, PreferredVel, LocoLerpFactor) — the single input for
+    /// movement-animation tier selection (by length) and movement facing (by
+    /// direction). Written post-movement by Locomotion each tick.</summary>
+    public Vec2 LocoVector;
 
     /// <summary>Hysteresis flag for the necromancer's facing source. True =
     /// face velocity direction (jog/run); false = face mouse direction (walk).

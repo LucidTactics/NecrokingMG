@@ -116,12 +116,9 @@ public static class TrampleSystem
         // Charge speed = sprint top speed × (1 + weapon trample bonus). Pre-v8
         // this was CombatSpeed × (1 + bonus), but CombatSpeed is now walk
         // speed — a trample at walk-speed-with-bonus would barely move.
-        // Sprint multiplier from UnitDef (4× biped, 9× quadruped default).
         var trampleDef = sim.GameData.Units.Get(units[idx].UnitDefID);
-        float sprintMult = (trampleDef?.SprintSpeedMultiplier > 0f)
-            ? trampleDef.SprintSpeedMultiplier
-            : Movement.LocomotionProfile.DefaultSprintMult;
-        float chargeSpeed = units[idx].Stats.CombatSpeed * sprintMult * (1f + weapon.TrampleSpeedBonus);
+        float chargeSpeed = Movement.Locomotion.SprintTopSpeed(trampleDef, units[idx].Stats)
+            * (1f + weapon.TrampleSpeedBonus);
 
         // Phase 3 — follow-through. Locked direction, no homing, no impact checks.
         if (units[idx].ChargePhase == 3)

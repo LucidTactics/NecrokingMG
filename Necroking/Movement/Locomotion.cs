@@ -2,7 +2,10 @@ using System;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
+using Necroking.Game;
+using Necroking.GameSystems;
 using Necroking.Render;
+using Necroking.World;
 
 namespace Necroking.Movement;
 
@@ -49,6 +52,266 @@ public enum MoveEffort : byte
     /// <summary>Bias toward Run gait. Combat charge, urgent retreat, chase.
     /// Snaps into Run on intent, well before measured velocity catches up.</summary>
     Sprint = 3,
+}
+
+/// <summary>Per-tick local-player input for the locomotion pass. Simulation
+/// fills this from its <c>_necro*</c> fields (set by Game1 before Tick) and
+/// hands it to <see cref="Locomotion.UpdateSpeeds"/> /
+/// <see cref="Locomotion.UpdateFacing"/>. Applied to units whose AI is
+/// <see cref="AIBehavior.PlayerControlled"/>. Headless sims pass
+/// <see cref="None"/>.</summary>
+public struct PlayerLocoInput
+{
+    /// <summary>Shift held and sprinting isn't externally forbidden (rope not
+    /// taut). Unit-state disqualifiers (carrying a corpse, ghost mode) are
+    /// checked inside the locomotion pass.</summary>
+    public bool WantSprint;
+    /// <summary>Player has a pending spell cast: movement input is ignored and
+    /// the effort ramp decays at half rate (never rises), so cast-weaving
+    /// doesn't eat the whole sprint ramp.</summary>
+    public bool CastPlant;
+    /// <summary>Rope-drag speed penalty, 0.05..1 (1 = no penalty).</summary>
+    public float DragSlow;
+    /// <summary>Mouse-driven target facing angle in degrees; NaN = none.</summary>
+    public float FacingOverrideDeg;
+    /// <summary>Frozen cast aim angle in degrees while casting; NaN = none.</summary>
+    public float CastAimAngleDeg;
+
+    public static PlayerLocoInput None => new PlayerLocoInput
+    {
+        DragSlow = 1f,
+        FacingOverrideDeg = float.NaN,
+        CastAimAngleDeg = float.NaN,
+    };
+}
+
+/// <summary>
+/// The locomotion system — effort → speed → animation/facing, in one place.
+///
+/// Responsibilities and the per-tick data flow:
+///   1. <see cref="SetEffort"/> — AI/player declare effort INTENT
+///      (<see cref="MoveEffort"/> + optional routine speed cap). Intent only;
+///      no speed is written here.
+///   2. <see cref="UpdateSpeeds"/> (pre-AI) — the ONLY writer of
+///      <see cref="Unit.MaxSpeed"/> at runtime. Ramps <see cref="Unit.EffortMult"/>
+///      toward the effort's multiplier at the unit's physical accel/decel rate,
+///      then composes ALL speed modifiers (buffed CombatSpeed, routine cap,
+///      terrain, paralysis, player rope-drag / ghost mode) into the final cap.
+///      Because every modifier is an input to this one computation, nothing can
+///      clobber anything else by write ordering anymore.
+///   3. AI builds <see cref="Unit.PreferredVel"/> from direction × MaxSpeed
+///      (see <see cref="PreferredVelToward"/>); the movement integrator ramps
+///      Velocity toward it under the Newtonian accel model.
+///   4. Phase B (post-movement) — the smoothed loco vector
+///      <c>Lerp(Velocity, PreferredVel, 0.2)</c> drives which movement
+///      animation plays (by its length) and which way a moving unit faces.
+/// </summary>
+public static class Locomotion
+{
+    /// <summary>Blend factor for the loco vector: how strongly movement INTENT
+    /// (PreferredVel) pulls the anim/facing vector away from measured Velocity.</summary>
+    public const float LocoLerpFactor = 0.2f;
+
+    /// <summary>Below this much movement *intent* (PreferredVel magnitude, wu/s)
+    /// a unit is treated as standing still — filters residual-momentum slide so
+    /// a stopped or can't-pathfind unit shows Idle, not walk-in-place. Must stay
+    /// well under the slowest deliberate locomotion (deer feed at ~0.1 wu/s).</summary>
+    public const float MoveIntentEpsilon = 0.05f;
+
+    /// <summary>Dev fly-mode speed cap (ignores all other modifiers).</summary>
+    public const float GhostModeSpeed = 20f;
+
+    /// <summary>When the effort ramp starts rising from rest, it kickstarts to
+    /// this fraction of the target gain so a sprint tap responds immediately
+    /// instead of creeping off the line (from the original player sprint ramp).</summary>
+    public const float RampStartFloor = 0.25f;
+
+    // ─── Effort intent ───────────────────────────────────────────────────
+
+    /// <summary>Declare a unit's movement effort. Intent only — the actual
+    /// MaxSpeed is derived (with ramping and modifiers) by the per-tick
+    /// <see cref="UpdateSpeeds"/> pass, so it persists correctly for amortized
+    /// AI that doesn't re-issue effort every frame.
+    ///
+    /// <paramref name="routineCapMult"/> is an optional further cap as a
+    /// fraction of the effort-max speed, for "lazy" routines where the gait
+    /// should be Walk but slower than full walk speed — e.g.
+    /// <c>SetEffort(Walk, 0.5f)</c> for a half-speed idle-roam stroll.
+    /// Null resets the cap to 1 (full effort speed).</summary>
+    public static void SetEffort(Unit u, MoveEffort effort, float? routineCapMult = null)
+    {
+        u.MoveEffort = effort;
+        u.RoutineSpeedCap = routineCapMult ?? 1f;
+    }
+
+    /// <summary>The velocity multiplier a given <see cref="MoveEffort"/> applies
+    /// to a unit's base CombatSpeed, from the unit def's jog/sprint multipliers
+    /// (falling back to the locomotion-profile defaults). Walk/Normal = 1×.</summary>
+    public static float EffortMultiplier(UnitDef def, MoveEffort effort)
+    {
+        switch (effort)
+        {
+            case MoveEffort.Hurry:
+                return (def?.JogSpeedMultiplier > 0f) ? def.JogSpeedMultiplier : LocomotionProfile.DefaultJogMult;
+            case MoveEffort.Sprint:
+                return (def?.SprintSpeedMultiplier > 0f) ? def.SprintSpeedMultiplier : LocomotionProfile.DefaultSprintMult;
+            default:
+                return 1.0f; // Walk / Normal
+        }
+    }
+
+    /// <summary>Compute the (unramped, unmodified) velocity cap a given effort
+    /// would give this unit, without mutating anything. Useful when a routine
+    /// needs the cap for clamping PreferredVel but isn't changing effort.</summary>
+    public static float ResolveEffortSpeed(Unit u, GameData gameData, MoveEffort effort,
+        float? routineCapMult = null)
+    {
+        var def = UnitUtil.ResolveDef(u, gameData);
+        float speed = u.Stats.CombatSpeed * EffortMultiplier(def, effort);
+        if (routineCapMult.HasValue) speed *= routineCapMult.Value;
+        return speed;
+    }
+
+    /// <summary>Full sprint top speed for a unit: CombatSpeed × sprint
+    /// multiplier (def override or default 4×). The single home for the
+    /// "sprint mult with fallback" pattern used by pounce/trample/etc.</summary>
+    public static float SprintTopSpeed(UnitDef def, in UnitStats stats)
+        => stats.CombatSpeed * ((def?.SprintSpeedMultiplier > 0f)
+            ? def.SprintSpeedMultiplier : LocomotionProfile.DefaultSprintMult);
+
+    /// <summary>Initialize the speed cap on spawn / stat rebuild. The next
+    /// <see cref="UpdateSpeeds"/> pass takes over from here.</summary>
+    public static void ResetSpeed(Unit u)
+    {
+        u.MaxSpeed = u.Stats.CombatSpeed;
+    }
+
+    /// <summary>Movement intent from a desired direction: direction × the
+    /// unit's current speed cap (× optional fraction).</summary>
+    public static Vec2 PreferredVelToward(Unit u, Vec2 dir, float speedFrac = 1f)
+        => dir * (u.MaxSpeed * speedFrac);
+
+    // ─── Phase A: the single per-frame MaxSpeed computation ─────────────
+
+    /// <summary>Per-tick derivation of every unit's MaxSpeed — the only runtime
+    /// writer of <see cref="Unit.MaxSpeed"/>. Runs BEFORE UpdateAI so the AI
+    /// builds PreferredVel from a cap that already includes terrain/paralysis
+    /// (fixing the old ordering bugs where those were post-hoc multiplies that
+    /// either got clobbered by AI writes or arrived after PreferredVel was
+    /// built). A same-frame SetEffort only moves the ramp target; the ramp
+    /// matches the Newtonian accel limit, so the one-frame pickup is identical
+    /// to what the velocity integrator would have allowed anyway.</summary>
+    public static void UpdateSpeeds(UnitArrays units, GameData gameData, TileGrid grid,
+        float dt, in PlayerLocoInput player)
+    {
+        int w = grid?.Width ?? 0;
+        int h = grid?.Height ?? 0;
+
+        for (int i = 0; i < units.Count; i++)
+        {
+            var u = units[i];
+            if (!u.Alive) continue;
+
+            var def = UnitUtil.ResolveDef(u, gameData);
+            bool isPlayer = u.AI == Data.AIBehavior.PlayerControlled;
+
+            // Player input → effort intent. Carrying a corpse or ghost mode
+            // disqualifies sprinting (preserves the prior behavior where
+            // carrying suppressed the run bonus).
+            if (isPlayer)
+            {
+                bool wantSprint = player.WantSprint && u.CarryingCorpseID < 0 && !u.GhostMode;
+                SetEffort(u, wantSprint ? MoveEffort.Sprint : MoveEffort.Normal);
+            }
+
+            // Continuous effort ramp: EffortMult moves toward the effort's
+            // target multiplier at the unit's physical accel/decel rate
+            // (dMult/dt = accel / CombatSpeed — the exact rate the Newtonian
+            // velocity model can follow, so the cap is always honest; derived
+            // from the original accel-based player sprint ramp).
+            float targetMult = EffortMultiplier(def, u.MoveEffort);
+            float cs = MathF.Max(0.01f, u.Stats.CombatSpeed);
+            float em = u.EffortMult;
+            if (em <= 0f) em = 1f; // safety for uninitialized units
+
+            if (isPlayer && player.CastPlant)
+            {
+                // Cast plant: the ramp decays at HALF rate (and never rises)
+                // while casting, so a quick cast mid-sprint doesn't cost the
+                // whole ramp.
+                float decel = def?.MaxDeceleration ?? gameData.Settings.Combat.MaxDeceleration;
+                em = MathF.Max(1f, em - (decel / cs) * 0.5f * dt);
+            }
+            else if (em < targetMult)
+            {
+                float accel = def?.MaxAcceleration ?? gameData.Settings.Combat.MaxAcceleration;
+                if (u.ActiveBuffs.Count > 0)
+                    accel = BuffSystem.GetModifiedExtra(units, i, "MaxAcceleration", accel);
+                // Kickstart: a ramp rising from rest starts at a floor fraction
+                // of the gain so a sprint tap responds immediately.
+                float floor = 1f + RampStartFloor * (targetMult - 1f);
+                if (em < floor) em = floor;
+                em = MathF.Min(targetMult, em + (MathF.Max(0.01f, accel) / cs) * dt);
+            }
+            else if (em > targetMult)
+            {
+                float decel = def?.MaxDeceleration ?? gameData.Settings.Combat.MaxDeceleration;
+                em = MathF.Max(targetMult, em - (MathF.Max(0.01f, decel) / cs) * dt);
+            }
+            u.EffortMult = em;
+
+            // Ghost mode: dev fly speed, ignores physical modifiers (still
+            // honors rope drag like the old player branch did).
+            if (u.GhostMode)
+            {
+                u.MaxSpeed = GhostModeSpeed * (isPlayer ? player.DragSlow : 1f);
+                continue;
+            }
+
+            // Paralysis stun: hard zero (the unit is also Incap-locked; a zero
+            // cap keeps every MaxSpeed consumer honest during the stun).
+            if (u.ParalysisStunTimer > 0f)
+            {
+                u.MaxSpeed = 0f;
+                continue;
+            }
+
+            // Base speed with buffs, then compose every modifier exactly once.
+            float speed = u.ActiveBuffs.Count > 0
+                ? BuffSystem.GetModifiedStat(units, i, BuffStat.CombatSpeed, u.Stats.CombatSpeed)
+                : u.Stats.CombatSpeed;
+            speed *= em;
+            if (u.RoutineSpeedCap > 0f) speed *= u.RoutineSpeedCap;
+
+            // Paralysis slow phase: lerps 0.7× → 0 over the slow duration.
+            if (u.ParalysisSlowTimer > 0f)
+                speed *= PotionSystem.ParalyzeSlowStartMultiplier
+                    * MathF.Max(u.ParalysisSlowTimer / PotionSystem.ParalyzeSlowDuration, 0f);
+
+            // Terrain (e.g. shallow water 0.5×). Skips units whose movement is
+            // owned elsewhere (physics-impulse, dodge-hop, trample charge).
+            if (w > 0 && h > 0 && !u.InPhysics && u.DodgeTimer <= 0f
+                && u.ChargePhase != 1 && u.ChargePhase != 3)
+            {
+                int gx = (int)MathF.Floor(u.Position.X);
+                int gy = (int)MathF.Floor(u.Position.Y);
+                if (gx >= 0 && gx < w && gy >= 0 && gy < h)
+                {
+                    var terrain = grid.GetTerrain(gx, gy);
+                    if (terrain != TerrainType.Open) // fast path: most tiles
+                    {
+                        float mult = TerrainCosts.GetSpeedMultiplier(terrain);
+                        if (mult < 1f) speed *= mult;
+                    }
+                }
+            }
+
+            // Player rope-drag penalty (taut rope hauling a corpse).
+            if (isPlayer) speed *= player.DragSlow;
+
+            u.MaxSpeed = speed;
+        }
+    }
 }
 
 /// <summary>

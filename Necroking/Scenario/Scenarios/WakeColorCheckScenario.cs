@@ -84,7 +84,7 @@ public class WakeColorCheckScenario : ScenarioBase
         int idx = sim.UnitsMut.AddUnit(startPos, UnitType.Skeleton);
         sim.UnitsMut[idx].AI = AIBehavior.MoveToPoint;
         sim.UnitsMut[idx].MoveTarget = target;
-        sim.UnitsMut[idx].MaxSpeed = 1.5f;
+        sim.UnitsMut[idx].Stats.CombatSpeed = 1.5f; // MaxSpeed derives from this via Locomotion.UpdateSpeeds
         _unitId = sim.UnitsMut[idx].Id;
 
         ZoomOnLocation(PondX, PondY, 80f);

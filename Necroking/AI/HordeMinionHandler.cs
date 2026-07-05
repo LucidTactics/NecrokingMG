@@ -144,10 +144,10 @@ public class HordeMinionHandler : IArchetypeHandler
             || ctx.Units[ctx.UnitIndex].JustEnteredCombat
             || ctx.Units[ctx.UnitIndex].JustLeftCombat;
         // Amortized skip: the velocity cap no longer needs re-applying here.
-        // Simulation's per-frame MaxSpeed derivation now bakes in the persisted
-        // MoveEffort (via SubroutineSteps.EffortMultiplier), so a skipped
-        // follower keeps its Jog/Sprint speed automatically. PreferredVel from
-        // the last full tick still points at the slot.
+        // Locomotion.UpdateSpeeds derives MaxSpeed each frame from the persisted
+        // MoveEffort, so a skipped follower keeps its Jog/Sprint speed
+        // automatically. PreferredVel from the last full tick still points at
+        // the slot.
         if (lowUrgency && !ctx.IsAmortizeTick && !urgent) return;
 
         // Execute current routine

@@ -2185,7 +2185,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Build full stats from equipment
         var builtStats = _gameData.Units.BuildStats(unitDefID, _gameData.Weapons, _gameData.Armors, _gameData.Shields);
         _sim.UnitsMut[idx].Stats = builtStats;
-        _sim.UnitsMut[idx].MaxSpeed = builtStats.CombatSpeed;
+        Movement.Locomotion.ResetSpeed(_sim.UnitsMut[idx]);
 
         // Faction
         _sim.UnitsMut[idx].Faction = unitDef.Faction switch

@@ -104,8 +104,7 @@ public class PathfindingTestScenario : ScenarioBase
         int idx = units.AddUnit(startPos, UnitType.Skeleton);
         units[idx].AI = AIBehavior.MoveToPoint;
         units[idx].MoveTarget = target;
-        units[idx].MaxSpeed = UnitSpeed;
-        units[idx].Stats.CombatSpeed = UnitSpeed;
+        units[idx].Stats.CombatSpeed = UnitSpeed; // MaxSpeed derives from this via Locomotion.UpdateSpeeds
         units[idx].Faction = Faction.Undead;
 
         _testUnitIndices.Add(idx);
@@ -202,8 +201,7 @@ public class PathfindingTestScenario : ScenarioBase
         int idx = units.AddUnit(startPos, UnitType.Skeleton);
         units[idx].AI = AIBehavior.MoveToPoint;
         units[idx].MoveTarget = target;
-        units[idx].MaxSpeed = UnitSpeed;
-        units[idx].Stats.CombatSpeed = UnitSpeed;
+        units[idx].Stats.CombatSpeed = UnitSpeed; // MaxSpeed derives from this via Locomotion.UpdateSpeeds
         units[idx].Faction = Faction.Undead;
 
         _testUnitIndices.Add(idx);
@@ -274,8 +272,7 @@ public class PathfindingTestScenario : ScenarioBase
         int idx = units.AddUnit(startPos, UnitType.Skeleton);
         units[idx].AI = AIBehavior.MoveToPoint;
         units[idx].MoveTarget = target;
-        units[idx].MaxSpeed = UnitSpeed;
-        units[idx].Stats.CombatSpeed = UnitSpeed;
+        units[idx].Stats.CombatSpeed = UnitSpeed; // MaxSpeed derives from this via Locomotion.UpdateSpeeds
         units[idx].Faction = Faction.Undead;
 
         _testUnitIndices.Add(idx);
