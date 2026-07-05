@@ -185,25 +185,25 @@ partial class GameRenderer
             queue.SubmitCallback(WorldLayer.YSort, rp.Y, _cbUnit, i, 0);
         }
 
-        // Occlusion fade: precompute the player's screen box once so the env
-        // loop below can test each tall object against it. Possible precisely
-        // because submissions are inspectable data before drawing.
-        bool occlusionActive = false;
-        float plLeft = 0, plRight = 0, plTop = 0, plBottom = 0, plY = 0;
-        int necroIdx = _g._sim.NecromancerIndex;
-        if (necroIdx >= 0 && necroIdx < _g._sim.Units.Count && _g._sim.Units[necroIdx].Alive)
+        // Occlusion fade: precompute a screen box for every alive player-owned
+        // (Undead) unit that's on screen — the necromancer AND the horde — so the
+        // env loop below can fade tall objects that hide any of them. View-culled
+        // (same bounds as the units/env), so off-screen minions cost nothing; the
+        // list is reused each frame to avoid GC churn in this hot render path.
+        // Possible precisely because submissions are inspectable data before drawing.
+        _occlusionBoxes.Clear();
+        for (int i = 0; i < _g._sim.Units.Count; i++)
         {
-            var nu = _g._sim.Units[necroIdx];
-            var ndef = _g._gameData.Units.Get(nu.UnitDefID);
-            float nWorldH = (ndef != null && ndef.SpriteWorldHeight > 0 ? ndef.SpriteWorldHeight : 1.8f) * nu.SpriteScale;
-            var nsp = _g._renderer.WorldToScreen(nu.RenderPos, nu.Z, _g._camera);
-            float npxH = nWorldH * _g._camera.Zoom;
-            plLeft = nsp.X - npxH * 0.30f;
-            plRight = nsp.X + npxH * 0.30f;
-            plTop = nsp.Y - npxH;
-            plBottom = nsp.Y;
-            plY = nu.RenderPos.Y;
-            occlusionActive = true;
+            var u = _g._sim.Units[i];
+            if (!u.Alive || u.Faction != Faction.Undead) continue;
+            var rp = u.RenderPos;
+            if (rp.X < viewLeft || rp.X > viewRight || rp.Y < viewTop || rp.Y > viewBottom)
+                continue;
+            var udef = _g._gameData.Units.Get(u.UnitDefID);
+            float uWorldH = (udef != null && udef.SpriteWorldHeight > 0 ? udef.SpriteWorldHeight : 1.8f) * u.SpriteScale;
+            var usp = _g._renderer.WorldToScreen(rp, u.Z, _g._camera);
+            float upxH = uWorldH * _g._camera.Zoom;
+            _occlusionBoxes.Add((usp.X - upxH * 0.30f, usp.X + upxH * 0.30f, usp.Y - upxH, usp.Y, rp.Y));
         }
 
         // Add environment objects (with view culling, skip collected foragables, skip ground-layer objects)
@@ -216,7 +216,7 @@ partial class GameRenderer
             if (obj.X < viewLeft || obj.X > viewRight || obj.Y < viewTop || obj.Y > viewBottom)
                 continue;
 
-            UpdateOcclusionFade(i, obj, def, occlusionActive, plLeft, plRight, plTop, plBottom, plY);
+            UpdateOcclusionFade(i, obj, def);
 
             // Note: defs whose sprites failed to load get a placeholder texture in EnvironmentSystem,
             // so GetDefTexture is non-null and the object still appears.
@@ -279,22 +279,27 @@ partial class GameRenderer
         }
     }
 
-    // --- Occlusion fade: a tall env object between the camera and the player
-    // goes semi-transparent so the necromancer stays visible. Per-object fade
-    // state persists across frames for a smooth lerp; entries at full opacity
-    // are dropped. Enabled by the retained model: items are data before draws,
-    // so the collect loop can inspect "what draws in front of the player."
+    // --- Occlusion fade: a tall env object between the camera and a player-owned
+    // unit goes semi-transparent so that unit stays visible — the necromancer AND
+    // any horde minion. Per-object fade state persists across frames for a smooth
+    // lerp; entries at full opacity are dropped. Enabled by the retained model:
+    // items are data before draws, so the collect loop can inspect "what draws in
+    // front of the player's units."
     private readonly Dictionary<int, float> _occlusionFade = new();
+    // One screen-space AABB per on-screen player unit (rebuilt each frame in the
+    // collect loop). plY is that unit's ground Y, so an object only fades against
+    // a unit it's actually in front of.
+    private readonly List<(float left, float right, float top, float bottom, float plY)> _occlusionBoxes = new();
     private const float OccludedAlpha = 0.40f;      // fade floor while occluding
     private const float OcclusionMinWorldH = 2.5f;  // only tall things fade (trees, buildings)
     private const float OcclusionFadeRate = 8f;     // exp-lerp speed, 1/s
 
-    private void UpdateOcclusionFade(int i, in PlacedObject obj, EnvironmentObjectDef def,
-        bool active, float plLeft, float plRight, float plTop, float plBottom, float plY)
+    private void UpdateOcclusionFade(int i, in PlacedObject obj, EnvironmentObjectDef def)
     {
         float target = 1f;
         float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
-        if (active && worldH >= OcclusionMinWorldH && obj.Y > plY)
+        // Only tall objects fade, and only when at least one player unit is on screen.
+        if (_occlusionBoxes.Count > 0 && worldH >= OcclusionMinWorldH)
         {
             // Approximate the object's screen box (aspect from its texture when
             // static; a 0.7 width ratio for animated sheets — close enough for
@@ -305,9 +310,19 @@ partial class GameRenderer
             float halfW = (tex != null && !def.IsAnimated)
                 ? pxH * (tex.Width / (float)tex.Height) * 0.5f
                 : pxH * 0.35f;
-            bool overlaps = sp.X - halfW < plRight && sp.X + halfW > plLeft
-                         && sp.Y - pxH < plBottom && sp.Y > plTop;
-            if (overlaps) target = OccludedAlpha;
+            float objLeft = sp.X - halfW, objRight = sp.X + halfW;
+            float objTop = sp.Y - pxH, objBottom = sp.Y;
+            // Fade if the object is in front of AND overlapping ANY player unit.
+            foreach (var b in _occlusionBoxes)
+            {
+                if (obj.Y > b.plY
+                    && objLeft < b.right && objRight > b.left
+                    && objTop < b.bottom && objBottom > b.top)
+                {
+                    target = OccludedAlpha;
+                    break;
+                }
+            }
         }
 
         if (!_occlusionFade.TryGetValue(i, out float fade))
