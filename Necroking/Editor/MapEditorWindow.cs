@@ -213,7 +213,7 @@ public class MapEditorWindow
     private readonly List<ProcGenStyle> _procGenStyles = new();
     private bool _procGenStylesLoaded;                 // lazy-load data/procgen_styles.json once
     public int SelectedProcGenStyle = -1;
-    private float _procGenLargeAccum, _procGenSmallAccum; // fractional placement attempts
+    // Fractional placement attempts are accrued per-category (ProcGenCategory.Accum).
     private const float ProcGenBrushRadius = 5f;       // brush disc radius in world units
     private const float ProcGenRatePerDensity = 5f;    // placement attempts/sec per density point
     private const int ProcGenTries = 6;                // 1 attempt + 5 retries per placement
@@ -5648,8 +5648,7 @@ public class MapEditorWindow
             return $"style '{styleName}' not found ({_procGenStyles.Count} styles loaded)";
 
         int before = _envSystem.ObjectCount;
-        _procGenLargeAccum = 0f;
-        _procGenSmallAccum = 0f;
+        foreach (var cat in style.Categories) cat.Accum = 0f;
         int ticks = Math.Max(1, (int)(seconds * 60f));
         for (int i = 0; i < ticks; i++)
             PaintProcGen(style, pos, 1f / 60f);
@@ -5673,12 +5672,11 @@ public class MapEditorWindow
             Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
             PaintProcGen(_procGenStyles[SelectedProcGenStyle], worldPos, dt);
         }
-        else
+        else if (styleSelected)
         {
             // Not painting: drop fractional attempts so a long pause can't burst
             // a backlog of placements on the next press.
-            _procGenLargeAccum = 0f;
-            _procGenSmallAccum = 0f;
+            foreach (var cat in _procGenStyles[SelectedProcGenStyle].Categories) cat.Accum = 0f;
         }
 
         if (leftUp && _batchPlacedObjects != null)
@@ -5712,27 +5710,15 @@ public class MapEditorWindow
         }
     }
 
-    /// <summary>One held-brush tick: each pool accrues density*5 placement attempts
-    /// per second; each attempt tries up to ProcGenTries random points in the brush
-    /// disc and places unless another object from the same pool is closer than
-    /// 8/sqrt(density) (or physical collision rejects the spot).</summary>
+    /// <summary>One held-brush tick: each category accrues density*5 placement
+    /// attempts per second; each attempt tries up to ProcGenTries random points in
+    /// the brush disc and places unless another object from the same category is
+    /// closer than 8/sqrt(density) (or physical collision rejects the spot).</summary>
     private void PaintProcGen(ProcGenStyle style, Vec2 center, float dt)
     {
-        _procGenLargeAccum += style.LargeDensity * ProcGenRatePerDensity * dt;
-        _procGenSmallAccum += style.SmallDensity * ProcGenRatePerDensity * dt;
-
         // Bound the per-frame burst so a frame hitch can't queue thousands of
         // attempts; overflow beyond the cap is dropped, fractions carry over.
         const int maxPerFrame = 400;
-        int largeN = Math.Min((int)_procGenLargeAccum, maxPerFrame);
-        int smallN = Math.Min((int)_procGenSmallAccum, maxPerFrame);
-        _procGenLargeAccum = Math.Min(_procGenLargeAccum - largeN, 1f);
-        _procGenSmallAccum = Math.Min(_procGenSmallAccum - smallN, 1f);
-
-        // Resolve ids fresh each tick — the env object editor can reorder defs
-        // mid-session, so cached indices would go stale.
-        var largePool = ResolveProcGenDefs(style.LargeDefIds);
-        var smallPool = ResolveProcGenDefs(style.SmallDefIds);
 
         // Suppress the per-AddObject pathfinder rebuild for the whole tick and
         // stamp collisions incrementally (same pattern as PaintObjectsBatch).
@@ -5741,8 +5727,18 @@ public class MapEditorWindow
         bool groundChanged = false;
         try
         {
-            groundChanged |= PlaceProcGenPool(largePool, largeN, ProcGenStyle.MinDistance(style.LargeDensity), center, style.LargeAutoGround);
-            groundChanged |= PlaceProcGenPool(smallPool, smallN, ProcGenStyle.MinDistance(style.SmallDensity), center, style.SmallAutoGround);
+            foreach (var cat in style.Categories)
+            {
+                cat.Accum += cat.Density * ProcGenRatePerDensity * dt;
+                int n = Math.Min((int)cat.Accum, maxPerFrame);
+                cat.Accum = Math.Min(cat.Accum - n, 1f);
+                if (n <= 0) continue;
+
+                // Resolve ids fresh each tick — the env object editor can reorder
+                // defs mid-session, so cached indices would go stale.
+                var pool = ResolveProcGenDefs(cat.DefIds);
+                groundChanged |= PlaceProcGenPool(pool, n, ProcGenStyle.MinDistance(cat.Density), center, cat.AutoGround);
+            }
         }
         finally
         {
@@ -5831,7 +5827,7 @@ public class MapEditorWindow
 
         if (_eb.DrawButton("+ New Style", panelX + Margin, y, fw, ButtonHeight))
         {
-            _procGenStyles.Add(new ProcGenStyle { Name = $"Style {_procGenStyles.Count + 1}" });
+            _procGenStyles.Add(ProcGenStyle.NewDefault($"Style {_procGenStyles.Count + 1}"));
             SelectedProcGenStyle = _procGenStyles.Count - 1;
         }
         y += ButtonHeight + 8;
@@ -5869,62 +5865,101 @@ public class MapEditorWindow
             SelectedProcGenStyle = Math.Min(idx, _procGenStyles.Count - 1);
             return; // list changed — re-layout next frame
         }
+        if (_eb.DrawButton("Copy Style", panelX + Margin + 116, y, 110, ButtonHeight))
+        {
+            var copy = st.Clone();
+            copy.Name = $"{st.Name} copy";
+            _procGenStyles.Insert(idx + 1, copy);
+            SelectedProcGenStyle = idx + 1;
+            return; // list changed — re-layout next frame
+        }
         y += ButtonHeight + 8;
 
         Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
         y += 4;
 
-        st.Name = _eb.DrawTextField($"procgen_name_{idx}", "Name", st.Name, panelX + Margin, y, fw);
+        st.Name = _eb.DrawTextField($"procgen_name_{idx}", "Style Name", st.Name, panelX + Margin, y, fw);
         y += FieldHeight + 6;
 
-        y = DrawProcGenPoolSection(idx, "large", "Large objects", st.LargeDefIds, ref st.LargeDensity, st.LargeAutoGround, panelX, y);
+        // Divider between the style name and the category list.
+        Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+        y += 4;
+
+        // One config block per category. Removing a category re-lays out next frame.
+        for (int c = 0; c < st.Categories.Count; c++)
+        {
+            if (c > 0)
+            {
+                Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
+                y += 4;
+            }
+            y = DrawProcGenCategorySection(idx, c, st.Categories[c], panelX, y, out bool removed);
+            if (removed)
+            {
+                st.Categories.RemoveAt(c);
+                return; // list changed — re-layout next frame
+            }
+        }
 
         Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
         y += 4;
 
-        y = DrawProcGenPoolSection(idx, "small", "Small objects", st.SmallDefIds, ref st.SmallDensity, st.SmallAutoGround, panelX, y);
+        if (_eb.DrawButton("+ Category", panelX + Margin, y, 110, ButtonHeight))
+            st.Categories.Add(new ProcGenCategory { Name = $"Category {st.Categories.Count + 1}" });
+        y += ButtonHeight + 8;
 
         DrawSmallText("Hold LMB in the world to paint.", panelX + Margin, y, TextDim);
     }
 
-    /// <summary>One pool's config block: density field (with derived spacing/rate
-    /// readout) + a row per pool member (combo + remove) + an add button. Field ids
-    /// embed style index, pool key and row so selection changes drop text focus.</summary>
-    private int DrawProcGenPoolSection(int idx, string key, string title,
-        List<string> defIds, ref float density, AutoGroundSettings autoGround, int panelX, int y)
+    /// <summary>One category's config block: editable name + remove button, a density
+    /// field (with derived spacing/rate readout), a row per pool member (combo +
+    /// remove), an add button, and the shared auto-ground controls. Field ids embed
+    /// the style index and category index so selection changes drop text focus.
+    /// Sets <paramref name="removed"/> when the user clicked this category's remove
+    /// button — the caller deletes it and re-lays out.</summary>
+    private int DrawProcGenCategorySection(int styleIdx, int catIdx, ProcGenCategory cat,
+        int panelX, int y, out bool removed)
     {
+        removed = false;
         var eb = _eb!;
         int fw = PanelWidth - Margin * 2;
 
-        DrawSmallText(title, panelX + Margin, y, AccentColor);
-        y += LineHeight;
+        // Header: editable category name + remove-category button.
+        cat.Name = eb.DrawTextField($"procgen_cat_name_{styleIdx}_{catIdx}", "Category Name", cat.Name,
+            panelX + Margin, y, fw - 46);
+        if (eb.DrawButton("X", panelX + Margin + fw - 40, y, 40, FieldHeight, DangerColor))
+        {
+            removed = true;
+            return y;
+        }
+        y += FieldHeight + 4;
 
-        density = MathF.Max(0.01f, eb.DrawFloatField($"procgen_{key}_density_{idx}",
-            "Density", density, panelX + Margin, y, fw, 1f));
+        cat.Density = MathF.Max(0.01f, eb.DrawFloatField($"procgen_cat_density_{styleIdx}_{catIdx}",
+            "Density", cat.Density, panelX + Margin, y, fw, 1f));
         y += FieldHeight + 2;
-        DrawSmallText($"min spacing {ProcGenStyle.MinDistance(density):0.0}, " +
-            $"{density * ProcGenRatePerDensity:0}/s", panelX + Margin, y, TextDim);
+        DrawSmallText($"min spacing {ProcGenStyle.MinDistance(cat.Density):0.0}, " +
+            $"{cat.Density * ProcGenRatePerDensity:0}/s", panelX + Margin, y, TextDim);
         y += LineHeight;
 
         string[] options = GetProcGenDefIdOptions();
-        for (int row = 0; row < defIds.Count; row++)
+        for (int row = 0; row < cat.DefIds.Count; row++)
         {
-            defIds[row] = eb.DrawCombo($"procgen_{key}_def_{idx}_{row}", $"Object {row + 1}",
-                defIds[row], options, panelX + Margin, y, fw - 46);
+            cat.DefIds[row] = eb.DrawCombo($"procgen_cat_def_{styleIdx}_{catIdx}_{row}", $"Object {row + 1}",
+                cat.DefIds[row], options, panelX + Margin, y, fw - 46);
             if (eb.DrawButton("X", panelX + Margin + fw - 40, y, 40, FieldHeight, DangerColor))
             {
-                defIds.RemoveAt(row);
+                cat.DefIds.RemoveAt(row);
                 return y; // list changed — re-layout next frame
             }
             y += FieldHeight + 2;
         }
 
         if (options.Length > 0 && eb.DrawButton("+ Add Object", panelX + Margin, y, 110, ButtonHeight))
-            defIds.Add(options[0]);
+            cat.DefIds.Add(options[0]);
         y += ButtonHeight + 6;
 
-        // Per-pool auto-ground toggle + controls (shared with the Objects tab).
-        DrawAutoGroundControls(autoGround, $"pg_{idx}_{key}", panelX, ref y);
+        // Per-category auto-ground toggle + controls (shared with the Objects tab).
+        DrawAutoGroundControls(cat.AutoGround, $"pg_{styleIdx}_{catIdx}", panelX, ref y);
 
         return y;
     }
