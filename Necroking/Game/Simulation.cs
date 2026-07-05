@@ -493,24 +493,8 @@ public class Simulation
 
         // Tick buffs
         BuffSystem.TickBuffs(_units, dt, _gameData.Buffs);
-        for (int i = 0; i < _units.Count; i++)
-        {
-            float baseSpeed = _units[i].ActiveBuffs.Count > 0
-                ? BuffSystem.GetModifiedStat(_units, i, BuffStat.CombatSpeed, _units[i].Stats.CombatSpeed)
-                : _units[i].Stats.CombatSpeed;
-            // Bake in the unit's persisted MoveEffort so the velocity cap stays
-            // correct even for AI that doesn't re-issue SetEffort every frame
-            // (amortized horde followers; early-return handler states). Without
-            // this, resetting MaxSpeed to base here clobbered a Jog/Sprint intent
-            // on skipped frames — the root cause of "minions follow too slowly".
-            // This makes effort→speed a single source of truth (shared with the
-            // AI's SetEffort via EffortMultiplier). Only Hurry/Sprint need the def
-            // lookup; Walk/Normal is 1× so the common case stays a field read.
-            var eff = _units[i].MoveEffort;
-            if (eff == Movement.MoveEffort.Hurry || eff == Movement.MoveEffort.Sprint)
-                baseSpeed *= AI.SubroutineSteps.EffortMultiplier(_gameData.Units.Get(_units[i].UnitDefID), eff);
-            _units[i].MaxSpeed = baseSpeed;
-        }
+        // (MaxSpeed derivation moved to Locomotion.UpdateSpeeds — the single
+        //  writer, called just before UpdateAI below.)
 
         // Standup/recovery timing now handled by IncapState inside BuffSystem.TickBuffs
         // (Dodging is already cleared in the per-frame flag loop above — a second
@@ -606,6 +590,22 @@ public class Simulation
         // (cohesion, shared flee, hunt-the-whole-pack) this same frame. See AI.SquadSystem.
         PhaseStart(); _squads.Update(_units); PhaseEnd("squads");
 
+        // The single per-frame MaxSpeed pass (effort ramp + buffs + terrain +
+        // paralysis + player drag/ghost). Runs BEFORE UpdateAI so the AI builds
+        // PreferredVel from a cap that already includes every modifier; a
+        // same-frame SetEffort just moves the ramp target for next tick.
+        var locoInput = new PlayerLocoInput
+        {
+            WantSprint = _necroRunning && !_necroRopeTaut,
+            CastPlant = _necroCastPlant,
+            DragSlow = _necroDragSlow,
+            FacingOverrideDeg = _necroFacingOverride,
+            CastAimAngleDeg = _necroCastAimAngle,
+        };
+        PhaseStart();
+        Movement.Locomotion.UpdateSpeeds(_units, _gameData, _grid, dt, locoInput);
+        PhaseEnd("loco_speeds");
+
         PhaseStart(); UpdateAI(dt); PhaseEnd("ai");
 
         // Zombie boars peel off the horde to eat nearby mushrooms. Runs after the
@@ -666,13 +666,16 @@ public class Simulation
         // UpdateMovement can still stop the charge (TickCharge checks position
         // movement next frame).
         PhaseStart(); GameSystems.TrampleSystem.TickAll(this, dt); PhaseEnd("trample");
-        // Slow units in water (and other costly terrain). Applied after AI's
-        // SetEffort/potion mults so ORCA's velocity cap sees the final value.
-        ApplyTerrainSpeedModulation();
+        // (Terrain speed modulation is folded into Locomotion.UpdateSpeeds.)
         PhaseStart(); UpdateMovement(dt); PhaseEnd("movement");
         PhaseStart(); _physics.Update(dt, _units, _grid.Width * GameConstants.TileSize, _grid.Height * GameConstants.TileSize, _quadtree); PhaseEnd("physics");
         PhaseStart(); _horde.UpdateStates(_units, _quadtree, _necromancerIdx, dt); PhaseEnd("horde_states");
-        PhaseStart(); UpdateFacingAngles(dt); PhaseEnd("facing");
+        // Loco vector + movement-animation tier for ALL units, from this frame's
+        // final Velocity/PreferredVel — the single gait selector.
+        PhaseStart(); Movement.Locomotion.UpdateLocoVectorsAndGait(_units, _gameData); PhaseEnd("loco_gait");
+        // Facing priority ladder (also central) — movement facing follows the
+        // loco vector so body direction and gait always agree.
+        PhaseStart(); Movement.Locomotion.UpdateFacing(_units, dt, _gameData, locoInput); PhaseEnd("facing");
         PhaseStart(); UpdateCombat(dt); PhaseEnd("combat");
 
         // Tick pending zombie raises. Game1 routes them through the composite reanimation effect
@@ -892,23 +895,24 @@ public class Simulation
     private bool _necroRunning;
     private float _necroFacingOverride = float.NaN;
 
-    // Sprint ramp: 0.0 = walking at base CombatSpeed, 1.0 = full sprint at 4×.
-    // Tracks how far we've ramped through the build-up while shift is held. The
-    // ramp duration is derived per-tick from the unit's MaxAcceleration /
-    // MaxDeceleration (see the PlayerControlled branch), so MaxSpeed grows exactly
-    // as fast as the Newtonian accel cap allows — no hardcoded wind-up, and decel
-    // (typically ~5× accel) gives a naturally faster decay on release so the unit
-    // doesn't keep coasting at sprint speed. Lerped into _sprintMultiplier each AI tick
-    // in the PlayerControlled case; multiplier scales MaxSpeed and biases the
-    // unit's MoveEffort toward Sprint so the gait picker shows Run earlier than
-    // raw velocity would warrant (= unit visibly cycles Walk → Jog → Run during
-    // the ramp instead of staying in Walk until ~mid-ramp).
-    private const float SprintMaxMultiplier = 4.0f;
-    private float _sprintRampValue; // 0..1
-
     /// <summary>Public accessor for debug / HUD readout — current sprint ramp
-    /// fraction (0 = walking, 1 = full sprint).</summary>
-    public float SprintRampValue => _sprintRampValue;
+    /// fraction (0 = walking, 1 = full sprint). Derived from the player unit's
+    /// <see cref="Unit.EffortMult"/>, which Locomotion.UpdateSpeeds ramps at the
+    /// unit's physical accel/decel rate (the old dedicated _sprintRampValue,
+    /// generalized to all units).</summary>
+    public float SprintRampValue
+    {
+        get
+        {
+            if (_necromancerIdx < 0 || _necromancerIdx >= _units.Count) return 0f;
+            var u = _units[_necromancerIdx];
+            var def = UnitUtil.ResolveDef(u, _gameData);
+            float sprintMult = (def?.SprintSpeedMultiplier > 0f)
+                ? def.SprintSpeedMultiplier : Movement.LocomotionProfile.DefaultSprintMult;
+            if (sprintMult <= 1f) return 0f;
+            return Necroking.Core.MathUtil.Clamp((u.EffortMult - 1f) / (sprintMult - 1f), 0f, 1f);
+        }
+    }
 
     public void SetNecromancerInput(Vec2 moveDir, bool running)
     {
@@ -1043,61 +1047,11 @@ public class Simulation
             {
                 case AIBehavior.PlayerControlled:
                 {
-                    // Sprint ramp: integrate _sprintRampValue toward 1 while shift
-                    // is held + the unit is allowed to sprint, otherwise toward 0.
-                    // Carrying a corpse disqualifies sprinting (preserves the prior
-                    // behavior where carrying suppressed the run bonus).
-                    bool canSprint = _necroRunning && _units[i].CarryingCorpseID < 0 && !_units[i].GhostMode && !_necroRopeTaut;
-                    
-                    var playerDef = _gameData.Units.Get(_units[i].UnitDefID);
-
-                    // Per-unit sprint cap: necromancer evolutions and other player
-                    // forms can have different sprint multipliers. Falls back to
-                    // the system default (4× biped sprint) when the def doesn't
-                    // specify. Each different player form (Lich, GrandNecromancer,
-                    // etc.) can have its own sprint character via this knob.
-                    float maxSprintMult = (playerDef?.SprintSpeedMultiplier > 0f)
-                       ? playerDef.SprintSpeedMultiplier
-                       : SprintMaxMultiplier;
-
-                    var maxAcceleration = BuffSystem.GetModifiedExtra(_units, i, "MaxAcceleration",
-                        playerDef?.MaxAcceleration ?? _gameData.Settings.Combat.MaxAcceleration);
-                    var maxDeceleration = playerDef?.MaxDeceleration ?? _gameData.Settings.Combat.MaxDeceleration;
-
-                    // Ramp duration = time the Newtonian accel model actually needs to
-                    // go from CombatSpeed to sprint speed, so MaxSpeed rises exactly as
-                    // fast as the accel cap can follow (no artificial hard-coded ramp).
-                    float sprintSpeedGain = MathF.Max(0.01f, _units[i].Stats.CombatSpeed * (maxSprintMult - 1f));
-                    float sprintRampUpSeconds = sprintSpeedGain / MathF.Max(0.01f, maxAcceleration);
-                    float sprintRampDownSeconds = sprintSpeedGain / MathF.Max(0.01f, maxDeceleration);
-
-                    float rampRate = canSprint
-                        ? dt / sprintRampUpSeconds
-                        : -dt / sprintRampDownSeconds;
-                    // Cast plant: the ramp decays at HALF rate (and never rises) while
-                    // casting, so a quick cast mid-sprint doesn't cost the whole ramp.
-                    if (_necroCastPlant)
-                        rampRate = -dt / (sprintRampDownSeconds * 2f);
-                    if (rampRate > 0) _sprintRampValue = MathF.Max(_sprintRampValue, 0.25f);
-                    _sprintRampValue = Necroking.Core.MathUtil.Clamp(_sprintRampValue + rampRate, 0f, 1f);
-                    float sprintMultiplier = 1f + (maxSprintMult - 1f) * _sprintRampValue;
-
-                    float speed = _units[i].Stats.CombatSpeed;
-                    if (_units[i].GhostMode)
-                        speed = 20.0f;
-                    else
-                        speed *= sprintMultiplier;
-                    speed *= _necroDragSlow; // rope-drag penalty (taut rope hauling a corpse)
-                    _units[i].MaxSpeed = speed; // update so ORCA + accel cap respect current speed
-
-                    // Bias the gait picker toward Sprint while ramping so the player
-                    // sees the gait transition early (Walk → Jog → Run cycles through
-                    // during the ramp) rather than the gait lagging actual
-                    // velocity. Tiny ramp values (<5%) snap back to Normal so a
-                    // single-frame shift-tap doesn't lock the unit into Sprint intent.
-                    _units[i].MoveEffort = _sprintRampValue > 0.05f
-                        ? Movement.MoveEffort.Sprint
-                        : Movement.MoveEffort.Normal;
+                    // Sprint effort + ramp + MaxSpeed are handled by
+                    // Locomotion.UpdateSpeeds (the pre-AI pass) from the
+                    // PlayerLocoInput built in Tick. Here the player is just
+                    // another effort-driven unit; this branch only owns routine
+                    // dispatch and movement intent.
 
                     // Dispatch to PlayerControlledHandler for structured activities
                     if (_units[i].Routine != 0)
@@ -1130,7 +1084,7 @@ public class Simulation
                         if (_units[i].CorpseInteractPhase != 0 || _necroCastPlant)
                             _units[i].PreferredVel = Vec2.Zero;
                         else
-                            _units[i].PreferredVel = _necroMoveInput * speed;
+                            _units[i].PreferredVel = _necroMoveInput * _units[i].MaxSpeed;
                     }
                     break;
                 }
@@ -1659,36 +1613,6 @@ public class Simulation
         LastPhaseMs["pf_imag_new"] = Necroking.World.Pathfinder.DiagImagChunkComputes;
         LastPhaseMs["pf_imag_recompute"] = Necroking.World.Pathfinder.DiagImagChunkRecomputes;
         LastPhaseMs["pf_imag_ms"] = Necroking.World.Pathfinder.DiagImagChunkMs;
-    }
-
-    // Apply a multiplicative speed penalty for the terrain the unit's currently
-    // standing on (e.g. shallow water = 0.5×). Runs between AI/effort writes and
-    // UpdateMovement so ORCA's velocity cap sees the slowed value. Skips units
-    // not currently controlled by the movement system (physics-owned, dodging,
-    // charging) — those have their own velocity authorities.
-    private void ApplyTerrainSpeedModulation()
-    {
-        int w = _grid.Width;
-        int h = _grid.Height;
-        if (w <= 0 || h <= 0) return;
-
-        for (int i = 0; i < _units.Count; i++)
-        {
-            if (!_units[i].Alive) continue;
-            if (_units[i].InPhysics) continue;
-            if (_units[i].DodgeTimer > 0f) continue;
-            if (_units[i].ChargePhase == 1 || _units[i].ChargePhase == 3) continue;
-
-            int gx = (int)MathF.Floor(_units[i].Position.X);
-            int gy = (int)MathF.Floor(_units[i].Position.Y);
-            if (gx < 0 || gx >= w || gy < 0 || gy >= h) continue;
-
-            var terrain = _grid.GetTerrain(gx, gy);
-            if (terrain == TerrainType.Open) continue; // fast path: most tiles
-
-            float mult = TerrainCosts.GetSpeedMultiplier(terrain);
-            if (mult < 1f) _units[i].MaxSpeed *= mult;
-        }
     }
 
     // --- Movement (with ORCA) ---
@@ -2440,134 +2364,8 @@ public class Simulation
     }
 
     // --- Facing Angles ---
-    // Delegates the per-unit rotation math to Movement.FacingUtil so the turn
-    // rate cap is applied identically everywhere (UpdateFacingAngles, handler
-    // FacePosition calls, legacy caster snap). Only the TARGET-ANGLE-SELECTION
-    // priority logic lives here — the rotation step is shared.
-    private void UpdateFacingAngles(float dt)
-    {
-        for (int i = 0; i < _units.Count; i++)
-        {
-            if (!_units[i].Alive) continue;
-            // FacingUtil.TurnToward enforces these guards too, but short-circuiting
-            // at this level saves the target-angle resolution for units that can't
-            // rotate anyway.
-            if (_units[i].Incap.IsLocked) continue;
-            if (_units[i].JumpPhase >= 2) continue;
-            if (_units[i].ChargePhase > 0) continue; // TrampleSystem owns facing during charge
-            // Tumbling ragdolls keep the facing they were launched with —
-            // PhysicsSystem writes Velocity each tick, and letting the
-            // face-away-from-attacker priority act on it turned launched units
-            // to face their flight direction mid-arc (visible pop on launch).
-            if (_units[i].InPhysics) continue;
-
-            // Player-controlled (necromancer): two facing sources, hysteresis between
-            // them. Walk gait → face the mouse (cursor angle stored in
-            // _necroFacingOverride). Jog/Run gait → face actual velocity direction so
-            // sprinting backward doesn't reverse-play the animation. Turn rate is
-            // applied either way.
-            if (_units[i].AI == AIBehavior.PlayerControlled)
-            {
-                if (_units[i].IsLockedByAction()) continue;
-
-                var def = _gameData.Units.Get(_units[i].UnitDefID);
-                if (def != null)
-                {
-                    var profile = Render.LocomotionProfile.FromUnit(def);
-                    float speed = _units[i].Velocity.Length();
-                    float enterT = profile.JogThreshold + profile.JogHysteresis;
-                    float exitT  = profile.JogThreshold - profile.JogHysteresis;
-                    if (_units[i].FaceVelocityMode)
-                    {
-                        if (speed <= exitT) _units[i].FaceVelocityMode = false;
-                    }
-                    else
-                    {
-                        if (speed >= enterT || speed >= 0.2f && _units[i].MaxSpeed > _units[i].Stats.CombatSpeed) _units[i].FaceVelocityMode = true;
-                    }
-                }
-
-                float targetAngle;
-                float turnMult = 1f;
-                if (_necroCastPlant && !float.IsNaN(_necroCastAimAngle))
-                {
-                    // Cast plant: the body swings to face the frozen cast aim point
-                    // (where the spell will actually go — not the live cursor) at a
-                    // boosted rate, overriding the walk/jog facing hysteresis. The
-                    // pivot overlaps the brake, so even a 180° sprint-cast is aimed
-                    // before the cast anim's effect frame.
-                    targetAngle = _necroCastAimAngle;
-                    turnMult = _gameData.Settings.Animation.CastTurnBoost;
-                }
-                else if (_units[i].FaceVelocityMode && _units[i].Velocity.LengthSq() > 0.01f)
-                {
-                    targetAngle = MathF.Atan2(_units[i].Velocity.Y, _units[i].Velocity.X) * Rad2Deg;
-                }
-                else if (!float.IsNaN(_necroFacingOverride))
-                {
-                    targetAngle = _necroFacingOverride;
-                }
-                else
-                {
-                    continue; // nothing to aim at yet (pre-input frames)
-                }
-                Movement.FacingUtil.TurnToward(_units[i], targetAngle, dt, _gameData, turnMult);
-                continue;
-            }
-
-            // Priority 1: turn toward the engaged target — UNLESS we're actively
-            // fleeing it. A unit retreating from its engaged target (e.g. a deer
-            // bolting from an attacker) should face where it's GOING, not look back
-            // over its shoulder; otherwise it runs away while facing the threat,
-            // which reads as a backwards run under a forward-run animation. When the
-            // velocity points away from the target we fall through to Priority 2
-            // (face movement direction). Stationary-but-engaged units (a wolf waiting
-            // out its cooldown) keep facing the target since velocity ~ 0.
-            if (!_units[i].EngagedTarget.IsNone && _units[i].EngagedTarget.IsUnit)
-            {
-                int ti = ResolveUnitTarget(_units[i].EngagedTarget);
-                if (ti >= 0)
-                {
-                    Vec2 toTarget = _units[ti].Position - _units[i].Position;
-                    Vec2 vel = _units[i].Velocity;
-                    bool fleeingTarget = vel.LengthSq() > 0.25f && vel.Dot(toTarget) < 0f;
-                    if (!fleeingTarget)
-                    {
-                        Movement.FacingUtil.TurnTowardPosition(_units[i], _units[ti].Position, dt, _gameData);
-                        continue;
-                    }
-                }
-            }
-
-            // Priority 2: Face movement direction. Prefer actual velocity over
-            // intended direction so the body matches motion — important under
-            // the Newtonian movement model where Velocity lags PreferredVel
-            // during turns / decel. Only fall back to PreferredVel when the
-            // unit is essentially stopped (about-to-start-moving anticipation).
-            // The old threshold (0.316 wu/s mag) was safe only when Velocity
-            // and PreferredVel were instantly aligned; under accel/decel it
-            // caused the body to snap to PreferredVel direction while still
-            // drifting along Velocity.
-            Vec2 faceDir = _units[i].Velocity;
-            if (faceDir.LengthSq() < 0.0025f) // < 0.05 wu/s — essentially stopped
-                faceDir = _units[i].PreferredVel;
-
-            // Priority 3: Stationary with a combat target (e.g. wolf waiting for
-            // cooldown) — keep facing the target so the idle frame reads naturally.
-            if (faceDir.LengthSq() < 0.0025f && _units[i].Target.IsUnit)
-            {
-                int ti = ResolveUnitTarget(_units[i].Target);
-                if (ti >= 0)
-                    faceDir = _units[ti].Position - _units[i].Position;
-            }
-
-            if (faceDir.LengthSq() > 0.0025f)
-            {
-                float targetAngle = MathF.Atan2(faceDir.Y, faceDir.X) * Rad2Deg;
-                Movement.FacingUtil.TurnToward(_units[i], targetAngle, dt, _gameData);
-            }
-        }
-    }
+    // The facing priority ladder lives in Movement.Locomotion.UpdateFacing
+    // (called from Tick) — the single home for effort/speed/gait/facing.
 
     /// <summary>
     /// Check if unit i is approximately facing unit target index ti.
@@ -2795,12 +2593,8 @@ public class Simulation
         var def = _gameData.Units.Get(_units[i].UnitDefID);
         string spriteName = def?.Sprite?.SpriteName ?? "";
         // Pounce traverses at sprint-top-speed regardless of current MaxSpeed
-        // (a predator springing from idle still leaps fast). Falls back to
-        // default biped sprint mult (4×) if def doesn't specify.
-        float pounceSprintMult = (def?.SprintSpeedMultiplier > 0f)
-            ? def.SprintSpeedMultiplier
-            : Render.LocomotionProfile.DefaultSprintMult;
-        float pounceSpeed = _units[i].Stats.CombatSpeed * pounceSprintMult;
+        // (a predator springing from idle still leaps fast).
+        float pounceSpeed = Movement.Locomotion.SprintTopSpeed(def, _units[i].Stats);
 
         // Lead the target: aim where it will be when the leap arrives, not
         // where it is now (a strafing deer used to be missed by design).
@@ -3694,7 +3488,9 @@ public class Simulation
         _units[i].EngagedTarget = CombatTarget.None;
         _units[i].Target = CombatTarget.None;
         _units[i].PendingAttack = CombatTarget.None;
-        _units[i].MoveEffort = MoveEffort.Sprint;
+        // SetEffort (not a raw MoveEffort write) so a stale routine speed cap
+        // (e.g. a half-speed stroll) can't throttle the flight.
+        Movement.Locomotion.SetEffort(_units[i], MoveEffort.Sprint);
         _units[i].RoutTimer -= dt;
 
         int threat = FindNearestEnemyIndex(i, MoraleLocalRadius * 1.5f);
@@ -3702,7 +3498,7 @@ public class Simulation
         {
             // Safe and rested — rally back into the fight.
             _units[i].Routing = false;
-            _units[i].MoveEffort = MoveEffort.Normal;
+            Movement.Locomotion.SetEffort(_units[i], MoveEffort.Normal);
             _units[i].PreferredVel = Vec2.Zero;
             _units[i].ShowStatusSymbol(UnitStatusSymbol.Notice, 1f);
             return;
@@ -3825,7 +3621,7 @@ public class Simulation
         AmortizedAI = _amortizedAI, AmortizationInterval = _aiUpdateInterval,
         AnimMeta = _animMeta,
         DamageEvents = _damageEvents,
-        NecroSprintT = _sprintRampValue,
+        NecroSprintT = SprintRampValue,
         WolfHuntCommandActive = WolfHuntCommandActive,   // timer OR in-progress hunt (see property)
         Squads = _squads,
     };
@@ -4475,7 +4271,7 @@ public class Simulation
         if (Enum.TryParse<AIBehavior>(def.AI, out var ai))
             _units[idx].AI = ai;
         _units[idx].Stats = stats;
-        _units[idx].MaxSpeed = stats.CombatSpeed;
+        Movement.Locomotion.ResetSpeed(_units[idx]);
     }
 
     public int SpawnUnitByID(string unitID, Vec2 pos)

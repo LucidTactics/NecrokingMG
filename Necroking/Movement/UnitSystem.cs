@@ -51,33 +51,8 @@ public enum UnitStatusSymbol : byte
     React = 2,   // "!" — unit is reacting (fleeing, charging, fighting back)
 }
 
-/// <summary>AI's stated locomotion intent, used as a bias on top of raw velocity
-/// when choosing Walk vs Jog vs Run. Lets a patrol pick Walk gait even when the
-/// path lets it move faster, or lets a charging unit pick Run even before its
-/// actual velocity has reached the run threshold (so the gait switch happens at
-/// the moment of intent, not several frames later when speed catches up).
-///
-/// Imported from the Nightfall Rogue project's MoveEffort concept. Bias is
-/// applied only to the gait-tier picker, NOT to playback rate — feet still
-/// lock to ground motion at actual velocity within whatever gait is chosen.
-/// </summary>
-public enum MoveEffort : byte
-{
-    /// <summary>No intent bias — gait is purely a function of measured velocity.
-    /// The default and the most common case.</summary>
-    Normal = 0,
-    /// <summary>Bias toward Walk gait. Patrolling, cautious approach, sneak.
-    /// A unit that physically COULD jog will still stay in Walk gait unless
-    /// velocity is well above the jog threshold.</summary>
-    Walk = 1,
-    /// <summary>Bias toward Jog gait. "Get there, but don't sprint" — routine
-    /// reposition, formation-up, follow-orders. Snaps into Jog earlier than
-    /// raw velocity would warrant.</summary>
-    Hurry = 2,
-    /// <summary>Bias toward Run gait. Combat charge, urgent retreat, chase.
-    /// Snaps into Run on intent, well before measured velocity catches up.</summary>
-    Sprint = 3,
-}
+// MoveEffort enum lives in Locomotion.cs (same namespace) — the single home
+// for effort / speed / gait / facing logic.
 
 public static class UnitStatusSymbolExt
 {
@@ -105,12 +80,30 @@ public class Unit
     public Data.Registries.UnitDef CachedDef;
     public string? CachedDefKey;
 
-    /// <summary>AI-declared locomotion intent. Read by SetLocomotionAnim when
-    /// picking Walk/Jog/Run gait — biases the choice without overriding the
-    /// raw-velocity floor. Default <see cref="MoveEffort.Normal"/> means
-    /// "no bias, pick gait purely from velocity." Reset per-routine by AI
-    /// when the unit changes posture (patrol → engage → flee).</summary>
+    /// <summary>AI-declared locomotion intent — set via
+    /// <see cref="Locomotion.SetEffort"/>, never directly. Pure INTENT: the
+    /// actual speed cap is derived from it (with ramping and modifiers) by
+    /// <see cref="Locomotion.UpdateSpeeds"/> each tick.</summary>
     public MoveEffort MoveEffort;
+
+    /// <summary>Current ramped effort multiplier (1 = base CombatSpeed, up to
+    /// the effort's jog/sprint multiplier). Integrated toward the MoveEffort
+    /// target at the unit's physical accel/decel rate by
+    /// <see cref="Locomotion.UpdateSpeeds"/> — the generalized form of the old
+    /// player-only sprint ramp. Owned by Locomotion; read-only elsewhere.</summary>
+    public float EffortMult = 1f;
+
+    /// <summary>Optional routine speed cap (fraction of effort-max speed, 1 =
+    /// none), persisted from <see cref="Locomotion.SetEffort"/>'s
+    /// routineCapMult so "lazy stroll" caps survive amortized AI frames.
+    /// Owned by Locomotion.</summary>
+    public float RoutineSpeedCap = 1f;
+
+    /// <summary>This frame's smoothed locomotion vector,
+    /// Lerp(Velocity, PreferredVel, LocoLerpFactor) — the single input for
+    /// movement-animation tier selection (by length) and movement facing (by
+    /// direction). Written post-movement by Locomotion each tick.</summary>
+    public Vec2 LocoVector;
 
     /// <summary>Hysteresis flag for the necromancer's facing source. True =
     /// face velocity direction (jog/run); false = face mouse direction (walk).

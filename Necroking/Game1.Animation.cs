@@ -653,13 +653,8 @@ public partial class Game1
                     || curState == AnimState.Run || curState == AnimState.Carry;
                 if (isLocoState)
                 {
-                    float locoSpeed = _sim.Units[i].Velocity.Length();
-                    var locoDef = _gameData.Units.Get(_sim.Units[i].UnitDefID);
-                    var locoProfile = locoDef != null
-                        ? LocomotionProfile.FromUnit(locoDef)
-                        : LocomotionProfile.FromBaseSpeed(_sim.Units[i].Stats.CombatSpeed);
-                    animData.Ctrl.PlaybackSpeed = LocomotionScaling.ComputeLocomotionPlayback(
-                        animData.Ctrl, locoProfile, curState, locoSpeed);
+                    animData.Ctrl.PlaybackSpeed = Movement.Locomotion.ComputePlayback(
+                        _sim.Units[i], _gameData, curState, _sim.Units[i].Velocity.Length());
                 }
                 animData.Ctrl.Update(dt);
 
@@ -728,16 +723,6 @@ public partial class Game1
                 targetState = AnimState.Hover;
             else
             {
-                // Gait selection uses the MAX of actual and intended (PreferredVel)
-                // speed so a unit accelerating from a standstill — e.g. a wolf bolting
-                // out of an attack into its retreat — shows Walk immediately instead of
-                // sliding in Idle while real velocity ramps up. Playback scaling below
-                // still uses actual Velocity, so feet stay locked to ground motion.
-                float speed = MathF.Max(_sim.Units[i].Velocity.Length(), _sim.Units[i].PreferredVel.Length());
-                float baseSpeed = _sim.Units[i].Stats.CombatSpeed;
-                float jogThreshold = 4f + baseSpeed / 3f;
-                float runThreshold = 6f + 2f * baseSpeed / 3f;
-
                 bool carrying = _sim.Units[i].CarryingCorpseID >= 0;
                 // While the necromancer is mid-cast (_pendingCastAnim), let the cast
                 // animation drive instead of pinning the Carry pose. Forcing Carry every
@@ -749,14 +734,15 @@ public partial class Game1
                 bool midCast = _pendingCastAnim.HasValue && i == _sim.NecromancerIndex;
                 if (carrying && !midCast)
                     targetState = AnimState.Carry;
-                else if (speed <= 0.25f)
-                    targetState = AnimState.Idle;
-                else if (speed < jogThreshold)
-                    targetState = AnimState.Walk;
-                else if (speed < runThreshold)
-                    targetState = AnimState.Jog;
                 else
-                    targetState = AnimState.Run;
+                {
+                    // Movement tier picked centrally by Locomotion.UpdateLocoVectorsAndGait
+                    // (from the smoothed loco vector) — same selector as archetype units.
+                    var loco = _sim.Units[i].RoutineAnim.State;
+                    bool locoClass = loco == AnimState.Idle || loco == AnimState.Walk
+                        || loco == AnimState.Jog || loco == AnimState.Run;
+                    targetState = locoClass ? loco : AnimState.Idle;
+                }
             }
 
             // Reverse walk playback
@@ -767,15 +753,8 @@ public partial class Game1
 
             // Locomotion playback scaling (Walk/Jog/Run/Carry) — keeps foot-cycle
             // frequency matched to actual velocity so anims don't skate.
-            {
-                float locoSpeed = _sim.Units[i].Velocity.Length();
-                var locoDef = _gameData.Units.Get(_sim.Units[i].UnitDefID);
-                var locoProfile = locoDef != null
-                    ? LocomotionProfile.FromUnit(locoDef)
-                    : LocomotionProfile.FromBaseSpeed(_sim.Units[i].Stats.CombatSpeed);
-                animData.Ctrl.PlaybackSpeed = LocomotionScaling.ComputeLocomotionPlayback(
-                    animData.Ctrl, locoProfile, targetState, locoSpeed);
-            }
+            animData.Ctrl.PlaybackSpeed = Movement.Locomotion.ComputePlayback(
+                _sim.Units[i], _gameData, targetState, _sim.Units[i].Velocity.Length());
             if (targetState == AnimState.Attack1 && animData.Ctrl.CurrentState != AnimState.Attack1)
             {
                 float lockout = _gameData.Settings.Combat.PostAttackLockout;

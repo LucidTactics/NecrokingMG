@@ -196,7 +196,7 @@ public class RangedUnitHandler : IArchetypeHandler
         // In range, weapon recharging (or caster): hold position. Facing falls to
         // UpdateFacingAngles priority 3 (stationary with a Target → face it).
         ctx.Units[i].PreferredVel = Vec2.Zero;
-        SubroutineSteps.SetLocomotionAnim(ref ctx, 0f);
+        SubroutineSteps.SetLocomotionAnim(ref ctx);
     }
 
     /// <summary>Queue a ranged attack via PendingAttack so the animation system plays

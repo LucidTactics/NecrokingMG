@@ -80,8 +80,7 @@ public class PortalRouteScaleScenario : ScenarioBase
         _targetIdx = units.AddUnit(new Vec2(500f, 200f), UnitType.Skeleton);
         units[_targetIdx].AI = AIBehavior.MoveToPoint;
         units[_targetIdx].MoveTarget = new Vec2(500f + TargetSpeed * DurationS, 200f);
-        units[_targetIdx].MaxSpeed = TargetSpeed;
-        units[_targetIdx].Stats.CombatSpeed = TargetSpeed;
+        units[_targetIdx].Stats.CombatSpeed = TargetSpeed; // MaxSpeed derives from this via Locomotion.UpdateSpeeds
         units[_targetIdx].Faction = Faction.Undead;
 
         // Follower: starts ~2.3 sectors behind, re-targets the target every
@@ -89,8 +88,7 @@ public class PortalRouteScaleScenario : ScenarioBase
         _followerIdx = units.AddUnit(new Vec2(350f, 200f), UnitType.Skeleton);
         units[_followerIdx].AI = AIBehavior.MoveToPoint;
         units[_followerIdx].MoveTarget = units[_targetIdx].Position;
-        units[_followerIdx].MaxSpeed = FollowerSpeed;
-        units[_followerIdx].Stats.CombatSpeed = FollowerSpeed;
+        units[_followerIdx].Stats.CombatSpeed = FollowerSpeed; // MaxSpeed derives from this via Locomotion.UpdateSpeeds
         units[_followerIdx].Faction = Faction.Undead;
 
         // Mirror Game1's map-load pipeline (tiered cost fields + portal build).

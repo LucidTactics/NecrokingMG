@@ -258,8 +258,11 @@ public static class PotionSystem
     // Paralysis timings (seconds).
     public const float ParalyzeSlowDuration = 8f;
     public const float ParalyzeStunDuration = 6f;
-    // Speed multiplier at the start of the slow phase — the curve lerps this to 0 over ParalyzeSlowDuration.
-    private const float ParalyzeSlowStartMultiplier = 0.7f;
+    // Speed multiplier at the start of the slow phase — the curve lerps this to 0 over
+    // ParalyzeSlowDuration. Public: the actual MaxSpeed reduction is applied by
+    // Movement.Locomotion.UpdateSpeeds (the single MaxSpeed writer) from these constants
+    // + the unit's ParalysisSlowTimer; this system only owns the timers/transitions.
+    public const float ParalyzeSlowStartMultiplier = 0.7f;
 
     /// <summary>
     /// Get the paralysis stat multiplier for a unit (0..1). 1 = no effect on attack/defense,
@@ -281,12 +284,11 @@ public static class PotionSystem
         {
             // --- Paralysis slow phase ---
             // Movement speed lerps from ParalyzeSlowStartMultiplier (0.7x) down to 0 over
-            // ParalyzeSlowDuration seconds. Attack/defense are unaffected in this phase.
+            // ParalyzeSlowDuration seconds (applied by Locomotion.UpdateSpeeds from the
+            // timer). Attack/defense are unaffected in this phase.
             if (units[i].ParalysisSlowTimer > 0f)
             {
                 units[i].ParalysisSlowTimer -= dt;
-                float t = MathF.Max(units[i].ParalysisSlowTimer / ParalyzeSlowDuration, 0f);
-                units[i].MaxSpeed *= ParalyzeSlowStartMultiplier * t;
 
                 if (units[i].ParalysisSlowTimer <= 0f)
                 {
@@ -312,10 +314,10 @@ public static class PotionSystem
             }
 
             // --- Paralysis stun phase ---
+            // (MaxSpeed = 0 during stun is applied by Locomotion.UpdateSpeeds.)
             if (units[i].ParalysisStunTimer > 0f)
             {
                 units[i].ParalysisStunTimer -= dt;
-                units[i].MaxSpeed = 0f;
 
                 if (units[i].ParalysisStunTimer <= 0f)
                 {

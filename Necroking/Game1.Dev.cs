@@ -925,20 +925,21 @@ public partial class Game1 {
                break;
             }
 
-            // Resolved locomotion profile (feet-lock vels, gait thresholds, legacy
-            // vs new mode) + the def's overrides — for diagnosing gait/playback.
+            // Resolved locomotion profile (feet-lock vels, gait thresholds,
+            // calibrated vs CS-derived defaults) + the def's overrides — for
+            // diagnosing gait/playback.
             case "locomotion": case "loco": {
                var lidxs = DevResolveUnits(c.Args.Length > 0 ? string.Join(" ", c.Args) : "necro");
                if (lidxs.Count == 0) { c.Complete(Necroking.Dev.DevServer.Error("no unit matched")); break; }
                var ldef = _gameData.Units.Get(_sim.Units[lidxs[0]].UnitDefID);
                if (ldef == null) { c.Complete(Necroking.Dev.DevServer.Error("no def")); break; }
-               var prof = Render.LocomotionProfile.FromUnit(ldef);
+               var prof = Movement.LocomotionProfile.FromUnit(ldef);
                var ci2 = System.Globalization.CultureInfo.InvariantCulture;
                bool hasCal = ldef.SpriteData?.Calibration != null;
                string ov(float? v) => v.HasValue ? v.Value.ToString("F2", ci2) : "null";
                c.Complete(Necroking.Dev.DevServer.OkRaw("{" +
                   $"\"def\":{System.Text.Json.JsonSerializer.Serialize(ldef.Id)}," +
-                  $"\"isLegacyProfile\":{(prof.IsLegacy ? "true" : "false")}," +
+                  $"\"derivedDefaultVels\":{(hasCal ? "false" : "true")}," +
                   $"\"hasCalibration\":{(hasCal ? "true" : "false")}," +
                   $"\"isQuadruped\":{(ldef.IsQuadruped ? "true" : "false")}," +
                   $"\"combatSpeed\":{(ldef.Stats?.CombatSpeed ?? 0f).ToString("F2", ci2)}," +

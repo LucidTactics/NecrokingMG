@@ -66,7 +66,7 @@ public class DeepWaterBlocksScenario : ScenarioBase
         int idx = sim.UnitsMut.AddUnit(startPos, UnitType.Skeleton);
         sim.UnitsMut[idx].AI = AIBehavior.MoveToPoint;
         sim.UnitsMut[idx].MoveTarget = target;
-        sim.UnitsMut[idx].MaxSpeed = 5f;
+        sim.UnitsMut[idx].Stats.CombatSpeed = 5f; // MaxSpeed derives from this via Locomotion.UpdateSpeeds
         _unitId = sim.UnitsMut[idx].Id;
         _maxX = _startX;
 

@@ -62,7 +62,7 @@ public class WolfRetargetScenario : ScenarioBase
         units[necroIdx].Faction = Faction.Human;
         units[necroIdx].AI = AIBehavior.MoveToPoint;
         units[necroIdx].MoveTarget = new Vec2(-100f, 20f);
-        units[necroIdx].MaxSpeed = 20f;
+        units[necroIdx].Stats.CombatSpeed = 20f; // MaxSpeed derives from this via Locomotion.UpdateSpeeds
         units[necroIdx].Stats.MaxHP = 500;
         units[necroIdx].Stats.HP = 500;
         _necroId = units[necroIdx].Id;
