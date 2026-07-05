@@ -22,6 +22,11 @@ public class ProcGenStyle
     public List<string> SmallDefIds = new();
     public float SmallDensity = 25f;
 
+    // Per-pool auto-ground: stamp a ground patch under each object this pool
+    // places (e.g. dirt under trees). Same feature as the Objects tab, per category.
+    public AutoGroundSettings LargeAutoGround = new();
+    public AutoGroundSettings SmallAutoGround = new();
+
     /// <summary>Min spacing between two objects of the same pool: 8/sqrt(density).</summary>
     public static float MinDistance(float density) => 8f / MathF.Sqrt(MathF.Max(0.01f, density));
 
@@ -40,10 +45,12 @@ public class ProcGenStyle
             writer.WriteStartArray("largeDefIds");
             foreach (var id in s.LargeDefIds) writer.WriteStringValue(id);
             writer.WriteEndArray();
+            WriteAutoGround(writer, "largeAutoGround", s.LargeAutoGround);
             writer.WriteNumber("smallDensity", s.SmallDensity);
             writer.WriteStartArray("smallDefIds");
             foreach (var id in s.SmallDefIds) writer.WriteStringValue(id);
             writer.WriteEndArray();
+            WriteAutoGround(writer, "smallAutoGround", s.SmallAutoGround);
             writer.WriteEndObject();
         }
         writer.WriteEndArray();
@@ -72,7 +79,27 @@ public class ProcGenStyle
             if (e.TryGetProperty("smallDefIds", out var sids))
                 foreach (var id in sids.EnumerateArray())
                     if (id.GetString() is { Length: > 0 } v) s.SmallDefIds.Add(v);
+            if (e.TryGetProperty("largeAutoGround", out var lag)) ReadAutoGround(lag, s.LargeAutoGround);
+            if (e.TryGetProperty("smallAutoGround", out var sag)) ReadAutoGround(sag, s.SmallAutoGround);
             styles.Add(s);
         }
+    }
+
+    private static void WriteAutoGround(Utf8JsonWriter writer, string prop, AutoGroundSettings s)
+    {
+        writer.WriteStartObject(prop);
+        writer.WriteBoolean("enabled", s.Enabled);
+        writer.WriteString("type", s.TypeName);
+        writer.WriteNumber("size", s.Size);
+        writer.WriteNumber("noise", s.Noise);
+        writer.WriteEndObject();
+    }
+
+    private static void ReadAutoGround(JsonElement e, AutoGroundSettings s)
+    {
+        if (e.TryGetProperty("enabled", out var en)) s.Enabled = en.GetBoolean();
+        if (e.TryGetProperty("type", out var ty)) s.TypeName = ty.GetString() ?? s.TypeName;
+        if (e.TryGetProperty("size", out var sz)) s.Size = sz.GetInt32();
+        if (e.TryGetProperty("noise", out var no)) s.Noise = no.GetInt32();
     }
 }

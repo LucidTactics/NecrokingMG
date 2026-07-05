@@ -140,13 +140,12 @@ public class MapEditorWindow
 
     // Auto-ground: when placing objects, stamp a ground patch underneath (e.g.
     // dirt under trees on grassland). Applies in both single and paint modes.
-    private bool _autoGround;
-    private int _autoGroundSize = 1;     // patch radius in ground tiles
-    private int _autoGroundType;         // index into _groundSystem types
-    private bool _autoGroundTypeInit;    // one-time default-to-"Dirt" resolved yet?
-    private int _autoGroundNoise = 3;    // # of ragged-edge tiles grown off the patch
+    // The Objects tab uses this one global instance; each ProcGen pool carries its
+    // own AutoGroundSettings. All stamping/UI is shared (see the auto-ground helpers).
+    private readonly AutoGroundSettings _objectsAutoGround = new();
     // Accumulates old ground vertex values across a paint stroke so the auto-ground
-    // stamped under a whole drag undoes together with the placed objects.
+    // stamped under a whole drag undoes together with the placed objects. Reused by
+    // both the Objects paint stroke and the ProcGen paint stroke.
     private Dictionary<long, byte>? _autoGroundStrokeOld;
 
     // Walls tab
@@ -1488,23 +1487,53 @@ public class MapEditorWindow
         return true;
     }
 
+    /// <summary>Resolve a ground-type name to its live index in the ground system,
+    /// or -1 if no type has that name. Case-insensitive; matches Name or Id.</summary>
+    private int ResolveGroundTypeIndex(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return -1;
+        for (int i = 0; i < _groundSystem.TypeCount; i++)
+        {
+            var d = _groundSystem.GetTypeDef(i);
+            if (string.Equals(d.Name, name, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(d.Id, name, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+        return -1;
+    }
+
     /// <summary>
-    /// Stamp the auto-ground patch under a placed object: a circle of radius
-    /// _autoGroundSize at world (worldX, worldY) of type _autoGroundType, plus
-    /// _autoGroundNoise extra tiles grown organically off the patch edge for a
-    /// ragged border. Old values are recorded into <paramref name="oldVals"/> for
+    /// Stamp an auto-ground patch under a placed object, driven by
+    /// <paramref name="s"/>: no-op unless it's enabled and its ground type resolves.
+    /// Thin wrapper over <see cref="StampGroundPatch"/> — this is the single entry
+    /// point shared by the Objects tab and every ProcGen pool.
+    /// </summary>
+    private bool StampAutoGround(AutoGroundSettings s, float worldX, float worldY, Dictionary<long, byte> oldVals)
+    {
+        if (!s.Enabled) return false;
+        int typeIdx = ResolveGroundTypeIndex(s.TypeName);
+        if (typeIdx < 0) return false;
+        return StampGroundPatch(worldX, worldY, typeIdx, s.Size, s.Noise, oldVals);
+    }
+
+    /// <summary>
+    /// Stamp a ground patch: a circle of radius <paramref name="size"/> at world
+    /// (worldX, worldY) of ground type <paramref name="typeIdx"/>, plus
+    /// <paramref name="noise"/> extra tiles grown organically off the patch edge for
+    /// a ragged border. Old values are recorded into <paramref name="oldVals"/> for
     /// undo. Returns true if anything changed. Does NOT fire the texture-update
     /// callback — the caller invokes it once per placement / per stroke frame.
     /// </summary>
-    private bool StampAutoGround(float worldX, float worldY, Dictionary<long, byte> oldVals)
+    private bool StampGroundPatch(float worldX, float worldY, int typeIdxInt, int size, int noise,
+        Dictionary<long, byte> oldVals)
     {
-        if (!_autoGround || _autoGroundType < 0 || _autoGroundType >= _groundSystem.TypeCount)
+        if (typeIdxInt < 0 || typeIdxInt >= _groundSystem.TypeCount)
             return false;
 
         int vx = (int)MathF.Round(worldX);
         int vy = (int)MathF.Round(worldY);
-        byte typeIdx = (byte)_autoGroundType;
-        int r = Math.Max(0, _autoGroundSize);
+        byte typeIdx = (byte)typeIdxInt;
+        int r = Math.Max(0, size);
         bool changed = false;
 
         // patch = every tile considered part of the blob (whether or not its value
@@ -1524,9 +1553,9 @@ public class MapEditorWindow
             }
         }
 
-        // Ragged edge: grow `_autoGroundNoise` tiles outward, each picked at random
+        // Ragged edge: grow `noise` tiles outward, each picked at random
         // from the current set of tiles adjacent to (but outside) the patch.
-        if (_autoGroundNoise > 0 && patch.Count > 0)
+        if (noise > 0 && patch.Count > 0)
         {
             var candidates = new HashSet<long>();
             void Consider(int nx, int ny)
@@ -1540,7 +1569,7 @@ public class MapEditorWindow
             foreach (long k in patch) AddNeighbours((int)(k % 100000), (int)(k / 100000));
 
             var pickList = new List<long>();
-            for (int i = 0; i < _autoGroundNoise && candidates.Count > 0; i++)
+            for (int i = 0; i < noise && candidates.Count > 0; i++)
             {
                 pickList.Clear();
                 pickList.AddRange(candidates);
@@ -2126,16 +2155,16 @@ public class MapEditorWindow
     // ====================================================================
 
     /// <summary>
-    /// Vertical height of the Auto-Ground controls block drawn between the mode
-    /// toggle and the object/group list. Single source of truth so the Draw
-    /// layout and the Update hit-test stay in lockstep — the per-control
-    /// increments in DrawObjectsTab must sum to this.
+    /// Vertical height of a shared Auto-Ground controls block (as drawn by
+    /// <see cref="DrawAutoGroundControls"/>). Single source of truth so any Draw
+    /// layout and the matching Update hit-test stay in lockstep — the per-control
+    /// increments in DrawAutoGroundControls must sum to this.
     /// </summary>
-    private int AutoGroundSectionHeight()
+    private int AutoGroundControlsHeight(AutoGroundSettings s)
     {
         if (_eb == null) return 0;
         int h = LineHeight + 2; // "Auto Ground" checkbox row
-        if (_autoGround)
+        if (s.Enabled)
             h += (ButtonHeight + 2)  // Size stepper
                + (FieldHeight + 2)   // Ground dropdown
                + (FieldHeight + 2);  // Noise tiles
@@ -2191,7 +2220,7 @@ public class MapEditorWindow
 
             // Def list (or group list for M17). Account for the Auto-Ground
             // controls block drawn between the mode toggle and the list.
-            int listY = modeY + ButtonHeight + 4 + AutoGroundSectionHeight();
+            int listY = modeY + ButtonHeight + 4 + AutoGroundControlsHeight(_objectsAutoGround);
             var filteredDefs = GetFilteredEnvDefs(categories);
             // M17: If category is "Groups", show group list instead
             bool isGroupMode = SelectedEnvCategory < categories.Count && categories[SelectedEnvCategory] == "Groups";
@@ -2268,7 +2297,7 @@ public class MapEditorWindow
                             // Bundle it with the object placement so one undo
                             // reverts both.
                             var groundOld = new Dictionary<long, byte>();
-                            bool groundChanged = StampAutoGround(worldPos.X, worldPos.Y, groundOld);
+                            bool groundChanged = StampAutoGround(_objectsAutoGround, worldPos.X, worldPos.Y, groundOld);
                             if (groundChanged) _onVertexMapChanged?.Invoke();
                             UndoAction placeUndo = new UndoObjectPlace { Env = _envSystem, ObjectIndex = newIdx };
                             if (groundChanged)
@@ -2644,8 +2673,8 @@ public class MapEditorWindow
 
                     // Auto-ground patch under this object (accumulated for one
                     // stroke-wide undo; texture is flushed once after the loop).
-                    if (_autoGround && _autoGroundStrokeOld != null
-                        && StampAutoGround(px, py, _autoGroundStrokeOld))
+                    if (_objectsAutoGround.Enabled && _autoGroundStrokeOld != null
+                        && StampAutoGround(_objectsAutoGround, px, py, _autoGroundStrokeOld))
                         groundChanged = true;
 
                     placed++;
@@ -2826,50 +2855,7 @@ public class MapEditorWindow
         // Auto-ground controls: stamp a ground patch under each placed object
         // (e.g. dirt under trees on grassland). Applies in single and paint modes.
         if (_eb != null)
-        {
-            _autoGround = _eb.DrawCheckbox("Auto Ground", _autoGround, panelX + Margin, contentY);
-            contentY += LineHeight + 2;
-            if (_autoGround)
-            {
-                // Size: patch radius in ground tiles (+/- stepper).
-                DrawAutoGroundSizeControl(panelX, contentY);
-                contentY += ButtonHeight + 2;
-
-                // Ground type dropdown.
-                int gtCount = _groundSystem.TypeCount;
-                var gtNames = new string[gtCount];
-                for (int i = 0; i < gtCount; i++) gtNames[i] = _groundSystem.GetTypeDef(i).Name;
-                // Default the auto-ground type to "Dirt" once ground types load
-                // (placing dirt under trees is the common case). Resolved once so
-                // it doesn't override the user's later choice.
-                if (!_autoGroundTypeInit && gtCount > 0)
-                {
-                    _autoGroundTypeInit = true;
-                    for (int i = 0; i < gtCount; i++)
-                    {
-                        var d = _groundSystem.GetTypeDef(i);
-                        if (string.Equals(d.Id, "dirt", StringComparison.OrdinalIgnoreCase)
-                            || string.Equals(d.Name, "Dirt", StringComparison.OrdinalIgnoreCase))
-                        { _autoGroundType = i; break; }
-                    }
-                }
-                if (_autoGroundType >= gtCount) _autoGroundType = Math.Max(0, gtCount - 1);
-                string curName = (_autoGroundType >= 0 && _autoGroundType < gtCount) ? gtNames[_autoGroundType] : "";
-                string picked = _eb.DrawCombo("auto_ground_type", "Ground", curName, gtNames,
-                    panelX + Margin, contentY, PanelWidth - Margin * 2);
-                if (picked != curName)
-                    for (int i = 0; i < gtCount; i++)
-                        if (gtNames[i] == picked) { _autoGroundType = i; break; }
-                contentY += FieldHeight + 2;
-
-                // Noise tiles: ragged-edge tiles grown off the patch.
-                _autoGroundNoise = _eb.DrawIntField("auto_ground_noise", "Noise Tiles", _autoGroundNoise,
-                    panelX + Margin, contentY, PanelWidth - Margin * 2);
-                _autoGroundNoise = Math.Clamp(_autoGroundNoise, 0, 500);
-                contentY += FieldHeight + 2;
-            }
-            contentY += 4;
-        }
+            DrawAutoGroundControls(_objectsAutoGround, "obj", panelX, ref contentY);
 
         // Separator
         Scope.Draw(_pixel, new Rectangle(panelX, contentY - 2, PanelWidth, 1), SeparatorColor);
@@ -5683,6 +5669,7 @@ public class MapEditorWindow
         if (styleSelected && leftDown && !overPanel)
         {
             _batchPlacedObjects ??= new();
+            _autoGroundStrokeOld ??= new();
             Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
             PaintProcGen(_procGenStyles[SelectedProcGenStyle], worldPos, dt);
         }
@@ -5698,13 +5685,30 @@ public class MapEditorWindow
         {
             if (_batchPlacedObjects.Count > 0)
             {
-                PushUndo(new UndoObjectBatchPlace
+                var batchUndo = new UndoObjectBatchPlace
                 {
                     Env = _envSystem,
                     ObjectIndices = new List<int>(_batchPlacedObjects.Select(b => b.objIdx))
-                });
+                };
+                // Bundle any per-pool auto-ground stamped during the stroke so one
+                // undo reverts both the objects and the ground under them (mirrors
+                // the Objects paint stroke).
+                if (_autoGroundStrokeOld != null && _autoGroundStrokeOld.Count > 0)
+                {
+                    var comp = new UndoComposite();
+                    comp.Actions.Add(batchUndo);
+                    comp.Actions.Add(new UndoGroundStroke
+                    {
+                        Ground = _groundSystem,
+                        OldValues = _autoGroundStrokeOld,
+                        OnChanged = _onVertexMapChanged
+                    });
+                    PushUndo(comp);
+                }
+                else PushUndo(batchUndo);
             }
             _batchPlacedObjects = null;
+            _autoGroundStrokeOld = null;
         }
     }
 
@@ -5734,15 +5738,20 @@ public class MapEditorWindow
         // stamp collisions incrementally (same pattern as PaintObjectsBatch).
         var prevHandler = _envSystem.OnCollisionsDirty;
         _envSystem.OnCollisionsDirty = null;
+        bool groundChanged = false;
         try
         {
-            PlaceProcGenPool(largePool, largeN, ProcGenStyle.MinDistance(style.LargeDensity), center);
-            PlaceProcGenPool(smallPool, smallN, ProcGenStyle.MinDistance(style.SmallDensity), center);
+            groundChanged |= PlaceProcGenPool(largePool, largeN, ProcGenStyle.MinDistance(style.LargeDensity), center, style.LargeAutoGround);
+            groundChanged |= PlaceProcGenPool(smallPool, smallN, ProcGenStyle.MinDistance(style.SmallDensity), center, style.SmallAutoGround);
         }
         finally
         {
             _envSystem.OnCollisionsDirty = prevHandler;
         }
+
+        // Flush the ground texture once per tick if any auto-ground was stamped
+        // (StampGroundPatch deliberately doesn't fire the callback itself).
+        if (groundChanged) _onVertexMapChanged?.Invoke();
     }
 
     private List<int> ResolveProcGenDefs(List<string> defIds)
@@ -5756,12 +5765,17 @@ public class MapEditorWindow
         return result;
     }
 
-    private void PlaceProcGenPool(List<int> pool, int attempts, float minDist, Vec2 center)
+    /// <summary>Place a pool's objects. Returns true if any auto-ground was stamped
+    /// (recorded into <see cref="_autoGroundStrokeOld"/> for the stroke's undo); the
+    /// caller flushes the ground texture once per tick.</summary>
+    private bool PlaceProcGenPool(List<int> pool, int attempts, float minDist, Vec2 center,
+        AutoGroundSettings autoGround)
     {
-        if (pool.Count == 0 || attempts <= 0) return;
+        if (pool.Count == 0 || attempts <= 0) return false;
 
         var poolSet = new HashSet<int>(pool);
         float minDistSq = minDist * minDist;
+        bool groundChanged = false;
 
         for (int a = 0; a < attempts; a++)
         {
@@ -5792,9 +5806,18 @@ public class MapEditorWindow
                 _batchPlacedObjects?.Add(((ushort)defIdx, px, py, scale, 0f, newIdx));
                 _envSystem.StampObjectCollisionAt(_tileGrid, newIdx);
                 AutoCreateTriggerInstance(newIdx); // RM06
+
+                // Per-pool auto-ground under this object (accumulated for one
+                // stroke-wide undo; texture flushed once per tick by the caller).
+                if (autoGround.Enabled && _autoGroundStrokeOld != null
+                    && StampAutoGround(autoGround, px, py, _autoGroundStrokeOld))
+                    groundChanged = true;
+
                 break; // placed — move to the next attempt
             }
         }
+
+        return groundChanged;
     }
 
     private void DrawProcGenTab(int panelX, int contentY, int contentH)
@@ -5854,12 +5877,12 @@ public class MapEditorWindow
         st.Name = _eb.DrawTextField($"procgen_name_{idx}", "Name", st.Name, panelX + Margin, y, fw);
         y += FieldHeight + 6;
 
-        y = DrawProcGenPoolSection(idx, "large", "Large objects", st.LargeDefIds, ref st.LargeDensity, panelX, y);
+        y = DrawProcGenPoolSection(idx, "large", "Large objects", st.LargeDefIds, ref st.LargeDensity, st.LargeAutoGround, panelX, y);
 
         Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
         y += 4;
 
-        y = DrawProcGenPoolSection(idx, "small", "Small objects", st.SmallDefIds, ref st.SmallDensity, panelX, y);
+        y = DrawProcGenPoolSection(idx, "small", "Small objects", st.SmallDefIds, ref st.SmallDensity, st.SmallAutoGround, panelX, y);
 
         DrawSmallText("Hold LMB in the world to paint.", panelX + Margin, y, TextDim);
     }
@@ -5868,7 +5891,7 @@ public class MapEditorWindow
     /// readout) + a row per pool member (combo + remove) + an add button. Field ids
     /// embed style index, pool key and row so selection changes drop text focus.</summary>
     private int DrawProcGenPoolSection(int idx, string key, string title,
-        List<string> defIds, ref float density, int panelX, int y)
+        List<string> defIds, ref float density, AutoGroundSettings autoGround, int panelX, int y)
     {
         var eb = _eb!;
         int fw = PanelWidth - Margin * 2;
@@ -5899,6 +5922,9 @@ public class MapEditorWindow
         if (options.Length > 0 && eb.DrawButton("+ Add Object", panelX + Margin, y, 110, ButtonHeight))
             defIds.Add(options[0]);
         y += ButtonHeight + 6;
+
+        // Per-pool auto-ground toggle + controls (shared with the Objects tab).
+        DrawAutoGroundControls(autoGround, $"pg_{idx}_{key}", panelX, ref y);
 
         return y;
     }
@@ -6518,11 +6544,11 @@ public class MapEditorWindow
         }
     }
 
-    private void DrawAutoGroundSizeControl(int panelX, int y)
+    private void DrawAutoGroundSizeControl(AutoGroundSettings s, int panelX, int y)
     {
         var mouse = _eb._input.Mouse;
 
-        DrawSmallText($"Size: {_autoGroundSize}", panelX + Margin + 40, y + 3, TextColor);
+        DrawSmallText($"Size: {s.Size}", panelX + Margin + 40, y + 3, TextColor);
 
         var minusRect = new Rectangle(panelX + Margin, y, 30, ButtonHeight);
         Scope.Draw(_pixel, minusRect, IsInRect(mouse, minusRect) ? ButtonHoverColor : ButtonBg);
@@ -6534,9 +6560,65 @@ public class MapEditorWindow
 
         if (!IsAnyPopupBlocking() && _eb._input.LeftPressed)
         {
-            if (IsInRect(mouse, minusRect)) _autoGroundSize = Math.Max(0, _autoGroundSize - 1);
-            if (IsInRect(mouse, plusRect)) _autoGroundSize = Math.Min(20, _autoGroundSize + 1);
+            if (IsInRect(mouse, minusRect)) s.Size = Math.Max(0, s.Size - 1);
+            if (IsInRect(mouse, plusRect)) s.Size = Math.Min(20, s.Size + 1);
         }
+    }
+
+    /// <summary>
+    /// Shared Auto-Ground controls block: an "Auto Ground" checkbox that, when on,
+    /// reveals a size stepper, a ground-type dropdown, and a noise-tiles field —
+    /// editing <paramref name="s"/> in place and advancing <paramref name="contentY"/>.
+    /// Used by both the Objects tab (one global instance) and each ProcGen pool.
+    /// <paramref name="idSuffix"/> must be unique per caller so text/combo focus ids
+    /// don't collide (e.g. "obj", "pg_0_large"). Height must match
+    /// <see cref="AutoGroundControlsHeight"/>.
+    /// </summary>
+    private void DrawAutoGroundControls(AutoGroundSettings s, string idSuffix, int panelX, ref int contentY)
+    {
+        var eb = _eb!;
+        s.Enabled = eb.DrawCheckbox("Auto Ground", s.Enabled, panelX + Margin, contentY);
+        contentY += LineHeight + 2;
+        if (s.Enabled)
+        {
+            // Size: patch radius in ground tiles (+/- stepper).
+            DrawAutoGroundSizeControl(s, panelX, contentY);
+            contentY += ButtonHeight + 2;
+
+            // Ground type dropdown (stored by name).
+            int gtCount = _groundSystem.TypeCount;
+            var gtNames = new string[gtCount];
+            for (int i = 0; i < gtCount; i++) gtNames[i] = _groundSystem.GetTypeDef(i).Name;
+            // Default to "Dirt" (else the first type) when unset or stale — placing
+            // dirt under trees is the common case.
+            if (ResolveGroundTypeIndex(s.TypeName) < 0 && gtCount > 0)
+                s.TypeName = DefaultAutoGroundTypeName(gtNames);
+            string picked = eb.DrawCombo($"auto_ground_type_{idSuffix}", "Ground", s.TypeName, gtNames,
+                panelX + Margin, contentY, PanelWidth - Margin * 2);
+            if (picked != s.TypeName) s.TypeName = picked;
+            contentY += FieldHeight + 2;
+
+            // Noise tiles: ragged-edge tiles grown off the patch.
+            s.Noise = eb.DrawIntField($"auto_ground_noise_{idSuffix}", "Noise Tiles", s.Noise,
+                panelX + Margin, contentY, PanelWidth - Margin * 2);
+            s.Noise = Math.Clamp(s.Noise, 0, 500);
+            contentY += FieldHeight + 2;
+        }
+        contentY += 4;
+    }
+
+    /// <summary>Pick the default auto-ground type name: "Dirt" if present, else the
+    /// first type. <paramref name="gtNames"/> is assumed non-empty.</summary>
+    private string DefaultAutoGroundTypeName(string[] gtNames)
+    {
+        for (int i = 0; i < _groundSystem.TypeCount; i++)
+        {
+            var d = _groundSystem.GetTypeDef(i);
+            if (string.Equals(d.Id, "dirt", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(d.Name, "Dirt", StringComparison.OrdinalIgnoreCase))
+                return d.Name;
+        }
+        return gtNames[0];
     }
 
     private void DrawBrushCursor(int screenW, int screenH)
