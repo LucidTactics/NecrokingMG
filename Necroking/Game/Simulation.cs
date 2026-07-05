@@ -1855,7 +1855,12 @@ public class Simulation
 
                 var param = new ORCAParams
                 {
-                    TimeHorizon = 0.0f,
+                    // 3s lookahead. MUST be > 0: TimeHorizon = 0 makes
+                    // invTimeHorizon infinite and every neighbor constraint
+                    // degenerate (NaN/∞ cone math) — the solver then vetoes
+                    // nearly all motion for any unit with neighbors in range
+                    // (frozen wolves/deer on populated maps, 2026-07-05).
+                    TimeHorizon = 3f,
                     MaxSpeed = _units[i].MaxSpeed,
                     Radius = _units[i].Radius,
                     Priority = _units[i].OrcaPriority
