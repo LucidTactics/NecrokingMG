@@ -326,30 +326,9 @@ public class SpellEffectSystem
     /// excluding one index (the caster).</summary>
     private static int FindClosestAlly(Simulation sim, Vec2 point, float range,
         Faction faction, int excludeIdx)
-    {
-        int best = -1;
-        float bestDist = range * range;
-        for (int i = 0; i < sim.Units.Count; i++)
-        {
-            if (i == excludeIdx) continue;
-            if (!sim.Units[i].Alive || sim.Units[i].Faction != faction) continue;
-            float d = (point - sim.Units[i].Position).LengthSq();
-            if (d < bestDist) { bestDist = d; best = i; }
-        }
-        return best;
-    }
+        => sim.Query.NearestAllyToPoint(point, range, faction, excludeIdx);
 
     /// <summary>Find closest enemy unit to a point within range.</summary>
     private static int FindClosestEnemy(Simulation sim, Vec2 point, float range, Faction casterFaction)
-    {
-        int best = -1;
-        float bestDist = range * range;
-        for (int i = 0; i < sim.Units.Count; i++)
-        {
-            if (!sim.Units[i].Alive || sim.Units[i].Faction == casterFaction) continue;
-            float d = (point - sim.Units[i].Position).LengthSq();
-            if (d < bestDist) { bestDist = d; best = i; }
-        }
-        return best;
-    }
+        => sim.Query.NearestEnemyToPoint(point, range, casterFaction);
 }

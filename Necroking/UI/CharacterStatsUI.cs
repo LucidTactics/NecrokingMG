@@ -677,21 +677,8 @@ public class CharacterStatsUI : IModalLayer
         if (necroIdx < 0) return;
         const float Range = 6f;
         var necroPos = sim.Units[necroIdx].Position;
-        int bestIdx = -1;
-        float bestDistSq = Range * Range;
-        for (int i = 0; i < sim.Corpses.Count; i++)
-        {
-            var c = sim.Corpses[i];
-            if (c.Dissolving) continue;
-            if (humansOnly && gameData != null)
-            {
-                var cDef = gameData.Units.Get(c.UnitDefID);
-                if (cDef == null) continue;
-                if (cDef.Faction != "Human") continue;
-            }
-            float d = (c.Position - necroPos).LengthSq();
-            if (d < bestDistSq) { bestDistSq = d; bestIdx = i; }
-        }
+        int bestIdx = sim.Query.NearestCorpse(necroPos, Range,
+            new ConsumableCorpses(humansOnly ? gameData : null));
         if (bestIdx < 0)
         {
             Core.DebugLog.Log("skillbook", $"metamorph action: no {(humansOnly ? "human " : "")}corpse in range");
@@ -723,6 +710,22 @@ public class CharacterStatsUI : IModalLayer
             u.Stats = stats;
             Core.DebugLog.Log("skillbook",
                 $"Corpse Eating: hp {u.Stats.HP}/{u.Stats.MaxHP}, bonus {bookState.CorpseEatingBonus}/{SkillBookState.CorpseEatingHPCap}");
+        }
+    }
+
+    /// <summary>Corpses eligible for consumption: not dissolving, and — when a
+    /// GameData is supplied — only bodies whose source UnitDef faction is Human
+    /// (the Soul Consumption gate). Null gameData = any faction.</summary>
+    private readonly struct ConsumableCorpses : ICorpseQueryFilter
+    {
+        private readonly GameData? _humanGate;
+        public ConsumableCorpses(GameData? humanGate) { _humanGate = humanGate; }
+        public bool Match(Corpse c)
+        {
+            if (c.Dissolving) return false;
+            if (_humanGate == null) return true;
+            var cDef = _humanGate.Units.Get(c.UnitDefID);
+            return cDef != null && cDef.Faction == "Human";
         }
     }
 

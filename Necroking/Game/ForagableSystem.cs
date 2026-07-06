@@ -82,23 +82,10 @@ public class ForagableSystem
     /// <summary>Reset on new game / map reload.</summary>
     public void Clear() { _inFlight.Clear(); _autoPickupCooldown = 0f; }
 
-    /// <summary>Walk the env objects looking for the nearest foragable within
-    /// <paramref name="maxDist"/> of <paramref name="fromPos"/>. Returns -1 if none.</summary>
+    /// <summary>Nearest collectable foragable within <paramref name="maxDist"/>
+    /// of <paramref name="fromPos"/>. Returns -1 if none.</summary>
     public int FindNearest(Vec2 fromPos, float maxDist)
-    {
-        float bestDist = maxDist;
-        int bestIdx = -1;
-        for (int fi = 0; fi < _env.ObjectCount; fi++)
-        {
-            if (!_env.IsObjectVisible(fi)) continue;
-            var def = _env.Defs[_env.Objects[fi].DefIndex];
-            if (!def.IsForagable) continue;
-            var obj = _env.Objects[fi];
-            float dist = (new Vec2(obj.X, obj.Y) - fromPos).Length();
-            if (dist < bestDist) { bestDist = dist; bestIdx = fi; }
-        }
-        return bestIdx;
-    }
+        => _sim.Query.NearestEnvObject(fromPos, maxDist, new EnvForagables());
 
     /// <summary>Begin an arc-pickup animation on the env object at
     /// <paramref name="objIdx"/>. Marks the object collected immediately so

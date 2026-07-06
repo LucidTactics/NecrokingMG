@@ -184,6 +184,11 @@ public class Simulation
     public UnitArrays Units => _units;
     public UnitArrays UnitsMut => _units;
     public Quadtree Quadtree => _quadtree;
+    /// <summary>Central world-query engine (nearest / under-cursor / in-radius over
+    /// units, env objects, corpses). Reach it as _sim.Query.… per call — never cache
+    /// it in a field, same rule as _sim itself (recreated with the session).</summary>
+    public WorldQuery Query => _query ??= new WorldQuery(this);
+    private WorldQuery? _query;
     public NecromancerState NecroState => _necroState;
     public IReadOnlyList<Corpse> Corpses => _corpses;
     public List<Corpse> CorpsesMut => _corpses;
@@ -4046,20 +4051,10 @@ public class Simulation
         return closest >= 0 ? CombatTarget.Unit(_units[closest].Id) : CombatTarget.None;
     }
 
+    // Bounded range routes through the quadtree (this runs per-unit in AI
+    // paths — O(N²) as a linear scan at horde scale); unbounded stays linear.
     private int FindClosestEnemy(int unitIdx, float maxRange = 0f)
-    {
-        float bestDist = float.MaxValue;
-        float maxDist2 = maxRange > 0f ? maxRange * maxRange : float.MaxValue;
-        int bestIdx = -1;
-        for (int j = 0; j < _units.Count; j++)
-        {
-            if (j == unitIdx || !_units[j].Alive) continue;
-            if (_units[j].Faction == _units[unitIdx].Faction) continue;
-            float dist = (_units[j].Position - _units[unitIdx].Position).LengthSq();
-            if (dist < bestDist && dist <= maxDist2) { bestDist = dist; bestIdx = j; }
-        }
-        return bestIdx;
-    }
+        => Query.NearestEnemyOf(unitIdx, maxRange);
 
     private bool IsTargetAlive(CombatTarget t)
     {

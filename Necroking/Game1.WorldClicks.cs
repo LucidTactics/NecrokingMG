@@ -18,59 +18,36 @@ public partial class Game1
 {
     /// <summary>Nearest Empty Grave (IsWorkerHome def) under the cursor, or -1.</summary>
     private int FindGraveUnderCursor(Vec2 mouseWorld, float clickRange = 1.6f)
-    {
-        if (_envSystem == null) return -1;
-        int best = -1; float bestSq = clickRange * clickRange;
-        for (int i = 0; i < _envSystem.ObjectCount; i++)
-        {
-            var def = _envSystem.GetDef(_envSystem.GetObject(i).DefIndex);
-            var rt = _envSystem.GetObjectRuntime(i);
-            if (!def.IsWorkerHome || !rt.Alive || rt.BuildProgress < 1f) continue;
-            var o = _envSystem.GetObject(i);
-            float sq = (new Vec2(o.X, o.Y) - mouseWorld).LengthSq();
-            if (sq < bestSq) { bestSq = sq; best = i; }
-        }
-        return best;
-    }
+        => _sim.Query.NearestEnvObject(mouseWorld, clickRange, new EnvWorkerHomes());
 
     // Nearest built Corpse Pile under the cursor (click-to-gather target), or -1.
     private int FindCorpsePileUnderCursor(Vec2 mouseWorld, float clickRange = 1.6f)
     {
-        if (_envSystem == null) return -1;
-        int pileDef = _envSystem.FindDef("corpse_pile");
+        int pileDef = _envSystem != null ? _envSystem.FindDef("corpse_pile") : -1;
         if (pileDef < 0) return -1;
-        int best = -1; float bestSq = clickRange * clickRange;
-        for (int i = 0; i < _envSystem.ObjectCount; i++)
-        {
-            if (_envSystem.GetObject(i).DefIndex != pileDef) continue;
-            var rt = _envSystem.GetObjectRuntime(i);
-            if (!rt.Alive || rt.BuildProgress < 1f) continue;
-            var o = _envSystem.GetObject(i);
-            float sq = (new Vec2(o.X, o.Y) - mouseWorld).LengthSq();
-            if (sq < bestSq) { bestSq = sq; best = i; }
-        }
-        return best;
+        return _sim.Query.NearestEnvObject(mouseWorld, clickRange, pileDef);
+    }
+
+    /// <summary>Built Corpse Piles that actually hold a corpse — the standard
+    /// pile gate plus a stock check via the worker system (the WorldQuery
+    /// escape hatch for state that lives outside EnvironmentSystem).</summary>
+    private readonly struct StockedCorpsePiles : IEnvQueryFilter
+    {
+        private readonly EnvByDefIndex _pile;
+        private readonly Game.Jobs.WorkerSystem _workers;
+        public StockedCorpsePiles(int pileDef, Game.Jobs.WorkerSystem workers)
+        { _pile = new EnvByDefIndex(pileDef); _workers = workers; }
+        public bool Match(World.EnvironmentSystem env, int i)
+            => _pile.Match(env, i) && _workers.StoredOf(i, Game.Jobs.JobResources.Corpse) > 0;
     }
 
     // Nearest built Corpse Pile that actually holds a corpse, within range of a point
     // (used by the F-key pickup so it grabs from a pile the same way as a loose body).
     private int FindNearestCorpsePileInRange(Vec2 from, float range)
     {
-        if (_envSystem == null) return -1;
-        int pileDef = _envSystem.FindDef("corpse_pile");
+        int pileDef = _envSystem != null ? _envSystem.FindDef("corpse_pile") : -1;
         if (pileDef < 0) return -1;
-        int best = -1; float bestSq = range * range;
-        for (int i = 0; i < _envSystem.ObjectCount; i++)
-        {
-            if (_envSystem.GetObject(i).DefIndex != pileDef) continue;
-            var rt = _envSystem.GetObjectRuntime(i);
-            if (!rt.Alive || rt.BuildProgress < 1f) continue;
-            if (_workerSystem.StoredOf(i, Game.Jobs.JobResources.Corpse) <= 0) continue;
-            var o = _envSystem.GetObject(i);
-            float sq = (new Vec2(o.X, o.Y) - from).LengthSq();
-            if (sq < bestSq) { bestSq = sq; best = i; }
-        }
-        return best;
+        return _sim.Query.NearestEnvObject(from, range, new StockedCorpsePiles(pileDef, _workerSystem));
     }
 
     /// <summary>World-object panel routes, ordered — the first pick that hits

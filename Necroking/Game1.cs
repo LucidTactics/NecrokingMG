@@ -269,20 +269,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private bool TryNearestFreeCorpse(Vec2 from, out TetherEnd end)
     {
         end = default;
-        int best = -1;
-        float bestSq = RopeAttachRadius * RopeAttachRadius;
-        var corpses = _sim.Corpses;
-        for (int ci = 0; ci < corpses.Count; ci++)
-        {
-            var cp = corpses[ci];
-            if (cp.ConsumedBySummon || cp.Dissolving || cp.Bagged
-                || cp.DraggedByUnitID != GameConstants.InvalidUnit) continue;
-            float dx = cp.Position.X - from.X, dy = cp.Position.Y - from.Y;
-            float d2 = dx * dx + dy * dy;
-            if (d2 < bestSq) { bestSq = d2; best = ci; }
-        }
+        int best = _sim.Query.NearestCorpse(from, RopeAttachRadius, CorpseExclude.Free);
         if (best < 0) return false;
-        end = TetherEnd.ForCorpse(corpses[best].CorpseID);
+        end = TetherEnd.ForCorpse(_sim.Corpses[best].CorpseID);
         return true;
     }
 
@@ -2610,36 +2599,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Skips bodies that are mid-dissolve, consumed, bagged, or being carried.
         _hoveredCorpseIdx = -1;
         if ((inspectAll || tcfg.ShowCorpseInfo) && !overUI)
-        {
-            float pr = tcfg.GroundPickRadius;
-            float bcd = pr * pr;
-            var corpses = _sim.Corpses;
-            for (int ci = 0; ci < corpses.Count; ci++)
-            {
-                var cp = corpses[ci];
-                if (cp.ConsumedBySummon || cp.Dissolving || cp.Bagged
-                    || cp.DraggedByUnitID != GameConstants.InvalidUnit) continue;
-                float cdx = cp.Position.X - mouseWorld.X, cdy = cp.Position.Y - mouseWorld.Y;
-                float cd = cdx * cdx + cdy * cdy;
-                if (cd < bcd) { bcd = cd; _hoveredCorpseIdx = ci; }
-            }
-        }
+            _hoveredCorpseIdx = _sim.Query.NearestCorpse(
+                mouseWorld, tcfg.GroundPickRadius, CorpseExclude.Free);
 
         // --- Hovered unit (for the outline-box highlight + info tooltip) ---
         _hoveredUnitIdx = -1;
         if ((inspectAll || tcfg.ShowHoverHighlight) && !overUI)
-        {
-            float pr = tcfg.HoverPickRadius;
-            float bud = pr * pr;
-            for (int i = 0; i < _sim.Units.Count; i++)
-            {
-                var u = _sim.Units[i];
-                if (!u.Alive) continue;
-                float udx = u.Position.X - mouseWorld.X, udy = u.Position.Y - mouseWorld.Y;
-                float d2 = udx * udx + udy * udy;
-                if (d2 < bud) { bud = d2; _hoveredUnitIdx = i; }
-            }
-        }
+            _hoveredUnitIdx = _sim.Query.UnitUnderCursor(mouseWorld, tcfg.HoverPickRadius);
 
         // Dev force-hover: pin the highlight to a chosen unit for headless variant testing.
         if (_devForceHoverUnitId != uint.MaxValue)
@@ -4335,20 +4301,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         catch { _itemTextureCache[itemId] = null; return null; }
     }
 
+    // Enemy = different faction from the necromancer (undead).
     private int FindClosestEnemyToPoint(Vec2 worldPos, float maxRange)
-    {
-        float bestDist = maxRange * maxRange;
-        int bestIdx = -1;
-        for (int i = 0; i < _sim.Units.Count; i++)
-        {
-            if (!_sim.Units[i].Alive) continue;
-            // Enemy = different faction from necromancer (undead)
-            if (_sim.Units[i].Faction == Faction.Undead) continue;
-            float d = (_sim.Units[i].Position - worldPos).LengthSq();
-            if (d < bestDist) { bestDist = d; bestIdx = i; }
-        }
-        return bestIdx;
-    }
+        => _sim.Query.NearestEnemyToPoint(worldPos, maxRange, Faction.Undead);
 
     private int FindNecromancer() => _sim.Units.FindAliveNecromancerIndex();
 
