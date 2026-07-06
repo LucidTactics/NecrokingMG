@@ -115,7 +115,7 @@ public static class MapData
                     float scale = po.TryGetProperty("scale", out var s) ? s.GetSingle() : 1f;
                     float seed = po.TryGetProperty("seed", out var sd) ? sd.GetSingle() : -1f;
 
-                    env.AddObject((ushort)defIdx, x, y, scale, seed);
+                    env.AddObject((ushort)defIdx, x, y, scale, seed, persistent: true);
                 }
                 DebugLog.Log("startup", $"  Placed objects: {env.ObjectCount}" + (orphans > 0 ? $" ({orphans} orphans skipped)" : ""));
             }

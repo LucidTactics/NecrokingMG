@@ -401,7 +401,7 @@ public class MapEditorWindow
         public float X, Y, Scale, Seed;
         public override void Undo()
         {
-            Env.AddObject(DefIndex, X, Y, Scale, Seed);
+            Env.AddObject(DefIndex, X, Y, Scale, Seed, persistent: true);
         }
     }
 
@@ -430,7 +430,7 @@ public class MapEditorWindow
         public override void Undo()
         {
             foreach (var r in Removed)
-                Env.AddObject(r.defIdx, r.x, r.y, r.scale, r.seed);
+                Env.AddObject(r.defIdx, r.x, r.y, r.scale, r.seed, persistent: true);
         }
     }
 
@@ -607,6 +607,17 @@ public class MapEditorWindow
         if (string.IsNullOrEmpty(name)) return;
         _mapFilename = name;
         _wallEditor?.SetMapFilename(name);
+    }
+
+    /// <summary>Dev-command hook (`save_map [name]`): trigger the same save as the
+    /// editor's Save Map button, optionally to a different filename (the editor's
+    /// save target is left unchanged). Returns the map filename that was written.</summary>
+    public string DevSaveMap(string? filename = null)
+    {
+        string prev = _mapFilename;
+        if (!string.IsNullOrEmpty(filename)) _mapFilename = filename;
+        try { SaveMap(); return _mapFilename; }
+        finally { _mapFilename = prev; }
     }
 
     /// <summary>Ignore world interaction until the mouse buttons are released. Call
@@ -2293,7 +2304,7 @@ public class MapEditorWindow
                             int newIdx;
                             try
                             {
-                                newIdx = _envSystem.AddObject((ushort)defToPlace, worldPos.X, worldPos.Y, placeScale);
+                                newIdx = _envSystem.AddObject((ushort)defToPlace, worldPos.X, worldPos.Y, placeScale, persistent: true);
                             }
                             finally
                             {
@@ -2665,7 +2676,7 @@ public class MapEditorWindow
 
                     long t3 = System.Diagnostics.Stopwatch.GetTimestamp();
                     float paintScale = GetRandomPlacementScale(defToPlace);
-                    int newIdx = _envSystem.AddObject((ushort)defToPlace, px, py, paintScale);
+                    int newIdx = _envSystem.AddObject((ushort)defToPlace, px, py, paintScale, persistent: true);
                     _batchPlacedObjects?.Add(((ushort)defToPlace, px, py, paintScale, 0f, newIdx));
                     // Incremental stamp: skip the per-stroke full rebake on
                     // mouse-up by keeping tier fields in sync as we go. O(r²)
@@ -2792,7 +2803,7 @@ public class MapEditorWindow
                     if (!tooClose)
                     {
                         float groupScale = GetRandomPlacementScale(SelectedEnvDefIndex);
-                        int newIdx = _envSystem.AddObject((ushort)SelectedEnvDefIndex, px, py, groupScale);
+                        int newIdx = _envSystem.AddObject((ushort)SelectedEnvDefIndex, px, py, groupScale, persistent: true);
                         AutoCreateTriggerInstance(newIdx); // RM06
                         _envSystem.StampObjectCollisionAt(_tileGrid, newIdx);
                     }
@@ -5804,7 +5815,7 @@ public class MapEditorWindow
                 float scale = GetRandomPlacementScale(defIdx);
                 if (!_envSystem.CanPlaceObject(defIdx, px, py, scale)) continue;
 
-                int newIdx = _envSystem.AddObject((ushort)defIdx, px, py, scale);
+                int newIdx = _envSystem.AddObject((ushort)defIdx, px, py, scale, persistent: true);
                 _batchPlacedObjects?.Add(((ushort)defIdx, px, py, scale, 0f, newIdx));
                 _envSystem.StampObjectCollisionAt(_tileGrid, newIdx);
                 AutoCreateTriggerInstance(newIdx); // RM06
@@ -6097,11 +6108,14 @@ public class MapEditorWindow
             EnsureProcGenStylesLoaded();
             ProcGenStyle.SaveAll(GamePaths.Resolve("data/procgen_styles.json"), _procGenStyles);
 
-            // Placed objects
+            // Placed objects. Only persistent ones (editor-placed / map-loaded /
+            // player-built) — gameplay spawns (zone foragables, village stamps,
+            // creature drops) would otherwise accumulate in the map JSON forever.
             writer.WriteStartArray("placedObjects");
             for (int i = 0; i < _envSystem.ObjectCount; i++)
             {
                 var obj = _envSystem.GetObject(i);
+                if (!obj.Persistent) continue;
                 var def = _envSystem.GetDef(obj.DefIndex);
                 writer.WriteStartObject();
                 writer.WriteString("defId", def.Id);

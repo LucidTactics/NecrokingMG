@@ -641,6 +641,15 @@ public partial class Game1 {
                break;
             }
 
+            // Trigger the map editor's Save Map (writes assets/maps/<loaded map>.json
+            // plus env_defs/procgen_styles). Optional arg saves under a different
+            // filename without retargeting the editor. window.dev('save_map',['name'])
+            case "save_map": {
+               string? saveName = c.Args.Length > 0 ? c.Args[0] : null;
+               c.Complete(Necroking.Dev.DevServer.Ok($"saved map '{_mapEditor.DevSaveMap(saveName)}'"));
+               break;
+            }
+
             // Assign a unit to a grave (nearest unoccupied empty_grave if idx omitted):
             // window.dev('assign_worker',[unitId]) or window.dev('assign_worker',[unitId, graveObjIdx])
             case "assign_worker": {

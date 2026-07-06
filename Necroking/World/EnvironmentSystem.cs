@@ -451,6 +451,11 @@ public struct PlacedObject
     public float Scale;
     public float Seed;
     public string ObjectID;
+    /// <summary>True = written to the map JSON by the editor's Save Map: editor-placed,
+    /// map-loaded, and player-built objects. False = gameplay spawns (zone foragables,
+    /// village stamps, creature drops, dev/scenario placements) so saving the map
+    /// doesn't accumulate them across sessions.</summary>
+    public bool Persistent;
 }
 
 public enum TrapVisualState : byte { Hidden, Triggered, Deployed, FadingOut }
@@ -569,13 +574,14 @@ public class EnvironmentSystem
     public EnvironmentObjectDef GetDef(int idx) => _defs[idx];
     public int FindDef(string id) { for (int i = 0; i < _defs.Count; i++) if (_defs[i].Id == id) return i; return -1; }
 
-    public int AddObject(ushort defIndex, float x, float y, float scale = 1f, float seed = -1f)
+    public int AddObject(ushort defIndex, float x, float y, float scale = 1f, float seed = -1f, bool persistent = false)
     {
         var obj = new PlacedObject
         {
             DefIndex = defIndex, X = x, Y = y, Scale = scale,
             Seed = seed < 0 ? Random.Shared.NextSingle() : seed,
-            ObjectID = $"obj_{_nextObjectID++}"
+            ObjectID = $"obj_{_nextObjectID++}",
+            Persistent = persistent
         };
         _objects.Add(obj);
         var def = _defs[defIndex];
@@ -671,9 +677,9 @@ public class EnvironmentSystem
     public TableCraftState GetTableState(int idx) => _tableState[idx];
 
     /// <summary>Add an object as an unbuilt blueprint (BuildProgress = 0).</summary>
-    public int AddObjectAsBlueprint(ushort defIndex, float x, float y, float scale = 1f)
+    public int AddObjectAsBlueprint(ushort defIndex, float x, float y, float scale = 1f, bool persistent = false)
     {
-        int idx = AddObject(defIndex, x, y, scale);
+        int idx = AddObject(defIndex, x, y, scale, persistent: persistent);
         var rt = _objectRuntime[idx];
         rt.BuildProgress = 0f;
         _objectRuntime[idx] = rt;

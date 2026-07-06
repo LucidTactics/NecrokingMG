@@ -366,7 +366,8 @@ public class BuildingMenuUI : IModalLayer
         if (!_envSystem.CanPlaceObject(defIdx, worldX, worldY)) return false;
 
         DeductCosts(envDef);
-        _envSystem.AddObject((ushort)defIdx, worldX, worldY);
+        // Persistent: map save is currently the only way player constructions survive a restart.
+        _envSystem.AddObject((ushort)defIdx, worldX, worldY, persistent: true);
         return true;
     }
 
