@@ -240,6 +240,8 @@ public static class Locomotion
                 // while casting, so a quick cast mid-sprint doesn't cost the
                 // whole ramp.
                 float decel = def?.MaxDeceleration ?? gameData.Settings.Combat.MaxDeceleration;
+                if (u.ActiveBuffs.Count > 0)
+                   decel = BuffSystem.GetModifiedExtra(units, i, "MaxAcceleration", decel);
                 em = MathF.Max(1f, em - (decel / cs) * 0.5f * dt);
             }
             else if (em < targetMult)

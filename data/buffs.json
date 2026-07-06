@@ -496,6 +496,11 @@
           "value": 3
         },
         {
+          "type": "Multiply",
+          "stat": "MaxAcceleration",
+          "value": 3
+        },
+        {
           "type": "Add",
           "stat": "MaxMana",
           "value": 999

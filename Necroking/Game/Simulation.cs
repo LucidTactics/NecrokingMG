@@ -1963,10 +1963,10 @@ public class Simulation
             var accelDef = UnitUtil.ResolveDef(_units[i], _gameData); // memoized — per moving unit per frame
             float maxAccel = BuffSystem.GetModifiedExtra(_units, i, "MaxAcceleration",
                 accelDef?.MaxAcceleration ?? _gameData.Settings.Combat.MaxAcceleration);
-            float maxDecel = accelDef?.MaxDeceleration
-                ?? _gameData.Settings.Combat.MaxDeceleration;
-            float maxLateral = accelDef?.MaxLateralAccel
-                ?? _gameData.Settings.Combat.MaxLateralAccel;
+            float maxDecel = BuffSystem.GetModifiedExtra(_units, i, "MaxAcceleration",
+               accelDef?.MaxDeceleration ?? _gameData.Settings.Combat.MaxDeceleration);
+            float maxLateral = BuffSystem.GetModifiedExtra(_units, i, "MaxAcceleration",
+               accelDef?.MaxLateralAccel ?? _gameData.Settings.Combat.MaxLateralAccel);
             // Cast plant: boosted brake so the player skids to a stop inside the
             // cast wind-up window (~0.1s from a full sprint) instead of coasting.
             if (_necroCastPlant && _units[i].AI == AIBehavior.PlayerControlled)
