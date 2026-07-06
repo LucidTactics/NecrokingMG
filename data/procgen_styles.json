@@ -2,34 +2,74 @@
   "styles": [
     {
       "name": "Light Forest",
-      "largeDensity": 2,
-      "largeDefIds": [
-        "Oak7",
-        "Oak8",
-        "Oak9",
-        "Oak10"
-      ],
-      "smallDensity": 5,
-      "smallDefIds": [
-        "moss_clump",
-        "small_fern",
-        "wild_growth"
+      "categories": [
+        {
+          "name": "Large objects",
+          "density": 2,
+          "defIds": [
+            "Oak7",
+            "Oak8",
+            "Oak9",
+            "Oak10"
+          ],
+          "autoGround": {
+            "enabled": false,
+            "type": "",
+            "size": 1,
+            "noise": 3
+          }
+        },
+        {
+          "name": "Small objects",
+          "density": 5,
+          "defIds": [
+            "moss_clump",
+            "small_fern",
+            "wild_growth"
+          ],
+          "autoGround": {
+            "enabled": false,
+            "type": "",
+            "size": 1,
+            "noise": 3
+          }
+        }
       ]
     },
     {
       "name": "Forest",
-      "largeDensity": 4,
-      "largeDefIds": [
-        "Oak7",
-        "Oak8",
-        "Oak9",
-        "Oak10"
-      ],
-      "smallDensity": 4,
-      "smallDefIds": [
-        "moss_clump",
-        "small_fern",
-        "wild_growth"
+      "categories": [
+        {
+          "name": "Large objects",
+          "density": 4,
+          "defIds": [
+            "Oak7",
+            "Oak8",
+            "Oak9",
+            "Oak10"
+          ],
+          "autoGround": {
+            "enabled": false,
+            "type": "",
+            "size": 1,
+            "noise": 3
+          }
+        },
+        {
+          "name": "Small objects",
+          "density": 4,
+          "defIds": [
+            "moss_clump",
+            "small_fern",
+            "wild_growth"
+          ],
+          "autoGround": {
+            "enabled": false,
+            "type": "",
+            "size": 1,
+            "noise": 3
+          }
+        }
       ]
     }
   ]
