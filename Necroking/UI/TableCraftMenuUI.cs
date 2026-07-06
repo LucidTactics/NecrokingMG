@@ -4,12 +4,12 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Necroking.Core;
 using Necroking.Data.Registries;
+using Necroking.Game;
 using Necroking.GameSystems;
 using Necroking.Render;
-using Necroking.UI;
 using Necroking.World;
 
-namespace Necroking.Game;
+namespace Necroking.UI;
 
 /// <summary>
 /// Small floating menu that opens above a craft-table. Shows N corpse slots, M
@@ -30,7 +30,7 @@ namespace Necroking.Game;
 /// slot boxes / progress bar / button / X via primitives for tight pixel control
 /// (slot widget "Item Slot" is sized for the equipment grid, too large here).
 /// </summary>
-public class TableCraftMenuUI : Necroking.UI.IModalLayer
+public class TableCraftMenuUI : IModalLayer
 {
     private const string PanelWidgetId = "TableCraftMenu";
 

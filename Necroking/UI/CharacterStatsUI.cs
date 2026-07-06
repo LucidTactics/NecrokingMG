@@ -7,8 +7,9 @@ using Necroking.Data;
 using Necroking.Data.Registries;
 using Necroking.Game;
 using Necroking.GameSystems;
+using Necroking.Render;
 
-namespace Necroking.Render;
+namespace Necroking.UI;
 
 /// <summary>
 /// Toggleable panel (Tab) showing the player necromancer's stats, plus two
@@ -19,7 +20,7 @@ namespace Necroking.Render;
 /// Stats modified by active buffs are colored green (higher) or red (lower)
 /// vs base.
 /// </summary>
-public class CharacterStatsUI : Necroking.UI.IModalLayer
+public class CharacterStatsUI : IModalLayer
 {
     private const int PanelW = 340;
     private const int RowH = 18;

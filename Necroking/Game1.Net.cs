@@ -13,7 +13,7 @@ namespace Necroking;
 public partial class Game1
 {
     internal NetSession _net = null!;
-    internal Editor.MultiplayerWindow _multiplayerWindow = null!;
+    internal UI.MultiplayerWindow _multiplayerWindow = null!;
 
     // remote playerId → ghost Unit.Id (stable across UnitArrays swap-and-pop)
     private readonly Dictionary<byte, uint> _netGhosts = new();

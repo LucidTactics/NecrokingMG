@@ -46,4 +46,4 @@ The game-facing integration (ghost unit spawning, per-frame state stamping, the 
 Multiplayer window) lives OUTSIDE this folder:
 - `Necroking/Game1.Net.cs` — glue partial: polls the session, spawns/despawns ghost units,
   sends the local necromancer's state at 20 Hz.
-- `Necroking/Editor/MultiplayerWindow.cs` — the pause-menu UI.
+- `Necroking/UI/MultiplayerWindow.cs` — the pause-menu UI.

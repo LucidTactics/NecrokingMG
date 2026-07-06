@@ -4,10 +4,10 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Necroking.Core;
 using Necroking.Data.Registries;
+using Necroking.Game;
 using Necroking.GameSystems;
-using Necroking.UI;
 
-namespace Necroking.Game;
+namespace Necroking.UI;
 
 /// <summary>
 /// Bridges the slot-based Inventory to the widget-based UI.
@@ -18,7 +18,7 @@ namespace Necroking.Game;
 /// This class owns the data binding — which slots show which items.
 /// Cosmetic edits in the widget editor flow through automatically.
 /// </summary>
-public class InventoryUI : Necroking.UI.IModalLayer
+public class InventoryUI : IModalLayer
 {
     private const string WidgetId = "EquipmentWindow";
     private const string FilledSlotWidget = "Item Slot";

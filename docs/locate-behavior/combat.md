@@ -48,7 +48,7 @@ forwards to it so AI and sim share one formula (they previously drifted — 1.5f
   landing resolves melee); `Trample` → `TrampleSystem.BeginCharge`; `Sweep` → stamps a
   sweep `PendingAttack`. This is the ONLY `BeginPounce` caller — wild-wolf and other AI
   handlers don't pounce themselves (see `WolfPackHandler.cs` comment: pounce is central).
-  `BeginPounce` (`Necroking/GameSystems/JumpSystem.cs`) derives travel duration itself
+  `BeginPounce` (`Necroking/Game/JumpSystem.cs`) derives travel duration itself
   from `dist / speed` + anim compression.
 
 ### `Necroking/Game1.WorldClicks.cs` — the player click → melee order (regression lives here)

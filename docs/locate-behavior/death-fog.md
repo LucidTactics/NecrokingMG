@@ -8,7 +8,7 @@ map editor" bug class is closed structurally (see Pitfalls).
 
 ## Files
 
-### `Necroking/GameSystems/DeathFogSystem.cs`
+### `Necroking/Game/DeathFogSystem.cs`
 The spread simulation itself. A coarse per-cell scalar density grid (`CellSize=4` world
 units/cell) with sources, sinks, and diffusion; keeps a sparse `_active` set so per-frame
 cost scales with fog footprint, not map size.

@@ -51,7 +51,7 @@ per-entity panel router to extend — you add the branch here.
 (`corpse_pile` def, `def.IsBuilding` + `def.StoredResource == "Corpse"`); its stored bodies
 live in `WorkerSystem` stockpiles, not on the object. Its "inventory panel" is a **floating
 cursor tooltip**:
-- `Necroking/Render/HUDRenderer.cs` → `DrawObjectTooltip(hoveredIdx, envSystem, sim, gameData,
+- `Necroking/UI/HUDRenderer.cs` → `DrawObjectTooltip(hoveredIdx, envSystem, sim, gameData,
   screenW, screenH)` — branches on env-object kind; for a building whose `StoredResource ==
   "Corpse"` it appends `"Corpses:"` + `sim.Workers.PiledCorpseLines(hoveredIdx)` (grouped
   "Skeleton x3" lines), else `"Empty"`, then `DrawCursorTooltip(lines, …)`. **This is the
@@ -68,7 +68,7 @@ belly/inventory list panel modeled on `PiledCorpseLines` + `DrawCursorTooltip`.
 
 There is **no reflection-based "programmer tooltip"** — the term is descriptive. The actual
 "what is this object" hover readouts are the **cursor-tooltip family in
-`Necroking/Render/HUDRenderer.cs`** (each builds a `string[]`/`List<string>` and calls the
+`Necroking/UI/HUDRenderer.cs`** (each builds a `string[]`/`List<string>` and calls the
 shared `DrawCursorTooltip(lines, screenW, screenH)`):
 - `DrawObjectTooltip` (env objects/buildings: name/id, `HP:`, `Owner:`, process state, pile contents),
   `DrawCorpseTooltip` (corpse name), `DrawBellyTooltip` (forager unit belly), and
@@ -100,11 +100,11 @@ need z-order over the world.
 return;`** (~line 553) — its own editor suppression, independent of the pick-block gate above.
 
 **Membership data for "in player horde / village / faction" (per unit):**
-- Faction: `Unit.Faction` (`Necroking/Movement/UnitSystem.cs`, enum `Faction { Undead, Human, Animal }`
+- Faction: `Unit.Faction` (`Necroking/Movement/UnitModel.cs`, enum `Faction { Undead, Human, Animal }`
   in `Data/Enums.cs`). "Player horde" = `Faction.Undead` **and** in the horde (below).
 - Horde: `sim.Horde` (`Game/HordeSystem.cs`) → `IsInHorde(uint id)`; `GetUnitState(id)` for
   Following/Chasing/Returning if wanted. Only meaningful for `Faction.Undead`.
-- Village: `Unit.VillageId` (short, -1 = none, `UnitSystem.cs`) → `sim.Villages?.Get(villageId)?.Name`
+- Village: `Unit.VillageId` (short, -1 = none, `UnitModel.cs`) → `sim.Villages?.Get(villageId)?.Name`
   (`Game/VillageSystem.cs`). Village membership is a **per-unit tag**, set at spawn in
   `Game1.Villages.cs` (`_sim.UnitsMut[idx].VillageId = …`); the `VillageSystem` recomputes only
   aggregate counts/posture, not membership.

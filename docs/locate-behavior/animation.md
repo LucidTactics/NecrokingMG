@@ -53,7 +53,7 @@ same-priority replacement rejected until the current override actually started.
 Look/edit here when: an override never clears, a queued anim gets stolen same-frame,
 priority arbitration is wrong.
 
-### `Necroking/Movement/UnitSystem.cs` (Unit fields — the state storage)
+### `Necroking/Movement/UnitModel.cs` (Unit fields — the state storage)
 `Unit.RoutineAnim` (plain field — AI writes raw, **last-writer-holds**: it persists until
 some code overwrites it, there is no auto-reset to locomotion), `Unit.OverrideAnim` /
 `OverrideTimer` / `OverrideStarted` / `CurrentOverrideHandleId` (internal setters —
@@ -110,13 +110,13 @@ Enable when hunting "anim got weird N frames ago" bugs.
   Sleep buffs), recovery `Forced(Standup/RecoverAnim)`.
 - `Game/PotionSystem.cs` — paralysis `Hold(Stunned, prio 3)`.
 - `Game/PhysicsSystem.cs` — knockback launch → `Forced(Fall)` (+ `AIControl.Interrupt`).
-- `GameSystems/TrampleSystem.cs` — trample-dodge hop → timed Dodge (owns `DodgeTimer`
+- `Game/TrampleSystem.cs` — trample-dodge hop → timed Dodge (owns `DodgeTimer`
   scripted hop; suppresses the standard Simulation dodge via `suppressDodgeAnim`).
 - `AI/DeerHerdHandler.cs` — wake-up `Combat(Standup)`.
 - `AI/CorpsePuppetHandler.cs` — `Forced(Death)` on despawn-deposit.
 
 **Direct controller writes (bypass both channels — the exceptions):**
-- `GameSystems/JumpSystem.cs` — ForceState(JumpTakeoff/Loop/Land…) — owns the controller
+- `Game/JumpSystem.cs` — ForceState(JumpTakeoff/Loop/Land…) — owns the controller
   during a jump (see AnimInvariants).
 - `Game1.Animation.cs` corpse-interact branch + `UpdateChanneledCast`; `Game1.Spells.cs`
   cast start (necromancer channels).

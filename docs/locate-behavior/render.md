@@ -185,7 +185,7 @@ of 2026-07-03; the deferred-issue list behind several of them is
 `todos/shader-review-followups.md`.
 
 ### Fog & visibility
-- **Death fog (ground blight fog)** — WORKING. Sim: `GameSystems/DeathFogSystem.cs`
+- **Death fog (ground blight fog)** — WORKING. Sim: `Game/DeathFogSystem.cs`
   (coarse 4-unit grid, heat-equation diffusion, sources/sinks from env-def
   `FogEmitRate`/`FogAbsorbRate`; also drives tree corruption and ground-vertex
   corruption). Render: `Render/DeathFogRenderer.cs` — **no shader**, one cloud-flipbook

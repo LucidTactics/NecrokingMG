@@ -1,8 +1,9 @@
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
+using Necroking.Editor;
 using Necroking.Net;
 
-namespace Necroking.Editor;
+namespace Necroking.UI;
 
 /// <summary>
 /// Pause-menu → Multiplayer submenu. Host a session (bind IP + port + on/off

@@ -5,9 +5,11 @@ editor project; `tools/` is Python). This doc says what each folder under `Necro
 is for and **where new code should go**.
 
 **How to read it:**
-- The rules are **prescriptive for new code, descriptive for existing code.** The flagged
-  oddities are known-and-tolerated — nothing is being moved or renamed — but they are
-  *not* templates to imitate.
+- The rules are **prescriptive for new code, descriptive for existing code.** The
+  historical oddities this doc used to flag (player UI classes stranded in `Game/`,
+  `Render/` and `Editor/`, the legacy top-level `GameSystems/` folder, the misnamed
+  `UnitSystem.cs`) were cleaned up 2026-07-06; the one remaining irregularity is the
+  `Game/` namespace split (see its section).
 - This doc maps folder → purpose. For behavior → file routing ("where is X handled?"),
   use the `locate-behavior` skill and [locate-behavior/overview.md](locate-behavior/overview.md).
   Detailed boundary rules live in class-level doc comments (`Game1.cs`, `Game/Simulation.cs`,
@@ -31,7 +33,6 @@ is for and **where new code should go**.
 | `Game/Combat/` | `Necroking.GameSystems.Combat` ⚠ | Shared combat math (melee range, intercept) |
 | `Game/Jobs/` | `Necroking.Game.Jobs` | Worker economy: WorkerSystem brain, job defs/state |
 | `Game/SkillEffects/` | `Necroking.Game.SkillEffects` | Skill/passive effect application |
-| `GameSystems/` | `Necroking.GameSystems` ⚠ | Four more gameplay systems; historical spillover of the same namespace as `Game/` |
 | `AI/` | `Necroking.AI` | Per-unit AI: archetype handlers deciding what a unit *wants* to do |
 | `Render/` | `Necroking.Render` | Everything wired into the draw pipeline: atlases, camera, effects, anim state, HUD |
 | `UI/` | `Necroking.UI` | Player-facing overlays/panels with hit-testing, plus widget infra |
@@ -46,11 +47,10 @@ is for and **where new code should go**.
 
 - **New gameplay system (per-tick world behavior)** → file in **`Game/`**, namespace
   **`Necroking.GameSystems`**. Matches `Simulation`'s namespace and where the bulk already
-  lives. The `GameSystems/` *folder* is legacy — never add files there.
+  lives. (The old top-level `GameSystems/` folder was merged into `Game/` 2026-07-06.)
 - **New AI behavior/archetype** → `AI/`, a handler on `IArchetypeHandler`. AI sets intent
   (targets, `PreferredVel`); execution stays in Locomotion/Simulation.
-- **New player-facing overlay/panel** → `UI/` — not `Render/`, not `Game/`, not `Editor/`,
-  despite the flagged precedents in each.
+- **New player-facing overlay/panel** → `UI/` — not `Render/`, not `Game/`, not `Editor/`.
 - **New developer/content editor** → `Editor/`, built on `EditorBase`.
 - **New `data/*.json` registry** → `Data/Registries/` on `RegistryBase<TDef>`. New pure
   data schema/type → `Data/`.
@@ -66,7 +66,7 @@ is for and **where new code should go**.
 - **Networking** → only when the task is explicitly multiplayer; read
   [Necroking/Net/README.md](../Necroking/Net/README.md) first.
 - **Movement feel** (effort→velocity, facing, movement anim) → `Movement/Locomotion.cs`.
-  **New unit data field** → `Movement/UnitSystem.cs` (the unit *model*, despite the name).
+  **New unit data field** → `Movement/UnitModel.cs` (the unit data model).
 
 ## Folder reference
 
@@ -113,10 +113,9 @@ class doc), `GroundSystem`, `TileGrid`, `WallSystem`, `RoadSystem`, `FlowField`,
 **Purpose:** the unit data model and how intent becomes motion. `Locomotion.cs` is THE
 single home for effort→speed, movement animation, and facing selection; `Orca.cs` is the
 local collision-avoidance solver.
-**Known oddity — don't imitate:** `UnitSystem.cs` is misnamed — it is the unit **data
-model** (`Unit`, the SoA `UnitArrays`, `UnitUtil`, `NecromancerState`), not a system; its
-header says to treat it as "UnitModel.cs". The movement *tick* itself is
-`Simulation.UpdateMovement`, which calls into this folder.
+`UnitModel.cs` (renamed from `UnitSystem.cs` 2026-07-06) is the unit **data model**
+(`Unit`, the SoA `UnitArrays`, `UnitUtil`, `NecromancerState`), not a system. The movement
+*tick* itself is `Simulation.UpdateMovement`, which calls into this folder.
 **Not here:** deciding *where* a unit wants to go (→ `AI/`), path routing (→ `World/Pathfinder.cs`).
 
 ### `Game/` — the gameplay core
@@ -129,14 +128,14 @@ potions, crafting, inventory, projectiles, player resources, combat log.
 **What goes here:** new gameplay systems — in this folder, namespace `Necroking.GameSystems`.
 
 **⚠ The namespace split (historical — the one big irregularity):** this folder spans
-three namespaces: ~20 files (including `Simulation`) are `Necroking.GameSystems`, ~12 are
+three namespaces: ~24 files (including `Simulation`) are `Necroking.GameSystems`, ~8 are
 `Necroking.Game`, and `GameSession.cs`/`SpellBarBindings.cs` are root `Necroking`.
-The top-level `GameSystems/` folder holds four more files of the same
-`Necroking.GameSystems` namespace. **Treat "GameSystems" as a namespace, not the folder** —
-the folder split carries no meaning. New systems: `Game/` folder + `GameSystems` namespace.
+(The old top-level `GameSystems/` folder was merged in here 2026-07-06.) **Treat
+"GameSystems" as a namespace, not a folder** — the split carries no meaning. New systems:
+`Game/` folder + `GameSystems` namespace.
 
-**Known oddity — don't imitate:** `InventoryUI`, `BuildingMenuUI`, `CraftingMenuUI`,
-`TableCraftMenuUI` are player UI living here; new panels go in `UI/`.
+Trample/Jump (with `PhysicsSystem`) form the "scripted motion" cluster — systems that own
+a unit's movement while active.
 
 #### `Game/Combat/`
 Shared combat math: `MeleeRangeUtil` (the canonical "am I in range" formula used by both
@@ -149,13 +148,6 @@ the AI handler), `JobRegistry`/`JobDef`/`JobState`.
 
 #### `Game/SkillEffects/`
 Skill/passive effect application (`SkillEffects.cs`).
-
-### `GameSystems/`
-Four gameplay systems (`TrampleSystem`, `JumpSystem`, `DeathFogSystem`,
-`WeaponBonusEffect`) that share the `Necroking.GameSystems` namespace with the `Game/`
-folder — see the namespace-split note above. **Legacy folder: don't add files here.**
-Trample/Jump (with `Game/PhysicsSystem`) form the "scripted motion" cluster — systems
-that own a unit's movement while active.
 
 ### `AI/`
 **Purpose:** per-unit AI — `IArchetypeHandler` plus one handler per archetype (wolves,
@@ -173,14 +165,13 @@ the road" banner), effect systems, and visual-only sims (`WadingWakeSystem`,
 `GroundFogSystem`).
 **Boundary vs UI:** `Render/` = drawn as part of the frame pass sequence; `UI/` =
 overlay/widget panels with hit-testing.
-**Known oddity — don't imitate:** `HUDRenderer` and `CharacterStatsUI` are player UI
-panels living here; new panels go in `UI/`.
 
 ### `UI/`
-**Purpose:** player-facing overlays and panels — grimoire, skill book, unit info sheet,
-job board, grave roster, tooltips — plus the shared widget infrastructure:
-`RuntimeWidgetRenderer` (draws the UI-editor widget defs at runtime), `UIHitRegistry`,
-`NineSlice`, `PopupManager`.
+**Purpose:** player-facing overlays and panels — the HUD (`HUDRenderer`), grimoire, skill
+book, unit info sheet, job board, grave roster, character stats, the
+inventory/crafting/building/table-craft menus, the pause-menu multiplayer window,
+tooltips — plus the shared widget infrastructure: `RuntimeWidgetRenderer` (draws the
+UI-editor widget defs at runtime), `UIHitRegistry`, `NineSlice`, `PopupManager`.
 **Not here:** developer content editors (→ `Editor/`), pipeline-level drawing (→ `Render/`).
 
 ### Root `Necroking/` — the app shell
@@ -199,9 +190,8 @@ job board, grave roster, tooltips — plus the shared widget infrastructure:
 item, wall, env-object, UI-widget, settings — all built on `EditorBase` (shared panels,
 fields, focus, reflection-driven property rendering).
 **Boundary vs UI:** editors author content (edit the JSON registries live) for
-developers; `UI/` is what players see.
-**Known oddity — don't imitate:** `MultiplayerWindow.cs` is a player-facing pause-menu
-window that lives here because it's built on the editor widget base.
+developers; `UI/` is what players see (even when a player panel is built on `EditorBase`,
+like `UI/MultiplayerWindow.cs`).
 
 ### `Dev/`
 **Purpose:** the `--devserver` HTTP control channel — `DevServer` (HTTP → queued
@@ -216,7 +206,7 @@ wire format (bump `ConnectionKey` on change), everything assumes single-threaded
 `PollEvents`, and the dependency points one way — nothing here may reference
 `Simulation`/`Game1`/UI. **Do not touch unless the task is explicitly multiplayer**; read
 [Necroking/Net/README.md](../Necroking/Net/README.md) first. Game-facing glue lives in
-`Game1.Net.cs`; the UI in `Editor/MultiplayerWindow.cs`.
+`Game1.Net.cs`; the UI in `UI/MultiplayerWindow.cs`.
 
 ### `Scenario/` and `Scenario/Scenarios/`
 **Purpose:** the coded headless regression harness run via `--scenario <name>`:

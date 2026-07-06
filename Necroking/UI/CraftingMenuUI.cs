@@ -6,10 +6,10 @@ using Microsoft.Xna.Framework.Input;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
+using Necroking.Game;
 using Necroking.GameSystems;
-using Necroking.UI;
 
-namespace Necroking.Game;
+namespace Necroking.UI;
 
 /// <summary>
 /// Widget-driven crafting menu. Uses the "CraftingMenu" widget template
@@ -17,7 +17,7 @@ namespace Necroking.Game;
 /// up to 2 ingredient costs. Handles selection, affordability, 1s crafting
 /// progress bar, and inventory output.
 /// </summary>
-public class CraftingMenuUI : Necroking.UI.IModalLayer
+public class CraftingMenuUI : IModalLayer
 {
     private const string MenuWidgetId = "CraftingMenu";
     private const string ItemWidgetId = "CraftingItem";

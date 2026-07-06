@@ -110,8 +110,8 @@ Copy it for mushrooms:
   680`) only if you go the passive-static route; an archetype handler is dispatched
   automatically by the unit loop and needs no manual wiring.
 
-### (b) Per-unit belly storage → new field(s) on `Necroking/Movement/UnitSystem.cs`
-Per-unit state is Struct-of-Arrays in `UnitSystem.cs` (this is where `CorpsesEaten` /
+### (b) Per-unit belly storage → new field(s) on `Necroking/Movement/UnitModel.cs`
+Per-unit state is Struct-of-Arrays in `UnitModel.cs` (this is where `CorpsesEaten` /
 `CorpseEatTimer` / `CorpseEatTargetID` live). Add a `byte BellyMushrooms;` counter (mirror
 `CorpsesEaten`). A plain count is enough if all belly mushrooms are the same def; if boars
 can eat different foragable types and must spit back the exact types, store a small

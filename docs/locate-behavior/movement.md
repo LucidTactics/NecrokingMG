@@ -112,7 +112,7 @@ shared static — single-threaded assumption.
 **Look/edit here when…** avoidance pushing/priority feel, units phasing through each
 other, NaN velocities, parallelizing movement.
 
-### `Necroking/Movement/UnitSystem.cs` — Unit data model + UnitArrays
+### `Necroking/Movement/UnitModel.cs` — Unit data model + UnitArrays
 `Unit` (Position/Velocity/PreferredVel/MoveTarget/MaxSpeed/Radius/OrcaPriority/
 StuckTime/MoveEffort/GhostMode/InPhysics + all gameplay state), `MoveEffort` gait-bias
 enum, `UnitArrays` (swap-and-pop removal with O(1) `_idToIndex`), `UnitUtil.ResolveUnitIndex`.
@@ -184,8 +184,8 @@ rocks) for ORCA statics and player clipping; rebuilt inside `RebuildPathfinder`.
 
 ### Scripted-movement owners (bypass ORCA/pathfinding while active)
 `Necroking/Game/PhysicsSystem.cs` (2.5D knockback arcs, `InPhysics`),
-`Necroking/GameSystems/JumpSystem.cs` (JumpPhase state machine),
-`Necroking/GameSystems/TrampleSystem.cs` (charge velocity + follow-through), and the
+`Necroking/Game/JumpSystem.cs` (JumpPhase state machine),
+`Necroking/Game/TrampleSystem.cs` (charge velocity + follow-through), and the
 dodge-hop lerp inline in `Simulation.Tick`.
 
 ### Debug / tests

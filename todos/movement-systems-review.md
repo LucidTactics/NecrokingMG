@@ -66,7 +66,7 @@ fragmentation.
 ## P0 — Confirmed player-visible bugs
 
 ### A. Swap-and-pop index-keying bug class (3 systems affected)
-`UnitArrays.RemoveUnit` (Necroking/Movement/UnitSystem.cs:596-609) swap-and-pops; only
+`UnitArrays.RemoveUnit` (Necroking/Movement/UnitModel.cs:596-609) swap-and-pops; only
 `_idToIndex` and `_necromancerIdx` (Simulation.cs:201-206) are repaired. Systems keying
 per-unit state by raw index break on every death:
 
@@ -285,7 +285,7 @@ flow-cache miss next tick. Gameplay triggers (EnvironmentSystem.cs):
   BuildChunkDirectionField (:1219-1276). A bug (e.g. the plateau 2-cycle) must be fixed in 5
   places. Consolidate to one `RunWindowDijkstra(baseX, baseY, w, h, goals, goalCosts, tier,
   cost[])` + one direction-field builder.
-- **`Unit.MoveTime` is dead** (written :1632/:1657, declared UnitSystem.cs:369, never read;
+- **`Unit.MoveTime` is dead** (written :1632/:1657, declared UnitModel.cs:369, never read;
   comment at :1628 is actively misleading). Delete.
 - **`UpdateWolfAI` legacy machine** (~200 lines, Simulation.cs:3573+): only live user is
   WolfHitAndRunScenario (comment :957-961 admits it). Port scenario to archetype, delete.

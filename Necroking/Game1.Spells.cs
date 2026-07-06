@@ -6,6 +6,7 @@ using Necroking.Data.Registries;
 using Necroking.Game;
 using Necroking.GameSystems;
 using Necroking.Render;
+using Necroking.UI;
 
 namespace Necroking;
 

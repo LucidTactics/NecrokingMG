@@ -1,7 +1,7 @@
 using System;
 using Microsoft.Xna.Framework;
 
-namespace Necroking.Render;
+namespace Necroking.UI;
 
 /// <summary>
 /// The HP/Mana bars: a grimoire-parchment track with slim gold trim (lines +

@@ -257,12 +257,12 @@ count stays the same; only the recorded identity changes.
 ## External routine writers — who sets Routine/Subroutine from OUTSIDE the handlers
 
 Per-unit AI state (`Routine`, `Subroutine`, `SubroutineTimer` bytes/float) lives on the
-`Unit` class in `Necroking/Movement/UnitSystem.cs`; `AIContext.Routine/Subroutine` are just
+`Unit` class in `Necroking/Movement/UnitModel.cs`; `AIContext.Routine/Subroutine` are just
 pass-throughs. Since commit 0b435eb external systems no longer write the bytes raw — they
 go through `AIControl.StartRoutine` (order start) / `AIControl.Interrupt` (cancel/yank),
 see "Shared transition logic" above. Current external writers:
 
-- `Game1.Crafting.cs` / `Game1.Spells.cs` (bush-work) / `Game/BuildingMenuUI.cs` — call
+- `Game1.Crafting.cs` / `Game1.Spells.cs` (bush-work) / `UI/BuildingMenuUI.cs` — call
   `AIControl.StartRoutine(units, necroIdx, PlayerControlledHandler.RoutineCraftAtTable /
   RoutineWorkOnBush / RoutineBuildGlyph, …)`. Cancel path: WASD input →
   `AIControl.Interrupt(units, i, "player-move")` in `Simulation.UpdateAI`'s

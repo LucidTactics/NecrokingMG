@@ -6,12 +6,12 @@ using Microsoft.Xna.Framework.Input;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
+using Necroking.Game;
 using Necroking.GameSystems;
 using Necroking.Render;
-using Necroking.UI;
 using Necroking.World;
 
-namespace Necroking.Game;
+namespace Necroking.UI;
 
 /// <summary>
 /// Widget-driven building placement menu. Uses the "BuildingMenu" widget template
@@ -19,7 +19,7 @@ namespace Necroking.Game;
 /// resource costs with icons and quantities. Handles selection, resource checking,
 /// ghost preview, and placement.
 /// </summary>
-public class BuildingMenuUI : Necroking.UI.IModalLayer
+public class BuildingMenuUI : IModalLayer
 {
     private const string MenuWidgetId = "BuildingMenu";
     private const string ItemWidgetId = "BuildingItem";

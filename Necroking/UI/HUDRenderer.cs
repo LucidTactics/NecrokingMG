@@ -7,9 +7,10 @@ using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
 using Necroking.GameSystems;
+using Necroking.Render;
 using Necroking.World;
 
-namespace Necroking.Render;
+namespace Necroking.UI;
 
 /// <summary>
 /// Renders the in-game HUD: HP/mana bars, spell bars, tooltips, unit counts,

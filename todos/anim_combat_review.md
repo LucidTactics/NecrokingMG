@@ -90,7 +90,7 @@ Frame:
 **Recommended fix scope:** the Combat / pre-roll / damage sites should funnel through `SetOverride`, OR AnimResolver should detect "state changed under me" by remembering the state the override was last seen playing (a generation/request ID, see §6 industry section).
 
 ### 1.2 Pounce landing callback has no guard against the underlying `PendingAttack` being lost
-**Where:** [JumpSystem.cs:307-324](Necroking/GameSystems/JumpSystem.cs#L307-L324). `FireLandingCallback` gates itself on `JumpAttackFired`, but does not verify `PendingAttack.IsUnit` or `PendingWeaponIdx >= 0`. `sim.ResolvePendingAttack` early-returns if the target is None, silently swallowing the pounce damage.
+**Where:** [JumpSystem.cs:307-324](Necroking/Game/JumpSystem.cs#L307-L324). `FireLandingCallback` gates itself on `JumpAttackFired`, but does not verify `PendingAttack.IsUnit` or `PendingWeaponIdx >= 0`. `sim.ResolvePendingAttack` early-returns if the target is None, silently swallowing the pounce damage.
 **Failure mode:** any code path that clears `PendingAttack` mid-pounce (e.g. Disengage in a wolf's hit-and-run phase timer, target death, or a future AI routine that resets combat state) makes the pounce land and do nothing with no warning.
 
 ### 1.3 Legacy `WolfPhase == WolfDisengage` code path clears `PendingAttack`/`PostAttackTimer` but isn't actually dead
@@ -106,7 +106,7 @@ Frame:
 ## 2. Fragile / easy-to-break interactions
 
 ### 2.1 JumpSystem has no timeout for Phase 3 (Landing) or Phase 4 (Recovery)
-**Where:** [JumpSystem.cs:235-272](Necroking/GameSystems/JumpSystem.cs#L235-L272). Takeoff has a 3s safety timeout. Landing/Recovery rely entirely on `ctrl.ConsumeActionMoment()` and the anim's PlayOnceTransition auto-switch. If anim metadata is missing (effect_time=0), Landing can stick until the fallback `t >= 1f` fires; Recovery waits for the controller to leave the land anim which requires the anim to actually complete. A broken/absent JumpLand sprite hangs the unit in phase 4 with `PreferredVel=Zero` — AI is locked out by the `if (JumpPhase != 0) break;` guard in every handler.
+**Where:** [JumpSystem.cs:235-272](Necroking/Game/JumpSystem.cs#L235-L272). Takeoff has a 3s safety timeout. Landing/Recovery rely entirely on `ctrl.ConsumeActionMoment()` and the anim's PlayOnceTransition auto-switch. If anim metadata is missing (effect_time=0), Landing can stick until the fallback `t >= 1f` fires; Recovery waits for the controller to leave the land anim which requires the anim to actually complete. A broken/absent JumpLand sprite hangs the unit in phase 4 with `PreferredVel=Zero` — AI is locked out by the `if (JumpPhase != 0) break;` guard in every handler.
 **Why it matters:** any art/data regression makes a unit unplayable with no in-game indicator.
 
 ### 2.2 `Incap.Recovering` + `RecoverTimer` handshake is fragile
@@ -142,7 +142,7 @@ Scan of numbers that should be data-driven:
 - [WolfPackHandler.cs:52-53](Necroking/AI/WolfPackHandler.cs#L52-L53) — SitDuration, SleepDetectionScale, StandupDuration.
 - [SubroutineSteps.cs:192-195](Necroking/AI/SubroutineSteps.cs#L192-L195) — `minTime = 0.2f` default.
 - [DamageSystem.cs:94](Necroking/Game/DamageSystem.cs#L94) — poison re-tick at 3s (should be per-poison-type).
-- [JumpSystem.cs:34-38](Necroking/GameSystems/JumpSystem.cs#L34-L38) — AirHorizontalSpeed, MinAirDuration, DefaultArcPeak, TakeoffSafetyTimeout.
+- [JumpSystem.cs:34-38](Necroking/Game/JumpSystem.cs#L34-L38) — AirHorizontalSpeed, MinAirDuration, DefaultArcPeak, TakeoffSafetyTimeout.
 
 None of these are per-unit or per-weapon. A "fast biter" archetype can't have shorter disengage timers; a "lazy stalker" wolf can't have longer alert windows; etc.
 
@@ -281,8 +281,8 @@ Handler + LocomotionScaling both consume this one asset. Industry analogue: Unre
 
 **What happens now:**
 - [AnimController.HasReachedActionMoment](Necroking/Render/AnimController.cs#L554-L566) — when effectMs<=0, falls through to `_animTime >= totalTicks * 0.5f`. So attacks resolve at 50% of anim duration regardless of what the artist intended.
-- [JumpSystem.TickTakeoffApproach](Necroking/GameSystems/JumpSystem.cs#L181-L203) — `ConsumeActionMoment` is the preferred liftoff trigger. If effect_time is 0, the action moment fires at 50% of anim, which is often wrong for a takeoff pose. Fallback is a 3-second `TakeoffSafetyTimeout` — player sees unit "winding up" for 3 full seconds before liftoff.
-- [JumpSystem.cs:91-94](Necroking/GameSystems/JumpSystem.cs#L91-L94) — baseline_ms uses `takeoffEffect`; if 0, baseline is (takeoffTotal + loopTotal + 0). The compression math underestimates flight duration and the land anim fires early.
+- [JumpSystem.TickTakeoffApproach](Necroking/Game/JumpSystem.cs#L181-L203) — `ConsumeActionMoment` is the preferred liftoff trigger. If effect_time is 0, the action moment fires at 50% of anim, which is often wrong for a takeoff pose. Fallback is a 3-second `TakeoffSafetyTimeout` — player sees unit "winding up" for 3 full seconds before liftoff.
+- [JumpSystem.cs:91-94](Necroking/Game/JumpSystem.cs#L91-L94) — baseline_ms uses `takeoffEffect`; if 0, baseline is (takeoffTotal + loopTotal + 0). The compression math underestimates flight duration and the land anim fires early.
 
 **Player sees:** attacks that "miss" visually but damage registers halfway through the anim. OR pounces that hang in takeoff for 3 seconds. OR attacks that come out faster than the animation suggests.
 
@@ -431,8 +431,8 @@ Now (post-fix): `ConsumeActionMoment` is only called if `hasPendingCast || hasPe
 **Trigger:** unit initiates a pounce, but the JumpLand anim asset fails to load (corrupt .png, missing .animationmeta).
 
 **What happens now:**
-- [JumpSystem.TickLanding](Necroking/GameSystems/JumpSystem.cs#L235-L257) fires on `ConsumeActionMoment || t >= 1f`. If the land anim has no meta, HasReachedActionMoment falls back to 50% of tick-based total, which still fires. But if the *anim* is missing entirely, ctrl.ForceState(JumpLand) sets the state to JumpLand anyway (AnimController doesn't validate), but rendering falls back to Idle.
-- Bigger risk: [JumpSystem.TickRecovery](Necroking/GameSystems/JumpSystem.cs#L259-L272) checks `ctrl.CurrentState != landAnim` to call EndJump. If somehow the state never transitions away from landAnim (e.g. because the PlayOnceTransition loop never completes), EndJump never fires. JumpPhase=4 forever. All AI handlers have `if (JumpPhase != 0) break` guards — unit is locked out of AI and combat permanently.
+- [JumpSystem.TickLanding](Necroking/Game/JumpSystem.cs#L235-L257) fires on `ConsumeActionMoment || t >= 1f`. If the land anim has no meta, HasReachedActionMoment falls back to 50% of tick-based total, which still fires. But if the *anim* is missing entirely, ctrl.ForceState(JumpLand) sets the state to JumpLand anyway (AnimController doesn't validate), but rendering falls back to Idle.
+- Bigger risk: [JumpSystem.TickRecovery](Necroking/Game/JumpSystem.cs#L259-L272) checks `ctrl.CurrentState != landAnim` to call EndJump. If somehow the state never transitions away from landAnim (e.g. because the PlayOnceTransition loop never completes), EndJump never fires. JumpPhase=4 forever. All AI handlers have `if (JumpPhase != 0) break` guards — unit is locked out of AI and combat permanently.
 
 **Player sees:** a unit stuck in a jump-recovery pose mid-combat, refusing to do anything.
 

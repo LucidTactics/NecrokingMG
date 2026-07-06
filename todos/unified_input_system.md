@@ -16,9 +16,9 @@ Most of the original plan has landed. Keeping this note around to track the rema
 
 ### Phase 3 — Game UI migration (DONE)
 All take `InputState` parameter now:
-- [InventoryUI.Update(InputState)](Necroking/Game/InventoryUI.cs:141)
-- [BuildingMenuUI.Update(InputState, ...)](Necroking/Game/BuildingMenuUI.cs:251)
-- [CraftingMenuUI.Update(InputState, ...)](Necroking/Game/CraftingMenuUI.cs:231)
+- [InventoryUI.Update(InputState)](Necroking/UI/InventoryUI.cs:141)
+- [BuildingMenuUI.Update(InputState, ...)](Necroking/UI/BuildingMenuUI.cs:251)
+- [CraftingMenuUI.Update(InputState, ...)](Necroking/UI/CraftingMenuUI.cs:231)
 - [UIManager.Update(InputState)](Necroking/UI/UIManager.cs:58)
 - [TrapPlacementManager.Update(InputState, ...)](Necroking/Game/TrapPlacementManager.cs:19)
 - HUDRenderer migrated off `Mouse.GetState()`.
@@ -33,7 +33,7 @@ All take `InputState` parameter now:
 - Original editor `InputLayer` priority system is still in place on top of `InputState` (as planned).
 
 ### Phase 6 — Hover highlights (LARGELY DONE)
-- Inventory slot hover highlight in [InventoryUI.cs:209](Necroking/Game/InventoryUI.cs:209).
+- Inventory slot hover highlight in [InventoryUI.cs:209](Necroking/UI/InventoryUI.cs:209).
 - Hover logic present in HUDRenderer (34 refs — spell bar slots), BuildingMenuUI, CraftingMenuUI, all editor windows, `UIElement`, `ColorPickerPopup`.
 - Cursor swap hand/arrow over interactive UI: [Game1.cs:2405](Necroking/Game1.cs:2405) `Mouse.SetCursor(overInteractiveUI ? Hand : Arrow)`.
 

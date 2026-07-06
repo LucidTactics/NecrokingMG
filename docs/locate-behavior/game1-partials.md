@@ -270,7 +270,7 @@ lockstep or clicks land on the wrong button. Submenus opened from pause (e.g. Se
 `MenuState.Settings` + `Editor/SettingsWindow.cs` pattern: a window class driven by the shared
 `EditorBase` (`_editorUi`) widgets, `WantsClose` flag polled in `Game1.Update` to return to
 `MenuState.PauseMenu`.
-See also: `Render/HUDRenderer` and the spellbar renderer (the actual spellbar widget), `UI/`
+See also: `UI/HUDRenderer` and the spellbar renderer (the actual spellbar widget), `UI/`
 (inventory/grimoire/skill-book overlays), `Game1.Render.cs` (when HUD draws in the pipeline).
 
 ### `Necroking/Game1.Dev.cs` — dev-server command dispatch (`ExecuteDevCommand`) — READ ONLY
@@ -337,6 +337,6 @@ The `Game1.*` partials are glue; the heavy logic lives in sibling subsystem fold
   (`SpellRegistry`, units, items, potions, buffs, weapons, armor). Edit the JSON via the
   `edit-game-data` skill.
 - **`Necroking/Dev/`** — `DevServer` / `DevCommand` HTTP plumbing feeding `ExecuteDevCommand`.
-- Other folders (`AI/`, `Movement/`, `Spatial/`, `Algorithm/`, `GameSystems/`, `Editor/`,
+- Other folders (`AI/`, `Movement/`, `Spatial/`, `Algorithm/`, `Editor/`,
   `Scenario/`, `UI/`) — see [overview.md](overview.md) for tentative responsibilities; none documented
   in detail yet.

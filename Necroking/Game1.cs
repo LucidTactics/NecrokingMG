@@ -90,10 +90,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal Inventory _inventory = null!;
     private Render.FontManager _fontManager = new();
     internal RuntimeWidgetRenderer _widgetRenderer = new();
-    internal Game.InventoryUI _inventoryUI = new();
-    internal Game.BuildingMenuUI _buildingMenuUI = new();
+    internal InventoryUI _inventoryUI = new();
+    internal BuildingMenuUI _buildingMenuUI = new();
     internal CraftingMenuUI _craftingMenu = new();
-    internal Game.TableCraftMenuUI _tableMenuUI = new();
+    internal TableCraftMenuUI _tableMenuUI = new();
     /// <summary>True after Inventory/Building/Crafting/Table menu UIs have been
     /// fully initialized. Initialization is deferred from LoadContent to first-use
     /// (see EnsureInventoryUIsInitialized) — these four UIs collectively cost

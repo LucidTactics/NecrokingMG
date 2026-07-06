@@ -19,7 +19,7 @@ them. There is **no separate "pile of corpses" object** — a pile is just many
   `UpdateCombat`) and for editor-placed bodies via a convert-to-corpse helper.
 - **Carry state lives on the *unit*, not the corpse**: `Unit.CarryingCorpseID`,
   `Unit.CorpseInteractPhase` (0=idle, 1=WorkStart, 4=Pickup, 5=PutDown),
-  `Unit.BaggingCorpseID`/`BaggingTimer`. See `Movement/UnitSystem.cs` &
+  `Unit.BaggingCorpseID`/`BaggingTimer`. See `Movement/UnitModel.cs` &
   `Game1.Animation.cs` for how the phases advance.
 - **Look/edit here when**: changing what a corpse stores, finding a corpse by id,
   enumerating bodies near a point, or marking a corpse as taken.

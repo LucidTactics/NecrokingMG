@@ -130,7 +130,7 @@ public abstract class ScenarioBase
     // Inventory UI control
     public bool RequestOpenInventory;
     public bool RequestCloseInventory;
-    public Game.InventoryUI? InventoryUI;
+    public UI.InventoryUI? InventoryUI;
 
     // Skill book panel (new tabbed grimoire) control
     public bool RequestOpenSkillBook;
