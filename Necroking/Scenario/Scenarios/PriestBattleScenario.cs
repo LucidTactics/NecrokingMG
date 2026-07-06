@@ -19,9 +19,12 @@ public class PriestBattleScenario : ScenarioBase
 
         var units = sim.UnitsMut;
 
-        // Spawn priest (caster) with soldiers
+        // Spawn priest (caster) with soldiers (CasterUnit archetype — the
+        // legacy AIBehavior.Caster path was migrated to AI.CasterUnitHandler)
         int priestIdx = units.AddUnit(new Vec2(8f, 10f), UnitType.Soldier);
-        units[priestIdx].AI = AIBehavior.Caster;
+        units[priestIdx].Archetype = AI.ArchetypeRegistry.CasterUnit;
+        units[priestIdx].SpawnPosition = units[priestIdx].Position;
+        GodRayScenario.GrantHeavensPath(units, priestIdx);
         units[priestIdx].Mana = 30f;
         units[priestIdx].MaxMana = 50f;
         units[priestIdx].ManaRegen = 1.5f;

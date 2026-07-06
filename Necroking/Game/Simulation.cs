@@ -1259,98 +1259,8 @@ public class Simulation
                     break;
                 }
 
-                case AIBehavior.Caster:
-                {
-                    _units[i].PreferredVel = Vec2.Zero;
-
-                    // Tick mana regen
-                    _units[i].Mana = MathF.Min(_units[i].MaxMana, _units[i].Mana + _units[i].ManaRegen * dt);
-
-                    // Tick spell cooldown
-                    _units[i].SpellCooldownTimer = MathF.Max(0f, _units[i].SpellCooldownTimer - dt);
-
-                    // No spell or no mana pool — idle
-                    string spellId = _units[i].SpellID;
-                    if (string.IsNullOrEmpty(spellId) || _units[i].MaxMana <= 0f) break;
-
-                    // Look up spell definition
-                    var spell = _gameData.Spells.Get(spellId);
-                    if (spell == null) break;
-
-                    // Find closest enemy within spell range
-                    int enemy = FindClosestEnemy(i);
-                    if (enemy >= 0)
-                    {
-                        float dist = (_units[enemy].Position - _units[i].Position).Length();
-                        // Path-aware gating: caster must meet primary+secondary
-                        // path requirements; cost is scaled down by primary mastery.
-                        var casterDef = _gameData.Units.Get(_units[i].UnitDefID);
-                        System.Func<Data.Registries.MagicPath, int> casterLevel = casterDef != null
-                            ? casterDef.GetPathLevel
-                            : _ => 0;
-                        float effectiveCost = spell.EffectiveManaCost(casterLevel);
-                        if (dist <= spell.Range &&
-                            spell.MeetsPathRequirements(casterLevel) &&
-                            _units[i].Mana >= effectiveCost &&
-                            _units[i].SpellCooldownTimer <= 0f)
-                        {
-                            // Cast the spell — spawn strike at target
-                            var style = spell.BuildStrikeStyle();
-                            var visual = spell.StrikeVisualType == "GodRay"
-                                ? StrikeVisual.GodRay : StrikeVisual.Lightning;
-                            var grp = spell.BuildGodRayParams();
-                            var tFilter = Enum.TryParse<SpellTargetFilter>(spell.TargetFilter, out var tf)
-                                ? tf : SpellTargetFilter.AnyEnemy;
-                            if (spell.StrikeTargetUnit)
-                            {
-                                // Instant zap: caster hand to target unit
-                                Vec2 casterPos = _units[i].EffectSpawnPos2D;
-                                float casterHeight = _units[i].EffectSpawnHeight;
-                                Vec2 targetPos = _units[enemy].Position;
-
-                                // Target center of sprite body instead of feet
-                                float targetH = 1.8f;
-                                if (_gameData != null)
-                                {
-                                    var tDef = _gameData.Units.Get(_units[enemy].UnitDefID);
-                                    if (tDef != null) targetH = tDef.SpriteWorldHeight;
-                                }
-                                targetH *= _units[enemy].SpriteScale;
-
-                                _lightning.SpawnZap(casterPos, targetPos, spell.ZapDuration, style,
-                                    casterHeight, targetH * 0.5f);
-
-                                // Apply direct damage to target, attributed to the caster.
-                                DealDamage(enemy, spell.Damage, i);
-                            }
-                            else
-                            {
-                                // Sky lightning strike: telegraph then AOE
-                                _lightning.SpawnStrike(_units[enemy].Position,
-                                    spell.TelegraphDuration, spell.StrikeDuration,
-                                    spell.AoeRadius, spell.Damage, style, spell.Id, visual, grp, tFilter,
-                                    spell.TelegraphVisible, _units[i].Id);
-                            }
-
-                            _units[i].Mana -= effectiveCost;
-                            _units[i].SpellCooldownTimer = spell.Cooldown;
-
-                            // Apply casting buff
-                            if (!string.IsNullOrEmpty(spell.CastingBuffID) && _gameData != null)
-                            {
-                                var castBuff = _gameData.Buffs.Get(spell.CastingBuffID);
-                                if (castBuff != null) BuffSystem.ApplyBuff(_units, i, castBuff);
-                            }
-
-                            // Face target (rate-capped by unit TurnSpeed — no
-                            // instant snap, so the caster visibly turns to its
-                            // target as the spell winds up).
-                            Movement.FacingUtil.TurnTowardPosition(
-                                _units[i], _units[enemy].Position, dt, _gameData);
-                        }
-                    }
-                    break;
-                }
+                // AIBehavior.Caster was migrated to the CasterUnit archetype
+                // (AI.CasterUnitHandler) — defs should set "archetype": "CasterUnit".
 
                 case AIBehavior.CorpseWorker:
                 {
@@ -3646,7 +3556,7 @@ public class Simulation
         GameData = _gameData, Pathfinder = _pathfinder, Quadtree = _quadtree,
         Horde = _horde, TriggerSystem = _triggerSystem, Villages = _villages, EnvSystem = _envSystem,
         Workers = Workers,
-        Projectiles = _projectiles, MagicGlyphs = _magicGlyphs,
+        Projectiles = _projectiles, MagicGlyphs = _magicGlyphs, Lightning = _lightning,
         GameTime = _gameTime, DayTime = dayFraction, IsNight = isNight,
         AmortizedAI = _amortizedAI, AmortizationInterval = _aiUpdateInterval,
         AnimMeta = _animMeta,
@@ -4291,6 +4201,12 @@ public class Simulation
         if (Enum.TryParse<AIBehavior>(def.AI, out var ai))
             _units[idx].AI = ai;
         _units[idx].Stats = stats;
+        // Caster resources — without these a spawned caster has MaxMana = 0 and
+        // never casts. Spawns (and transforms) start at full mana.
+        _units[idx].MaxMana = def.MaxMana;
+        _units[idx].ManaRegen = def.ManaRegen;
+        _units[idx].Mana = def.MaxMana;
+        _units[idx].SpellID = def.SpellID;
         Movement.Locomotion.ResetSpeed(_units[idx]);
     }
 

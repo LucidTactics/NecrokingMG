@@ -1090,7 +1090,7 @@
     },
     {
       "id": "militia_copy",
-      "name": "Light Infantry Sword \u0026 Shield",
+      "name": "Light Infantry Sword & Shield",
       "faction": "Human",
       "color": {
         "r": 180,
@@ -1100,7 +1100,7 @@
       },
       "sprite": {
         "atlas": "Navarre_Units",
-        "name": "NavarreLightInfantry_Sword\u0026Shield"
+        "name": "NavarreLightInfantry_Sword&Shield"
       },
       "stats": {
         "maxHP": 10,
@@ -1169,7 +1169,10 @@
       "detectionRange": 15,
       "detectionBreakRange": 22,
       "alertDuration": 1,
-      "alertEscalateRange": 8
+      "alertEscalateRange": 8,
+      "paths": {
+        "heavens": 1
+      }
     },
     {
       "id": "soldier",
@@ -1184,7 +1187,7 @@
       },
       "sprite": {
         "atlas": "Navarre_Units",
-        "name": "NavarreTemplar_Sword\u0026Shield"
+        "name": "NavarreTemplar_Sword&Shield"
       },
       "stats": {
         "maxHP": 10,

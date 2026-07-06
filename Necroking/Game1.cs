@@ -1051,7 +1051,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.ArcherUnit, "ArcherUnit",
             new AI.RangedUnitHandler(AI.ArchetypeRegistry.ArcherUnit));
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.CasterUnit, "CasterUnit",
-            new AI.RangedUnitHandler(AI.ArchetypeRegistry.CasterUnit));
+            new AI.CasterUnitHandler());
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.Worker, "Worker", new AI.WorkerHandler());
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.CorpsePuppet, "CorpsePuppet", new AI.CorpsePuppetHandler());
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.Civilian, "Civilian", new AI.VillagerHandler());
@@ -2194,6 +2194,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         var builtStats = _gameData.Units.BuildStats(unitDefID, _gameData.Weapons, _gameData.Armors, _gameData.Shields);
         _sim.UnitsMut[idx].Stats = builtStats;
         Movement.Locomotion.ResetSpeed(_sim.UnitsMut[idx]);
+
+        // Caster resources — without these a spawned caster has MaxMana = 0 and
+        // never casts. Spawns start at full mana. (Duplicated in
+        // Simulation.ApplyDefRuntimeFields for the SpawnUnitByID path.)
+        _sim.UnitsMut[idx].MaxMana = unitDef.MaxMana;
+        _sim.UnitsMut[idx].ManaRegen = unitDef.ManaRegen;
+        _sim.UnitsMut[idx].Mana = unitDef.MaxMana;
+        _sim.UnitsMut[idx].SpellID = unitDef.SpellID;
 
         // Faction
         _sim.UnitsMut[idx].Faction = unitDef.Faction switch

@@ -31,19 +31,39 @@ public class GodRayScenario : ScenarioBase
             units[idx].MoveTarget = new Vec2(x, y);
         }
 
-        // Spawn 2 caster soldiers
+        // Spawn 2 caster soldiers (CasterUnit archetype — the legacy
+        // AIBehavior.Caster path was migrated to AI.CasterUnitHandler)
         for (int i = 0; i < 2; i++)
         {
             int idx = units.AddUnit(new Vec2(20f + i * 3f, 10f), UnitType.Soldier);
-            units[idx].AI = AIBehavior.Caster;
+            units[idx].Archetype = AI.ArchetypeRegistry.CasterUnit;
+            units[idx].SpawnPosition = units[idx].Position;
             units[idx].Mana = 50f;
             units[idx].MaxMana = 50f;
             units[idx].ManaRegen = 2f;
             units[idx].SpellID = "god_ray";
+            GrantHeavensPath(units, idx);
         }
 
         DebugLog.Log(ScenarioLog, "Spawned 6 skeletons + 2 casters");
         ZoomOnLocation(14f, 10f, 24f);
+    }
+
+    /// <summary>god_ray requires Heavens 1 — the raw Soldier unit has no paths,
+    /// so grant it via an intrinsic path buff (EffectivePathLevel picks it up).</summary>
+    internal static void GrantHeavensPath(UnitArrays units, int idx)
+    {
+        var buff = new Data.Registries.BuffDef
+        {
+            Id = "scenario_heavens_path", Duration = 0f, Intrinsic = true, MaxStacks = 1,
+            Effects = { new Data.Registries.BuffEffect
+            {
+                Type = "Add",
+                Stat = BuffSystem.PathStat(Data.Registries.MagicPath.Heavens),
+                Value = 1,
+            } },
+        };
+        BuffSystem.ApplyBuff(units, idx, buff);
     }
 
     public override void OnTick(Simulation sim, float dt)

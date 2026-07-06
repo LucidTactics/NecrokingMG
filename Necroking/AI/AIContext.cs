@@ -32,6 +32,9 @@ public ref struct AIContext
     public Game.Jobs.WorkerSystem? Workers;
     public GameSystems.ProjectileManager? Projectiles;
     public GameSystems.MagicGlyphSystem? MagicGlyphs;
+    /// <summary>Strike/zap spawner for casting archetypes (CasterUnitHandler). Null in
+    /// minimal contexts (OnSpawn) — handlers must only cast from Update.</summary>
+    public GameSystems.LightningSystem? Lightning;
     public List<GameSystems.DamageEvent>? DamageEvents;
     // Anim metadata for effect-time lookups (used by AI to time things like pounce takeoffs).
     public Dictionary<string, AnimationMeta>? AnimMeta;
