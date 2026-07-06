@@ -5,6 +5,12 @@ How every non-player unit decides what to do each tick. The pattern is a
 per archetype, dispatched by a `byte` archetype id on the unit. All per-unit state
 lives in `UnitArrays` (the SoA), passed in via the `ref struct AIContext`.
 
+**The legacy `AIBehavior` migration is DONE** (commits d08b584…d21ad4a on master,
+2026-07-07): the enum is down to 5 values, the wolf phase machine and a dozen dead
+behaviors are deleted, and every spawn path wires the def archetype through one canonical
+helper (`Simulation.ApplyDefRuntimeFields`). See "Legacy `AIBehavior` — post-migration
+state" below.
+
 ```
 Archetype (IArchetypeHandler singleton) — drives behavior
   → Routine (byte index)    — high-level mode (Following, Chasing, …)
@@ -16,36 +22,57 @@ Archetype (IArchetypeHandler singleton) — drives behavior
 1. **`Necroking/AI/IArchetypeHandler.cs`** — the interface (`Update`, `OnSpawn`,
    `GetRoutineName`, `GetSubroutineName`) **and** `ArchetypeRegistry` (the
    name→id→handler table). Archetype ids are `const byte` (None=0, PlayerControlled=1,
-   HordeMinion=2 … Worker=12). `ArchetypeRegistry.FromName(string)` is the **single
-   source of truth** mapping a `UnitDef.Archetype` string → byte id; `Get(byte)` returns
-   the handler.
+   HordeMinion=2 … Watchdog=14, SoloPredator=15, AmbushPredator=16).
+   `ArchetypeRegistry.FromName(string)` is the **single source of truth** mapping a
+   `UnitDef.Archetype` string → byte id; `Get(byte)` returns the handler.
 2. **Registration** — `Necroking/Game1.cs`, the "Register AI archetypes" block (search
    `ArchetypeRegistry.Register`): one `Register(id, "Name", new XHandler())` per archetype
    (currently PlayerControlled, WolfPack, RatPack, DeerHerd, HordeMinion, PatrolSoldier,
-   GuardStationary, ArmyUnit, ArcherUnit, CasterUnit, Worker, CorpsePuppet,
-   Civilian→VillagerHandler, Watchdog). **Add your handler registration here.**
+   GuardStationary, ArmyUnit, ArcherUnit, CasterUnit→`CasterUnitHandler`, Worker,
+   CorpsePuppet, Civilian→VillagerHandler, Watchdog, and
+   SoloPredator/AmbushPredator→`SoloPredatorHandler(opportunist: false/true)`).
+   **Add your handler registration here.**
 3. **Per-tick dispatch** — `Necroking/Game/Simulation.cs` `UpdateAI(dt)`: per-unit loop,
    gates first (`!Alive` / `InPhysics` / `Jumping`/`Incap.IsLocked` → PreferredVel=0 /
    `Routing` → `SteerRout`), then if `Archetype > 0` →
    `ArchetypeRegistry.Get(archetype).Update(ref ctx)` and `continue`. The `AIContext` is
    built by `Simulation.BuildAIContext(i, dt, dayFraction, isNight)` — this is the **full**
    context (includes `Workers`, `EnvSystem`, `Pathfinder`, `Quadtree`). `Archetype == 0`
-   falls through to a **legacy `AIBehavior` switch** (same method) — PlayerControlled runs
-   there and re-dispatches to `PlayerControlledHandler` when `Routine != 0`. Pre-passes
-   inside `UpdateAI`: `AwarenessSystem.Update` then `_villages?.Update` (village alert),
-   and before `UpdateAI` in `Simulation.Update`: `_squads.Update` (SquadSystem pre-pass).
-4. **Archetype assignment at spawn** — two spawn paths, both resolve the same way:
-   - `Game1.SpawnUnit(unitDefID, pos)` — `Necroking/Game1.cs` `~line 1815`: reads
-     `unitDef.Archetype`, `FromName` → `UnitsMut[idx].Archetype = id`, then calls
-     `handler.OnSpawn(ref ctx)`. **NOTE: the OnSpawn `AIContext` here is *partial*** — it
-     does **not** set `Workers` or `EnvSystem`. Don't depend on those in `OnSpawn`; only
-     set routine/phase scalars there (mirror `WorkerHandler.OnSpawn`).
-   - `Simulation.SpawnZombieMinion` / convert path — `Necroking/Game/Simulation.cs`
-     `~line 3941`: `FromName(def.Archetype)` overrides the default archetype.
+   falls through to the **residual legacy `AIBehavior` switch** (same method) — only three
+   cases remain: PlayerControlled (re-dispatches to `PlayerControlledHandler` when
+   `Routine != 0`), MoveToPoint, IdleAtPoint, plus the `default` AttackClosest
+   horde-follow/chase brain. The old `selfManagesCombat` wolf special-casing in the
+   preamble is gone. Pre-passes inside `UpdateAI`: `AwarenessSystem.Update` then
+   `_villages?.Update` (village alert), and before `UpdateAI` in `Simulation.Update`:
+   `_squads.Update` (SquadSystem pre-pass).
+4. **Archetype assignment at spawn — one canonical path**:
+   **`Simulation.ApplyDefRuntimeFields(idx, def, stats)`** (`Necroking/Game/Simulation.cs`)
+   is the single def→unit runtime copy: sprite scale/size/radius/OrcaPriority, faction
+   (**unconditional** — empty def faction = Undead), stats, awareness config, caster
+   resources (`MaxMana`/`ManaRegen`/`SpellID`, spawn at **full mana**), and AI dispatch:
+   **a def `archetype` wins** (`FromName` → `Archetype`, `handler.OnSpawn` called; the
+   legacy `ai` string is ignored/inert); only archetype-less defs parse `def.AI`. Callers:
+   - `Game1.SpawnUnit(unitDefID, pos)` (`Necroking/Game1.cs`) — delegates to it, then does
+     necro detection (`unitDef.AI == "PlayerControlled"` string compare) and horde
+     auto-enroll for archetype-less undead.
+   - `Simulation.SpawnUnitByID` and `Simulation.TransformUnit` — call it directly, so
+     trigger/potion-spawned and transformed units now get their def archetype wired (this
+     was the old "SpawnUnitByID gap"; it's closed).
+   - `Simulation.SpawnZombieMinion` / reanimate path — HordeMinion default, def
+     `archetype` overrides.
+
+   **NOTE: the OnSpawn `AIContext` in `ApplyDefRuntimeFields` is *partial*** — it does
+   **not** set `Workers` or `EnvSystem`. Don't depend on those in `OnSpawn`; only set
+   routine/phase scalars there (mirror `WorkerHandler.OnSpawn`).
 
    **Archetype is keyed by the `UnitDef.Archetype` string in `data/units.json`** — NOT by
-   UnitDefID and NOT by a separate AIBehavior enum. (Legacy units with no `Archetype` fall
-   back to the `AIBehavior` enum in `unitDef.AI`; new behavior should use Archetype.)
+   UnitDefID and NOT by the `AIBehavior` enum. (Archetype-less defs fall back to the
+   `AIBehavior` enum in `unitDef.AI`; new behavior should always use Archetype.)
+
+   **Placed units with a patrol route**: the `Game1.cs` map-load placed-unit loop stamps
+   `Archetype = PatrolSoldier` + `PatrolRouteIdx`/`PatrolWaypointIdx`/`MoveTarget` when
+   `pu.PatrolRouteId` is set — same wiring as the inter-village patrols in
+   `Game1.Villages.cs` (the old `AIBehavior.Patrol` never walked the route).
 
 ## Files
 
@@ -88,19 +115,28 @@ ownership:
 - `HordeMinionHandler.cs` — routine-switch template (Following/Chasing/Engaged/…),
   good model for `GetRoutineName`/`GetSubroutineName` and `OnSpawn`.
 - `CombatUnitHandler.cs` / `RangedUnitHandler.cs` — constructed with an archetype id arg
-  (one class, several registered ids: PatrolSoldier/GuardStationary/ArmyUnit,
-  ArcherUnit/CasterUnit). **`RangedUnitHandler.cs` is the archer/caster brain**: routines
+  (one class, several registered ids: PatrolSoldier/GuardStationary/ArmyUnit for
+  CombatUnitHandler; RangedUnitHandler is registered for **ArcherUnit only** —
+  CasterUnit has its own `CasterUnitHandler.cs`). **`RangedUnitHandler.cs` is the archer
+  brain**: routines
   Idle(0)/Alert(1)/Combat(2)/Return(3); `UpdateCombat` reads `Stats.RangedRange[w]`
   (fallback 18f), closes in (Hurry) when `dist > maxRange`, **kites** when
-  `dist < maxRange*0.25` (ArcherUnit only — `SubroutineSteps.MoveAwayFrom` at Walk effort;
-  casters stand), else stops; fires by stamping `PendingAttack` + `PendingWeaponIdx` +
+  `dist < maxRange*0.25` (`SubroutineSteps.MoveAwayFrom` at Walk effort), else stops;
+  fires by stamping `PendingAttack` + `PendingWeaponIdx` +
   `PendingWeaponIsRanged` + `PendingRangedTarget` (never `EngagedTarget` — that runs the
   melee queue). Arrow spawns later at the anim hit frame via
   `Simulation.ResolvePendingAttack`'s ranged branch (see combat.md "Ranged / projectiles").
   `PlayerControlledHandler.cs` (exposes public routine consts —
   `RoutineCraftAtTable`, `RoutineBuildGlyph`, `RoutineWorkOnBush`, `BuildSub_*` — written
-  by external systems, see "External routine writers"), `WolfPackHandler.cs` (wild wolves),
-  `RatPackHandler.cs`, `DeerHerdHandler.cs`.
+  by external systems, see "External routine writers"), `WolfPackHandler.cs` (wild wolf
+  packs), `RatPackHandler.cs`, `DeerHerdHandler.cs` (female flee / male fight-back —
+  absorbed FleeWhenHit/NeutralFightBack).
+- `SoloPredatorHandler.cs` — **one class, two archetypes** via ctor flag:
+  `SoloPredator` (id 15, `opportunist: false`) — hit-and-run engage→bite→disengage→
+  wait-cooldown cycle (defs: DireWolf, JuvWolf, Boar, GreatBoar); `AmbushPredator`
+  (id 16, `opportunist: true`) — circles and waits for the target to face away before
+  committing (defs: Bear, GrizzlyBear). Combat subroutines mirror the deleted legacy
+  `WolfPhase` states; `IsTargetFacingAway` lives here now (migrated from `Simulation`).
 - `VillagerHandler.cs` (archetype `Civilian`) and `WatchdogHandler.cs` (archetype
   `Watchdog`, Guard/Bark routines) — village AI; both consult `VillageThreat.cs`
   (static undead-detection helpers) and `Game/VillageSystem.cs` (per-village alert/posture,
@@ -173,83 +209,65 @@ marks the spot). `Simulation.ApplyDefRuntimeFields` now copies `def.MaxMana`/`Ma
 `SpellID` onto the unit (spawns start at full mana). Path levels are still read from the
 def at cast time (`UnitDef.GetPathLevel`, buffs via `BuffSystem.EffectivePathLevel`).
 
-## Legacy `AIBehavior` switch — usage census & migration status (audited 2026-07-06)
+## Legacy `AIBehavior` — post-migration state (migrated 2026-07-07, commits d08b584…d21ad4a)
 
-The `switch (_units[i].AI)` in `Game/Simulation.cs` `UpdateAI` (~line 1071) is the legacy
-path, reached only when `Archetype == 0` **or** `AI == PlayerControlled` (dispatch gate
-~line 1034: `Archetype > 0 && AI != PlayerControlled` → archetype handler).
+The migration the old census documented is **complete**. Current state:
 
-**Spawn-path asymmetry (the reason several "inert" legacy values are still live):**
-- `Game1.SpawnUnit` (map placed units, zones, dev spawn): if the def has an `archetype`,
-  it wires the archetype and **never parses `def.AI`** — the unit keeps the field default
-  `AttackClosest` (`Movement/UnitModel.cs`). Only archetype-less defs get their `ai` parsed.
-- `Simulation.SpawnUnitByID` → `ApplyDefRuntimeFields`: parses `def.AI` but **does NOT wire
-  `def.Archetype`** — callers `Game/TriggerSystem.cs` (both spawn effects) and
-  `Game/PotionSystem.cs` therefore spawn units running their **legacy** ai (or default
-  AttackClosest), even when the def has an archetype. `SpawnZombieMinion` papers over this
-  for reanimation only (HordeMinion default + def override). **Wiring the archetype into
-  `SpawnUnitByID` is the single fix that makes most def `ai` strings fully inert** — but
-  audit `Scenario/` first: many scenarios rely on bare `SpawnUnitByID` = legacy dispatch.
+**The enum** (`Necroking/Data/Enums.cs`) is reduced to:
+`PlayerControlled = 0, AttackClosest, MoveToPoint, IdleAtPoint, Caster`.
+`Caster` is **inert** — kept only so old def `ai` strings parse harmlessly (the real
+behavior is the CasterUnit archetype). **Deleted values**: AttackClosestRetarget,
+GuardKnight, AttackNecromancer, ArcherAttack, DefendPoint, Raid, Patrol, CorpseWorker,
+OrderAttack, FleeWhenHit, NeutralFightBack, and all four Wolf* values.
 
-**`Unit.AI` reads OUTSIDE the switch (load-bearing — can't delete these values blindly):**
-- `PlayerControlled` (enum value **0**, but field default is AttackClosest) is the de-facto
-  "is the player" flag: `UnitModel.cs` `FindAliveNecromancerIndex` (game-over check),
-  `Game1.cs` `SpawnUnit` necro detection (string compare `unitDef.AI == "PlayerControlled"`)
-  + horde auto-enroll exclusion, `SpellEffectSystem` summon horde-enroll exclusion,
-  `HordeCapTracker`, `DamageSystem` (2× auto-engage exclusion), `Locomotion` (2× player
-  gait), `Simulation` movement/ORCA/cast-plant gates (~1609/1630/1722/1882) and kill-tally
-  (~4005), and the dispatch gate itself. `Game1.Net.cs` ghosts must be non-PlayerControlled.
-- `FleeWhenHit`: `DamageSystem` (2×) skips the auto-`EngagedTarget` stamp for flee prey.
-  NB inconsistency: DeerHerd deer spawned via `Game1.SpawnUnit` have AI=AttackClosest so
-  they DO get engage-stamped; via `SpawnUnitByID` they don't.
-- `WolfHitAndRun/-Isolated/WolfOpportunist/-Isolated` + `FleeWhenHit`: the
-  `selfManagesCombat` gate at the top of the legacy path (~1055) and `UpdateWolfAI` (~3703).
-- `AttackNecromancer`: read by the `GuardKnight` case (escort scan).
-- Dev: `set_ai` (any enum name), `move` (sets MoveToPoint — **silently broken for
-  archetype units**, it doesn't clear `Archetype` so the gate keeps dispatching the
-  handler), `unit_info` JSON dump prints `u.AI`.
+**Deleted with them**: `Unit` fields `WolfPhase`/`WolfPhaseTimer`/`FleeTimer`/
+`RetargetTimer`/`QueuedAction`, the `QueuedUnitAction` enum, and `Simulation`'s
+`UpdateWolfAI`/`IsTargetFacingAway`/`FindMostIsolatedEnemy` (the facing-away test now
+lives in `SoloPredatorHandler`). The legacy switch preamble no longer has the
+`selfManagesCombat` wolf special-casing.
 
-**Per-behavior status** (def users from `data/units.json`; "inert" = def also has an
-archetype so the ai string only matters on the `SpawnUnitByID` path):
-- **PlayerControlled** — KEEP-LEGACY. Defs: necromancer + wretched/pale_acolyte/wight/
-  lich/grand_necromancer/necromancer_debug (all archetype-less by design). Re-dispatches to
-  `PlayerControlledHandler` when `Routine != 0`. Migrating it = replacing every read above
-  with an Archetype check; separate refactor.
-- **ArcherAttack** — covered by ArcherUnit (`RangedUnitHandler`). Defs archer/hunter both
-  have `archetype:"ArcherUnit"` → live only via SpawnUnitByID/trigger spawns + scenarios.
-- **AttackNecromancer / GuardKnight** — DEAD outside `AIBehaviorScenario` + `set_ai`.
-  Delete as a pair (GuardKnight scans for AttackNecromancer units).
-- **MoveToPoint** — KEEP (dev/test primitive): dev `move`, ~10 scenarios, no defs.
-- **IdleAtPoint** — KEEP: net ghosts (`Game1.Net.cs` `SpawnNetGhost`) + ~30 scenarios use
-  it as the "inert" value. Not truly inert (fights enemies <10u, returns to MoveTarget).
-- **DefendPoint** — DEAD: zero writers anywhere (shares the IdleAtPoint case; only two
-  scenario equality-reads). Delete.
-- **Patrol** — covered by PatrolSoldier (`CombatUnitHandler.UpdatePatrol` actually walks
-  `PatrolRouteIdx`/`PatrolWaypointIdx` waypoints; the legacy case ignores the route). Sole
-  writer: `Game1.cs` placed-unit loop (`pu.PatrolRouteId` → AI=Patrol) — replace with the
-  `Game1.Villages.cs` PatrolSoldier wiring (Archetype+RouteIdx+WaypointIdx+MoveTarget+
-  SpawnPosition), then delete.
-- **Raid / OrderAttack / CorpseWorker** — DEAD outside scenarios. CorpseWorker's case is a
-  do-nothing stub (real behavior = Worker archetype); OrderAttack is superseded by
-  `HordeMinionHandler.CommandTo`; nothing in TriggerSystem/villages sets Raid.
-- **AttackClosestRetarget** — def: abomination (`archetype:"HordeMinion"` → inert on the
-  archetype paths). Only adds a 2s re-target tick over default. Near-dead.
-- **FleeWhenHit / NeutralFightBack** — covered by DeerHerd (`DeerHerdHandler`: female=flee,
-  male=FightBack routine 5). Defs FemaleDeer/MaleDeer both have `archetype:"DeerHerd"`.
-  FleeWhenHit is also a DamageSystem flag (see above) — migrate that check too.
-- **WolfHitAndRun / WolfOpportunist** — **LIVE, NOT COVERED**: Bear + GrizzlyBear
-  (WolfOpportunist), DireWolf/JuvWolf/Boar/GreatBoar/ZombieRat (WolfHitAndRun) have these
-  ai values **without** an archetype → they run the legacy `UpdateWolfAI` phase machine
-  (`WolfPhase`, engage→attack→disengage 3u→wait-cooldown; opportunist waits for the target
-  to face away). WolfPack/RatPack are squad-pack brains, not this solo hit-and-run.
-  Needs a new solo-predator handler (or per-def archetype assignment) before deletion.
-- **WolfHitAndRunIsolated / WolfOpportunistIsolated** — DEAD (zero setters anywhere;
-  only the `isolated` flavor bits inside `UpdateWolfAI` / `FindMostIsolatedEnemy`).
-- **default (AttackClosest)** — the legacy horde-follow/chase brain. Live users:
-  WolfCubZombie (only def with neither ai nor archetype), every trigger-spawned unit
-  (SpawnUnitByID gap above), `OrderAttack` fallback, ~20 scenarios, and the horde
-  auto-enroll for archetype-less undead (`Game1.cs` SpawnUnit). Covered functionally by
-  HordeMinion/ArmyUnit; keep until the SpawnUnitByID gap + scenarios are migrated.
+**The residual legacy switch** (`Simulation.UpdateAI`, reached when `Archetype == 0` or
+`AI == PlayerControlled`) keeps only: `PlayerControlled` (routine re-dispatch + WASD),
+`MoveToPoint` (dev/test primitive: dev `move`, scenarios), `IdleAtPoint` (net ghosts in
+`Game1.Net.cs` + scenarios' "inert" value — still fights enemies <10u), and the
+`default` AttackClosest horde-follow/chase brain (horde units without an archetype,
+scenario spawns).
+
+**Where the old behaviors went**:
+- Caster → `CasterUnit` archetype (`AI/CasterUnitHandler.cs`) — see section below.
+- WolfHitAndRun (DireWolf/JuvWolf/Boar/GreatBoar defs) → **SoloPredator** (id 15);
+  WolfOpportunist (Bear/GrizzlyBear defs) → **AmbushPredator** (id 16); both
+  `AI/SoloPredatorHandler.cs` via ctor flag. ZombieRat and WolfCubZombie defs →
+  `HordeMinion`.
+- Patrol → PatrolSoldier: the `Game1.cs` placed-unit map-load loop wires
+  Archetype+PatrolRouteIdx+WaypointIdx+MoveTarget from `pu.PatrolRouteId` (same as the
+  `Game1.Villages.cs` village patrols).
+- FleeWhenHit's DamageSystem role → **`Archetype == ArchetypeRegistry.DeerHerd`**: the
+  auto-`EngagedTarget` exemption in `Game/DamageSystem.cs` (both `Apply` and
+  `ApplyDirect`) now keys on the archetype, since the handler owns the flee/fight-back
+  reaction.
+
+**`Unit.AI` reads still load-bearing (all PlayerControlled — the "is the player" flag):**
+`UnitModel.cs` `FindAliveNecromancerIndex`, `Game1.cs` `SpawnUnit` necro detection
+(string compare `unitDef.AI == "PlayerControlled"`) + horde auto-enroll exclusion,
+`SpellEffectSystem` summon horde-enroll exclusion, `HordeCapTracker`, `DamageSystem`
+auto-engage exclusion, `Locomotion` player gait, `Simulation` movement/ORCA/cast-plant
+gates and kill-tally, the dispatch gate itself, and `Game1.Net.cs` ghosts (must be
+non-PlayerControlled). Migrating PlayerControlled off the enum = replacing every one of
+these reads with an Archetype check; separate refactor, not planned.
+
+**Scenario convention**: a scenario that spawns a unit by def and drives it with legacy
+AI (`u.AI = ...`, MoveToPoint, manual targets) must **set `Archetype = 0` explicitly** —
+otherwise the def's archetype handler keeps dispatching and the legacy fields are
+ignored. Many scenarios now do this (see `TrampleAttackScenario` / `SweepAttackScenario`
+comments). Scenarios deleted with the migration: ai_behavior, order_attack, undead_raid,
+raid_workers, flee_when_hit, retarget. `wolf_hit_and_run` now tests the SoloPredator
+archetype (the phase machine is the Combat routine's subroutines);
+`neutral_fight_back` tests MaleDeer/DeerHerd fight-back.
+
+**Dev-command gotcha (still true)**: dev `move` sets `AI = MoveToPoint` but does NOT
+clear `Archetype`, so it's silently ignored for archetype units; `set_ai` only accepts
+the 5 surviving enum names.
 
 ## Second AI style — post-archetype "sweep" overrides (BoarForageAI / CorpseEatAI)
 
@@ -280,10 +298,11 @@ the archetype's follow velocity.
   ("wolf")` — ZombieWolf has tag `"wolf"`) exactly as BoarForage filters `"forager"`.
 
 ### Player zombie wolves run as HordeMinion, not WolfPack
-`WolfPackHandler` (archetype `WolfPack`, id 3) is for **wild** wolves (`data/units.json` `Wolf`
-`archetype:"WolfPack"`). The player's raised **`ZombieWolf`** def has **no `archetype` field**,
-so it takes the horde-follow default (`HordeMinion`, like zombie boars) via the reanimate spawn
-path (`Simulation.SpawnZombieMinion`). The pack-hunt behavior for the player's wolves was
+`WolfPackHandler` (archetype `WolfPack`, id 3) is for **wild** wolf packs (`data/units.json`
+`Wolf` `archetype:"WolfPack"`; solo predators like DireWolf are `SoloPredator` instead). The
+player's raised **`ZombieWolf`** def has `archetype:"HordeMinion"` (horde-follow, like zombie
+boars), spawned via the reanimate path (`Simulation.SpawnZombieMinion`). The pack-hunt
+behavior for the player's wolves was
 implemented as the sweep override **`AI/WolfPackHuntAI.cs`** (see above) — NOT by editing
 `WolfPackHandler`, which still governs wild predators only.
 
@@ -390,8 +409,8 @@ see "Shared transition logic" above. Current external writers:
 - **Stuck/locked units — the classic causes**: (a) a `PendingAttack` that never resolves
   pins the unit (legacy path zeroes `PreferredVel` while one is set; archetype routines must
   clear it on transitions — `CombatTransitions` does); (b) legacy-path `InCombat == true`
-  zeroes `PreferredVel` for non-self-managing AIs — forget to clear `InCombat` on routine
-  exit and the unit freezes; (c) `Routing`/`Incap.IsLocked`/`Jumping`/`InPhysics` all
+  zeroes `PreferredVel` (only `Fleeing`/`Routing` units are exempt) — forget to clear
+  `InCombat` on routine exit and the unit freezes; (c) `Routing`/`Incap.IsLocked`/`Jumping`/`InPhysics` all
   short-circuit the AI dispatch entirely — a stale flag means the handler never runs;
   (d) routine byte written externally with no exit arc in the handler (see "External
   routine writers") leaves the unit in a state its handler never leaves.
