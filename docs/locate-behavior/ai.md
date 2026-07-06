@@ -165,36 +165,91 @@ side from the necromancer) then Driving (chase the deer toward the player). Gate
 "Wolf Hunt" spell command (`Simulation._wolfHuntCmdTimer` + cast point, set in
 `Game1.Spells.cs`); uses `SquadSystem` centroid/spread to stand off the whole herd.
 
-## Caster gap — `CasterUnit` archetype does NOT cast (legacy `AIBehavior.Caster` never migrated)
+## CasterUnit archetype — migrated (commit 11b12d8)
 
-- `ArchetypeRegistry.CasterUnit` (id 8) is registered in `Game1.cs` to a **plain
-  `RangedUnitHandler(CasterUnit)`** — positioning/kite-suppression only; it stamps ranged
-  weapon attacks, it has **no spell-casting logic**. The actual NPC spell-cast brain is the
-  **legacy `case AIBehavior.Caster:` block in `Game/Simulation.cs` `UpdateAI`** (mana regen
-  tick, `SpellCooldownTimer`, `Units[i].SpellID` lookup, `spell.MeetsPathRequirements` +
-  `EffectiveManaCost` via `casterDef.GetPathLevel`, then `_lightning.SpawnZap`/`SpawnStrike`
-  + `DealDamage` + casting buff). A def with a non-empty `archetype` **never reaches the
-  legacy switch**, so Priest (`militia_copy_copy`, `archetype:"CasterUnit"` AND `ai:"Caster"`)
-  runs RangedUnitHandler and never casts.
-- **Neither spawn path initializes unit mana/spell fields from the def**: `Game1.SpawnUnit`
-  and `Simulation.ApplyDefRuntimeFields` (used by `SpawnUnitByID`/`SpawnZombieMinion`) copy
-  Radius/Faction/Stats etc. but NOT `def.MaxMana`/`def.ManaRegen`/`def.SpellID` → units spawn
-  with `MaxMana=0`, and the legacy block bails on `MaxMana <= 0`. Only scenarios
-  (`GodRayScenario`, `PriestBattleScenario`) set them by hand. `UnitDef` has the fields
-  (`maxMana`/`manaRegen`/`spellID`, `Data/Registries/UnitRegistry.cs`).
-- **Path levels are read from the def at cast time**, not stored on the unit —
-  `UnitDef.GetPathLevel` (the `"paths": {"death": 4}` dict); buff-granted paths via
-  `BuffSystem.EffectivePathLevel(units, idx, def, path)` (`Game/BuffSystem.cs`). The Priest
-  def has NO `paths` entry, so god_ray's `primaryPath:"heavens", primaryLevel:1` requirement
-  fails even in the legacy path.
-- **Migration constraint**: `AIContext` has no `Simulation`/`LightningSystem` handle
-  (`GameData`/`TriggerSystem`/`MagicGlyphs` are its only system refs). A casting handler
-  needs `sim.Lightning` (public accessor) + `sim.DealDamage` (public) — either add
-  `LightningSystem?` to `AIContext` (precedent: `MagicGlyphs`), or do the casting as a
-  post-archetype sweep (`static Update(Simulation sim, float dt)`, see next section) with
-  a `CasterUnitHandler` owning only movement/routines. Note the sky-strike branch
-  (`SpawnStrike`) already routes damage through `LightningSystem`'s damage list (drained in
-  `Simulation.Update`); only the instant-zap branch calls `DealDamage` directly.
+`AI/CasterUnitHandler.cs` now owns NPC spell-casting (registered as `CasterUnit`, id 8);
+the legacy `case AIBehavior.Caster:` was **removed** from the `UpdateAI` switch (a comment
+marks the spot). `Simulation.ApplyDefRuntimeFields` now copies `def.MaxMana`/`ManaRegen`/
+`SpellID` onto the unit (spawns start at full mana). Path levels are still read from the
+def at cast time (`UnitDef.GetPathLevel`, buffs via `BuffSystem.EffectivePathLevel`).
+
+## Legacy `AIBehavior` switch — usage census & migration status (audited 2026-07-06)
+
+The `switch (_units[i].AI)` in `Game/Simulation.cs` `UpdateAI` (~line 1071) is the legacy
+path, reached only when `Archetype == 0` **or** `AI == PlayerControlled` (dispatch gate
+~line 1034: `Archetype > 0 && AI != PlayerControlled` → archetype handler).
+
+**Spawn-path asymmetry (the reason several "inert" legacy values are still live):**
+- `Game1.SpawnUnit` (map placed units, zones, dev spawn): if the def has an `archetype`,
+  it wires the archetype and **never parses `def.AI`** — the unit keeps the field default
+  `AttackClosest` (`Movement/UnitModel.cs`). Only archetype-less defs get their `ai` parsed.
+- `Simulation.SpawnUnitByID` → `ApplyDefRuntimeFields`: parses `def.AI` but **does NOT wire
+  `def.Archetype`** — callers `Game/TriggerSystem.cs` (both spawn effects) and
+  `Game/PotionSystem.cs` therefore spawn units running their **legacy** ai (or default
+  AttackClosest), even when the def has an archetype. `SpawnZombieMinion` papers over this
+  for reanimation only (HordeMinion default + def override). **Wiring the archetype into
+  `SpawnUnitByID` is the single fix that makes most def `ai` strings fully inert** — but
+  audit `Scenario/` first: many scenarios rely on bare `SpawnUnitByID` = legacy dispatch.
+
+**`Unit.AI` reads OUTSIDE the switch (load-bearing — can't delete these values blindly):**
+- `PlayerControlled` (enum value **0**, but field default is AttackClosest) is the de-facto
+  "is the player" flag: `UnitModel.cs` `FindAliveNecromancerIndex` (game-over check),
+  `Game1.cs` `SpawnUnit` necro detection (string compare `unitDef.AI == "PlayerControlled"`)
+  + horde auto-enroll exclusion, `SpellEffectSystem` summon horde-enroll exclusion,
+  `HordeCapTracker`, `DamageSystem` (2× auto-engage exclusion), `Locomotion` (2× player
+  gait), `Simulation` movement/ORCA/cast-plant gates (~1609/1630/1722/1882) and kill-tally
+  (~4005), and the dispatch gate itself. `Game1.Net.cs` ghosts must be non-PlayerControlled.
+- `FleeWhenHit`: `DamageSystem` (2×) skips the auto-`EngagedTarget` stamp for flee prey.
+  NB inconsistency: DeerHerd deer spawned via `Game1.SpawnUnit` have AI=AttackClosest so
+  they DO get engage-stamped; via `SpawnUnitByID` they don't.
+- `WolfHitAndRun/-Isolated/WolfOpportunist/-Isolated` + `FleeWhenHit`: the
+  `selfManagesCombat` gate at the top of the legacy path (~1055) and `UpdateWolfAI` (~3703).
+- `AttackNecromancer`: read by the `GuardKnight` case (escort scan).
+- Dev: `set_ai` (any enum name), `move` (sets MoveToPoint — **silently broken for
+  archetype units**, it doesn't clear `Archetype` so the gate keeps dispatching the
+  handler), `unit_info` JSON dump prints `u.AI`.
+
+**Per-behavior status** (def users from `data/units.json`; "inert" = def also has an
+archetype so the ai string only matters on the `SpawnUnitByID` path):
+- **PlayerControlled** — KEEP-LEGACY. Defs: necromancer + wretched/pale_acolyte/wight/
+  lich/grand_necromancer/necromancer_debug (all archetype-less by design). Re-dispatches to
+  `PlayerControlledHandler` when `Routine != 0`. Migrating it = replacing every read above
+  with an Archetype check; separate refactor.
+- **ArcherAttack** — covered by ArcherUnit (`RangedUnitHandler`). Defs archer/hunter both
+  have `archetype:"ArcherUnit"` → live only via SpawnUnitByID/trigger spawns + scenarios.
+- **AttackNecromancer / GuardKnight** — DEAD outside `AIBehaviorScenario` + `set_ai`.
+  Delete as a pair (GuardKnight scans for AttackNecromancer units).
+- **MoveToPoint** — KEEP (dev/test primitive): dev `move`, ~10 scenarios, no defs.
+- **IdleAtPoint** — KEEP: net ghosts (`Game1.Net.cs` `SpawnNetGhost`) + ~30 scenarios use
+  it as the "inert" value. Not truly inert (fights enemies <10u, returns to MoveTarget).
+- **DefendPoint** — DEAD: zero writers anywhere (shares the IdleAtPoint case; only two
+  scenario equality-reads). Delete.
+- **Patrol** — covered by PatrolSoldier (`CombatUnitHandler.UpdatePatrol` actually walks
+  `PatrolRouteIdx`/`PatrolWaypointIdx` waypoints; the legacy case ignores the route). Sole
+  writer: `Game1.cs` placed-unit loop (`pu.PatrolRouteId` → AI=Patrol) — replace with the
+  `Game1.Villages.cs` PatrolSoldier wiring (Archetype+RouteIdx+WaypointIdx+MoveTarget+
+  SpawnPosition), then delete.
+- **Raid / OrderAttack / CorpseWorker** — DEAD outside scenarios. CorpseWorker's case is a
+  do-nothing stub (real behavior = Worker archetype); OrderAttack is superseded by
+  `HordeMinionHandler.CommandTo`; nothing in TriggerSystem/villages sets Raid.
+- **AttackClosestRetarget** — def: abomination (`archetype:"HordeMinion"` → inert on the
+  archetype paths). Only adds a 2s re-target tick over default. Near-dead.
+- **FleeWhenHit / NeutralFightBack** — covered by DeerHerd (`DeerHerdHandler`: female=flee,
+  male=FightBack routine 5). Defs FemaleDeer/MaleDeer both have `archetype:"DeerHerd"`.
+  FleeWhenHit is also a DamageSystem flag (see above) — migrate that check too.
+- **WolfHitAndRun / WolfOpportunist** — **LIVE, NOT COVERED**: Bear + GrizzlyBear
+  (WolfOpportunist), DireWolf/JuvWolf/Boar/GreatBoar/ZombieRat (WolfHitAndRun) have these
+  ai values **without** an archetype → they run the legacy `UpdateWolfAI` phase machine
+  (`WolfPhase`, engage→attack→disengage 3u→wait-cooldown; opportunist waits for the target
+  to face away). WolfPack/RatPack are squad-pack brains, not this solo hit-and-run.
+  Needs a new solo-predator handler (or per-def archetype assignment) before deletion.
+- **WolfHitAndRunIsolated / WolfOpportunistIsolated** — DEAD (zero setters anywhere;
+  only the `isolated` flavor bits inside `UpdateWolfAI` / `FindMostIsolatedEnemy`).
+- **default (AttackClosest)** — the legacy horde-follow/chase brain. Live users:
+  WolfCubZombie (only def with neither ai nor archetype), every trigger-spawned unit
+  (SpawnUnitByID gap above), `OrderAttack` fallback, ~20 scenarios, and the horde
+  auto-enroll for archetype-less undead (`Game1.cs` SpawnUnit). Covered functionally by
+  HordeMinion/ArmyUnit; keep until the SpawnUnitByID gap + scenarios are migrated.
 
 ## Second AI style — post-archetype "sweep" overrides (BoarForageAI / CorpseEatAI)
 
