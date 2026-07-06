@@ -31,18 +31,22 @@ open the listed `<area>.md`. Areas marked **(not yet documented)** have no doc y
 
 ## Subsystems (under `Necroking/`) — most not yet documented
 
+Folder purposes and "where does new code go" (incl. the namespace exceptions) are
+authoritative in [docs/code-map.md](../code-map.md); this table is the routing view.
+
 | Folder / area | Tentative responsibility (verify) | Doc |
 |---------------|-----------------------------------|-----|
 | `Game1.*` (root) | Top-level `Game1` partial class: loop, glue, player-facing entry points | game1-partials.md ✅ |
-| `Core/` | Foundational types — `Vec2`, `GameClock`, `DebugLog`, constants | (not yet documented) |
+| `Core/` | Engine-agnostic primitives — `Vec2`, `GameClock`, `GamePaths`, `InputState`, `DebugLog`, JSON/file utils | (not yet documented) |
 | `Data/` | Game-data model + JSON registries (spells, units, items, potions, buffs, weapons, armor) under `Data/Registries/` | [data-registries.md](data-registries.md) ✅ |
-| `Game/` | Gameplay systems — `Simulation` (the headless, deterministic world model ticked by `Game1` via `GameSession`; the Simulation-vs-Game1 boundary rule is in the class comments on both), spell targeting (`SpellCasting`), spell effects (`SpellEffectSystem`), crafting/table-craft, inventory, building menus, horde caps | (not yet documented) |
+| `Game/` | Gameplay systems — `Simulation` (the headless, deterministic world model ticked by `Game1` via `GameSession`; the Simulation-vs-Game1 boundary rule is in the class comments on both), spell targeting (`SpellCasting`), spell effects (`SpellEffectSystem`), crafting/table-craft, inventory, building menus, horde caps. Spans three namespaces — see [code-map.md](../code-map.md) | (not yet documented) |
+| `Game/SkillEffects/` | Skill/passive effect application (`SkillEffects.cs`) | (not yet documented) |
 | `Render/` | Rendering subsystems — atlases, shadows, bloom, font manager, widget renderer, HUD renderer | [render.md](render.md) ◐ (effects only) |
 | `UI/` | Overlays & panels — grimoire, skill book, character stats/sheet, unit info | [ui.md](ui.md) ✅ |
 | `World/` | World/environment systems — env objects, foragables, walls, roads | [world.md](world.md) ✅ |
 | `Movement/` | Unit data model + ORCA solver + facing util (pathfinder itself is in `World/Pathfinder.cs`) | [movement.md](movement.md) ✅ |
 | `AI/` | Unit AI behaviors & routines (combat, routines like craft-at-table) | [ai.md](ai.md) ✅ |
-| `GameSystems/` | Discrete systems — `DeathFogSystem` (corruption/blight spread), etc. | [death-fog.md](death-fog.md) ◐ (DeathFogSystem only) |
+| `GameSystems/` | Four systems (`Trample`/`Jump`/`DeathFog`/`WeaponBonus`) sharing the `Necroking.GameSystems` namespace with ~20 files in `Game/` — folder split is historical, don't add files here | [death-fog.md](death-fog.md) ◐ (DeathFogSystem only) |
 | `Spatial/` | Spatial partitioning / grid queries | (not yet documented) |
 | `Algorithm/` | Standalone algorithms | (not yet documented) |
 | `Editor/` | In-game immediate-mode editors (unit / spell / map / UI / item) | [editor.md](editor.md) ◐ (UI/widget editor only) |

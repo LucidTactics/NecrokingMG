@@ -45,15 +45,14 @@ NecrokingMG/
   bin/             (build output — exe + runtime DLLs only)
     Publish/
     Debug/
-  Necroking/       (C# source code, .csproj)
-  Necroking.Editor/
+  Necroking/       (C# source code, .csproj — the only project; folder map in docs/code-map.md)
   tools/
   todos/           (temporary research/task notes for future sessions)
   docs/            (on-demand reference: stable info to look up, not in context each session)
 ```
 
 ## File Conventions
-- C# source in `Necroking/`, organized by subsystem (Algorithm, Core, Data, Editor, Game, Movement, Render, Scenario, Spatial, UI, World)
+- C# source in `Necroking/`, organized by subsystem — per-folder purposes and "where does new code go" in [docs/code-map.md](docs/code-map.md)
 - Main game loop in `Necroking/Game1.cs`, entry point in `Necroking/Program.cs`
 - Assets at root `assets/` (Environment/, Effects/, Items/, Sprites/, UI/, fonts/)
 - Game data at root `data/` (JSON registries, maps/, settings)
@@ -219,6 +218,7 @@ relevant. When something in CLAUDE.md is good to keep but no longer a primary dr
 it here (or make it a skill if it's an invokable procedure) and leave a one-line pointer in
 CLAUDE.md. Current contents:
 - [docs/north-star.md](docs/north-star.md) — the design philosophy ("does this satisfy?").
+- [docs/code-map.md](docs/code-map.md) — folder-by-folder map of the C# code: what each folder is for, where new code goes, namespace exceptions.
 - [docs/git-discipline.md](docs/git-discipline.md) — the *why* behind the Drive-sync git reflexes + the `user settings/` migration.
 - [docs/avoid-prompting-user.md](docs/avoid-prompting-user.md) — how the Bash prompt-guard hook works and how to tune it (whitelist methods + reminder hooks).
 - [docs/spells.md](docs/spells.md) — deep reference behind the `add-spell` skill.
