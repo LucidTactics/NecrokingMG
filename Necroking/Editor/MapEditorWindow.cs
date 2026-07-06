@@ -60,8 +60,14 @@ public class GrassTypeDef
 }
 
 // ============================================================================
-//  MapEditorWindow - Full 7-tab map editor
+//  MapEditorWindow - the full tabbed map editor
 // ============================================================================
+/// <summary>
+/// The full in-game map editor (MenuState.MapEditor) — tabbed tools for ground/grass
+/// painting, env-object, wall and road placement, regions, triggers, units, zones and
+/// procgen, plus map save/load. Edits the live world directly and persists through
+/// <see cref="Data.MapData"/>. Editor-only: no gameplay rules belong here.
+/// </summary>
 public class MapEditorWindow
 {
     // ---- Owning game (set via Init) ----

@@ -94,6 +94,26 @@ public struct SoulOrb
     public float Lifetime;
 }
 
+/// <summary>
+/// The gameplay world model — all game state and the rules that advance it, with zero
+/// dependency on MonoGame, rendering, input devices, or wall-clock time. Owns the grid,
+/// pathfinder and spatial indices, the SoA unit store (<see cref="UnitArrays"/>), corpses,
+/// projectiles, physics, squads, horde, poison/lightning/glyphs, <see cref="NecromancerState"/>,
+/// player resources, the combat log, and game time.
+///
+/// Lifecycle: constructed and owned by <see cref="GameSession"/> (recreated per map load);
+/// <see cref="Init"/> resets the world, then <see cref="Tick"/> advances it one frame through a
+/// single ordered phase pipeline (buffs → AI → movement → physics → combat → deaths → corpses …).
+/// Player input arrives only as abstract intents via setters (SetNecromancerInput/Facing/Casting);
+/// the callbacks Game1 installs (<see cref="ReanimHandler"/>, <see cref="OnForagerAte"/>,
+/// <see cref="Workers"/>, SetAnimMeta) are optional and stay null in headless runs.
+///
+/// The rule: if it must behave identically in a headless scenario or a replay, it goes here —
+/// deterministically (Random.Shared is banned on sim paths). If it draws, reads a device, or is
+/// app-lifetime (renderers, UI, editors, clock/pause), it goes in <see cref="Game1"/> or Render/.
+/// Multiplayer stays out too: remote ghosts are ordinary puppet units that Game1.Net.cs stamps
+/// into <see cref="UnitsMut"/>.
+/// </summary>
 public class Simulation
 {
     private const float CombatTickInterval = 2.0f;

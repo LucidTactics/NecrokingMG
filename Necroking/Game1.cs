@@ -1,3 +1,6 @@
+// Game1 partial: this file is the root — fields, app lifecycle (Initialize/LoadContent),
+// menu + input handling, and the Update orchestrator. Sibling Game1.*.cs partials each
+// carry their own banner; see docs/locate-behavior/game1-partials.md for the routing map.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -22,6 +25,23 @@ namespace Necroking;
 
 public enum MenuState { MainMenu, None, PauseMenu, Settings, Multiplayer, UnitEditor, SpellEditor, MapEditor, UIEditor, ItemEditor, ScenarioList }
 
+/// <summary>
+/// The MonoGame app shell and orchestrator — everything platform- and presentation-side.
+/// Owns the app-lifetime objects: graphics device, SpriteBatch/fonts, the renderers
+/// (GameRenderer, HUD, shadows, weather), UI panels/overlays, the editors, <see cref="GameData"/>,
+/// camera, <see cref="InputState"/>, the <see cref="GameClock"/> (single time/pause authority),
+/// day/night, menus, and the dev server. Per-game world state lives in <see cref="GameSession"/>
+/// (<c>_session</c>, recreated on every map load); <c>_sim</c> forwards to <c>_session.Sim</c>.
+///
+/// Each Update: read devices → translate input into abstract Simulation intents → if
+/// <c>_clock.WorldRunning</c>, call <c>_sim.Tick(_clock.WorldDt)</c> → tick presentation-side
+/// systems (animation, workers, environment visuals). Draw reads sim state without mutating it.
+///
+/// The rule: gameplay state and rules go in <see cref="Simulation"/> (headless, deterministic);
+/// drawing goes in Render/; deep logic belongs in Game/, World/, or AI/ classes that Game1
+/// merely constructs and wires. Game1 itself is glue — if a method here grows real logic,
+/// it's in the wrong place.
+/// </summary>
 public partial class Game1 : Microsoft.Xna.Framework.Game
 {
     internal const int WorldSize = 64; // start small, load map for real size

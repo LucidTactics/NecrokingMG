@@ -34,9 +34,9 @@ open the listed `<area>.md`. Areas marked **(not yet documented)** have no doc y
 | Folder / area | Tentative responsibility (verify) | Doc |
 |---------------|-----------------------------------|-----|
 | `Game1.*` (root) | Top-level `Game1` partial class: loop, glue, player-facing entry points | game1-partials.md ✅ |
-| `Core/` | Foundational types & sim core — `Vec2`, `Simulation`, units/corpses state, `DebugLog`, constants | (not yet documented) |
+| `Core/` | Foundational types — `Vec2`, `GameClock`, `DebugLog`, constants | (not yet documented) |
 | `Data/` | Game-data model + JSON registries (spells, units, items, potions, buffs, weapons, armor) under `Data/Registries/` | [data-registries.md](data-registries.md) ✅ |
-| `Game/` | Gameplay systems — spell targeting (`SpellCasting`), spell effects (`SpellEffectSystem`), crafting/table-craft, inventory, building menus, horde caps | (not yet documented) |
+| `Game/` | Gameplay systems — `Simulation` (the headless, deterministic world model ticked by `Game1` via `GameSession`; the Simulation-vs-Game1 boundary rule is in the class comments on both), spell targeting (`SpellCasting`), spell effects (`SpellEffectSystem`), crafting/table-craft, inventory, building menus, horde caps | (not yet documented) |
 | `Render/` | Rendering subsystems — atlases, shadows, bloom, font manager, widget renderer, HUD renderer | [render.md](render.md) ◐ (effects only) |
 | `UI/` | Overlays & panels — grimoire, skill book, character stats/sheet, unit info | [ui.md](ui.md) ✅ |
 | `World/` | World/environment systems — env objects, foragables, walls, roads | [world.md](world.md) ✅ |

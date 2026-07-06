@@ -1,3 +1,7 @@
+// Despite the name, this file is the unit DATA MODEL, not a system: the Unit class, the
+// SoA UnitArrays store, UnitUtil helpers, and NecromancerState. Behavior lives elsewhere
+// (Simulation's tick phases, AI/, Movement/Locomotion). Treat "UnitSystem.cs" as
+// "UnitModel.cs" — kept under this name to avoid churning history.
 using System;
 using System.Collections.Generic;
 using Necroking.Core;

@@ -791,6 +791,11 @@ public class SpellDef : IHasId
     };
 }
 
+/// <summary>
+/// Loads and holds the immutable <see cref="SpellDef"/>s from data/spells.json, keyed by id.
+/// Definitions only — the cast pipeline lives in SpellCasting/SpellEffectSystem and
+/// Game1.Spells.cs.
+/// </summary>
 public class SpellRegistry : RegistryBase<SpellDef>
 {
     protected override string RootKey => "spells";

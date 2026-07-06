@@ -22,6 +22,12 @@ public struct PathDecisionInfo
     public int FallbackTier;
 }
 
+/// <summary>
+/// Grid pathfinding for the simulation: sector flow fields plus the hierarchical
+/// portal graph (see the design block further down this file). Owned by
+/// <see cref="GameSystems.Simulation"/>; deterministic and headless-safe. Steering and
+/// collision avoidance are NOT here — that's Locomotion/ORCA in Movement/.
+/// </summary>
 public class Pathfinder
 {
     public const int SectorSize = 64;

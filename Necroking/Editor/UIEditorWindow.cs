@@ -220,6 +220,12 @@ public class UIEditorWidgetDef
 // ═══════════════════════════════════════════════
 // Main UI Editor Window
 // ═══════════════════════════════════════════════
+/// <summary>
+/// In-game editor (MenuState.UIEditor) for the data-driven widget layouts defined by the
+/// UIEditor*Def POCOs above, which <see cref="UI.RuntimeWidgetRenderer"/> draws at runtime.
+/// Built on <see cref="EditorBase"/>; edits and saves widget definitions — it renders
+/// nothing during normal gameplay.
+/// </summary>
 public partial class UIEditorWindow : EditorBase
 {
     private GraphicsDevice? _device;

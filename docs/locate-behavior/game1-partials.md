@@ -31,7 +31,7 @@ the wrong thing; fullscreen/windowed/resize behaves wrong; the necromancer or a 
 spellbar slots don't persist; melee-attack or right-click-gather input is off; god mode / cheats;
 a new field or system needs wiring into the loop. If a behavior is "what happens each frame" or
 "what happens on this input", it's routed from here.
-See also: `Necroking/Game1.Dev.cs` (the `ExecuteDevCommand` body), `Core/Simulation.cs`,
+See also: `Necroking/Game1.Dev.cs` (the `ExecuteDevCommand` body), `Game/Simulation.cs`,
 `Render/` (renderers constructed here), `Editor/` (editors), `data/maps/` (map JSON — world content
 lives in the map, not in startup spawns; see CLAUDE.md), and **`Necroking/Game/GameSession.cs`**
 (the per-game state owner — see next).

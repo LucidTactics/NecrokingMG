@@ -489,6 +489,13 @@ public struct PlacedObjectRuntime
     public PlacedObjectRuntime() { HP = 0; Owner = 1; Alive = true; Collected = false; RespawnTimer = 0f; BuildProgress = 1f; AppliedBuffID = ""; }
 }
 
+/// <summary>
+/// The environment-object store: defs (tree/rock/building/… templates) plus every placed
+/// instance, with spatial/occupancy queries, foragable collect/respawn, and per-building
+/// state (construction progress, craft processes). Per-game — owned and recreated by
+/// <see cref="GameSession"/>. Rendering of these objects lives in GameRenderer; the job
+/// logic that consumes them in WorkerSystem.
+/// </summary>
 public class EnvironmentSystem
 {
     private float _worldMaxY = 1f;

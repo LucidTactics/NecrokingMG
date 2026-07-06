@@ -9,6 +9,11 @@ using Necroking.GameSystems;
 
 namespace Necroking.Data;
 
+/// <summary>
+/// The map-file schema and its JSON load/save — pure serialization, no live world state.
+/// Loading a map means MapData → the per-game systems (GroundSystem, EnvironmentSystem,
+/// WallSystem, placed units); the reverse when the map editor saves.
+/// </summary>
 public static class MapData
 {
     public static bool Load(string path, GroundSystem ground, EnvironmentSystem env, WallSystem walls,

@@ -519,6 +519,10 @@ public class DirectionalFractions
     public static readonly string[] SectorLabels = { "E", "SE", "S", "SW", "W", "NW", "N", "NE" };
 }
 
+/// <summary>
+/// Loads and holds the immutable <see cref="UnitDef"/>s from data/units.json, keyed by id.
+/// Definitions only — live unit instances are Simulation's <see cref="Movement.UnitArrays"/>.
+/// </summary>
 public class UnitRegistry : RegistryBase<UnitDef>
 {
     protected override string RootKey => "units";
