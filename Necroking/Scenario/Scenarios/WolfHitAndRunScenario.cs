@@ -1,4 +1,5 @@
 using System;
+using Necroking.AI;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.GameSystems;
@@ -31,23 +32,24 @@ public class WolfHitAndRunScenario : ScenarioBase
     public override void OnInit(Simulation sim)
     {
         DebugLog.Clear(ScenarioLog);
-        DebugLog.Log(ScenarioLog, "=== Wolf Hit-and-Run Scenario ===");
-        DebugLog.Log(ScenarioLog, "Testing WolfHitAndRun AI: Engage(0) -> Attacking(1) -> Disengage(2) -> WaitCooldown(3) -> Engage(0)");
+        DebugLog.Log(ScenarioLog, "=== Wolf Hit-and-Run Scenario (SoloPredator archetype) ===");
+        DebugLog.Log(ScenarioLog, "Testing SoloPredator combat cycle: Engage(0) -> Attacking(1) -> Disengage(2) -> WaitCooldown(3) -> Engage(0)");
 
         var units = sim.UnitsMut;
 
-        // Spawn 3 wolves (Skeleton units with WolfHitAndRun AI, Animal faction) around (10, 15)
+        // Spawn 3 wolves (Skeleton units with the SoloPredator archetype — the
+        // migrated AIBehavior.WolfHitAndRun brain, Animal faction) around (10, 15)
         Vec2[] wolfPositions = { new Vec2(9f, 14f), new Vec2(10f, 16f), new Vec2(11f, 15f) };
         for (int w = 0; w < 3; w++)
         {
             int idx = units.AddUnit(wolfPositions[w], UnitType.Skeleton);
-            units[idx].AI = AIBehavior.WolfHitAndRun;
+            units[idx].Archetype = ArchetypeRegistry.SoloPredator;
             units[idx].Faction = Faction.Animal;
             _wolfIds[w] = units[idx].Id;
             _maxPhaseReached[w] = 0;
             _phaseTransitions[w] = 0;
             _lastPhase[w] = 0;
-            DebugLog.Log(ScenarioLog, $"Wolf {w}: spawned at ({wolfPositions[w].X:F1}, {wolfPositions[w].Y:F1}), id={_wolfIds[w]}, AI=WolfHitAndRun, Faction=Animal");
+            DebugLog.Log(ScenarioLog, $"Wolf {w}: spawned at ({wolfPositions[w].X:F1}, {wolfPositions[w].Y:F1}), id={_wolfIds[w]}, archetype=SoloPredator, Faction=Animal");
         }
 
         // Spawn 2 soldiers (AttackClosest AI) at (20, 15) as targets
@@ -76,7 +78,7 @@ public class WolfHitAndRunScenario : ScenarioBase
             int idx = FindByID(units, _wolfIds[w]);
             if (idx < 0) continue;
 
-            byte currentPhase = units[idx].WolfPhase;
+            byte currentPhase = CombatPhase(units, idx);
             if (currentPhase != _lastPhase[w])
             {
                 _phaseTransitions[w]++;
@@ -149,8 +151,8 @@ public class WolfHitAndRunScenario : ScenarioBase
             }
 
             var pos = units[idx].Position;
-            byte phase = units[idx].WolfPhase;
-            float phaseTimer = units[idx].WolfPhaseTimer;
+            byte phase = CombatPhase(units, idx);
+            float phaseTimer = units[idx].SubroutineTimer;
             bool inCombat = units[idx].InCombat;
             float cooldown = units[idx].AttackCooldown;
 
@@ -189,6 +191,12 @@ public class WolfHitAndRunScenario : ScenarioBase
 
         DebugLog.Log(ScenarioLog, $"  Combat log entries: {sim.CombatLog.Entries.Count}");
     }
+
+    /// <summary>The predator's hit-and-run phase = its Combat-routine subroutine
+    /// (SoloPredatorHandler routine 2); outside Combat it reads as Engage(0),
+    /// matching the legacy WolfPhase reset on target loss.</summary>
+    private static byte CombatPhase(UnitArrays units, int idx) =>
+        units[idx].Routine == 2 ? units[idx].Subroutine : (byte)0;
 
     private static string PhaseName(byte phase) => phase switch
     {

@@ -228,9 +228,6 @@ public class Unit
     /// opportunity to retarget spans several ticks (the unit might be briefly in
     /// melee with its current target when the hit lands).</summary>
     public float LastHitTime = -1f;
-    public float FleeTimer;
-    public byte WolfPhase;
-    public float WolfPhaseTimer;
 
     // Jumping — scripted voluntary jump (JumpSystem). Z holds airborne height.
     // JumpPhase drives the state machine: 0=None, 1=TakeoffApproach, 2=Airborne,
@@ -368,7 +365,6 @@ public class Unit
     // Engagement & combat state
     public CombatTarget EngagedTarget = CombatTarget.None;
     public float PostAttackTimer;
-    public QueuedUnitAction QueuedAction = QueuedUnitAction.None;
 
     // Ghost mode
     public bool GhostMode;

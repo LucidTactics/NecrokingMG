@@ -65,7 +65,7 @@ public static class DamageSystem
     {
         if (idx < 0 || idx >= units.Count) return false;
         if (units[idx].Incap.Active || units[idx].JumpPhase != 0) return false;
-        if (units[idx].Fleeing || units[idx].Routing || units[idx].FleeTimer > 0f) return false;
+        if (units[idx].Fleeing || units[idx].Routing) return false;
         if (units[idx].ReactionCooldownTimer > 0f) return false;
         return true;
     }

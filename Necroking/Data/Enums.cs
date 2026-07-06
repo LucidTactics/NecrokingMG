@@ -40,12 +40,8 @@ public enum AIBehavior : byte
 {
     PlayerControlled = 0, AttackClosest,
     MoveToPoint, IdleAtPoint,
-    Caster,
-    WolfHitAndRun,          // Attack → disengage 3 units → wait for cooldown → re-engage (nearest target)
-    WolfOpportunist,        // Like HitAndRun but waits up to 1 cycle for target to turn away (>100° from facing)
+    Caster,   // migrated to CasterUnit archetype; kept so old def "ai" strings parse harmlessly
 }
-
-public enum QueuedUnitAction : byte { None, Flee, Disengage }
 
 public enum ProjectileType : byte { Arrow, Fireball, Potion }
 public enum HitLocation : byte { Head, Arms, Chest, Legs, Feet }

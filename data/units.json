@@ -133,7 +133,7 @@
       "id": "Rat",
       "name": "Rat",
       "faction": "Animal",
-      "ai": "WolfHitAndRun",
+      "ai": "",
       "radius": 0.5,
       "spriteScale": 0.25,
       "sprite": {
@@ -170,7 +170,7 @@
     {
       "id": "ZombieRat",
       "name": "Zombie Rat",
-      "ai": "WolfHitAndRun",
+      "ai": "",
       "radius": 0.5,
       "spriteScale": 0.25,
       "sprite": {
@@ -195,7 +195,8 @@
       ],
       "isQuadruped": true,
       "animJogVelOverride": 2,
-      "animRunVelOverride": 3
+      "animRunVelOverride": 3,
+      "archetype": "HordeMinion"
     },
     {
       "id": "ZombieFemaleDeer",
@@ -286,7 +287,7 @@
       "id": "Wolf",
       "name": "Wolf",
       "faction": "Animal",
-      "ai": "WolfHitAndRun",
+      "ai": "",
       "radius": 0.5,
       "spriteScale": 0.6875,
       "sprite": {
@@ -345,7 +346,7 @@
       "id": "Bear",
       "name": "Bear",
       "faction": "Animal",
-      "ai": "WolfOpportunist",
+      "ai": "",
       "size": 3,
       "radius": 0.75,
       "spriteScale": 0.842188,
@@ -399,13 +400,14 @@
       "dutyCycle": 0.5,
       "targetWalkCycle": 1.7,
       "jogSpeedMultiplier": 3,
-      "sprintSpeedMultiplier": 9
+      "sprintSpeedMultiplier": 9,
+      "archetype": "AmbushPredator"
     },
     {
       "id": "GrizzlyBear",
       "name": "Grizzly Bear",
       "faction": "Animal",
-      "ai": "WolfOpportunist",
+      "ai": "",
       "size": 4,
       "radius": 1,
       "spriteScale": 1.185938,
@@ -459,13 +461,14 @@
       "dutyCycle": 0.5,
       "targetWalkCycle": 1.8,
       "jogSpeedMultiplier": 3,
-      "sprintSpeedMultiplier": 9
+      "sprintSpeedMultiplier": 9,
+      "archetype": "AmbushPredator"
     },
     {
       "id": "DireWolf",
       "name": "Dire Wolf",
       "faction": "Animal",
-      "ai": "WolfHitAndRun",
+      "ai": "",
       "size": 3,
       "radius": 0.75,
       "spriteScale": 0.91875,
@@ -512,13 +515,14 @@
       "dutyCycle": 0.5,
       "targetWalkCycle": 1,
       "jogSpeedMultiplier": 3,
-      "sprintSpeedMultiplier": 9
+      "sprintSpeedMultiplier": 9,
+      "archetype": "SoloPredator"
     },
     {
       "id": "JuvWolf",
       "name": "Wolf Cub",
       "faction": "Animal",
-      "ai": "WolfHitAndRun",
+      "ai": "",
       "radius": 0.5,
       "spriteScale": 0.515625,
       "sprite": {
@@ -564,7 +568,8 @@
       "dutyCycle": 0.5,
       "targetWalkCycle": 0.6,
       "jogSpeedMultiplier": 3,
-      "sprintSpeedMultiplier": 9
+      "sprintSpeedMultiplier": 9,
+      "archetype": "SoloPredator"
     },
     {
       "id": "ZombieWolf",
@@ -664,7 +669,8 @@
       "dutyCycle": 0.5,
       "targetWalkCycle": 0.5,
       "jogSpeedMultiplier": 3,
-      "sprintSpeedMultiplier": 9
+      "sprintSpeedMultiplier": 9,
+      "archetype": "HordeMinion"
     },
     {
       "id": "ZombieMaleDeer",
@@ -1440,7 +1446,7 @@
       "id": "Boar",
       "name": "Boar",
       "faction": "Animal",
-      "ai": "WolfHitAndRun",
+      "ai": "",
       "size": 3,
       "radius": 0.5,
       "spriteScale": 0.83125,
@@ -1483,13 +1489,14 @@
       "dutyCycle": 0.5,
       "targetWalkCycle": 1,
       "jogSpeedMultiplier": 3,
-      "sprintSpeedMultiplier": 9
+      "sprintSpeedMultiplier": 9,
+      "archetype": "SoloPredator"
     },
     {
       "id": "GreatBoar",
       "name": "Great Boar",
       "faction": "Animal",
-      "ai": "WolfHitAndRun",
+      "ai": "",
       "size": 3,
       "radius": 0.75,
       "spriteScale": 1.125,
@@ -1532,7 +1539,8 @@
       "dutyCycle": 0.5,
       "targetWalkCycle": 1.4,
       "jogSpeedMultiplier": 3,
-      "sprintSpeedMultiplier": 9
+      "sprintSpeedMultiplier": 9,
+      "archetype": "SoloPredator"
     },
     {
       "id": "ZombieJuvenileBear",

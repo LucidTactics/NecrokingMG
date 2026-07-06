@@ -2179,7 +2179,6 @@ public partial class Game1 {
              $"\"panic\":{u.PanicTimer.ToString("F2", ci)}," +
              $"\"vel\":{u.Velocity.Length().ToString("F2", ci)}," +
              $"\"prefVel\":{u.PreferredVel.Length().ToString("F2", ci)}," +
-             $"\"wolfPhase\":{u.WolfPhase}," +
              $"\"huntTgt\":{u.WolfHuntTargetId},\"huntPhase\":{u.WolfHuntPhase},\"huntTimer\":{u.WolfHuntTimer.ToString("F1", ci)}," +
              $"\"squadId\":{u.SquadId}," +
              $"\"villageId\":{u.VillageId}," +

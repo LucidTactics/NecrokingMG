@@ -73,6 +73,7 @@ public class WolfRetargetScenario : ScenarioBase
         if (deerIdx >= 0)
         {
             units[deerIdx].Faction = Faction.Undead;
+            units[deerIdx].Archetype = 0;  // legacy chase — def archetype is auto-wired now
             units[deerIdx].AI = AIBehavior.AttackClosest;
             units[deerIdx].Stats.MaxHP = 500;
             units[deerIdx].Stats.HP = 500;

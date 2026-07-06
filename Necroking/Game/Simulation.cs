@@ -1046,22 +1046,15 @@ public class Simulation
             }
             subSw.Restart(); // legacy switch from here down
 
-            // Legacy AI path: only reached when Archetype == 0 (see `continue` above for
-            // archetype units). Wolf-flavored AIBehaviors here don't collide with
-            // WolfPackHandler because the archetype dispatcher short-circuits.
-            // Wolf AIs self-manage combat/disengage logic.
-            bool selfManagesCombat = _units[i].AI == AIBehavior.WolfHitAndRun
-                || _units[i].AI == AIBehavior.WolfOpportunist;
-            // Units with pending attacks stop moving (except self-managed AIs);
-            // wolf AIs bypass during disengage/wait phases
-            if (!_units[i].PendingAttack.IsNone
-                && !(selfManagesCombat && _units[i].WolfPhase >= WolfDisengage))
+            // Legacy AI path: only reached when Archetype == 0 (see `continue` above
+            // for archetype units).
+            // Units with pending attacks stop moving.
+            if (!_units[i].PendingAttack.IsNone)
             { _units[i].PreferredVel = Vec2.Zero; continue; }
             // Fleeing/routing units are exempt from the InCombat plant: a fleeing
             // unit with a stale/live engagement must keep running, not freeze in
-            // melee doing attack windups. (InCombat itself stays derived so male
-            // deer can still flip Fleeing→FightBack off it.)
-            if (_units[i].InCombat && _units[i].AI != AIBehavior.PlayerControlled && !selfManagesCombat
+            // melee doing attack windups.
+            if (_units[i].InCombat && _units[i].AI != AIBehavior.PlayerControlled
                 && !_units[i].Fleeing && !_units[i].Routing)
             { _units[i].PreferredVel = Vec2.Zero; continue; }
 
@@ -1156,14 +1149,8 @@ public class Simulation
 
                 // ArcherAttack → ArcherUnit/RangedUnitHandler; AttackClosestRetarget →
                 // HordeMinion; FleeWhenHit / NeutralFightBack → DeerHerdHandler
-                // (female flee / male fight-back).
-
-                case AIBehavior.WolfHitAndRun:
-                case AIBehavior.WolfOpportunist:
-                {
-                    UpdateWolfAI(i, dt);
-                    break;
-                }
+                // (female flee / male fight-back); WolfHitAndRun / WolfOpportunist →
+                // SoloPredator / AmbushPredator (AI.SoloPredatorHandler).
 
                 default:
                 {
@@ -3400,186 +3387,6 @@ public class Simulation
             Vec2 dir = dist > 0.01f ? (targetPos - myPos) * (1f / dist) : Vec2.Zero;
             _units[i].PreferredVel = dir * speed;
         }
-    }
-
-    // Wolf AI phases
-    private const byte WolfEngage = 0;
-    private const byte WolfAttacking = 1;
-    private const byte WolfDisengage = 2;
-    private const byte WolfWaitCooldown = 3;
-    private const float WolfAggroRange = 10f;
-    private const float WolfAggroBreakRange = 15f;
-
-    private void UpdateWolfAI(int i, float dt)
-    {
-        bool opportunist = _units[i].AI == AIBehavior.WolfOpportunist;
-
-        // Find/validate target with aggro range
-        if (!IsTargetAlive(_units[i].Target))
-        {
-            int found = FindClosestEnemy(i, WolfAggroRange);
-            _units[i].Target = found >= 0 ? CombatTarget.Unit(_units[found].Id) : CombatTarget.None;
-            _units[i].WolfPhase = WolfEngage;
-            _units[i].WolfPhaseTimer = 0;
-        }
-
-        int targetIdx = ResolveUnitTarget(_units[i].Target);
-        if (targetIdx < 0)
-        {
-            _units[i].PreferredVel = Vec2.Zero;
-            return;
-        }
-
-        // Drop target if beyond break range
-        float breakDist = (_units[targetIdx].Position - _units[i].Position).Length();
-        if (breakDist > WolfAggroBreakRange)
-        {
-            _units[i].Target = CombatTarget.None;
-            _units[i].EngagedTarget = CombatTarget.None;
-            _units[i].WolfPhase = WolfEngage;
-            _units[i].WolfPhaseTimer = 0;
-            _units[i].PreferredVel = Vec2.Zero;
-            return;
-        }
-
-        Vec2 myPos = _units[i].Position;
-        Vec2 targetPos = _units[targetIdx].Position;
-        float dist = (targetPos - myPos).Length();
-        // Same engage range as the combat system (Settings-tunable; see MeleeRangeUtil).
-        float attackRange = Combat.MeleeRangeUtil.Compute(_units, i, targetIdx, _gameData);
-        float disengageDist = attackRange + 2f; // back off 2 units beyond attack range
-        float attackCooldown = _units[i].AttackCooldown;
-
-        switch (_units[i].WolfPhase)
-        {
-            case WolfEngage:
-            {
-                // Move toward target
-                if (dist <= attackRange)
-                {
-                    if (opportunist)
-                    {
-                        // Check if target is facing away (>100° from us)
-                        if (IsTargetFacingAway(i, targetIdx, 100f) || _units[i].WolfPhaseTimer > attackCooldown)
-                        {
-                            // Opportunity! Or timeout — attack
-                            _units[i].WolfPhase = WolfAttacking;
-                            _units[i].WolfPhaseTimer = 0;
-                            _units[i].EngagedTarget = _units[i].Target;
-                        }
-                        else
-                        {
-                            // Wait for opportunity, circle at edge of range
-                            _units[i].WolfPhaseTimer += dt;
-                            Vec2 perp = new Vec2(-(targetPos.Y - myPos.Y), targetPos.X - myPos.X);
-                            if (perp.LengthSq() > 0.01f) perp = perp.Normalized();
-                            _units[i].PreferredVel = perp * _units[i].MaxSpeed * 0.5f;
-                        }
-                    }
-                    else
-                    {
-                        // Non-opportunist: attack immediately
-                        _units[i].WolfPhase = WolfAttacking;
-                        _units[i].WolfPhaseTimer = 0;
-                        _units[i].EngagedTarget = _units[i].Target;
-                    }
-                }
-                else
-                {
-                    MoveTowardUnit(i, targetIdx, _units[i].MaxSpeed);
-                    if (opportunist) _units[i].WolfPhaseTimer += dt;
-                }
-                break;
-            }
-
-            case WolfAttacking:
-            {
-                // In melee range attacking — let combat system handle the attack
-                // Once attack cooldown starts (we just attacked), transition to disengage
-                if (attackCooldown > 0 && _units[i].WolfPhaseTimer > 0.2f)
-                {
-                    // We've been in attack phase long enough and cooldown started → disengage
-                    _units[i].WolfPhase = WolfDisengage;
-                    _units[i].WolfPhaseTimer = 0;
-                    _units[i].EngagedTarget = CombatTarget.None;
-                }
-                else
-                {
-                    _units[i].WolfPhaseTimer += dt;
-                    // Stay near target
-                    if (dist > attackRange * 1.5f)
-                        MoveTowardUnit(i, targetIdx, _units[i].MaxSpeed);
-                    else
-                        _units[i].PreferredVel = Vec2.Zero;
-                }
-                break;
-            }
-
-            case WolfDisengage:
-            {
-                // Force-clear engagement and lockout — wolf needs to move immediately
-                _units[i].EngagedTarget = CombatTarget.None;
-                _units[i].PendingAttack = CombatTarget.None;
-                _units[i].PostAttackTimer = 0f;
-
-                // Back away from target to maintain disengageDist
-                if (dist < disengageDist)
-                {
-                    Vec2 awayDir = dist > 0.01f ? (myPos - targetPos) * (1f / dist) : new Vec2(1, 0);
-                    _units[i].PreferredVel = awayDir * _units[i].MaxSpeed;
-                }
-                else
-                {
-                    // Reached safe distance, wait for cooldown
-                    _units[i].WolfPhase = WolfWaitCooldown;
-                    _units[i].WolfPhaseTimer = 0;
-                    _units[i].PreferredVel = Vec2.Zero;
-                }
-                break;
-            }
-
-            case WolfWaitCooldown:
-            {
-                // Force-clear engagement but KEEP our target
-                _units[i].EngagedTarget = CombatTarget.None;
-                _units[i].PendingAttack = CombatTarget.None;
-
-                // Maintain distance, wait for attack cooldown to expire
-                if (dist < disengageDist - 0.5f)
-                {
-                    Vec2 awayDir = dist > 0.01f ? (myPos - targetPos) * (1f / dist) : new Vec2(1, 0);
-                    _units[i].PreferredVel = awayDir * _units[i].MaxSpeed * 0.5f;
-                }
-                else if (attackCooldown <= 0)
-                {
-                    // Cooldown done — re-engage
-                    _units[i].WolfPhase = WolfEngage;
-                    _units[i].WolfPhaseTimer = 0;
-                }
-                else
-                {
-                    // Circle while waiting (emergent flanking when multiple wolves)
-                    Vec2 toTarget = targetPos - myPos;
-                    Vec2 perp = new Vec2(-toTarget.Y, toTarget.X);
-                    if (perp.LengthSq() > 0.01f) perp = perp.Normalized();
-                    _units[i].PreferredVel = perp * _units[i].MaxSpeed * 0.3f;
-                }
-                break;
-            }
-        }
-    }
-
-    /// <summary>Check if the target is facing away from us by more than angleDeg degrees.</summary>
-    private bool IsTargetFacingAway(int unitIdx, int targetIdx, float angleDeg)
-    {
-        Vec2 targetFacingDir = Movement.FacingUtil.ForwardDir(_units[targetIdx]);
-        Vec2 toUs = _units[unitIdx].Position - _units[targetIdx].Position;
-        if (toUs.LengthSq() < 0.01f) return false;
-        toUs = toUs.Normalized();
-        // dot product: 1 = facing toward us, -1 = facing away
-        float dot = targetFacingDir.X * toUs.X + targetFacingDir.Y * toUs.Y;
-        float angleRad = angleDeg * MathF.PI / 180f;
-        return dot < MathF.Cos(angleRad); // facing more than angleDeg away from us
     }
 
     /// <summary>

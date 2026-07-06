@@ -75,6 +75,7 @@ public class TrampleAttackScenario : ScenarioBase
             return;
         }
         units[boarIdx].Faction = Faction.Animal;
+        units[boarIdx].Archetype = 0;  // legacy straight-line charge — Boar def is SoloPredator now
         units[boarIdx].AI = AIBehavior.AttackClosest;
         units[boarIdx].FacingAngle = 0f;
         units[boarIdx].Stats.MaxHP = 99999;

@@ -121,6 +121,10 @@ public class SweepAttackScenario : ScenarioBase
     /// brawl, which scrambles the cone/faction damage accounting.</summary>
     private static void ZeroAwareness(UnitArrays units, int idx)
     {
+        // Bear def carries the AmbushPredator archetype now — clear it too, or
+        // the handler self-aggros within its flat AggroRange and ignores the
+        // scenario's IdleAtPoint.
+        units[idx].Archetype = 0;
         units[idx].DetectionRange = 0f;
         units[idx].DetectionBreakRange = 0f;
         units[idx].AlertEscalateRange = 0f;

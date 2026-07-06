@@ -1052,6 +1052,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             new AI.RangedUnitHandler(AI.ArchetypeRegistry.ArcherUnit));
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.CasterUnit, "CasterUnit",
             new AI.CasterUnitHandler());
+        AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.SoloPredator, "SoloPredator",
+            new AI.SoloPredatorHandler(opportunist: false));
+        AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.AmbushPredator, "AmbushPredator",
+            new AI.SoloPredatorHandler(opportunist: true));
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.Worker, "Worker", new AI.WorkerHandler());
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.CorpsePuppet, "CorpsePuppet", new AI.CorpsePuppetHandler());
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.Civilian, "Civilian", new AI.VillagerHandler());

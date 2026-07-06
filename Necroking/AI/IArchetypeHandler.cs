@@ -94,6 +94,8 @@ public static class ArchetypeRegistry
         "Worker" => Worker,
         "CorpsePuppet" => CorpsePuppet,
         "Watchdog" => Watchdog,
+        "SoloPredator" => SoloPredator,
+        "AmbushPredator" => AmbushPredator,
         _ => None,
     };
 
@@ -113,4 +115,8 @@ public static class ArchetypeRegistry
     public const byte Worker = 12;
     public const byte CorpsePuppet = 13;
     public const byte Watchdog = 14;
+    /// <summary>Un-packed hunting animal, hit-and-run cycle (dire wolves, boars).</summary>
+    public const byte SoloPredator = 15;
+    /// <summary>SoloPredator that waits for the target to face away before committing (bears).</summary>
+    public const byte AmbushPredator = 16;
 }
