@@ -48,6 +48,7 @@ public class PounceOutrunScenario : ScenarioBase
         }
         if (wolfIdx < 0) { DebugLog.Log(ScenarioLog, "FAIL: spawn Wolf/DireWolf"); _complete = true; return; }
         units[wolfIdx].Faction = Faction.Animal;
+        units[wolfIdx].Archetype = 0;  // legacy chase — def archetype is auto-wired now
         units[wolfIdx].AI = AIBehavior.AttackClosest;
         units[wolfIdx].FacingAngle = 0f;
         units[wolfIdx].Stats.MaxHP = 9999;

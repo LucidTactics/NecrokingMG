@@ -55,6 +55,7 @@ public class SweepAttackScenario : ScenarioBase
         int bearIdx = sim.SpawnUnitByID("Bear", new Vec2(10f, 10f));
         units[bearIdx].Faction = Faction.Animal;
         units[bearIdx].AI = AIBehavior.IdleAtPoint;
+        ZeroAwareness(units, bearIdx);   // geometry prop — must never self-aggro
         units[bearIdx].FacingAngle = 0f;
         units[bearIdx].Stats.MaxHP = 99999;
         units[bearIdx].Stats.HP = 99999;
@@ -97,6 +98,7 @@ public class SweepAttackScenario : ScenarioBase
         int ab = sim.SpawnUnitByID("Bear", new Vec2(7f, 10f));
         units[ab].Faction = Faction.Animal;
         units[ab].AI = AIBehavior.IdleAtPoint;
+        ZeroAwareness(units, ab);        // geometry prop — must never self-aggro
         units[ab].Stats.MaxHP = 99999;
         units[ab].Stats.HP = 99999;
         _allyBearId = units[ab].Id;
@@ -111,6 +113,18 @@ public class SweepAttackScenario : ScenarioBase
 
         _initialCombatLogCount = sim.CombatLog.Entries.Count;
         ZoomOnLocation(10.5f, 10f, 64f);
+    }
+
+    /// <summary>SpawnUnitByID now copies awareness config from the def (like the
+    /// Game1 spawn pipeline always did). This test wants inert geometry props:
+    /// with live awareness the bears alert on the soldiers and start a real
+    /// brawl, which scrambles the cone/faction damage accounting.</summary>
+    private static void ZeroAwareness(UnitArrays units, int idx)
+    {
+        units[idx].DetectionRange = 0f;
+        units[idx].DetectionBreakRange = 0f;
+        units[idx].AlertEscalateRange = 0f;
+        units[idx].GroupAlertRadius = 0f;
     }
 
     public override void OnTick(Simulation sim, float dt)

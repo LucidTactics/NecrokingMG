@@ -2199,69 +2199,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         var unitDef = _gameData.Units.Get(unitDefID);
         if (unitDef == null) return idx;
 
-        _sim.UnitsMut[idx].SpriteScale = unitDef.SpriteScale;
-        _sim.UnitsMut[idx].OrcaPriority = unitDef.OrcaPriority;
-        _sim.UnitsMut[idx].Radius = unitDef.Radius;
-        _sim.UnitsMut[idx].Size = unitDef.Size;
-
-        // Build full stats from equipment
+        // All def-derived runtime fields (sprite/size/faction/awareness/AI+archetype/
+        // stats/caster resources) come from the single canonical copy shared with
+        // SpawnUnitByID and TransformUnit.
         var builtStats = _gameData.Units.BuildStats(unitDefID, _gameData.Weapons, _gameData.Armors, _gameData.Shields);
-        _sim.UnitsMut[idx].Stats = builtStats;
-        Movement.Locomotion.ResetSpeed(_sim.UnitsMut[idx]);
-
-        // Caster resources — without these a spawned caster has MaxMana = 0 and
-        // never casts. Spawns start at full mana. (Duplicated in
-        // Simulation.ApplyDefRuntimeFields for the SpawnUnitByID path.)
-        _sim.UnitsMut[idx].MaxMana = unitDef.MaxMana;
-        _sim.UnitsMut[idx].ManaRegen = unitDef.ManaRegen;
-        _sim.UnitsMut[idx].Mana = unitDef.MaxMana;
-        _sim.UnitsMut[idx].SpellID = unitDef.SpellID;
-
-        // Faction
-        _sim.UnitsMut[idx].Faction = unitDef.Faction switch
-        {
-            "Human" => Faction.Human,
-            "Animal" => Faction.Animal,
-            _ => Faction.Undead
-        };
-
-        // Initialize awareness config from UnitDef (always, regardless of archetype)
-        _sim.UnitsMut[idx].DetectionRange = unitDef.DetectionRange;
-        _sim.UnitsMut[idx].DetectionBreakRange = unitDef.DetectionBreakRange;
-        _sim.UnitsMut[idx].AlertDuration = unitDef.AlertDuration;
-        _sim.UnitsMut[idx].AlertEscalateRange = unitDef.AlertEscalateRange;
-        _sim.UnitsMut[idx].AggroRangeScale = unitDef.AggroRangeScale;
-        _sim.UnitsMut[idx].GroupAlertRadius = unitDef.GroupAlertRadius;
-
-        // AI — use new archetype system if specified, otherwise legacy AI enum
-        if (!string.IsNullOrEmpty(unitDef.Archetype))
-        {
-            // Resolve archetype name to ID (single source of truth — see
-            // ArchetypeRegistry.FromName, shared with Simulation.SpawnZombieMinion).
-            byte archetypeId = AI.ArchetypeRegistry.FromName(unitDef.Archetype);
-            _sim.UnitsMut[idx].Archetype = archetypeId;
-
-            // Call OnSpawn for the archetype handler
-            var handler = AI.ArchetypeRegistry.Get(archetypeId);
-            if (handler != null)
-            {
-                float dayCycleLength = 360f;
-                float dayFraction = (_sim.GameTime % dayCycleLength) / dayCycleLength;
-                var ctx = new AI.AIContext
-                {
-                    UnitIndex = idx, Units = _sim.UnitsMut, Dt = 0, FrameNumber = 0,
-                    GameData = _gameData, Pathfinder = _sim.Pathfinder,
-                    Horde = _sim.Horde, TriggerSystem = _triggerSystem, MagicGlyphs = _sim.MagicGlyphs,
-                    GameTime = _sim.GameTime, DayTime = dayFraction, IsNight = dayFraction >= 0.5f,
-                };
-                handler.OnSpawn(ref ctx);
-            }
-        }
-        else
-        {
-            _sim.UnitsMut[idx].AI = Enum.TryParse<AIBehavior>(unitDef.AI, out var parsedAI)
-                ? parsedAI : AIBehavior.AttackClosest;
-        }
+        _sim.ApplyDefRuntimeFields(idx, unitDef, builtStats);
 
         // If necromancer, record index in simulation
         if (unitDef.AI == "PlayerControlled")

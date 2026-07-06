@@ -69,7 +69,13 @@ public class AngleSweepScenario : ScenarioBase
             if (soldierIdx >= 0) sim.UnitsMut[soldierIdx].FacingAngle = 0f;
 
             foreach (int idx in new[] { deerIdx, zombieIdx, soldierIdx })
-                if (idx >= 0) sim.UnitsMut[idx].AI = AIBehavior.IdleAtPoint;
+                if (idx >= 0)
+                {
+                    // Legacy idle — clear the def archetype (SpawnUnitByID now
+                    // wires it) so the handler doesn't override the pose.
+                    sim.UnitsMut[idx].Archetype = 0;
+                    sim.UnitsMut[idx].AI = AIBehavior.IdleAtPoint;
+                }
 
             DebugLog.Log(ScenarioLog,
                 $"Spawned: deer={deerIdx} zombieDeer={zombieIdx} soldier={soldierIdx} (total units={sim.Units.Count})");

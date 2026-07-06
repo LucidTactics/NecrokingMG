@@ -4185,28 +4185,69 @@ public class Simulation
         : faction == "Animal" ? Faction.Animal
         : Faction.Undead;
 
-    /// <summary>Apply the def-derived runtime fields shared by SpawnUnitByID and
-    /// TransformUnit (sprite/size/collision/faction/AI/stats). Centralizing this fixed
-    /// TransformUnit's weaker copy that dropped the Animal faction and hand-rolled a
-    /// partial 6-case AI switch — so transforming into an Animal-faction or other-AI def
-    /// silently downgraded it.</summary>
-    private void ApplyDefRuntimeFields(int idx, Data.Registries.UnitDef def, UnitStats stats)
+    /// <summary>Apply the def-derived runtime fields shared by Game1.SpawnUnit,
+    /// SpawnUnitByID and TransformUnit (sprite/size/collision/faction/awareness/
+    /// AI+archetype/stats/caster resources). Centralizing this fixed TransformUnit's
+    /// weaker copy that dropped the Animal faction and hand-rolled a partial 6-case
+    /// AI switch — and later the SpawnUnitByID gap where the def's archetype was
+    /// never wired, so trigger/potion-spawned units silently ran legacy AI.
+    ///
+    /// AI dispatch mirrors Game1.SpawnUnit: a def archetype wins and the legacy
+    /// "ai" string is ignored (inert); only archetype-less defs parse it. The
+    /// archetype handler's OnSpawn runs with a partial context (no EnvSystem/
+    /// Workers) — handlers only init routine state there.</summary>
+    internal void ApplyDefRuntimeFields(int idx, Data.Registries.UnitDef def, UnitStats stats)
     {
         _units[idx].SpriteScale = def.SpriteScale;
         _units[idx].Radius = def.Radius;
         _units[idx].Size = def.Size;
         _units[idx].OrcaPriority = def.OrcaPriority;
-        if (!string.IsNullOrEmpty(def.Faction))
-            _units[idx].Faction = ParseFaction(def.Faction);
-        if (Enum.TryParse<AIBehavior>(def.AI, out var ai))
-            _units[idx].AI = ai;
+        // Unconditional: an empty def faction means Undead (all faction-less defs
+        // are zombies/skeletons/player forms) — matching the old Game1.SpawnUnit
+        // default. AddUnit's Dynamic default is Human, so skipping would flip them.
+        _units[idx].Faction = ParseFaction(def.Faction);
         _units[idx].Stats = stats;
+
+        // Awareness config (always, regardless of archetype)
+        _units[idx].DetectionRange = def.DetectionRange;
+        _units[idx].DetectionBreakRange = def.DetectionBreakRange;
+        _units[idx].AlertDuration = def.AlertDuration;
+        _units[idx].AlertEscalateRange = def.AlertEscalateRange;
+        _units[idx].AggroRangeScale = def.AggroRangeScale;
+        _units[idx].GroupAlertRadius = def.GroupAlertRadius;
+
         // Caster resources — without these a spawned caster has MaxMana = 0 and
         // never casts. Spawns (and transforms) start at full mana.
         _units[idx].MaxMana = def.MaxMana;
         _units[idx].ManaRegen = def.ManaRegen;
         _units[idx].Mana = def.MaxMana;
         _units[idx].SpellID = def.SpellID;
+
+        // AI — archetype wins; legacy "ai" string only applies to archetype-less defs.
+        if (!string.IsNullOrEmpty(def.Archetype))
+        {
+            byte archetypeId = AI.ArchetypeRegistry.FromName(def.Archetype);
+            _units[idx].Archetype = archetypeId;
+            var handler = AI.ArchetypeRegistry.Get(archetypeId);
+            if (handler != null)
+            {
+                var ctx = new AI.AIContext
+                {
+                    UnitIndex = idx, Units = _units, Dt = 0, FrameNumber = (int)_frameNumber,
+                    GameData = _gameData, Pathfinder = _pathfinder,
+                    Horde = _horde, TriggerSystem = _triggerSystem, MagicGlyphs = _magicGlyphs,
+                    GameTime = _gameTime,
+                };
+                handler.OnSpawn(ref ctx);
+            }
+        }
+        else
+        {
+            _units[idx].Archetype = AI.ArchetypeRegistry.None;
+            if (Enum.TryParse<AIBehavior>(def.AI, out var ai))
+                _units[idx].AI = ai;
+        }
+
         Movement.Locomotion.ResetSpeed(_units[idx]);
     }
 

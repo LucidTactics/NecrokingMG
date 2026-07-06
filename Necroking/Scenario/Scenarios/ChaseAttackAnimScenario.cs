@@ -66,6 +66,7 @@ public class ChaseAttackAnimScenario : ScenarioBase
         int dIdx = sim.SpawnUnitByID("soldier", new Vec2(13.3f, 10f));
         if (dIdx < 0) { _fail = true; _failReason = "spawn dummy failed"; _complete = true; return; }
         units[dIdx].Faction = Faction.Human;
+        units[dIdx].Archetype = 0;  // legacy idle dummy — def archetype is auto-wired now
         units[dIdx].AI = AIBehavior.IdleAtPoint;
         units[dIdx].Stats.MaxHP = 100000; units[dIdx].Stats.HP = 100000;
         _dummyId = units[dIdx].Id;
