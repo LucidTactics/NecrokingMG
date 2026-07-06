@@ -65,6 +65,20 @@ CLAUDE.md → "Standard Patterns Reference".)
   (SpawnArrow, BeginPounce) take the already-led point.
 - **Melee engage range** — `GameSystems.Combat.MeleeRangeUtil.Compute`
   (single source for "am I close enough to melee", sim + AI handlers).
+- **World queries (nearest / under-cursor / in-radius) — `_sim.Query`**
+  (`WorldQuery`, Necroking/Game/WorldQuery.cs, added 2026-07-06). NEVER write
+  a new `for (...) { bestSq }` scan over units/env objects/corpses — call
+  `_sim.Query.NearestEnemyToPoint / NearestEnvObject / NearestCorpse /
+  UnitsInRadius / …` with a prebuilt filter (`EnvForagables`, `EnvWorkerHomes`,
+  `EnvByDefIndex`, `CorpseExclude.Free`) or a small caller-side struct filter
+  for odd gates (see `Game1.WorldClicks.StockedCorpsePiles`). Bounded unit
+  queries on sim-tick paths use the quadtree; UI/paused code uses the linear
+  methods (`UnitUnderCursor`, `NearestEnemyToPoint`) — the quadtree is stale
+  outside `Simulation.Tick`. Returns are use-this-frame indices; never cache
+  `_sim.Query` in a field (recreated with the session). Still-unmigrated
+  linear scans (WorkerSystem finds, CorpseInteractionManager, SpellCasting/
+  Projectile corpse scans, AI VillageThreat/BoarForageAI) should move here
+  when touched.
 
 ## Data / registries
 

@@ -56,8 +56,18 @@ not mouse-based.
 ### Other World/ files (context, not needed for this task)
 `Pathfinder.cs` (A*/steering used via `AIContext.Pathfinder`), `FlowField.cs`,
 `EnvSpatialIndex.cs` (spatial index over env objects — faster than the linear scan
-if boars/mushrooms get numerous), `WallSystem.cs`, `RoadSystem.cs`, `TileGrid.cs`,
-`GroundSystem.cs`.
+if boars/mushrooms get numerous; ORCA-only consumer), `WallSystem.cs`, `RoadSystem.cs`,
+`TileGrid.cs`, `GroundSystem.cs`.
+
+### World queries — `_sim.Query` (WorldQuery, 2026-07-06)
+"Nearest X / X under cursor / all X in radius" over units, env objects, and corpses has
+ONE canonical home: **`Necroking/Game/WorldQuery.cs`**, owned by `Simulation`
+(`_sim.Query`). Struct-generic filters (`EnvForagables`, `EnvWorkerHomes`,
+`EnvByDefIndex`, `CorpseExclude.Free`, caller-side structs for odd gates). Bounded unit
+queries ride the per-tick quadtree; UI/paused picks use the linear methods (quadtree is
+stale outside `Simulation.Tick`). Don't write new ad-hoc `bestSq` scans — and when
+touching the remaining unmigrated ones (WorkerSystem finds, CorpseInteractionManager,
+SpellCasting/Projectile corpse scans, VillageThreat, BoarForageAI), migrate them here.
 
 ## Death → corpse → drop path (cross-area: Simulation)
 
