@@ -181,8 +181,22 @@ action frame). Note: instant spells with no `CastingBuffID` and no channel execu
 never set `_pendingCastAnim` — there is no cast-duration window to lock against for those. The
 **necromancer already faces the target and stops during a channel** (facing pinned each frame in
 `UpdateChanneledCast`), but plain WASD movement is NOT gated by a cast today. A separate
-`_channelingSlot` (int, `Game1.cs`) tracks hold-to-channel beam/drain spells (released in `Game1.cs`
-Update when the slot key is let go) — unrelated to `_pendingCastAnim`.
+`_channelingSlot` (int, `Game1.cs`) tracks hold-to-channel beam/drain spells (set in
+`SpellEffectSystem.Execute`'s Beam/Drain cases, released in `Game1.cs` Update when the slot key is
+let go via `Lightning.CancelBeamsForCaster`/`CancelDrainsForCaster`) — unrelated to
+`_pendingCastAnim`.
+**Player-only cast state census (for anyone un-globalizing casting):** `Game1._pendingSpell` — the
+single shared `PendingSpellCast` instance (targeting results: `TargetCorpseID`/`TargetUnitID`/
+`SummonUnitID`/multi-shot counters) written by `SpellCaster.TryStartSpellCast` and read later at
+effect time by `SpellEffectSystem.ExecuteSummonSpell` via `game._pendingSpell` (one caster at a
+time by construction); `Game1._pendingCastAnim`/`_channelingSlot`/`_pendingProjectiles`/
+`_pendingReanimRises` as above; mana + per-spell cooldown dict on `Simulation.NecroState`
+(`NecromancerState`, `Movement/UnitModel.cs` — deducted inside `TryStartSpellCast`'s success path,
+refunded by `SpellCaster.RefundSpellCast` on channel cancel); the necromancer-only cast-plant flag
+`Simulation.SetNecromancerCasting` driven by `TickCastPlant` (`Game1.Animation.cs`). AI casters
+(`AI/CasterUnitHandler.cs`) bypass ALL of this — see ai.md "CasterUnit archetype" pipeline note.
+There is no charge-up or combo system; the only wind-up mechanisms are the cast plant + `CastTime`
+and the channel Start/Loop/Finish machine.
 See also: **`docs/spells.md`** (read before adding/changing a spell — explains the three-layer
 split), `Game/SpellCasting.cs`, `Game/SpellEffectSystem.cs`, `Game/SpellPenetration.cs`,
 `Data/Registries/SpellRegistry.cs`, `Game1.Spells.cs` is paired with the main loop in `Game1.cs`.

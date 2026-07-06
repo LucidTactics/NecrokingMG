@@ -209,6 +209,22 @@ marks the spot). `Simulation.ApplyDefRuntimeFields` now copies `def.MaxMana`/`Ma
 `SpellID` onto the unit (spawns start at full mana). Path levels are still read from the
 def at cast time (`UnitDef.GetPathLevel`, buffs via `BuffSystem.EffectivePathLevel`).
 
+**Pipeline note — AI casting does NOT share the player pipeline.**
+`CasterUnitHandler.TryCast` bypasses `SpellCaster.TryStartSpellCast` and
+`SpellEffectSystem.Execute` entirely: it hand-rolls Strike-style casts only
+(`ctx.Lightning.SpawnZap`/`SpawnStrike` + `DamageSystem.Apply` + casting buff), gated by
+the **per-unit scalars** `Unit.Mana`/`MaxMana`/`ManaRegen`/`SpellID`/`SpellCooldownTimer`
+(one spell per unit, one float cooldown — no per-spell dict; regen+cooldown are ticked
+inside `CasterUnitHandler.Update`, nothing else ticks unit mana). Everything else —
+Projectile/Summon/Beam/Drain/Blight/Cloud/Sacrifice categories, multi-shot, cast
+anims/plant/channel phases — is **player-only**, driven by Game1-level state
+(`_pendingSpell`, `_pendingCastAnim`, `_channelingSlot`, `_pendingProjectiles`,
+`Simulation.NecroState` mana/cooldown dict) and `SpellEffectSystem.Execute(spell,
+Game1 game, …)` which takes `Game1` directly. Giving AI units the full pipeline means
+de-globalizing that state (see game1-partials.md → `Game1.Spells.cs`). Precedent for
+exposing a casting service to handlers: `AIContext` already carries `Lightning` and
+`DamageEvents`.
+
 ## Legacy `AIBehavior` — post-migration state (migrated 2026-07-07, commits d08b584…d21ad4a)
 
 The migration the old census documented is **complete**. Current state:
