@@ -1401,6 +1401,19 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Zones are reloaded per map below; clear here so maps without a zones file
         // (empty_test, missing map) don't inherit the previous map's zones.
         _zoneSystem.Clear();
+        // Grass is per-map like zones: clear here so a map without a grassMap
+        // section doesn't inherit the previous map's grass — Save Map would then
+        // bake the stale grid into that map's JSON (this is how testmap.json once
+        // gained default's full 5120x5120 grass layer, +34MB).
+        _grassW = 0; _grassH = 0;
+        _grassMap = Array.Empty<byte>();
+        _grassTypeIds = Array.Empty<string>();
+        _grassTypeNames = Array.Empty<string>();
+        _grassTypeSpritePaths = Array.Empty<string[]>();
+        _grassTypeScales = Array.Empty<float>();
+        _grassTypeDensities = Array.Empty<float>();
+        _grassDefaultTints = Array.Empty<Color>();
+        _grassCorruptedTints = Array.Empty<Color>();
         string mapPath = GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}.json");
         if (mapName == "empty_test")
         {
@@ -1691,8 +1704,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _mapEditor.SetCorpseSettings(_gameData.Corpse, corpsesAtlas);
         }
 
-        // Feed grass data to map editor
-        if (_grassMap.Length > 0)
+        // Feed grass data to map editor — unconditionally, so loading a map
+        // without grass also CLEARS the editor's grass state from the previous
+        // map (the editor outlives map loads; stale grass would get re-saved).
         {
             var grassTypeInfos = new MapData.GrassTypeInfo[_grassTypeIds.Length];
             for (int gi = 0; gi < grassTypeInfos.Length; gi++)

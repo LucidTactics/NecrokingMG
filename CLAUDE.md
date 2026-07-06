@@ -39,8 +39,8 @@ The exe references `assets/` and `data/` at the project root (two levels up from
 ## Directory Layout
 ```
 NecrokingMG/
-  assets/          (sprites, textures, UI, effects, fonts, items)
-  data/            (ALL JSON: game data, maps/, env_defs, spellbar)
+  assets/          (sprites, textures, UI, effects, fonts, items, maps/)
+  data/            (game-data JSON: registries, env_defs, spellbar)
   resources/       (shaders .fx, fonts .spritefont, Content.mgcb)
   bin/             (build output — exe + runtime DLLs only)
     Publish/
@@ -55,8 +55,8 @@ NecrokingMG/
 - C# source in `Necroking/`, organized by subsystem — per-folder purposes and "where does new code go" in [docs/code-map.md](docs/code-map.md)
 - Main game loop in `Necroking/Game1.cs`, entry point in `Necroking/Program.cs`
 - Assets at root `assets/` (Environment/, Effects/, Items/, Sprites/, UI/, fonts/)
-- Game data at root `data/` (JSON registries, maps/, settings)
-- Maps in `data/maps/` (default.json, triggers, roads, wall_defs)
+- Game data at root `data/` (JSON registries, settings)
+- Maps in `assets/maps/` (default.json, triggers, roads, wall_defs; gitignored, Drive-synced with the other assets)
 - Shaders and fonts in `resources/`
 - Tools/scripts in `tools/`
 - All paths resolved via `GamePaths.Resolve()` — no DualSave, no file copying to build output
@@ -73,7 +73,7 @@ or just run the tool. Bulk/derived changes across many entries → a one-off `to
 ## Map Content Lives In The Map, Not In Code
 **If the user asks for something to be placed in the world — a building, foragable, prop, decoration, unit — add it to the map JSON, not to a code path that spawns it at startup.** Hardcoded startup spawns step on the player's map edits: they save the map without the object, restart, and the code re-spawns it. The save *worked*; the load just stomps it.
 
-- **Adding world content** → edit `data/maps/default.json` directly (or via the in-game map editor and save). Use `tools/` scripts when the JSON is too large to edit interactively.
+- **Adding world content** → edit `assets/maps/default.json` directly (or via the in-game map editor and save). Use `tools/` scripts when the JSON is too large to edit interactively.
 - **Don't** write `_envSystem.AddObject(...)` or `SpawnUnit(...)` calls in `LoadContent` / `LoadGame` / startup paths unless the user explicitly asks for "always re-spawn this on game start regardless of the map." If unsure, ask.
 - **Exception — true fallbacks:** the necromancer fallback at the start of `LoadGame` ("if no necromancer in placed units, spawn Wretched at map center") is fine because it only fires when the map provides nothing. Distinguish "fill in what's missing" from "always add on top of what's there."
 - **Past offenders (now removed):** `SpawnStarterMushroom` and `SpawnStarterBlightAltar` in `Game1.cs` unconditionally inserted a Deathcap and a Blight Altar near the necromancer every launch, making them un-deletable via the map editor. Both removed 2026-05-13.
