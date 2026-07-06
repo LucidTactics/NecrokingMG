@@ -87,7 +87,11 @@ public class CorpseWorkerScenario : ScenarioBase
         int idx = units.AddUnit(new Vec2(CX + 3f, CY + 3f), UnitType.Skeleton);
         if (idx >= 0)
         {
-            units[idx].AI = AIBehavior.CorpseWorker;
+            // CorpseWorker AI was a do-nothing stub and has been deleted; the
+            // real corpse-hauling brain is the Worker archetype (WorkerSystem).
+            // These skeletons are stand-around props for the building test.
+            units[idx].AI = AIBehavior.IdleAtPoint;
+            units[idx].MoveTarget = units[idx].Position;
             DebugLog.Log(ScenarioLog, $"Skeleton worker spawned at ({CX + 3f}, {CY + 3f}), idx={idx}, AI=CorpseWorker");
         }
 

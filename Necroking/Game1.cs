@@ -1564,11 +1564,22 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             }
             if (!string.IsNullOrEmpty(pu.PatrolRouteId))
             {
-                _sim.UnitsMut[lastIdx].AI = AIBehavior.Patrol;
+                // PatrolSoldier archetype walks the route's waypoints; the old
+                // AIBehavior.Patrol only ever moved to MoveTarget and ignored
+                // the route (and silently lost to any def archetype anyway).
+                // Same wiring as the inter-village patrols in Game1.Villages.cs.
                 for (int pri = 0; pri < _triggerSystem.PatrolRoutes.Count; pri++)
                 {
-                    if (_triggerSystem.PatrolRoutes[pri].Id == pu.PatrolRouteId)
-                    { _sim.UnitsMut[lastIdx].PatrolRouteIdx = pri; break; }
+                    if (_triggerSystem.PatrolRoutes[pri].Id != pu.PatrolRouteId) continue;
+                    var route = _triggerSystem.PatrolRoutes[pri];
+                    _sim.UnitsMut[lastIdx].Archetype = AI.ArchetypeRegistry.PatrolSoldier;
+                    _sim.UnitsMut[lastIdx].PatrolRouteIdx = pri;
+                    _sim.UnitsMut[lastIdx].PatrolWaypointIdx = 0;
+                    if (route.Waypoints.Count > 0)
+                        _sim.UnitsMut[lastIdx].MoveTarget = route.Waypoints[0];
+                    _sim.UnitsMut[lastIdx].Routine = 0;
+                    _sim.UnitsMut[lastIdx].Subroutine = 0;
+                    break;
                 }
             }
             // Editor-placed corpse: spawn the unit (so it resolves its def/sprite/scale),

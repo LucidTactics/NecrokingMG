@@ -1053,8 +1053,8 @@ public class Simulation
             // "Wolf" unit-def itself uses Archetype=WolfPack which never enters this branch.
             // FleeWhenHit and wolf AIs self-manage combat/disengage logic.
             bool selfManagesCombat = _units[i].AI == AIBehavior.FleeWhenHit
-                || _units[i].AI == AIBehavior.WolfHitAndRun || _units[i].AI == AIBehavior.WolfHitAndRunIsolated
-                || _units[i].AI == AIBehavior.WolfOpportunist || _units[i].AI == AIBehavior.WolfOpportunistIsolated;
+                || _units[i].AI == AIBehavior.WolfHitAndRun
+                || _units[i].AI == AIBehavior.WolfOpportunist;
             // Units with pending attacks stop moving (except self-managed AIs)
             // FleeWhenHit always bypasses; wolf AIs bypass during disengage/wait phases
             if (!_units[i].PendingAttack.IsNone && !(_units[i].AI == AIBehavior.FleeWhenHit
@@ -1148,36 +1148,6 @@ public class Simulation
                     break;
                 }
 
-                case AIBehavior.AttackNecromancer:
-                {
-                    if (_necromancerIdx >= 0 && _necromancerIdx < _units.Count && _units[_necromancerIdx].Alive)
-                        _units[i].Target = CombatTarget.Unit(_units[_necromancerIdx].Id);
-                    else if (!IsTargetAlive(_units[i].Target))
-                        _units[i].Target = FindBestEnemyTarget(i);
-                    goto default;
-                }
-
-                case AIBehavior.GuardKnight:
-                {
-                    int guardTarget = -1;
-                    float bestGuardDist = float.MaxValue;
-                    for (int j = 0; j < _units.Count; j++)
-                    {
-                        if (j == i || !_units[j].Alive || _units[j].Faction != _units[i].Faction) continue;
-                        if (_units[j].AI != AIBehavior.AttackNecromancer) continue;
-                        float d = Vec2.DistSq(_units[j].Position, _units[i].Position);
-                        if (d < bestGuardDist) { bestGuardDist = d; guardTarget = j; }
-                    }
-                    if (guardTarget >= 0 && MathF.Sqrt(bestGuardDist) > 3f)
-                    {
-                        MoveTowardUnit(i, guardTarget, _units[i].MaxSpeed);
-                        break;
-                    }
-                    if (!IsTargetAlive(_units[i].Target))
-                        _units[i].Target = FindBestEnemyTarget(i);
-                    goto default;
-                }
-
                 case AIBehavior.MoveToPoint:
                 {
                     var toTarget = _units[i].MoveTarget - _units[i].Position;
@@ -1193,7 +1163,6 @@ public class Simulation
                 }
 
                 case AIBehavior.IdleAtPoint:
-                case AIBehavior.DefendPoint:
                 {
                     // Idle near move target, fight nearby enemies, return
                     int enemy = FindClosestEnemy(i);
@@ -1216,104 +1185,11 @@ public class Simulation
                     break;
                 }
 
-                case AIBehavior.Patrol:
-                {
-                    // Move along patrol route waypoints
-                    // For now, just move to moveTarget (first waypoint)
-                    var toTarget = _units[i].MoveTarget - _units[i].Position;
-                    if (toTarget.LengthSq() > 1f)
-                        MoveTowardPosition(i, _units[i].MoveTarget, _units[i].MaxSpeed);
-                    else
-                        _units[i].PreferredVel = Vec2.Zero;
-
-                    // Fight nearby enemies
-                    int nearEnemy = FindClosestEnemy(i);
-                    if (nearEnemy >= 0 && (_units[nearEnemy].Position - _units[i].Position).Length() < 8f)
-                    {
-                        _units[i].Target = CombatTarget.Unit(_units[nearEnemy].Id);
-                        MoveTowardUnit(i, nearEnemy, _units[i].MaxSpeed);
-                    }
-                    break;
-                }
-
-                case AIBehavior.Raid:
-                {
-                    // Attack-move toward target, call friends
-                    if (!IsTargetAlive(_units[i].Target))
-                        _units[i].Target = FindBestEnemyTarget(i);
-                    if (_units[i].Target.IsUnit)
-                    {
-                        int ti = ResolveUnitTarget(_units[i].Target);
-                        if (ti >= 0) MoveTowardUnit(i, ti, _units[i].MaxSpeed);
-                        else _units[i].PreferredVel = Vec2.Zero;
-                    }
-                    else
-                    {
-                        // Move toward moveTarget (raid destination)
-                        var toTarget = _units[i].MoveTarget - _units[i].Position;
-                        if (toTarget.LengthSq() > 1f)
-                            MoveTowardPosition(i, _units[i].MoveTarget, _units[i].MaxSpeed);
-                        else
-                            _units[i].PreferredVel = Vec2.Zero;
-                    }
-                    break;
-                }
-
-                // AIBehavior.Caster was migrated to the CasterUnit archetype
-                // (AI.CasterUnitHandler) — defs should set "archetype": "CasterUnit".
-
-                case AIBehavior.CorpseWorker:
-                {
-                    // Find corpses, drag to buildings — simplified for now
-                    _units[i].PreferredVel = Vec2.Zero;
-                    break;
-                }
-
-                case AIBehavior.OrderAttack:
-                {
-                    // Attack-move to moveTarget, fight enemies, rejoin horde
-                    const float OrderEngageRange = 15f;
-                    const float OrderArrivalDist = 5f;
-
-                    Vec2 dest = _units[i].MoveTarget;
-                    float distToDest = (_units[i].Position - dest).Length();
-                    bool atDest = distToDest < OrderArrivalDist;
-
-                    // Acquire/validate target
-                    if (!IsTargetAlive(_units[i].Target))
-                    {
-                        int enemy = FindClosestEnemy(i);
-                        if (enemy >= 0)
-                        {
-                            float eDist = (_units[enemy].Position - _units[i].Position).Length();
-                            if (eDist < OrderEngageRange)
-                                _units[i].Target = CombatTarget.Unit(_units[enemy].Id);
-                            else
-                                _units[i].Target = CombatTarget.None;
-                        }
-                    }
-
-                    if (IsTargetAlive(_units[i].Target) && _units[i].Target.IsUnit)
-                    {
-                        int ti = ResolveUnitTarget(_units[i].Target);
-                        if (ti >= 0) MoveTowardUnit(i, ti, _units[i].MaxSpeed);
-                        else _units[i].PreferredVel = Vec2.Zero;
-                    }
-                    else if (!atDest)
-                    {
-                        // March toward destination
-                        MoveTowardPosition(i, dest, _units[i].MaxSpeed);
-                    }
-                    else
-                    {
-                        // At destination with no enemies — return to horde
-                        _units[i].AI = AIBehavior.AttackClosest;
-                        _units[i].Target = CombatTarget.None;
-                        _horde.AddUnit(_units[i].Id);
-                        _units[i].PreferredVel = Vec2.Zero;
-                    }
-                    break;
-                }
+                // Migrated to archetypes (Caster → CasterUnitHandler, Patrol →
+                // PatrolSoldier/CombatUnitHandler) or deleted as dead code
+                // (AttackNecromancer, GuardKnight, DefendPoint, Raid, CorpseWorker
+                // stub, OrderAttack — superseded by HordeMinionHandler CommandTo /
+                // the Worker archetype).
 
                 case AIBehavior.AttackClosestRetarget:
                 {
@@ -1445,9 +1321,7 @@ public class Simulation
                 }
 
                 case AIBehavior.WolfHitAndRun:
-                case AIBehavior.WolfHitAndRunIsolated:
                 case AIBehavior.WolfOpportunist:
-                case AIBehavior.WolfOpportunistIsolated:
                 {
                     UpdateWolfAI(i, dt);
                     break;
@@ -3700,22 +3574,13 @@ public class Simulation
 
     private void UpdateWolfAI(int i, float dt)
     {
-        var ai = _units[i].AI;
-        bool isolated = ai == AIBehavior.WolfHitAndRunIsolated || ai == AIBehavior.WolfOpportunistIsolated;
-        bool opportunist = ai == AIBehavior.WolfOpportunist || ai == AIBehavior.WolfOpportunistIsolated;
+        bool opportunist = _units[i].AI == AIBehavior.WolfOpportunist;
 
         // Find/validate target with aggro range
         if (!IsTargetAlive(_units[i].Target))
         {
-            if (isolated)
-            {
-                _units[i].Target = FindMostIsolatedEnemy(i); // returns CombatTarget directly
-            }
-            else
-            {
-                int found = FindClosestEnemy(i, WolfAggroRange);
-                _units[i].Target = found >= 0 ? CombatTarget.Unit(_units[found].Id) : CombatTarget.None;
-            }
+            int found = FindClosestEnemy(i, WolfAggroRange);
+            _units[i].Target = found >= 0 ? CombatTarget.Unit(_units[found].Id) : CombatTarget.None;
             _units[i].WolfPhase = WolfEngage;
             _units[i].WolfPhaseTimer = 0;
         }
@@ -3877,40 +3742,6 @@ public class Simulation
         float dot = targetFacingDir.X * toUs.X + targetFacingDir.Y * toUs.Y;
         float angleRad = angleDeg * MathF.PI / 180f;
         return dot < MathF.Cos(angleRad); // facing more than angleDeg away from us
-    }
-
-    /// <summary>Find the most isolated enemy (fewest allies nearby).</summary>
-    private CombatTarget FindMostIsolatedEnemy(int unitIdx)
-    {
-        int bestIdx = -1;
-        int bestAllyCount = int.MaxValue;
-        float bestDist = float.MaxValue;
-
-        for (int j = 0; j < _units.Count; j++)
-        {
-            if (!_units[j].Alive || _units[j].Faction == _units[unitIdx].Faction) continue;
-            float dist = (_units[j].Position - _units[unitIdx].Position).LengthSq();
-            if (dist > 40f * 40f) continue; // max acquisition range
-
-            // Count allies near this enemy
-            int allyCount = 0;
-            for (int k = 0; k < _units.Count; k++)
-            {
-                if (k == j || !_units[k].Alive || _units[k].Faction != _units[j].Faction) continue;
-                float allyDist = (_units[k].Position - _units[j].Position).LengthSq();
-                if (allyDist < 8f * 8f) allyCount++; // allies within 8 units
-            }
-
-            // Prefer fewest allies, break ties by distance
-            if (allyCount < bestAllyCount || (allyCount == bestAllyCount && dist < bestDist))
-            {
-                bestAllyCount = allyCount;
-                bestDist = dist;
-                bestIdx = j;
-            }
-        }
-
-        return bestIdx >= 0 ? CombatTarget.Unit(_units[bestIdx].Id) : CombatTarget.None;
     }
 
     /// <summary>

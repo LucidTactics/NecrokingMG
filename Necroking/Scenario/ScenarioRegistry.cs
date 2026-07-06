@@ -23,10 +23,8 @@ public static class ScenarioRegistry
         Register("empty_map", () => new Scenarios.EmptyMapScenario());
         Register("spell_test", () => new Scenarios.SpellTestScenario());
         Register("combat_log", () => new Scenarios.CombatLogScenario());
-        Register("ai_behavior", () => new Scenarios.AIBehaviorScenario());
         Register("building_placement", () => new Scenarios.BuildingPlacementScenario());
         Register("ground_test", () => new Scenarios.GroundTestScenario());
-        Register("order_attack", () => new Scenarios.OrderAttackScenario());
         Register("god_ray", () => new Scenarios.GodRayScenario());
         Register("priest_battle", () => new Scenarios.PriestBattleScenario());
         Register("patrol_encounter", () => new Scenarios.PatrolEncounterScenario());
@@ -44,8 +42,6 @@ public static class ScenarioRegistry
         Register("UIGrimoireClick", () => new Scenarios.UIGrimoireClickScenario());
         Register("grass_test", () => new Scenarios.GrassTestScenario());
         Register("corpse_worker", () => new Scenarios.CorpseWorkerScenario());
-        Register("raid_workers", () => new Scenarios.RaidWorkersScenario());
-        Register("undead_raid", () => new Scenarios.UndeadRaidScenario());
         Register("shadow_test", () => new Scenarios.ShadowTestScenario());
         Register("grass_wall_depth", () => new Scenarios.GrassWallDepthScenario());
         Register("road_rim", () => new Scenarios.RoadRimScenario());

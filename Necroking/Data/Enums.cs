@@ -30,16 +30,20 @@ public static class FactionMaskExt
     public static FactionMask AllExcept(Faction f) => FactionMask.All & ~f.Bit();
 }
 
+// Legacy AI enum — most behaviors have migrated to the archetype system
+// (ArchetypeRegistry / IArchetypeHandler); a unit with Archetype > 0 never runs
+// these. What's left: PlayerControlled is the load-bearing "is the player"
+// marker; MoveToPoint/IdleAtPoint are dev/scenario/net-ghost primitives;
+// AttackClosest is the legacy horde brain (the field default); the rest are
+// pending migration.
 public enum AIBehavior : byte
 {
-    PlayerControlled = 0, AttackClosest, AttackClosestRetarget, GuardKnight,
-    AttackNecromancer, MoveToPoint, ArcherAttack, IdleAtPoint, DefendPoint,
-    Raid, Patrol, CorpseWorker, Caster, OrderAttack,
+    PlayerControlled = 0, AttackClosest, AttackClosestRetarget,
+    MoveToPoint, ArcherAttack, IdleAtPoint,
+    Caster,
     FleeWhenHit, NeutralFightBack,
     WolfHitAndRun,          // Attack → disengage 3 units → wait for cooldown → re-engage (nearest target)
-    WolfHitAndRunIsolated,  // Same but prefers isolated targets
     WolfOpportunist,        // Like HitAndRun but waits up to 1 cycle for target to turn away (>100° from facing)
-    WolfOpportunistIsolated // Same but prefers isolated targets
 }
 
 public enum QueuedUnitAction : byte { None, Flee, Disengage }
