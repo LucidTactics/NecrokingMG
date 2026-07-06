@@ -48,6 +48,7 @@ public class TrampleBlockerScenario : ScenarioBase
         int boarIdx = sim.SpawnUnitByID("Boar", _boarStartPos);
         if (boarIdx < 0) { _complete = true; return; }
         units[boarIdx].Faction = Faction.Animal;
+        units[boarIdx].Archetype = 0;  // legacy straight-line charge — Boar def is SoloPredator now
         units[boarIdx].AI = AIBehavior.AttackClosest;
         units[boarIdx].FacingAngle = 0f;
         units[boarIdx].Stats.MaxHP = 9999;
@@ -59,6 +60,7 @@ public class TrampleBlockerScenario : ScenarioBase
         _knightStartPos = new Vec2(5f, 10f);
         int knightIdx = sim.SpawnUnitByID("GreatBoar", _knightStartPos);
         if (knightIdx < 0) { _complete = true; return; }
+        units[knightIdx].Archetype = 0;  // inert blocker — GreatBoar def is SoloPredator now
         units[knightIdx].AI = AIBehavior.IdleAtPoint;
         units[knightIdx].Faction = Faction.Human;  // hostile to boar
         units[knightIdx].Stats.MaxHP = 99999;

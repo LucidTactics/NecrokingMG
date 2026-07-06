@@ -75,6 +75,7 @@ public class TrampleNecromancerScenario : ScenarioBase
         int boarIdx = sim.SpawnUnitByID("Boar", _boarStartPos);
         if (boarIdx < 0) { DebugLog.Log(ScenarioLog, "FAIL: could not spawn Boar"); _complete = true; return; }
         units[boarIdx].Faction = Faction.Animal;
+        units[boarIdx].Archetype = 0;  // legacy straight-line charge — Boar def is SoloPredator now
         units[boarIdx].AI = AIBehavior.AttackClosest;
         units[boarIdx].FacingAngle = 0f;
         units[boarIdx].Stats.MaxHP = 9999;
