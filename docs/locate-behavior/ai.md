@@ -165,6 +165,37 @@ side from the necromancer) then Driving (chase the deer toward the player). Gate
 "Wolf Hunt" spell command (`Simulation._wolfHuntCmdTimer` + cast point, set in
 `Game1.Spells.cs`); uses `SquadSystem` centroid/spread to stand off the whole herd.
 
+## Caster gap — `CasterUnit` archetype does NOT cast (legacy `AIBehavior.Caster` never migrated)
+
+- `ArchetypeRegistry.CasterUnit` (id 8) is registered in `Game1.cs` to a **plain
+  `RangedUnitHandler(CasterUnit)`** — positioning/kite-suppression only; it stamps ranged
+  weapon attacks, it has **no spell-casting logic**. The actual NPC spell-cast brain is the
+  **legacy `case AIBehavior.Caster:` block in `Game/Simulation.cs` `UpdateAI`** (mana regen
+  tick, `SpellCooldownTimer`, `Units[i].SpellID` lookup, `spell.MeetsPathRequirements` +
+  `EffectiveManaCost` via `casterDef.GetPathLevel`, then `_lightning.SpawnZap`/`SpawnStrike`
+  + `DealDamage` + casting buff). A def with a non-empty `archetype` **never reaches the
+  legacy switch**, so Priest (`militia_copy_copy`, `archetype:"CasterUnit"` AND `ai:"Caster"`)
+  runs RangedUnitHandler and never casts.
+- **Neither spawn path initializes unit mana/spell fields from the def**: `Game1.SpawnUnit`
+  and `Simulation.ApplyDefRuntimeFields` (used by `SpawnUnitByID`/`SpawnZombieMinion`) copy
+  Radius/Faction/Stats etc. but NOT `def.MaxMana`/`def.ManaRegen`/`def.SpellID` → units spawn
+  with `MaxMana=0`, and the legacy block bails on `MaxMana <= 0`. Only scenarios
+  (`GodRayScenario`, `PriestBattleScenario`) set them by hand. `UnitDef` has the fields
+  (`maxMana`/`manaRegen`/`spellID`, `Data/Registries/UnitRegistry.cs`).
+- **Path levels are read from the def at cast time**, not stored on the unit —
+  `UnitDef.GetPathLevel` (the `"paths": {"death": 4}` dict); buff-granted paths via
+  `BuffSystem.EffectivePathLevel(units, idx, def, path)` (`Game/BuffSystem.cs`). The Priest
+  def has NO `paths` entry, so god_ray's `primaryPath:"heavens", primaryLevel:1` requirement
+  fails even in the legacy path.
+- **Migration constraint**: `AIContext` has no `Simulation`/`LightningSystem` handle
+  (`GameData`/`TriggerSystem`/`MagicGlyphs` are its only system refs). A casting handler
+  needs `sim.Lightning` (public accessor) + `sim.DealDamage` (public) — either add
+  `LightningSystem?` to `AIContext` (precedent: `MagicGlyphs`), or do the casting as a
+  post-archetype sweep (`static Update(Simulation sim, float dt)`, see next section) with
+  a `CasterUnitHandler` owning only movement/routines. Note the sky-strike branch
+  (`SpawnStrike`) already routes damage through `LightningSystem`'s damage list (drained in
+  `Simulation.Update`); only the instant-zap branch calls `DealDamage` directly.
+
 ## Second AI style — post-archetype "sweep" overrides (BoarForageAI / CorpseEatAI)
 
 Not every behavior is an `IArchetypeHandler`. There's a **second pattern** for behaviors
