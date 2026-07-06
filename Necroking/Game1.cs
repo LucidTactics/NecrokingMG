@@ -2829,6 +2829,22 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             string scenName = LaunchArgs.Scenario;
             LaunchArgs.Scenario = null; // Only auto-start once
             StartScenario(scenName);
+            if (_activeScenario == null)
+            {
+                // Unknown/typo'd name. The process exists solely to run this
+                // scenario, so exit with an error instead of idling at the menu
+                // forever (which wedged headless test runs and held the exe lock).
+                var similar = ScenarioRegistry.GetNames()
+                    .Where(n => n.Contains(scenName, StringComparison.OrdinalIgnoreCase)
+                             || scenName.Contains(n, StringComparison.OrdinalIgnoreCase))
+                    .Take(5).ToList();
+                Console.Error.WriteLine($"SCENARIO FAIL: {scenName} (unknown scenario name)");
+                if (similar.Count > 0)
+                    Console.Error.WriteLine($"  Did you mean: {string.Join(", ", similar)}");
+                Console.Error.WriteLine("  Valid names: see Register(...) calls in Necroking/Scenario/ScenarioRegistry.cs");
+                Environment.ExitCode = 2;
+                Exit();
+            }
             _prevKb = kb;
             _prevMouse = mouse;
             base.Update(gameTime);
