@@ -296,8 +296,10 @@ public class UnitDef : IHasId
 
     /// <summary>
     /// Weapon attachment points: anim name -> yaw angle -> list of WeaponFrameData (one per frame).
+    /// Loaded from / saved to weapon_points.json (see LoadWeaponPoints/SaveWeaponPoints), NOT units.json.
+    /// [JsonIgnore] keeps this out of units.json so pressing Save in the unit editor doesn't write it back.
     /// </summary>
-    [JsonPropertyName("weaponPoints")]
+    [JsonIgnore]
     public Dictionary<string, Dictionary<string, List<WeaponFrameData>>> WeaponPoints { get; set; } = new();
 
     /// <summary>
