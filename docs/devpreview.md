@@ -29,11 +29,11 @@ so it runs anywhere Python does — no pip installs. Tools:
 
 | tool | what it does |
 |---|---|
-| `necro_status` | supervisor + game status (does not start the game) |
+| `necro_status` | supervisor + game status (read-only — starts nothing; reports "supervisor not running" instead of spawning one) |
 | `necro_start` | ensure the game is running (`windowed`, `map` optional) |
 | `necro_cmd` | run any game dev command: `{cmd, args[], opts{}}` — the main driver |
 | `necro_screenshot` | capture the frame, **returned inline as an image** (`no_ui`, `no_ground`, `full`, `size`) |
-| `necro_restart` | stop → optional `build` → start (after a C# change) |
+| `necro_restart` | stop → optional `build` → start; **preserves windowed/headless state** (after a C# change) |
 | `necro_stop` | stop the game (leave the supervisor up) |
 
 `necro_cmd` forwards the same commands as the dashboard (`ExecuteDevCommand` in Game1.cs),
@@ -147,4 +147,16 @@ python tools/devctl.py restart --build      # build errors come back in the JSON
   synced). Approve it once; it won't ask again.
 - Do **not** edit `tools/devserver.py` (its own header forbids it) — add new *game* control
   in C# (`ExecuteDevCommand` in Game1.cs) and `restart --build`; `devctl` forwards it for free.
+- **A failed screenshot now errors instead of returning a stale frame**: the client checks
+  the game's reply *and* the PNG's mtime, so "screenshot failed" / "superseded" / main-thread
+  timeout surface as a tool error, never as a silently-old image. If you somehow still doubt
+  a frame's freshness, re-shoot with a fresh unique `name`.
+- **`necro_restart` with `build:true` blocks the whole MCP server** (requests are handled
+  serially) — no other necro tool answers until the build finishes. Expected; don't
+  diagnose it as a hang.
+- **A `/cmd` that times out ("timeout waiting for game main thread") still executes later** —
+  the command stays queued in the game. Don't blind-retry side-effecting commands (spawns,
+  menu presses) after a timeout; check `state` first or you'll double-execute.
+- **`restart` keeps the current windowed/headless state** unless you pass `windowed`
+  explicitly. It does *not* reload the map — the game restarts to the main menu.
 ```

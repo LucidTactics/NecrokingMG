@@ -2537,8 +2537,19 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (LaunchArgs.DevServerPort > 0)
         {
             _devServer = new Necroking.Dev.DevServer(LaunchArgs.DevServerPort);
-            _devServer.Start();
-            Exiting += (_, _) => _devServer?.Stop();
+            if (_devServer.Start())
+            {
+                Exiting += (_, _) => _devServer?.Stop();
+            }
+            else
+            {
+                // Port taken (a second instance raced onto it). Without the control
+                // channel this process is unreachable AND invisible (headless runs
+                // hide the taskbar button), so it would idle forever burning CPU.
+                // Exit instead; the supervisor reports "exited during startup".
+                _devServer = null;
+                Exit();
+            }
         }
 
         // Init property editor infrastructure

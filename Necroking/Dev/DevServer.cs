@@ -106,7 +106,11 @@ public sealed class DevServer
         _listener.Prefixes.Add($"http://localhost:{port}/");
     }
 
-    public void Start()
+    /// <summary>Returns false if the listener could not bind (port already taken —
+    /// e.g. a second game instance raced onto the same --devserver port). The caller
+    /// decides what to do; a dev-mode game without its control channel is unreachable
+    /// and invisible, so Game1 exits rather than run deaf.</summary>
+    public bool Start()
     {
         try
         {
@@ -115,12 +119,13 @@ public sealed class DevServer
         catch (Exception ex)
         {
             DebugLog.Log(LogCat, $"FAILED to start on port {Port}: {ex.Message}");
-            return;
+            return false;
         }
         _running = true;
         var t = new Thread(ListenLoop) { IsBackground = true, Name = "DevServer" };
         t.Start();
         DebugLog.Log(LogCat, $"listening on http://localhost:{Port}/");
+        return true;
     }
 
     public void Stop()

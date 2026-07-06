@@ -12,6 +12,7 @@ CLI prints to stderr and exits non-zero). stdlib only — no third-party deps.
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -205,9 +206,13 @@ def ensure_game(windowed=False, map_name=None):
     if st.get("game_running"):
         return st
     if not st.get("exe_exists"):
+        # NB: a plain `dotnet build` outputs to bin/Debug — it does NOT produce the
+        # preview's exe (bin/Devbuild, Release config). Only the supervisor build does.
         raise RuntimeError(
-            "game exe not built. Build first (restart with build, or "
-            "`dotnet build Necroking/Necroking.csproj`).")
+            "game exe not built (" + st.get("exe", "bin/Devbuild/Necroking.exe") + "). "
+            "Use necro_restart with build:true, or `python tools/devctl.py restart "
+            "--build` — a plain `dotnet build` outputs to bin/Debug, not the "
+            "preview's build dir.")
     body = {"windowed": windowed}
     if map_name:
         body["map"] = map_name
@@ -225,11 +230,34 @@ def send_cmd(cmd, args=None, opts=None):
 
 
 def screenshot(name="shot", opts=None):
-    """Trigger a screenshot in the game; return the absolute PNG path."""
+    """Trigger a screenshot in the game; return the absolute PNG path.
+
+    Raises RuntimeError instead of returning a path when the capture failed —
+    the game's reply is checked, and the PNG's mtime is compared against the
+    request time. Without those checks a failed capture would silently hand
+    back a STALE frame from an earlier shot with the same name (the default
+    name is reused), which is the worst failure mode for visual verification."""
+    # The game writes log/screenshots/<name>.png relative to its cwd; keep the
+    # name a plain filename so the write can't wander (and the path we return
+    # matches where it actually landed).
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", name or ""):
+        raise RuntimeError(
+            f"invalid screenshot name {name!r}: use letters, digits, '_', '-', '.'")
     ensure_supervisor()
     ensure_game()
     payload = {"cmd": "screenshot", "args": [name]}
     if opts:
         payload["opts"] = opts
-    req("POST", "/cmd", payload, timeout=60)
-    return os.path.join(screenshot_dir(), name + ".png")
+    t0 = time.time()
+    reply = req("POST", "/cmd", payload, timeout=60)
+    if not (isinstance(reply, dict) and reply.get("ok")):
+        err = reply.get("error", reply) if isinstance(reply, dict) else reply
+        raise RuntimeError(f"screenshot command failed: {err}")
+    path = os.path.join(screenshot_dir(), name + ".png")
+    if not os.path.exists(path):
+        raise RuntimeError(f"screenshot reported ok but PNG not found: {path}")
+    # 2s slop covers filesystem mtime granularity.
+    if os.path.getmtime(path) < t0 - 2:
+        raise RuntimeError(
+            f"screenshot PNG is stale (predates this request): {path}")
+    return path

@@ -203,6 +203,14 @@ async function tick(){
 _NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
 # --- shared state -----------------------------------------------------------
+# ThreadingHTTPServer handles requests concurrently, so every mutation of the
+# process-lifecycle state below must hold _state_lock (RLock: restart runs
+# stop→build→start, each of which locks). Without it two concurrent
+# /game/start (dashboard on-load auto-start racing an MCP ensure_game) both
+# pass the running check and both Popen — the loser fails to bind :8778 and
+# keeps running headless, unreachable, and invisible to the watchdog.
+_state_lock = threading.RLock()
+_frame_lock = threading.Lock()  # /frame and /pin share live.png — no torn reads
 _game_proc = None          # subprocess.Popen | None
 _last_build = None         # dict | None
 _pinned_frame = None       # bytes | None — frozen A/B snapshot (survives restart)
@@ -320,11 +328,14 @@ def _game_running():
 
 def _capture_frame_bytes():
     """Trigger a fresh full-res screenshot in the game and return the PNG bytes.
-    Shared by the /frame live view and /pin snapshot."""
-    _post_to_game({"cmd": "screenshot", "args": [LIVE_FRAME],
-                   "opts": {"downsample_to": "full"}})
-    with open(os.path.join(SCREENSHOT_DIR, LIVE_FRAME + ".png"), "rb") as f:
-        return f.read()
+    Shared by the /frame live view and /pin snapshot. Serialized by _frame_lock:
+    both callers write+read the same live.png, and an unlocked pair can read a
+    half-written file."""
+    with _frame_lock:
+        _post_to_game({"cmd": "screenshot", "args": [LIVE_FRAME],
+                       "opts": {"downsample_to": "full"}})
+        with open(os.path.join(SCREENSHOT_DIR, LIVE_FRAME + ".png"), "rb") as f:
+            return f.read()
 
 
 def _post_to_game(payload, timeout=16):
@@ -355,20 +366,25 @@ def _wait_until_ready(timeout=40):
 
 def start_game(windowed=False, map_name=None, resolution=DEFAULT_RESOLUTION):
     global _game_proc, _game_windowed, _last_activity
-    if _game_running():
-        return {"ok": True, "result": "already running", "pid": _game_proc.pid}
-    if not os.path.exists(EXE):
-        return {"ok": False, "error": f"exe not found: {EXE} (build first)"}
+    # Check-and-spawn must be atomic (see _state_lock). The ready-wait below
+    # stays OUTSIDE the lock — it can take 40s and must not block /status.
+    with _state_lock:
+        if _game_running():
+            return {"ok": True, "result": "already running", "pid": _game_proc.pid}
+        if not os.path.exists(EXE):
+            return {"ok": False, "error": f"exe not found: {EXE} (build first)"}
 
-    args = [EXE, "--devserver", str(GAME_PORT)]
-    if not windowed:
-        args.append("--headless")
-    if resolution:
-        args += ["--resolution", resolution]
-    _game_proc = subprocess.Popen(args, cwd=os.path.dirname(EXE), creationflags=_NO_WINDOW)
-    _assign_to_job(_game_proc)  # OS kills the game if this supervisor dies
-    _game_windowed = windowed   # seed the watchdog's headless/windowed view
-    _last_activity = time.monotonic()
+        args = [EXE, "--devserver", str(GAME_PORT)]
+        if not windowed:
+            args.append("--headless")
+        if resolution:
+            args += ["--resolution", resolution]
+        _game_proc = subprocess.Popen(args, cwd=os.path.dirname(EXE), creationflags=_NO_WINDOW)
+        _assign_to_job(_game_proc)  # OS kills the game if this supervisor dies
+        _game_windowed = windowed   # seed the watchdog's headless/windowed view
+        _last_activity = time.monotonic()
+        print(f"[devserver] game starting pid={_game_proc.pid} windowed={windowed}",
+              flush=True)
 
     ok, msg = _wait_until_ready()
     if not ok:
@@ -388,40 +404,47 @@ def start_game(windowed=False, map_name=None, resolution=DEFAULT_RESOLUTION):
 
 def stop_game():
     global _game_proc
-    if not _game_running():
+    with _state_lock:
+        if not _game_running():
+            _game_proc = None
+            return {"ok": True, "result": "not running"}
+        pid = _game_proc.pid
+        _game_proc.terminate()
+        try:
+            _game_proc.wait(timeout=8)
+        except subprocess.TimeoutExpired:
+            _game_proc.kill()
+            _game_proc.wait(timeout=8)
         _game_proc = None
-        return {"ok": True, "result": "not running"}
-    pid = _game_proc.pid
-    _game_proc.terminate()
-    try:
-        _game_proc.wait(timeout=8)
-    except subprocess.TimeoutExpired:
-        _game_proc.kill()
-        _game_proc.wait(timeout=8)
-    _game_proc = None
+    print(f"[devserver] game stopped pid={pid}", flush=True)
     return {"ok": True, "result": "stopped", "pid": pid}
 
 
 def build():
-    """Game must be stopped first — it locks the exe."""
+    """Game must be stopped first — it locks the exe. Holds _state_lock for the
+    whole build so a concurrent /game/start can't relaunch the old exe mid-build
+    (/status stays responsive — it doesn't take the lock)."""
     global _last_build
-    was_running = _game_running()
-    if was_running:
-        stop_game()
-    proc = subprocess.run(
-        ["dotnet", "build", PROJECT, "-c", BUILD_CONFIG, "-o", BUILD_DIR,
-         "-v", "q", "-nologo"],
-        cwd=REPO_ROOT, capture_output=True, text=True, creationflags=_NO_WINDOW)
-    lines = (proc.stdout or "").splitlines()
-    errors = [l for l in lines if ": error " in l]
-    _last_build = {
-        "ok": proc.returncode == 0,
-        "returncode": proc.returncode,
-        "errors": errors[:50],
-        "tail": lines[-8:],
-        "was_running": was_running,
-        "build_config": BUILD_CONFIG,  # which config was built (= where the exe/screenshots land)
-    }
+    with _state_lock:
+        was_running = _game_running()
+        if was_running:
+            stop_game()
+        proc = subprocess.run(
+            ["dotnet", "build", PROJECT, "-c", BUILD_CONFIG, "-o", BUILD_DIR,
+             "-v", "q", "-nologo"],
+            cwd=REPO_ROOT, capture_output=True, text=True, creationflags=_NO_WINDOW)
+        lines = (proc.stdout or "").splitlines()
+        errors = [l for l in lines if ": error " in l]
+        _last_build = {
+            "ok": proc.returncode == 0,
+            "returncode": proc.returncode,
+            "errors": errors[:50],
+            "tail": lines[-8:],
+            "was_running": was_running,
+            "build_config": BUILD_CONFIG,  # which config was built (= where the exe/screenshots land)
+        }
+    print(f"[devserver] build {'ok' if _last_build['ok'] else 'FAILED'} "
+          f"(rc={_last_build['returncode']}, {len(errors)} errors)", flush=True)
     return _last_build
 
 
@@ -467,6 +490,8 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 self._send_bytes(_capture_frame_bytes(), "image/png")
             except Exception as e:
+                print(f"[devserver] GET /frame error: {type(e).__name__}: {e}",
+                      flush=True)
                 self._send({"ok": False, "error": str(e)}, 500)
         elif path == "/pinned":
             # The frozen A/B snapshot. Held in supervisor memory, so it outlives
@@ -484,10 +509,14 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(_pinned_frame)
         elif path == "/status":
+            # Snapshot the Popen: another thread can null _game_proc between the
+            # running check and .pid, which would turn /status into a 500.
+            p = _game_proc
+            running = p is not None and p.poll() is None
             self._send({
                 "ok": True,
-                "game_running": _game_running(),
-                "pid": _game_proc.pid if _game_running() else None,
+                "game_running": running,
+                "pid": p.pid if running else None,
                 "supervisor_port": SUPERVISOR_PORT,
                 "game_port": GAME_PORT,
                 "last_build": _last_build,
@@ -506,12 +535,16 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/game/stop":
                 self._send(stop_game())
             elif path == "/game/restart":
+                # Preserve the current window state unless the caller overrides
+                # it — restarting a windowed session must not silently relaunch
+                # headless (the window vanishes, the game keeps running unseen).
+                windowed = body.get("windowed", _game_windowed)
                 stop_game()
                 b = build() if body.get("build") else None
                 if b and not b["ok"]:
                     self._send({"ok": False, "error": "build failed", "build": b})
                     return
-                res = start_game(body.get("windowed", False), body.get("map"),
+                res = start_game(windowed, body.get("map"),
                                  body.get("resolution", DEFAULT_RESOLUTION))
                 if b:
                     res["build"] = b
@@ -541,6 +574,9 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._send({"ok": False, "error": f"unknown POST {path}"}, 404)
         except Exception as e:
+            # Also log server-side: the JSON 500 alone leaves no trace in
+            # devctl-supervisor.log, making post-mortems impossible.
+            print(f"[devserver] POST {path} error: {type(e).__name__}: {e}", flush=True)
             self._send({"ok": False, "error": str(e)}, 500)
 
 

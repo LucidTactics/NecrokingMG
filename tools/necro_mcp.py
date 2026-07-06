@@ -30,14 +30,20 @@ import necro_devlib as dev  # noqa: E402
 dev.OWN_BY_DEFAULT = True
 
 PROTO_DEFAULT = "2024-11-05"
-SERVER_INFO = {"name": "necroking", "version": "1.0.0"}
+SERVER_INFO = {"name": "necroking", "version": "1.1.0"}
+
+
+def _log(msg):
+    """Diagnostics channel: stderr only (stdout is the protocol channel).
+    Claude Code captures stderr to the MCP log."""
+    print(f"[necro_mcp] {msg}", file=sys.stderr, flush=True)
 
 TOOLS = [
     {
         "name": "necro_status",
         "description": "Get the dev supervisor + game status (is the game running, "
-                       "pid, last build). Auto-starts the supervisor if needed. "
-                       "Does NOT start the game.",
+                       "pid, last build). Read-only: starts nothing — if the "
+                       "supervisor is down it says so (the game is then down too).",
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
@@ -163,7 +169,16 @@ def _annotate_repo(status):
 
 def call_tool(name, args):
     if name == "necro_status":
-        dev.ensure_supervisor()
+        # Read-only: don't spawn a supervisor just to ask it for status. The game
+        # dies with the supervisor (Job Object), so supervisor down => game down.
+        if not dev.supervisor_up():
+            return _result(_json({
+                "ok": True, "supervisor_running": False, "game_running": False,
+                "mcp_repo_root": dev.REPO_ROOT,
+                "note": "supervisor not running (the game dies with it, so nothing "
+                        "is running). necro_start / necro_cmd / necro_screenshot "
+                        "auto-start it.",
+            }))
         st = dev.req("GET", "/status")
         _annotate_repo(st)
         return _result(_json(st))
@@ -172,6 +187,7 @@ def call_tool(name, args):
         dev.ensure_supervisor()
         st = dev.ensure_game(windowed=bool(args.get("windowed")),
                              map_name=args.get("map"))
+        _annotate_repo(st)  # wrong-clone warning here too, not just necro_status
         return _result(_json(st))
 
     if name == "necro_cmd":
@@ -207,7 +223,11 @@ def call_tool(name, args):
                                      {"build": bool(args.get("build"))}, timeout=600)))
 
     if name == "necro_stop":
-        dev.ensure_supervisor()
+        # No supervisor => no game (Job Object guarantee); don't spawn one just
+        # to tell it to stop nothing.
+        if not dev.supervisor_up():
+            return _result(_json({"ok": True,
+                                  "result": "supervisor not running; nothing to stop"}))
         return _result(_json(dev.req("POST", "/game/stop", {})))
 
     return _result(f"unknown tool: {name}", is_error=True)
@@ -226,6 +246,7 @@ def main():
         try:
             msg = json.loads(line)
         except Exception:
+            _log(f"dropping unparseable JSON-RPC line: {line[:200]!r}")
             continue
         mid = msg.get("id")
         method = msg.get("method")
@@ -248,6 +269,7 @@ def main():
             try:
                 res = call_tool(params.get("name"), params.get("arguments") or {})
             except Exception as e:
+                _log(f"tool {params.get('name')} failed: {type(e).__name__}: {e}")
                 res = _result(f"{type(e).__name__}: {e}", is_error=True)
             send({"jsonrpc": "2.0", "id": mid, "result": res})
         elif method in ("resources/list", "prompts/list"):
