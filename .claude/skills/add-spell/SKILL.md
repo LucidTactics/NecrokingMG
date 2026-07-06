@@ -17,12 +17,12 @@ A spell flows through three files. Know which one you need to touch:
 |-------|------|------|
 | **Data / definition** | `Necroking/Data/Registries/SpellRegistry.cs` | `SpellDef` — every field of a spell, loaded from `data/spells.json`. Also the spell-editor schema (`[EditorField]`/`[EditorVisible]` attrs) and the `Build*Style()` helpers shared by game + editor preview. |
 | **Targeting / start** | `Necroking/Game/SpellCasting.cs` | `SpellCaster.TryStartSpellCast` — validates a cast (mana, cooldown, path reqs, range), resolves the target (corpse / unit / point) per category, fills a `PendingSpellCast`, then deducts mana + starts cooldown. Returns a `CastResult`. |
-| **Effect / payoff** | `Necroking/Game/SpellEffectSystem.cs` | `SpellEffectSystem.Execute` — the `switch (spell.Category)` that actually *does* the thing (spawn projectile, apply buff, fire beam, etc.). Category logic lives **here**, not in Game1. |
+| **Effect / payoff** | `Necroking/Game/SpellEffectSystem.cs` | `SpellEffectSystem.Execute(spell, game, casterIdx, target, slot)` — a static class holding the `switch (spell.Category)` that actually *does* the thing (spawn projectile, apply buff, fire beam, summon, blight, etc.). **All** category logic lives here, not in Game1. It takes `Game1` directly and reaches Game1-owned state through it (`game._deathFog`, `game._channelingSlot`, `game._pendingProjectiles`, `game.QueueReanimRise(...)`, `game.SpawnUnit(...)`). |
 
 `Necroking/Game1.Spells.cs` is the **orchestrator / glue** between input and those
-systems. It owns only the parts that need Game1's own state (animation controllers,
-the effect manager, inventory, pending-projectile queues). It does *not* contain
-category effect logic — that's delegated to `SpellEffectSystem`.
+systems. It owns the cast pipeline plus the queues it ticks each frame
+(`_pendingProjectiles`, `_pendingReanimRises`) and small effect-manager helpers. It
+does *not* contain category effect logic — that's delegated to `SpellEffectSystem`.
 
 ## The cast pipeline (what happens on a click)
 
@@ -50,24 +50,24 @@ is the single entry point for both spell bars. In order:
      from `Game1.Animation.cs`, which calls back into `ExecuteSpellEffect`).
    - **Immediate** (no casting buff): `ExecuteSpellEffect` is called right away.
 6. `ExecuteSpellEffect` (in `Game1.Spells.cs`) spawns the cast flipbook at the caster,
-   then delegates to `_spellEffects.Execute(...)`, passing callbacks for Game1-coupled
-   bits: `SpawnSpellProjectile` and `ExecuteSummonSpell`. It then applies the returned
-   `SpellEffectResult` (channeling slot, pending multi-projectile group).
+   then calls `SpellEffectSystem.Execute(spell, this, necroIdx, target, slot)`. No
+   callbacks, no result struct: the system writes Game1-owned results directly
+   (`game._channelingSlot` for Beam/Drain, `game._pendingProjectiles` for multi-shot
+   groups) and enqueues rises via `game.QueueReanimRise`.
 
-So: **targeting** is in `SpellCaster`, **effects** in `SpellEffectSystem`,
-`Game1.Spells.cs` wires them together + owns the two effects too coupled to extract.
+So: **targeting** is in `SpellCaster`, **all effects** in `SpellEffectSystem`,
+`Game1.Spells.cs` wires them together + ticks the deferred queues.
 
 ### What lives directly in `Game1.Spells.cs`
 
-- **`ExecuteSummonSpell`** — full summon/reanimation (touches `SpawnUnit`, the horde,
-  corpse consumption, unit anim rebuild). Handles every `SummonTargetReq`
-  (`None`/`Corpse`/`UnitType`/`CorpseAOE`) and `SummonMode` (`Spawn`/`Transform`),
-  zombie-type resolution via `TableCraftingSystem.ResolveZombieUnitID`, horde-cap clamp.
-- **`SpawnSpellProjectile`** — fireball-style projectile + the def's `Trajectory`
-  (Lob/DirectFire/Homing/Swirly/HomingSwirly), speed, projectile/hit flipbooks; tags
-  with spell id for impact knockback lookup.
 - **`TickPendingProjectiles`** — staggered extra shots for multi-shot spells
-  (`Quantity > 1`, `ProjectileDelay`), re-anchoring origin on the necromancer each shot.
+  (`Quantity > 1`, `ProjectileDelay`), re-anchoring origin on the necromancer each
+  shot (calls `SpellEffectSystem.SpawnProjectile` per shot).
+- **`QueueReanimRise` / `TickPendingReanimRises`** — the deferred reanimation-rise
+  queue (effect plays at the grave now, unit spawns after a delay). `internal` —
+  `SpellEffectSystem`'s summon logic enqueues through it.
+- **`ApplyBlightBombImpacts`** — deferred fog change for thrown Blight bombs (calls
+  `SpellEffectSystem.ApplyBlight` per impact).
 - **Cast/summon flipbook spawners** (`SpawnCastEffect`, `SpawnSummonEffect`),
   `FlashSpellSlot`, casting-buff cleanup (`RemoveCastingBuffAll`).
 - **Built-in abilities**: `TryCommandHorde`, `TryRegroupHorde`, `TryStartPoisonBerries`,
@@ -86,8 +86,8 @@ The key field is **`category`**, one of:
 
 `Projectile` · `Buff` · `Debuff` · `Summon` · `Strike` · `Beam` · `Drain` · `Cloud` ·
 `Sacrifice` · `Blight` (mutate the death-fog field — Add dumps blight, Purify cleanses
-a 5×5 kernel; wired via the `applyBlight` callback into `DeathFogSystem`) · `Toggle`
-(internal)
+a 5×5 kernel; applied through `game._deathFog` via `SpellEffectSystem.ApplyBlight`) ·
+`Toggle` (internal)
 
 Each category reads a different subset of fields (the editor's `[EditorVisible]` attrs
 show which). Common fields: `range`, `manaCost`, `cooldown`, `damage`, `aoeRadius`,
@@ -103,8 +103,9 @@ various flipbook refs.
 2. **`SpellCasting.cs`** — add a `case "YourCategory":` in `TryStartSpellCast` to
    validate range/target and fill `PendingSpellCast`.
 3. **`SpellEffectSystem.cs`** — add the matching `case "YourCategory":` in `Execute`.
-   If it needs Game1-only state, return it via `SpellEffectResult` or take a callback
-   (the projectile/summon pattern) rather than reaching into Game1.
+   It has the `Game1` instance — reach Game1-owned state via `game.*` (widen the
+   member to `internal` if it's private), the way Summon/Blight/Beam already do.
+   No callbacks, no result structs.
 
 **North Star:** the effect must *show* its payoff — visible, physical, audible — in
 proportion to the cast's wind-up. See `docs/north-star.md`.

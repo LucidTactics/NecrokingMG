@@ -226,7 +226,7 @@ shared enemy-detection pass that sets each prey's `AlertState`/`AlertTarget`.
 The **Corpse Puppet** spell (`data/spells.json`, `summonUnitID: "corpse_puppet"`,
 `summonTargetReq: "Corpse"`) currently raises a **dedicated `corpse_puppet` unit def**
 (archetype `CorpsePuppet`), NOT a zombie variant of the target:
-- In `Game1.Spells.cs` `ExecuteSummonSpell` single-corpse branch, `summonUnitID` comes from
+- In `Game/SpellEffectSystem.cs` `ExecuteSummonSpell` single-corpse branch, `summonUnitID` comes from
   `pending.SummonUnitID`. Zombie-type-from-corpse resolution only happens when
   `string.IsNullOrEmpty(summonUnitID)` (`~line 72`), calling
   `Game.TableCraftingSystem.ResolveZombieUnitID(gameData, corpse.UnitDefID)`. Because the
@@ -321,5 +321,5 @@ see "Shared transition logic" above. Current external writers:
 - [corpses.md](corpses.md) — `Corpse` data model; note a "pile" of loose corpses ≠ the
   `corpse_pile` *building* stockpile (the puppet deposits into the building's abstract
   "Corpse" count, not as a loose body).
-- game1-partials.md — `Game1.cs` archetype registration + `SpawnUnit`; `Game1.Spells.cs`
-  `ExecuteSummonSpell`.
+- game1-partials.md — `Game1.cs` archetype registration + `SpawnUnit`;
+  `Game/SpellEffectSystem.cs` `ExecuteSummonSpell` (moved out of `Game1.Spells.cs` 2026-07).

@@ -152,23 +152,24 @@ recipe resolution and table mechanics live in `Game/`.)
 See also: `World/` (foragable + env-object systems), `Game/` (table-craft system), `Game1.Spells.cs`
 (`TryStartPoisonBerries` — a related berry-harvest path).
 
-### `Necroking/Game1.Spells.cs` — player spell cast pipeline, effects, summon/reanimate, projectiles, horde commands
-What lives here: the player spell-cast pipeline as orchestrated from `Game1` — executing summon /
-reanimate spells (all `SummonTargetReq` / `SummonMode` variants), queuing and ticking delayed zombie
-rises, dispatching generic spell effects, blight application, casting cast/summon visual effects,
-potion-spell casting, spell-slot flash feedback, built-in (no-path) abilities, horde command/regroup
-orders, poison-berry harvest, and spawning + ticking spell projectiles.
-Key members: `ExecuteSummonSpell`, `ExecuteSpellEffect`, `QueueReanimRise`, `TickPendingReanimRises`,
-`OnSimReanimReady`, `ApplyBlightSpell`, `ApplyBlightBombImpacts`, `SpawnCastEffect`,
+### `Necroking/Game1.Spells.cs` — player spell cast pipeline, deferred queues, horde commands
+What lives here: the player spell-cast pipeline as orchestrated from `Game1` — dispatching casts,
+queuing and ticking delayed zombie rises and staggered multi-shot projectiles, deferred blight-bomb
+impacts, casting cast/summon visual effects, potion-spell casting, spell-slot flash feedback,
+built-in (no-path) abilities, horde command/regroup orders, and poison-berry harvest.
+Key members: `ExecuteSpellEffect` (thin glue → `SpellEffectSystem.Execute`), `QueueReanimRise`,
+`TickPendingReanimRises`, `OnSimReanimReady`, `ApplyBlightBombImpacts`, `SpawnCastEffect`,
 `SpawnSummonEffect`, `SpawnFlipbookEffect`, `CastPotionSpell`, `FlashSpellSlot`,
 `TryDispatchBuiltinAbility`, `TryCommandHorde`, `TryRegroupHorde`, `ValidatePotionAbilities`,
-`TryStartPoisonBerries`, `SpawnSpellProjectile`, `TickPendingProjectiles`, `RemoveCastingBuffAll`.
-Look/edit here when: a spell does the wrong thing on cast (summons the wrong unit, raises the wrong
-zombie, blight misfires); a reanimate doesn't rise or rises too early/late; a projectile spell flies
-wrong / never impacts; the spell-slot doesn't flash; a potion or built-in ability misbehaves; horde
-"command here" / "regroup" orders go wrong; poison berries don't start. This is the orchestration
-layer — **targeting** lives in `Game/SpellCasting.cs` and **effect resolution** in
-`Game/SpellEffectSystem.cs`.
+`TryStartPoisonBerries`, `TickPendingProjectiles`, `RemoveCastingBuffAll`.
+NOTE (2026-07): `ExecuteSummonSpell`, `SpawnSpellProjectile` (→ `SpawnProjectile`), and
+`ApplyBlightSpell` (→ `ApplyBlight`) moved into `Game/SpellEffectSystem.cs` — a static class whose
+`Execute(spell, game, casterIdx, target, slot)` takes `Game1` directly and owns ALL category logic.
+Look/edit here when: a reanimate doesn't rise or rises too early/late; staggered multi-shot timing
+is off; the spell-slot doesn't flash; a potion or built-in ability misbehaves; horde
+"command here" / "regroup" orders go wrong; poison berries don't start. For a spell doing the wrong
+thing on cast (wrong summon, blight misfire, projectile flies wrong), go to
+`Game/SpellEffectSystem.cs`; **targeting** lives in `Game/SpellCasting.cs`.
 **Cast begin + "is a cast in progress" state:** `DispatchSpellCast` is the single spell-bar/dev-`cast`
 entry. After a successful `SpellCaster.TryStartSpellCast`, it sets the field **`_pendingCastAnim`**
 (a `PendingCastAnim?` declared in `Game1.cs`, struct defined there too — carries `SpellID`, `Target`,

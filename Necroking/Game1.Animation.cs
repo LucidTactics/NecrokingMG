@@ -26,7 +26,7 @@ public partial class Game1
     /// <summary>
     /// Rebuild animation data for a unit (e.g. after transform).
     /// </summary>
-    private void RebuildUnitAnim(int unitIdx, string unitDefID)
+    internal void RebuildUnitAnim(int unitIdx, string unitDefID)
     {
         var unitDef = _gameData.Units.Get(unitDefID);
         if (unitDef.Sprite == null) return;

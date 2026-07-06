@@ -11,174 +11,6 @@ using Necroking.UI;
 namespace Necroking;
 
 public partial class Game1 {
-   /// <summary>
-   /// Execute the full summon spell logic matching C++ Simulation::executeSpellCast for Summon category.
-   /// Handles all SummonTargetReq types: None, Corpse, UnitType, CorpseAOE.
-   /// Handles SummonMode: Spawn, Transform.
-   /// </summary>
-   void ExecuteSummonSpell(SpellDef spell, PendingSpellCast pending, Vec2 necroPos, int necroIdx) {
-      if (spell.SummonTargetReq == "CorpseAOE") {
-         // AOE corpse raise: iterate corpses in range, resolve zombie type per corpse
-         int raised = 0;
-         for (int i = 0; i < _sim.Corpses.Count && raised < spell.SummonQuantity; i++) {
-            var corpse = _sim.Corpses[i];
-            if (corpse.Dissolving || corpse.ConsumedBySummon) continue;
-            if (corpse.DraggedByUnitID != GameConstants.InvalidUnit) continue;
-            if (corpse.BaggedByUnitID != GameConstants.InvalidUnit) continue; // mid-bagging
-            float dist = (corpse.Position - pending.TargetPos).Length();
-            if (dist > spell.AoeRadius) continue;
-
-            // Resolve zombie type from corpse's UnitDef. Shared with
-            // TableCraftingSystem so the same source corpse always raises
-            // into the same unit class regardless of how it was triggered.
-            string resolvedID = Game.TableCraftingSystem.ResolveZombieUnitID(_gameData, corpse.UnitDefID);
-            if (string.IsNullOrEmpty(resolvedID)) continue;
-
-            // Per-corpse cap check — AOE may mix categories. Skip corpses
-            // whose category is full but keep iterating to consume others
-            // whose category still has room.
-            var aoeCat = HordeCapTracker.CategoryFor(_gameData, resolvedID);
-            if (aoeCat != UndeadCategory.None
-                && HordeCapTracker.Available(_sim.Units, _gameData, _sim.NecroState, aoeCat) <= 0)
-               continue;
-
-            // Keep the corpse visible; QueueReanimRise claims it + plays the rise effect (green
-            // outline fading in on the body), then spawns the unit + removes the corpse cleanly
-            // after a short delay so the smoke/clouds build first. (Legacy spells dissolve + spawn now.)
-            // The reanim_smoke composite is the ONLY raise VFX now — the old green fire_loop summon
-            // flame is no longer layered on top of an AOE raise.
-            QueueReanimRise(resolvedID, corpse.CorpseID, spell.ReanimationEffectID,
-               riseSpeed: spell.TestRiseSpeed, fogSpeed: spell.TestFogSpeed);
-            raised++;
-         }
-      } else {
-         // Single corpse consume (Corpse targeting)
-         bool fromCorpse = false; // set when a corpse is consumed; drives the horde-minion
-                                  // raise. Do NOT use corpseFacing's sign for this — FacingAngle
-                                  // can legitimately be negative, which mis-routed negative-facing
-                                  // corpses to the plain-spawn path (archetype 0 → no follow).
-         string summonUnitID = pending.SummonUnitID;
-         string puppetSourceDef = "";  // corpse-puppet raise: the ORIGINAL corpse's def, so the
-                                       // puppet piles as that body rather than the zombie it wears.
-
-         if (spell.SummonTargetReq == "Corpse" && pending.TargetCorpseID >= 0) {
-            // Re-resolve the corpse by STABLE id, not the captured list index: a channeled
-            // reanimate executes after a multi-second channel, during which _corpses can be
-            // compacted (dissolve cleanup / carry-to-table) — the captured index would then
-            // silently rebind to a different body. FindCorpseIndexByID returns -1 if the
-            // aimed-at corpse is gone, in which case the raise simply no-ops.
-            int corpseIdx = _sim.FindCorpseIndexByID(pending.TargetCorpseID);
-            if (corpseIdx >= 0) {
-               var corpse = _sim.Corpses[corpseIdx];
-               // Resolve zombie type from the corpse if summonUnitID is empty (shared
-               // helper; see the AOE branch above).
-               if (string.IsNullOrEmpty(summonUnitID))
-                  summonUnitID = Game.TableCraftingSystem.ResolveZombieUnitID(_gameData, corpse.UnitDefID);
-
-               // Corpse-puppet raise: remember the original body so the puppet deposits as that
-               // type at a Corpse Pile (the OnSpawned callback below stamps it onto the unit).
-               if (spell.SummonAsPuppet) puppetSourceDef = corpse.UnitDefID;
-
-               fromCorpse = true;
-               // corpse is NOT consumed here — QueueReanimRise (below) claims it and either plays
-               // the rise effect (keeping it visible) or legacy-dissolves it.
-            }
-         }
-
-         // Corpse-puppet override: once the zombie stands up, swap its AI to the CorpsePuppet
-         // archetype (walk to nearest Corpse Pile + deposit self) and record the original corpse
-         // type so it piles as that body. Runs on the freshly-spawned unit (deferred rise spawn).
-         Action<int>? onPuppetSpawned = null;
-         if (spell.SummonAsPuppet) {
-            string srcDef = puppetSourceDef;
-            onPuppetSpawned = idx => {
-               _sim.UnitsMut[idx].Archetype = AI.ArchetypeRegistry.FromName("CorpsePuppet");
-               _sim.UnitsMut[idx].PuppetSourceDefID = srcDef;
-            };
-         }
-
-         if (spell.SummonMode == "Transform" && pending.TargetUnitID != GameConstants.InvalidUnit) {
-            // Transform mode: replace existing unit with the summon unit
-            int targetIdx = _sim.ResolveUnitID(pending.TargetUnitID);
-            if (targetIdx >= 0 && !string.IsNullOrEmpty(summonUnitID)) {
-               var targetPos = _sim.Units[targetIdx].Position;
-               _sim.TransformUnit(targetIdx, summonUnitID);
-
-               // Rebuild animation for the transformed unit
-               RebuildUnitAnim(targetIdx, summonUnitID);
-
-               // Spawn summon effect at target position
-               SpawnSummonEffect(spell, targetPos);
-            }
-         } else {
-            // Spawn mode
-            if (string.IsNullOrEmpty(summonUnitID)) return;
-
-            Vec2 spawnPos;
-            switch (spell.SpawnLocation) {
-               case "NearestTargetToMouse":
-                  spawnPos = pending.TargetPos;
-                  break;
-               case "NearestTargetToCaster":
-                  spawnPos = pending.TargetPos;
-                  break;
-               case "AdjacentToCaster": {
-                  float angle = _rng.Next(360) * MathF.PI / 180f;
-                  spawnPos = necroPos + new Vec2(MathF.Cos(angle) * 2f, MathF.Sin(angle) * 2f);
-                  break;
-               }
-               case "AtTargetLocation":
-                  spawnPos = pending.TargetPos;
-                  break;
-               default:
-                  spawnPos = pending.TargetPos;
-                  break;
-            }
-
-            // Cap-limited summon count: spawn min(SummonQuantity, available
-            // slots in the resolved category). Pre-check in SpellCaster
-            // already refused when available=0; this clamps the multi-spawn
-            // case so we never overshoot the cap.
-            int spawnQty = spell.SummonQuantity;
-            var spawnCat = HordeCapTracker.CategoryFor(_gameData, summonUnitID);
-            if (spawnCat != UndeadCategory.None) {
-               int avail = HordeCapTracker.Available(_sim.Units, _gameData, _sim.NecroState, spawnCat);
-               if (avail < spawnQty) spawnQty = avail;
-            }
-
-            for (int q = 0; q < spawnQty; q++) {
-               var unitSpawnPos = spawnPos;
-               if (q > 0) {
-                  // Offset additional spawns slightly
-                  float angle = _rng.Next(360) * MathF.PI / 180f;
-                  unitSpawnPos = spawnPos + new Vec2(MathF.Cos(angle) * 1f, MathF.Sin(angle) * 1f);
-               }
-
-               if (fromCorpse) {
-                  // Corpse reanimation → canonical horde minion (HordeMinion archetype). The rise
-                  // effect plays NOW at the grave (corpse stays visible, green outline fading in);
-                  // the unit spawns + stands up + the corpse is removed after a short delay.
-                  QueueReanimRise(summonUnitID, pending.TargetCorpseID, spell.ReanimationEffectID,
-                     riseSpeed: spell.TestRiseSpeed, fogSpeed: spell.TestFogSpeed,
-                     onSpawned: onPuppetSpawned);
-               } else {
-                  // Non-corpse summon (e.g. summon-from-def): plain spawn + horde enroll.
-                  SpawnUnit(summonUnitID, unitSpawnPos);
-                  int idx = _sim.Units.Count - 1;
-                  if (idx >= 0 && _sim.Units[idx].Faction == Faction.Undead &&
-                      _sim.Units[idx].AI != AIBehavior.PlayerControlled)
-                     _sim.Horde.AddUnit(_sim.Units[idx].Id);
-               }
-            }
-
-            // Spawn summon effect at the primary spawn location — only for a from-nothing summon.
-            // A corpse reanimation already gets the reanim_smoke composite at the grave; the legacy
-            // green fire_loop flame used to double up on raises, so suppress it here when fromCorpse.
-            if (!fromCorpse) SpawnSummonEffect(spell, spawnPos);
-         }
-      }
-   }
-
    // --- Deferred reanimation rise ------------------------------------------------
    // The composite rise effect (ReanimEffectSystem) plays at the grave the instant the
    // spell resolves, but the reanimated unit only spawns + plays its slow standup a short
@@ -217,7 +49,7 @@ public partial class Game1 {
    /// e.g. table crafting): play the effect at <paramref name="posOverride"/> and rise from it (no body
    /// to morph). <paramref name="onSpawned"/> runs on the freshly-spawned unit (e.g. apply crafted item
    /// bonuses). If the effect asset is missing, falls back to an immediate spawn.</summary>
-   void QueueReanimRise(string defId, int corpseId, string? configId, float delay = 3.5f,
+   internal void QueueReanimRise(string defId, int corpseId, string? configId, float delay = 3.5f,
                         Vec2 posOverride = default, float facingOverride = 0f, float scaleOverride = 1f,
                         Action<int>? onSpawned = null, float riseSpeed = 2f, float fogSpeed = 1f)
    {
@@ -334,29 +166,9 @@ public partial class Game1 {
       // Cast flipbook effect at caster position
       SpawnCastEffect(spell, _sim.Units[necroIdx].EffectSpawnPos2D);
 
-      // Delegate to SpellEffectSystem — all category logic lives there
-      var result = _spellEffects.Execute(spell, _sim, _gameData, necroIdx, target, slot,
-         _damageNumbers,
-         SpawnSpellProjectile,
-         (sp, cIdx) => ExecuteSummonSpell(sp, _pendingSpell, _sim.Units[cIdx].Position, cIdx),
-         ApplyBlightSpell);
-
-      // Apply side effects that SpellEffectSystem can't own (Game1 state)
-      if (result.ChannelingSlot >= 0)
-         _channelingSlot = result.ChannelingSlot;
-      if (result.PendingProjectile.HasValue)
-         _pendingProjectiles.Add(result.PendingProjectile.Value);
-   }
-
-   /// <summary>Apply a Blight-category spell to the death-fog field at the target.
-   /// Add mode dumps BlightAmount blight into the target cell (blight bomb); Purify
-   /// mode cleanses a 5×5 cell kernel centered on the target (purifying bomb), with
-   /// BlightAmount as the center cleanse strength. See DeathFogSystem.</summary>
-   void ApplyBlightSpell(SpellDef spell, Vec2 target) {
-      if (string.Equals(spell.BlightMode, "Purify", StringComparison.OrdinalIgnoreCase))
-         _deathFog.PurifyArea(target.X, target.Y, spell.BlightAmount);
-      else
-         _deathFog.AddDensity(target.X, target.Y, spell.BlightAmount);
+      // All category logic lives in SpellEffectSystem — it reaches Game1 state
+      // (death fog, channeling slot, pending projectiles/rises) through `this`.
+      GameSystems.SpellEffectSystem.Execute(spell, this, necroIdx, target, slot);
    }
 
    /// <summary>Drop the blight where a thrown Blight bomb actually exploded. A Blight
@@ -373,7 +185,7 @@ public partial class Game1 {
          if (string.IsNullOrEmpty(id)) continue;
          var spell = _gameData.Spells.Get(id);
          if (spell == null || spell.Category != "Blight") continue;
-         ApplyBlightSpell(spell, impacts[i].Position);
+         GameSystems.SpellEffectSystem.ApplyBlight(spell, impacts[i].Position, _deathFog);
       }
    }
 
@@ -387,7 +199,7 @@ public partial class Game1 {
       }
    }
 
-   void SpawnSummonEffect(SpellDef spell, Vec2 pos) {
+   internal void SpawnSummonEffect(SpellDef spell, Vec2 pos) {
       SpawnFlipbookEffect(spell.SummonFlipbook, pos);
    }
 
@@ -681,94 +493,6 @@ public partial class Game1 {
       DebugLog.Log("ai", $"[PoisonBerries] start: bushIdx={bushIdx} buff={buffID} item={itemID}");
    }
 
-   static readonly Random _projRng = new();
-
-   void SpawnSpellProjectile(SpellDef spell, Vec2 origin, Vec2 target, uint ownerUid, float spawnHeight) {
-      _sim.Projectiles.SpawnFireball(origin, target,
-         Faction.Undead, ownerUid, spell.Damage, spell.AoeRadius, spell.DisplayName,
-         spawnHeight: spawnHeight);
-      var projs = _sim.Projectiles.Projectiles;
-      if (projs.Count > 0) {
-         var lastProj = projs[projs.Count - 1];
-
-         // Tag projectile with spell ID for physics knockback lookup on impact
-         lastProj.SpellID = spell.Id;
-
-         // Blight bombs must burst exactly where the player clicked, not wherever
-         // the ballistic arc happens to land. Forward the aimed point and flag the
-         // projectile so it detonates on overshoot.
-         if (spell.Category == "Blight") {
-            lastProj.TargetPos = target;
-            lastProj.DetonateAtTarget = true;
-         }
-
-         // Apply trajectory type
-         var traj = Enum.TryParse<Trajectory>(spell.Trajectory, true, out var t) ? t : Trajectory.Lob;
-         var dir = (target - origin).Normalized();
-         float speed = spell.ProjectileSpeed > 0 ? spell.ProjectileSpeed : ProjectileManager.MagicSpeed;
-
-         switch (traj) {
-            case Trajectory.DirectFire: {
-               float theta = 5f * MathF.PI / 180f;
-               lastProj.Velocity = dir * speed * MathF.Cos(theta);
-               lastProj.VelocityZ = speed * MathF.Sin(theta);
-               lastProj.BaseDirection = dir;
-               lastProj.IsLob = false;
-               break;
-            }
-            case Trajectory.Swirly: {
-               float theta = 5f * MathF.PI / 180f;
-               lastProj.Velocity = dir * speed * MathF.Cos(theta);
-               lastProj.VelocityZ = speed * MathF.Sin(theta);
-               lastProj.BaseDirection = dir;
-               lastProj.IsLob = false;
-               lastProj.SwirlFreq = 3f + (float)_projRng.NextDouble() * 5f;
-               lastProj.SwirlAmplitude = 0.5f + (float)_projRng.NextDouble() * 1.5f;
-               lastProj.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
-               break;
-            }
-            case Trajectory.Homing: {
-               float theta = 5f * MathF.PI / 180f;
-               lastProj.Velocity = dir * speed * MathF.Cos(theta);
-               lastProj.VelocityZ = speed * MathF.Sin(theta);
-               lastProj.BaseDirection = dir;
-               lastProj.IsLob = false;
-               lastProj.TargetPos = target;
-               lastProj.HomingStrength = 5f;
-               break;
-            }
-            case Trajectory.HomingSwirly: {
-               float theta = 5f * MathF.PI / 180f;
-               lastProj.Velocity = dir * speed * MathF.Cos(theta);
-               lastProj.VelocityZ = speed * MathF.Sin(theta);
-               lastProj.BaseDirection = dir;
-               lastProj.IsLob = false;
-               lastProj.TargetPos = target;
-               lastProj.HomingStrength = 5f;
-               lastProj.SwirlFreq = 3f + (float)_projRng.NextDouble() * 5f;
-               lastProj.SwirlAmplitude = 0.5f + (float)_projRng.NextDouble() * 1.5f;
-               lastProj.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
-               break;
-            }
-            // Lob is the default from SpawnFireball — no changes needed
-         }
-
-         if (spell.ProjectileFlipbook != null) {
-            lastProj.FlipbookID = spell.ProjectileFlipbook.FlipbookID;
-            lastProj.ParticleScale = spell.ProjectileFlipbook.Scale;
-            lastProj.ParticleColor = spell.ProjectileFlipbook.Color;
-         }
-
-         if (spell.HitEffectFlipbook != null) {
-            lastProj.HitEffectFlipbookID = spell.HitEffectFlipbook.FlipbookID;
-            lastProj.HitEffectScale = spell.HitEffectFlipbook.Scale;
-            lastProj.HitEffectColor = spell.HitEffectFlipbook.Color;
-            lastProj.HitEffectBlendMode = spell.HitEffectFlipbook.BlendMode == "Additive" ? 1 : 0;
-            lastProj.HitEffectAlignment = spell.HitEffectFlipbook.Alignment == "Upright" ? 1 : 0;
-         }
-      }
-   }
-
    void TickPendingProjectiles(float dt) {
       for (int i = _pendingProjectiles.Count - 1; i >= 0; i--) {
          var pg = _pendingProjectiles[i];
@@ -783,7 +507,8 @@ public partial class Game1 {
                uint ownerUid = necroIdx >= 0 ? _sim.Units[necroIdx].Id : 0;
                Vec2 origin = necroIdx >= 0 ? _sim.Units[necroIdx].EffectSpawnPos2D : pg.Origin;
                float spawnH = necroIdx >= 0 ? _sim.Units[necroIdx].EffectSpawnHeight : 0.6f;
-               SpawnSpellProjectile(spell, origin, pg.Target, ownerUid, spawnH);
+               GameSystems.SpellEffectSystem.SpawnProjectile(spell, _sim.Projectiles,
+                  origin, pg.Target, ownerUid, spawnH);
             }
 
             if (pg.Remaining <= 0) {

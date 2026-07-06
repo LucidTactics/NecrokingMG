@@ -13,12 +13,12 @@ A spell flows through three files. Know which one you need to touch:
 |-------|------|------|
 | **Data / definition** | [`Necroking/Data/Registries/SpellRegistry.cs`](../Necroking/Data/Registries/SpellRegistry.cs) | `SpellDef` — every field of a spell, loaded from `data/spells.json`. Also the spell-editor schema (via `[EditorField]`/`[EditorVisible]` attrs) and the `Build*Style()` helpers shared by game + editor preview. |
 | **Targeting / start** | [`Necroking/Game/SpellCasting.cs`](../Necroking/Game/SpellCasting.cs) | `SpellCaster.TryStartSpellCast` — validates a cast (mana, cooldown, path requirements, range), resolves the target (corpse / unit / point) per category, fills a `PendingSpellCast`, then deducts mana + starts cooldown. Returns a `CastResult`. |
-| **Effect / payoff** | [`Necroking/Game/SpellEffectSystem.cs`](../Necroking/Game/SpellEffectSystem.cs) | `SpellEffectSystem.Execute` — the `switch (spell.Category)` that actually *does* the thing (spawn projectile, apply buff, fire beam, etc.). Category logic lives **here**, not in Game1. |
+| **Effect / payoff** | [`Necroking/Game/SpellEffectSystem.cs`](../Necroking/Game/SpellEffectSystem.cs) | `SpellEffectSystem.Execute(spell, game, casterIdx, target, slot)` — a static class holding the `switch (spell.Category)` that actually *does* the thing (spawn projectile, apply buff, fire beam, summon, blight, etc.). **All** category logic lives here, not in Game1. It takes `Game1` directly (same pattern as `GameRenderer`/`ForagableSystem`) and reaches Game1-owned state through it — `game._deathFog`, `game._channelingSlot`, `game._pendingProjectiles`, `game.QueueReanimRise(...)`, `game.SpawnUnit(...)`. |
 
 [`Necroking/Game1.Spells.cs`](../Necroking/Game1.Spells.cs) is the **orchestrator /
-glue**. It sits between input and those systems and owns only the parts that need
-Game1's own state (animation controllers, the effect manager, the inventory,
-pending-projectile queues). It does *not* contain category effect logic — that's
+glue**. It sits between input and those systems and owns the cast pipeline plus the
+queues it ticks each frame (`_pendingProjectiles`, `_pendingReanimRises`) and small
+effect-manager helpers. It does *not* contain category effect logic — that's
 delegated to `SpellEffectSystem`.
 
 ## The cast pipeline (what happens on a click)
@@ -51,28 +51,24 @@ is the single entry point for both spell bars. In order:
      `ExecuteSpellEffect`).
    - **Immediate** (no casting buff): `ExecuteSpellEffect` is called right away.
 6. `ExecuteSpellEffect` (in `Game1.Spells.cs`) spawns the cast flipbook at the caster,
-   then delegates to `_spellEffects.Execute(...)` (the *effect* layer), passing
-   callbacks for the bits that need Game1 state: `SpawnSpellProjectile` and
-   `ExecuteSummonSpell`. It then applies the returned `SpellEffectResult` (channeling
-   slot, pending multi-projectile group).
+   then calls `SpellEffectSystem.Execute(spell, this, necroIdx, target, slot)` (the
+   *effect* layer). No callbacks, no result struct: the system writes Game1-owned
+   results directly (`game._channelingSlot` for Beam/Drain, `game._pendingProjectiles`
+   for multi-shot groups) and enqueues rises via `game.QueueReanimRise`.
 
-So: **targeting** is in `SpellCaster`, **effects** are in `SpellEffectSystem`, and
-`Game1.Spells.cs` wires them together + owns the two effects too coupled to extract.
+So: **targeting** is in `SpellCaster`, **all effects** are in `SpellEffectSystem`, and
+`Game1.Spells.cs` wires them together + ticks the deferred queues.
 
 ## What lives directly in `Game1.Spells.cs`
 
-- **`ExecuteSummonSpell`** — the full summon/reanimation logic (kept in Game1 because
-  it touches `SpawnUnit`, the horde, corpse consumption, unit anim rebuild). Handles
-  every `SummonTargetReq` (`None`/`Corpse`/`UnitType`/`CorpseAOE`) and `SummonMode`
-  (`Spawn`/`Transform`), zombie-type resolution from a corpse via
-  `TableCraftingSystem.ResolveZombieUnitID`, and horde-cap clamping.
-- **`SpawnSpellProjectile`** — spawns a fireball-style projectile and applies the
-  def's `Trajectory` (Lob/DirectFire/Homing/Swirly/HomingSwirly), speed, and the
-  projectile/hit-effect flipbooks. Tags the projectile with the spell id for impact
-  knockback lookup.
 - **`TickPendingProjectiles`** — fires the staggered extra projectiles for
   multi-shot spells (`Quantity > 1`, `ProjectileDelay`), re-anchoring origin on the
-  necromancer each shot.
+  necromancer each shot (calls `SpellEffectSystem.SpawnProjectile` per shot).
+- **`QueueReanimRise` / `TickPendingReanimRises`** — the deferred reanimation-rise
+  queue (effect plays at the grave now, unit spawns after a delay). `internal` —
+  `SpellEffectSystem`'s summon logic enqueues through it.
+- **`ApplyBlightBombImpacts`** — reads projectile impacts each tick and applies the
+  deferred fog change for thrown Blight bombs (calls `SpellEffectSystem.ApplyBlight`).
 - **Cast/summon flipbook spawners** (`SpawnCastEffect`, `SpawnSummonEffect`),
   `FlashSpellSlot`, casting-buff cleanup (`RemoveCastingBuffAll`).
 - **Built-in abilities**: `TryCommandHorde` (command), `TryRegroupHorde`,
@@ -88,7 +84,7 @@ The key field is **`category`**, one of:
 
 `Projectile` · `Buff` · `Debuff` · `Summon` · `Strike` · `Beam` · `Drain` · `Cloud` ·
 `Sacrifice` · `Blight` (mutate the death-fog field — Add dumps blight, Purify cleanses
-a 5×5 kernel; effect wired via the `applyBlight` callback into `DeathFogSystem`) ·
+a 5×5 kernel; applied through `game._deathFog` via `SpellEffectSystem.ApplyBlight`) ·
 `Toggle` (internal)
 
 Each category reads a different subset of fields (the editor's `[EditorVisible]` attrs
@@ -103,9 +99,9 @@ and the various flipbook refs.
 2. `SpellCasting.cs` — add a `case "YourCategory":` in `TryStartSpellCast` to validate
    range/target and fill `PendingSpellCast`.
 3. `SpellEffectSystem.cs` — add the matching `case "YourCategory":` in `Execute` to
-   produce the effect. If it needs Game1-only state, return it via `SpellEffectResult`
-   or take a callback (the pattern used for projectiles/summons), rather than reaching
-   into Game1.
+   produce the effect. It has the `Game1` instance — reach Game1-owned state via
+   `game.*` (widen the member to `internal` if it's private), the way Summon/Blight/
+   Beam already do. No callbacks, no result structs.
 
 Keep the **North Star** in mind (see `CLAUDE.md`): the effect must *show* its payoff —
 visible, physical, audible — in proportion to the cast's wind-up.

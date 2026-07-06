@@ -562,7 +562,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal Render.ReanimMorph _reanimMorph = new();   // SDF body-morph data cache for the reanimation rise
     internal MagicGlyphRenderer _glyphRenderer = new();
     internal DebugDraw _debugDraw = new();
-    private GameSystems.SpellEffectSystem _spellEffects = new();
     internal List<GameSystems.DamageNumber> _damageNumbers = new();
 
     // Game state
@@ -608,7 +607,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     }
 
     // Glyph trap placement mode
-    private PendingSpellCast _pendingSpell = new();
+    internal PendingSpellCast _pendingSpell = new();
     private PendingCastAnim? _pendingCastAnim;
     internal SpellBarState _spellBarState = new();
     // True when the bar was seeded for a test context (test maps, scenario
@@ -625,7 +624,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // Dev cursor override for headless hover testing (set via the `mousepos` dev command).
     private Microsoft.Xna.Framework.Vector2? _devMouseOverride;
     internal int _spellDropdownSlot = -1;
-    private int _channelingSlot = -1;
+    internal int _channelingSlot = -1;
     private readonly Dictionary<string, Texture2D?> _itemTextureCache = new();
     internal int _hoveredObjectIdx = -1;
     internal int _hoveredCorpseIdx = -1;
@@ -765,7 +764,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     }
 
     // Pending projectiles (multi-projectile delay)
-    private readonly List<GameSystems.PendingProjectileGroup> _pendingProjectiles = new();
+    internal readonly List<GameSystems.PendingProjectileGroup> _pendingProjectiles = new();
 
     // Editors
     internal MapEditorWindow _mapEditor = new();
@@ -777,7 +776,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal SettingsWindow _settingsWindow = null!;
 
     // Random
-    private readonly Random _rng = new();
+    internal readonly Random _rng = new();
 
     // Collision debug
     internal CollisionDebugMode _collisionDebugMode = CollisionDebugMode.Off;
@@ -2178,7 +2177,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _menuState = MenuState.None;
     }
 
-    private int SpawnUnit(string unitDefID, Vec2 pos)
+    internal int SpawnUnit(string unitDefID, Vec2 pos)
     {
         int idx = _sim.UnitsMut.AddUnit(pos, UnitType.Dynamic);
         _sim.UnitsMut[idx].UnitDefID = unitDefID;
@@ -4000,7 +3999,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             {
                 // Spawn cloud at the trap position (not the target — the trap itself is
                 // where the burst originates). Same code path as a caster casting the spell.
-                _spellEffects.ExecuteCloud(spell, _sim, evt.TrapPos);
+                GameSystems.SpellEffectSystem.ExecuteCloud(spell, _sim, evt.TrapPos);
             }
         }
     }

@@ -36,51 +36,27 @@ public struct DamageNumber
 }
 
 /// <summary>
-/// Result of executing a spell effect. Game1 reads these to update its own state.
+/// Owns ALL spell-category effect logic. Takes Game1 directly (same pattern as
+/// GameRenderer/ForagableSystem) and reaches sim + presentation state through it —
+/// Game1-owned results (channeling slot, pending projectile groups, reanim rises)
+/// are written straight onto the game instance / enqueued via its internal methods.
 /// </summary>
-public struct SpellEffectResult
-{
-    /// <summary>Set to >= 0 when a channeling spell (Beam/Drain) started.</summary>
-    public int ChannelingSlot;
-
-    /// <summary>If non-null, a multi-projectile group to queue for delayed spawning.</summary>
-    public PendingProjectileGroup? PendingProjectile;
-
-    public static SpellEffectResult None => new() { ChannelingSlot = -1 };
-}
-
-/// <summary>
-/// Handles execution of spell effects by category. Extracted from Game1.ExecuteSpellEffect
-/// to decouple spell logic from the main game loop.
-/// </summary>
-public class SpellEffectSystem
+public static class SpellEffectSystem
 {
     /// <summary>
-    /// Execute a spell effect. Returns what Game1 needs to update in its own state.
+    /// Execute a spell effect by category.
     /// </summary>
     /// <param name="spell">Spell definition</param>
-    /// <param name="sim">Simulation (for units, lightning, clouds, quadtree)</param>
-    /// <param name="gameData">Game data (for buffs, unit defs)</param>
+    /// <param name="game">The game — sim, game data, death fog, damage numbers,
+    /// channeling/pending-projectile state, and the summon/reanim pipeline.</param>
     /// <param name="casterIdx">Caster unit index</param>
     /// <param name="target">World-space target position</param>
     /// <param name="slot">Spell bar slot index (for channeling)</param>
-    /// <param name="damageNumbers">Visual damage numbers list</param>
-    /// <param name="spawnProjectile">Callback to spawn a projectile (needs Game1 rendering state).
-    /// Signature: (spell, origin, target, ownerUid, spawnHeight).</param>
-    /// <param name="executeSummon">Callback for summon spells (deeply coupled to Game1)</param>
-    /// <param name="applyBlight">Callback for Blight spells — mutates the death-fog
-    /// field, which is Game1 state. Signature: (spell, target).</param>
-    public SpellEffectResult Execute(
-        SpellDef spell, Simulation sim, GameData gameData,
-        int casterIdx, Vec2 target, int slot,
-        List<DamageNumber> damageNumbers,
-        Action<SpellDef, Vec2, Vec2, uint, float> spawnProjectile,
-        Action<SpellDef, int> executeSummon,
-        Action<SpellDef, Vec2> applyBlight)
+    public static void Execute(SpellDef spell, Game1 game, int casterIdx, Vec2 target, int slot)
     {
-        var result = SpellEffectResult.None;
+        var sim = game._sim;
+        var gameData = game._gameData;
         var units = sim.UnitsMut;
-        var casterPos = units[casterIdx].Position;
         var casterUid = units[casterIdx].Id;
         var effectOrigin = units[casterIdx].EffectSpawnPos2D;
         var effectOriginH = units[casterIdx].EffectSpawnHeight;
@@ -88,10 +64,10 @@ public class SpellEffectSystem
         switch (spell.Category)
         {
             case "Projectile":
-                spawnProjectile(spell, effectOrigin, target, casterUid, effectOriginH);
+                SpawnProjectile(spell, sim.Projectiles, effectOrigin, target, casterUid, effectOriginH);
                 if (spell.Quantity > 1)
                 {
-                    result.PendingProjectile = new PendingProjectileGroup
+                    game._pendingProjectiles.Add(new PendingProjectileGroup
                     {
                         SpellID = spell.Id,
                         Origin = effectOrigin,
@@ -99,7 +75,7 @@ public class SpellEffectSystem
                         Remaining = spell.Quantity - 1,
                         Timer = 0f,
                         Interval = spell.ProjectileDelay > 0f ? spell.ProjectileDelay : 0.1f
-                    };
+                    });
                 }
                 break;
 
@@ -109,11 +85,11 @@ public class SpellEffectSystem
                 break;
 
             case "Strike":
-                ExecuteStrike(spell, sim, gameData, casterIdx, target, effectOrigin, damageNumbers);
+                ExecuteStrike(spell, sim, gameData, casterIdx, target, effectOrigin, game._damageNumbers);
                 break;
 
             case "Summon":
-                executeSummon(spell, casterIdx);
+                ExecuteSummonSpell(spell, game, game._pendingSpell, units[casterIdx].Position, casterIdx);
                 break;
 
             case "Beam":
@@ -124,7 +100,7 @@ public class SpellEffectSystem
                     sim.Lightning.SpawnBeam(casterUid, units[beamTarget].Id,
                         spell.Id, spell.Damage, spell.BeamTickRate, spell.BeamRetargetRadius,
                         spell.BuildBeamStyle());
-                    result.ChannelingSlot = slot;
+                    game._channelingSlot = slot;
                 }
                 break;
             }
@@ -138,7 +114,7 @@ public class SpellEffectSystem
                         spell.Id, spell.Damage, spell.DrainTickRate, spell.DrainHealPercent,
                         spell.DrainCorpseHP, spell.DrainReversed, spell.DrainMaxDuration,
                         spell.BuildDrainVisuals());
-                    result.ChannelingSlot = slot;
+                    game._channelingSlot = slot;
                 }
                 break;
             }
@@ -147,7 +123,7 @@ public class SpellEffectSystem
             // built-in (Game1.TryCommandHorde) so the category can host more uses.
 
             case "Sacrifice":
-                ExecuteSacrifice(spell, sim, casterIdx, target, damageNumbers);
+                ExecuteSacrifice(spell, sim, casterIdx, target, game._damageNumbers);
                 break;
 
             case "Cloud":
@@ -164,7 +140,7 @@ public class SpellEffectSystem
             case "Blight":
             {
                 // Mutate the death-fog ("blight") field — Add dumps blight at the
-                // target cell, Purify cleanses a 5×5 kernel. The field lives in Game1.
+                // target cell, Purify cleanses a 5×5 kernel.
                 //
                 // Visual: reuse the Strike / Projectile renderers so a Blight spell can
                 // present as a god-ray (StrikeVisual=GodRay) or a thrown bomb
@@ -175,21 +151,21 @@ public class SpellEffectSystem
                     && !string.IsNullOrEmpty(spell.ProjectileFlipbook.FlipbookID);
 
                 // With a thrown bomb, the fog is applied where/when the bomb explodes
-                // (Game1 reads the projectile impact by spell id). Without one, apply it
-                // now at the target point.
+                // (Game1.ApplyBlightBombImpacts reads the projectile impact by spell id).
+                // Without one, apply it now at the target point.
                 if (!hasBomb)
-                    applyBlight(spell, target);
+                    ApplyBlight(spell, target, game._deathFog);
 
                 if (spell.StrikeVisualType == "GodRay")
                 {
-                    ExecuteStrike(spell, sim, gameData, casterIdx, target, effectOrigin, damageNumbers);
+                    ExecuteStrike(spell, sim, gameData, casterIdx, target, effectOrigin, game._damageNumbers);
                 }
                 else if (hasBomb)
                 {
-                    spawnProjectile(spell, effectOrigin, target, casterUid, effectOriginH);
+                    SpawnProjectile(spell, sim.Projectiles, effectOrigin, target, casterUid, effectOriginH);
                     if (spell.Quantity > 1)
                     {
-                        result.PendingProjectile = new PendingProjectileGroup
+                        game._pendingProjectiles.Add(new PendingProjectileGroup
                         {
                             SpellID = spell.Id,
                             Origin = effectOrigin,
@@ -197,7 +173,7 @@ public class SpellEffectSystem
                             Remaining = spell.Quantity - 1,
                             Timer = 0f,
                             Interval = spell.ProjectileDelay > 0f ? spell.ProjectileDelay : 0.1f
-                        };
+                        });
                     }
                 }
                 break;
@@ -208,11 +184,291 @@ public class SpellEffectSystem
                     units[casterIdx].GhostMode = !units[casterIdx].GhostMode;
                 break;
         }
-
-        return result;
     }
 
-    private void ExecuteStrike(SpellDef spell, Simulation sim, GameData gameData,
+    /// <summary>
+    /// Execute the full summon spell logic matching C++ Simulation::executeSpellCast for Summon category.
+    /// Handles all SummonTargetReq types: None, Corpse, UnitType, CorpseAOE.
+    /// Handles SummonMode: Spawn, Transform.
+    /// </summary>
+    private static void ExecuteSummonSpell(SpellDef spell, Game1 game, PendingSpellCast pending,
+        Vec2 necroPos, int necroIdx)
+    {
+        var sim = game._sim;
+        var gameData = game._gameData;
+
+        if (spell.SummonTargetReq == "CorpseAOE") {
+            // AOE corpse raise: iterate corpses in range, resolve zombie type per corpse
+            int raised = 0;
+            for (int i = 0; i < sim.Corpses.Count && raised < spell.SummonQuantity; i++) {
+                var corpse = sim.Corpses[i];
+                if (corpse.Dissolving || corpse.ConsumedBySummon) continue;
+                if (corpse.DraggedByUnitID != GameConstants.InvalidUnit) continue;
+                if (corpse.BaggedByUnitID != GameConstants.InvalidUnit) continue; // mid-bagging
+                float dist = (corpse.Position - pending.TargetPos).Length();
+                if (dist > spell.AoeRadius) continue;
+
+                // Resolve zombie type from corpse's UnitDef. Shared with
+                // TableCraftingSystem so the same source corpse always raises
+                // into the same unit class regardless of how it was triggered.
+                string resolvedID = TableCraftingSystem.ResolveZombieUnitID(gameData, corpse.UnitDefID);
+                if (string.IsNullOrEmpty(resolvedID)) continue;
+
+                // Per-corpse cap check — AOE may mix categories. Skip corpses
+                // whose category is full but keep iterating to consume others
+                // whose category still has room.
+                var aoeCat = HordeCapTracker.CategoryFor(gameData, resolvedID);
+                if (aoeCat != UndeadCategory.None
+                    && HordeCapTracker.Available(sim.Units, gameData, sim.NecroState, aoeCat) <= 0)
+                    continue;
+
+                // Keep the corpse visible; QueueReanimRise claims it + plays the rise effect (green
+                // outline fading in on the body), then spawns the unit + removes the corpse cleanly
+                // after a short delay so the smoke/clouds build first. (Legacy spells dissolve + spawn now.)
+                // The reanim_smoke composite is the ONLY raise VFX now — the old green fire_loop summon
+                // flame is no longer layered on top of an AOE raise.
+                game.QueueReanimRise(resolvedID, corpse.CorpseID, spell.ReanimationEffectID,
+                    riseSpeed: spell.TestRiseSpeed, fogSpeed: spell.TestFogSpeed);
+                raised++;
+            }
+        } else {
+            // Single corpse consume (Corpse targeting)
+            bool fromCorpse = false; // set when a corpse is consumed; drives the horde-minion
+                                     // raise. Do NOT use corpseFacing's sign for this — FacingAngle
+                                     // can legitimately be negative, which mis-routed negative-facing
+                                     // corpses to the plain-spawn path (archetype 0 → no follow).
+            string summonUnitID = pending.SummonUnitID;
+            string puppetSourceDef = "";  // corpse-puppet raise: the ORIGINAL corpse's def, so the
+                                          // puppet piles as that body rather than the zombie it wears.
+
+            if (spell.SummonTargetReq == "Corpse" && pending.TargetCorpseID >= 0) {
+                // Re-resolve the corpse by STABLE id, not the captured list index: a channeled
+                // reanimate executes after a multi-second channel, during which _corpses can be
+                // compacted (dissolve cleanup / carry-to-table) — the captured index would then
+                // silently rebind to a different body. FindCorpseIndexByID returns -1 if the
+                // aimed-at corpse is gone, in which case the raise simply no-ops.
+                int corpseIdx = sim.FindCorpseIndexByID(pending.TargetCorpseID);
+                if (corpseIdx >= 0) {
+                    var corpse = sim.Corpses[corpseIdx];
+                    // Resolve zombie type from the corpse if summonUnitID is empty (shared
+                    // helper; see the AOE branch above).
+                    if (string.IsNullOrEmpty(summonUnitID))
+                        summonUnitID = TableCraftingSystem.ResolveZombieUnitID(gameData, corpse.UnitDefID);
+
+                    // Corpse-puppet raise: remember the original body so the puppet deposits as that
+                    // type at a Corpse Pile (the OnSpawned callback below stamps it onto the unit).
+                    if (spell.SummonAsPuppet) puppetSourceDef = corpse.UnitDefID;
+
+                    fromCorpse = true;
+                    // corpse is NOT consumed here — QueueReanimRise (below) claims it and either plays
+                    // the rise effect (keeping it visible) or legacy-dissolves it.
+                }
+            }
+
+            // Corpse-puppet override: once the zombie stands up, swap its AI to the CorpsePuppet
+            // archetype (walk to nearest Corpse Pile + deposit self) and record the original corpse
+            // type so it piles as that body. Runs on the freshly-spawned unit (deferred rise spawn).
+            Action<int>? onPuppetSpawned = null;
+            if (spell.SummonAsPuppet) {
+                string srcDef = puppetSourceDef;
+                onPuppetSpawned = idx => {
+                    sim.UnitsMut[idx].Archetype = AI.ArchetypeRegistry.FromName("CorpsePuppet");
+                    sim.UnitsMut[idx].PuppetSourceDefID = srcDef;
+                };
+            }
+
+            if (spell.SummonMode == "Transform" && pending.TargetUnitID != GameConstants.InvalidUnit) {
+                // Transform mode: replace existing unit with the summon unit
+                int targetIdx = sim.ResolveUnitID(pending.TargetUnitID);
+                if (targetIdx >= 0 && !string.IsNullOrEmpty(summonUnitID)) {
+                    var targetPos = sim.Units[targetIdx].Position;
+                    sim.TransformUnit(targetIdx, summonUnitID);
+
+                    // Rebuild animation for the transformed unit
+                    game.RebuildUnitAnim(targetIdx, summonUnitID);
+
+                    // Spawn summon effect at target position
+                    game.SpawnSummonEffect(spell, targetPos);
+                }
+            } else {
+                // Spawn mode
+                if (string.IsNullOrEmpty(summonUnitID)) return;
+
+                Vec2 spawnPos;
+                switch (spell.SpawnLocation) {
+                    case "NearestTargetToMouse":
+                        spawnPos = pending.TargetPos;
+                        break;
+                    case "NearestTargetToCaster":
+                        spawnPos = pending.TargetPos;
+                        break;
+                    case "AdjacentToCaster": {
+                        float angle = game._rng.Next(360) * MathF.PI / 180f;
+                        spawnPos = necroPos + new Vec2(MathF.Cos(angle) * 2f, MathF.Sin(angle) * 2f);
+                        break;
+                    }
+                    case "AtTargetLocation":
+                        spawnPos = pending.TargetPos;
+                        break;
+                    default:
+                        spawnPos = pending.TargetPos;
+                        break;
+                }
+
+                // Cap-limited summon count: spawn min(SummonQuantity, available
+                // slots in the resolved category). Pre-check in SpellCaster
+                // already refused when available=0; this clamps the multi-spawn
+                // case so we never overshoot the cap.
+                int spawnQty = spell.SummonQuantity;
+                var spawnCat = HordeCapTracker.CategoryFor(gameData, summonUnitID);
+                if (spawnCat != UndeadCategory.None) {
+                    int avail = HordeCapTracker.Available(sim.Units, gameData, sim.NecroState, spawnCat);
+                    if (avail < spawnQty) spawnQty = avail;
+                }
+
+                for (int q = 0; q < spawnQty; q++) {
+                    var unitSpawnPos = spawnPos;
+                    if (q > 0) {
+                        // Offset additional spawns slightly
+                        float angle = game._rng.Next(360) * MathF.PI / 180f;
+                        unitSpawnPos = spawnPos + new Vec2(MathF.Cos(angle) * 1f, MathF.Sin(angle) * 1f);
+                    }
+
+                    if (fromCorpse) {
+                        // Corpse reanimation → canonical horde minion (HordeMinion archetype). The rise
+                        // effect plays NOW at the grave (corpse stays visible, green outline fading in);
+                        // the unit spawns + stands up + the corpse is removed after a short delay.
+                        game.QueueReanimRise(summonUnitID, pending.TargetCorpseID, spell.ReanimationEffectID,
+                            riseSpeed: spell.TestRiseSpeed, fogSpeed: spell.TestFogSpeed,
+                            onSpawned: onPuppetSpawned);
+                    } else {
+                        // Non-corpse summon (e.g. summon-from-def): plain spawn + horde enroll.
+                        game.SpawnUnit(summonUnitID, unitSpawnPos);
+                        int idx = sim.Units.Count - 1;
+                        if (idx >= 0 && sim.Units[idx].Faction == Faction.Undead &&
+                            sim.Units[idx].AI != AIBehavior.PlayerControlled)
+                            sim.Horde.AddUnit(sim.Units[idx].Id);
+                    }
+                }
+
+                // Spawn summon effect at the primary spawn location — only for a from-nothing summon.
+                // A corpse reanimation already gets the reanim_smoke composite at the grave; the legacy
+                // green fire_loop flame used to double up on raises, so suppress it here when fromCorpse.
+                if (!fromCorpse) game.SpawnSummonEffect(spell, spawnPos);
+            }
+        }
+    }
+
+    // Swirl-trajectory jitter. Pre-existing cosmetic nondeterminism: the sim has no
+    // shared RNG (events seed their own), and the swirl only affects the visual arc.
+    private static readonly Random _projRng = new();
+
+    /// <summary>Spawn a spell projectile and post-configure it: tag it with the spell id
+    /// (impact knockback / blight-bomb lookup), apply the def's Trajectory, and copy the
+    /// projectile/hit-effect flipbook refs. Public — Game1.TickPendingProjectiles also
+    /// calls it for the staggered Quantity&gt;1 shots.</summary>
+    public static void SpawnProjectile(SpellDef spell, ProjectileManager projectiles,
+        Vec2 origin, Vec2 target, uint ownerUid, float spawnHeight)
+    {
+        projectiles.SpawnFireball(origin, target,
+            Faction.Undead, ownerUid, spell.Damage, spell.AoeRadius, spell.DisplayName,
+            spawnHeight: spawnHeight);
+        var projs = projectiles.Projectiles;
+        if (projs.Count > 0) {
+            var lastProj = projs[projs.Count - 1];
+
+            // Tag projectile with spell ID for physics knockback lookup on impact
+            lastProj.SpellID = spell.Id;
+
+            // Blight bombs must burst exactly where the player clicked, not wherever
+            // the ballistic arc happens to land. Forward the aimed point and flag the
+            // projectile so it detonates on overshoot.
+            if (spell.Category == "Blight") {
+                lastProj.TargetPos = target;
+                lastProj.DetonateAtTarget = true;
+            }
+
+            // Apply trajectory type
+            var traj = Enum.TryParse<Trajectory>(spell.Trajectory, true, out var t) ? t : Trajectory.Lob;
+            var dir = (target - origin).Normalized();
+            float speed = spell.ProjectileSpeed > 0 ? spell.ProjectileSpeed : ProjectileManager.MagicSpeed;
+
+            switch (traj) {
+                case Trajectory.DirectFire: {
+                    float theta = 5f * MathF.PI / 180f;
+                    lastProj.Velocity = dir * speed * MathF.Cos(theta);
+                    lastProj.VelocityZ = speed * MathF.Sin(theta);
+                    lastProj.BaseDirection = dir;
+                    lastProj.IsLob = false;
+                    break;
+                }
+                case Trajectory.Swirly: {
+                    float theta = 5f * MathF.PI / 180f;
+                    lastProj.Velocity = dir * speed * MathF.Cos(theta);
+                    lastProj.VelocityZ = speed * MathF.Sin(theta);
+                    lastProj.BaseDirection = dir;
+                    lastProj.IsLob = false;
+                    lastProj.SwirlFreq = 3f + (float)_projRng.NextDouble() * 5f;
+                    lastProj.SwirlAmplitude = 0.5f + (float)_projRng.NextDouble() * 1.5f;
+                    lastProj.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
+                    break;
+                }
+                case Trajectory.Homing: {
+                    float theta = 5f * MathF.PI / 180f;
+                    lastProj.Velocity = dir * speed * MathF.Cos(theta);
+                    lastProj.VelocityZ = speed * MathF.Sin(theta);
+                    lastProj.BaseDirection = dir;
+                    lastProj.IsLob = false;
+                    lastProj.TargetPos = target;
+                    lastProj.HomingStrength = 5f;
+                    break;
+                }
+                case Trajectory.HomingSwirly: {
+                    float theta = 5f * MathF.PI / 180f;
+                    lastProj.Velocity = dir * speed * MathF.Cos(theta);
+                    lastProj.VelocityZ = speed * MathF.Sin(theta);
+                    lastProj.BaseDirection = dir;
+                    lastProj.IsLob = false;
+                    lastProj.TargetPos = target;
+                    lastProj.HomingStrength = 5f;
+                    lastProj.SwirlFreq = 3f + (float)_projRng.NextDouble() * 5f;
+                    lastProj.SwirlAmplitude = 0.5f + (float)_projRng.NextDouble() * 1.5f;
+                    lastProj.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
+                    break;
+                }
+                // Lob is the default from SpawnFireball — no changes needed
+            }
+
+            if (spell.ProjectileFlipbook != null) {
+                lastProj.FlipbookID = spell.ProjectileFlipbook.FlipbookID;
+                lastProj.ParticleScale = spell.ProjectileFlipbook.Scale;
+                lastProj.ParticleColor = spell.ProjectileFlipbook.Color;
+            }
+
+            if (spell.HitEffectFlipbook != null) {
+                lastProj.HitEffectFlipbookID = spell.HitEffectFlipbook.FlipbookID;
+                lastProj.HitEffectScale = spell.HitEffectFlipbook.Scale;
+                lastProj.HitEffectColor = spell.HitEffectFlipbook.Color;
+                lastProj.HitEffectBlendMode = spell.HitEffectFlipbook.BlendMode == "Additive" ? 1 : 0;
+                lastProj.HitEffectAlignment = spell.HitEffectFlipbook.Alignment == "Upright" ? 1 : 0;
+            }
+        }
+    }
+
+    /// <summary>Apply a Blight-category spell to the death-fog field at the target.
+    /// Add mode dumps BlightAmount blight into the target cell (blight bomb); Purify
+    /// mode cleanses a 5×5 cell kernel centered on the target (purifying bomb), with
+    /// BlightAmount as the center cleanse strength. Public — Game1.ApplyBlightBombImpacts
+    /// also calls it for bomb-style Blight defs that defer the fog change to impact.</summary>
+    public static void ApplyBlight(SpellDef spell, Vec2 target, DeathFogSystem deathFog)
+    {
+        if (string.Equals(spell.BlightMode, "Purify", StringComparison.OrdinalIgnoreCase))
+            deathFog.PurifyArea(target.X, target.Y, spell.BlightAmount);
+        else
+            deathFog.AddDensity(target.X, target.Y, spell.BlightAmount);
+    }
+
+    private static void ExecuteStrike(SpellDef spell, Simulation sim, GameData gameData,
         int casterIdx, Vec2 target, Vec2 effectOrigin, List<DamageNumber> damageNumbers)
     {
         var units = sim.UnitsMut;
@@ -257,7 +513,7 @@ public class SpellEffectSystem
         }
     }
 
-    public void ExecuteCloud(SpellDef spell, Simulation sim, Vec2 target)
+    public static void ExecuteCloud(SpellDef spell, Simulation sim, Vec2 target)
     {
         sim.PoisonClouds.SpawnCloud(target, spell, Faction.Undead);
 
@@ -291,7 +547,7 @@ public class SpellEffectSystem
     /// (crumbles into a corpse, attributed to the caster) and the caster is healed
     /// by HealFlat + HealPercent × the victim's effective max HP, clamped to the
     /// caster's own effective max HP. A floating "+N" reports the gain.</summary>
-    private void ExecuteSacrifice(SpellDef spell, Simulation sim, int casterIdx,
+    private static void ExecuteSacrifice(SpellDef spell, Simulation sim, int casterIdx,
         Vec2 target, List<DamageNumber> damageNumbers)
     {
         var units = sim.UnitsMut;
