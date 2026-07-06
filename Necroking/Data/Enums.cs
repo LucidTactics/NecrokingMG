@@ -38,10 +38,9 @@ public static class FactionMaskExt
 // pending migration.
 public enum AIBehavior : byte
 {
-    PlayerControlled = 0, AttackClosest, AttackClosestRetarget,
-    MoveToPoint, ArcherAttack, IdleAtPoint,
+    PlayerControlled = 0, AttackClosest,
+    MoveToPoint, IdleAtPoint,
     Caster,
-    FleeWhenHit, NeutralFightBack,
     WolfHitAndRun,          // Attack → disengage 3 units → wait for cooldown → re-engage (nearest target)
     WolfOpportunist,        // Like HitAndRun but waits up to 1 cycle for target to turn away (>100° from facing)
 }

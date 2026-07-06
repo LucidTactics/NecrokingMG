@@ -190,9 +190,13 @@ public static class DamageSystem
             units[targetIdx].LastAttackerID = units[attackerIdx].Id;
 
             if (units[targetIdx].EngagedTarget.IsNone
-                && units[targetIdx].AI != AIBehavior.FleeWhenHit
+                && units[targetIdx].Archetype != AI.ArchetypeRegistry.DeerHerd
                 && units[targetIdx].AI != AIBehavior.PlayerControlled)
             {
+                // Auto-engage the victim onto its attacker so the melee queue runs.
+                // DeerHerd prey is exempt (was AIBehavior.FleeWhenHit): the handler
+                // owns its flee/fight-back reaction and a stamped EngagedTarget
+                // would drag a fleeing deer into the melee queue.
                 units[targetIdx].EngagedTarget = CombatTarget.Unit(units[attackerIdx].Id);
                 units[targetIdx].Target = units[targetIdx].EngagedTarget;
             }
@@ -230,9 +234,10 @@ public static class DamageSystem
             units[targetIdx].LastAttackerID = units[attackerIdx].Id;
 
             if (units[targetIdx].EngagedTarget.IsNone
-                && units[targetIdx].AI != AIBehavior.FleeWhenHit
+                && units[targetIdx].Archetype != AI.ArchetypeRegistry.DeerHerd
                 && units[targetIdx].AI != AIBehavior.PlayerControlled)
             {
+                // Same DeerHerd prey exemption as Apply — see comment there.
                 units[targetIdx].EngagedTarget = CombatTarget.Unit(units[attackerIdx].Id);
                 units[targetIdx].Target = units[targetIdx].EngagedTarget;
             }

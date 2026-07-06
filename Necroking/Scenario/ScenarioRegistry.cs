@@ -59,11 +59,9 @@ public static class ScenarioRegistry
         Register("pathfinding_test", () => new Scenarios.PathfindingTestScenario());
         Register("portal_route_scale", () => new Scenarios.PortalRouteScaleScenario());
         Register("wolf_hit_and_run", () => new Scenarios.WolfHitAndRunScenario());
-        Register("flee_when_hit", () => new Scenarios.FleeWhenHitScenario());
         Register("deer_realert_while_calming", () => new Scenarios.DeerReAlertWhileCalmingScenario());
         Register("neutral_fight_back", () => new Scenarios.NeutralFightBackScenario());
         Register("move_to_point", () => new Scenarios.MoveToPointScenario());
-        Register("retarget", () => new Scenarios.RetargetScenario());
         Register("horde_follow", () => new Scenarios.HordeFollowScenario());
         Register("sprite_scale", () => new Scenarios.SpriteScaleScenario());
         Register("shadow_pivot", () => new Scenarios.ShadowPivotScenario());

@@ -51,11 +51,14 @@ public class SpellKillTallyScenario : ScenarioBase
         var deerPos = new Vec2(36f, 30f);
         int di = units.AddUnit(deerPos, UnitType.Skeleton);
         units[di].Faction = Faction.Animal;
-        units[di].AI = AIBehavior.FleeWhenHit;
+        // Inert victim (FleeWhenHit is gone — DeerHerd owns prey behavior now);
+        // it dies to one bolt so it only needs to stand still and not retaliate.
+        units[di].AI = AIBehavior.MoveToPoint;
+        units[di].MoveTarget = deerPos;
         units[di].Stats.HP = 20;
         units[di].Stats.MaxHP = 20;
         _deerID = units[di].Id;
-        DebugLog.Log(ScenarioLog, $"Deer (Animal/FleeWhenHit) id={_deerID} at ({deerPos.X},{deerPos.Y}), HP={units[di].Stats.HP}");
+        DebugLog.Log(ScenarioLog, $"Deer (Animal/inert) id={_deerID} at ({deerPos.X},{deerPos.Y}), HP={units[di].Stats.HP}");
         DebugLog.Log(ScenarioLog, $"Distance caster->deer = {(deerPos - casterPos).Length():F1}");
     }
 

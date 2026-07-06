@@ -33,22 +33,26 @@ public class NeutralFightBackScenario : ScenarioBase
     public override void OnInit(Simulation sim)
     {
         DebugLog.Clear(ScenarioLog);
-        DebugLog.Log(ScenarioLog, "=== NeutralFightBack Scenario ===");
-        DebugLog.Log(ScenarioLog, "Phase 1 (0-3s): Neutral skeleton (NeutralFightBack AI, Animal faction) should stay idle");
-        DebugLog.Log(ScenarioLog, "Phase 2 (3s+): Soldier spawns, attacks neutral, neutral should fight back");
+        DebugLog.Log(ScenarioLog, "=== NeutralFightBack Scenario (DeerHerd male fight-back) ===");
+        DebugLog.Log(ScenarioLog, "Phase 1 (0-3s): Male deer (DeerHerd archetype) should not enter combat");
+        DebugLog.Log(ScenarioLog, "Phase 2 (3s+): Soldier spawns, attacks deer, deer should fight back");
 
         var units = sim.UnitsMut;
 
-        // Spawn neutral unit: Skeleton with NeutralFightBack AI, Animal faction
-        // Give it high HP so it survives long enough to demonstrate fighting back
+        // The legacy AIBehavior.NeutralFightBack was migrated into DeerHerdHandler
+        // (males fight back when hit) — test the real MaleDeer def. Awareness is
+        // zeroed so the deer doesn't pre-flee from the approaching soldier; the
+        // fight-back reaction keys off being hit, which is the behavior under test.
         _neutralInitialPos = new Vec2(15f, 15f);
-        int neutralIdx = units.AddUnit(_neutralInitialPos, UnitType.Skeleton);
-        units[neutralIdx].AI = AIBehavior.NeutralFightBack;
-        units[neutralIdx].Faction = Faction.Animal;
+        int neutralIdx = sim.SpawnUnitByID("MaleDeer", _neutralInitialPos);
         units[neutralIdx].Stats.MaxHP = 100;
         units[neutralIdx].Stats.HP = 100;
+        units[neutralIdx].DetectionRange = 0f;
+        units[neutralIdx].DetectionBreakRange = 0f;
+        units[neutralIdx].AlertEscalateRange = 0f;
+        units[neutralIdx].GroupAlertRadius = 0f;
         _neutralId = units[neutralIdx].Id;
-        DebugLog.Log(ScenarioLog, $"Spawned neutral skeleton id={_neutralId} at ({_neutralInitialPos.X:F1}, {_neutralInitialPos.Y:F1}), AI=NeutralFightBack, Faction=Animal, HP=100");
+        DebugLog.Log(ScenarioLog, $"Spawned MaleDeer id={_neutralId} at ({_neutralInitialPos.X:F1}, {_neutralInitialPos.Y:F1}), archetype={units[neutralIdx].Archetype}, HP=100");
 
         ZoomOnLocation(16f, 15f, 40f);
 
@@ -62,18 +66,15 @@ public class NeutralFightBackScenario : ScenarioBase
 
         int neutralIdx = FindByID(units, _neutralId);
 
-        // Phase 1: Check the neutral stays still during first 3 seconds
+        // Phase 1: the deer must not enter combat unprovoked. (Position drift is
+        // NOT checked — DeerHerd deer graze-wander while idle, which is fine.)
         if (_elapsed < IdlePhaseEnd)
         {
-            if (neutralIdx >= 0)
+            if (neutralIdx >= 0 && !_neutralMovedDuringIdlePhase
+                && (units[neutralIdx].InCombat || units[neutralIdx].Target.IsUnit))
             {
-                var pos = units[neutralIdx].Position;
-                float drift = (pos - _neutralInitialPos).Length();
-                if (drift > 0.1f && !_neutralMovedDuringIdlePhase)
-                {
-                    _neutralMovedDuringIdlePhase = true;
-                    DebugLog.Log(ScenarioLog, $"t={_elapsed:F2}s: PROBLEM - Neutral unit moved during idle phase! pos=({pos.X:F1},{pos.Y:F1}), drift={drift:F2}");
-                }
+                _neutralMovedDuringIdlePhase = true;
+                DebugLog.Log(ScenarioLog, $"t={_elapsed:F2}s: PROBLEM - deer entered combat during idle phase!");
             }
         }
 

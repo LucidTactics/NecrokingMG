@@ -1048,17 +1048,14 @@ public class Simulation
 
             // Legacy AI path: only reached when Archetype == 0 (see `continue` above for
             // archetype units). Wolf-flavored AIBehaviors here don't collide with
-            // WolfPackHandler because the archetype dispatcher short-circuits. The only
-            // live user of these WolfX AIBehaviors is WolfHitAndRunScenario (test); the
-            // "Wolf" unit-def itself uses Archetype=WolfPack which never enters this branch.
-            // FleeWhenHit and wolf AIs self-manage combat/disengage logic.
-            bool selfManagesCombat = _units[i].AI == AIBehavior.FleeWhenHit
-                || _units[i].AI == AIBehavior.WolfHitAndRun
+            // WolfPackHandler because the archetype dispatcher short-circuits.
+            // Wolf AIs self-manage combat/disengage logic.
+            bool selfManagesCombat = _units[i].AI == AIBehavior.WolfHitAndRun
                 || _units[i].AI == AIBehavior.WolfOpportunist;
-            // Units with pending attacks stop moving (except self-managed AIs)
-            // FleeWhenHit always bypasses; wolf AIs bypass during disengage/wait phases
-            if (!_units[i].PendingAttack.IsNone && !(_units[i].AI == AIBehavior.FleeWhenHit
-                || (selfManagesCombat && _units[i].WolfPhase >= WolfDisengage)))
+            // Units with pending attacks stop moving (except self-managed AIs);
+            // wolf AIs bypass during disengage/wait phases
+            if (!_units[i].PendingAttack.IsNone
+                && !(selfManagesCombat && _units[i].WolfPhase >= WolfDisengage))
             { _units[i].PreferredVel = Vec2.Zero; continue; }
             // Fleeing/routing units are exempt from the InCombat plant: a fleeing
             // unit with a stale/live engagement must keep running, not freeze in
@@ -1114,40 +1111,6 @@ public class Simulation
                     break;
                 }
 
-                case AIBehavior.ArcherAttack:
-                {
-                    if (!IsTargetAlive(_units[i].Target) || !_units[i].Target.IsUnit)
-                    {
-                        int enemy = FindClosestEnemy(i);
-                        _units[i].Target = enemy >= 0 ? CombatTarget.Unit(_units[enemy].Id) : CombatTarget.None;
-                    }
-                    if (_units[i].Target.IsUnit)
-                    {
-                        int targetIdx = ResolveUnitTarget(_units[i].Target);
-                        if (targetIdx >= 0)
-                        {
-                            float dist = (_units[targetIdx].Position - _units[i].Position).Length();
-                            float bestRange = _units[i].Stats.RangedRange.Count > 0 ? _units[i].Stats.RangedRange[0] : 40f;
-
-                            if (dist <= bestRange)
-                            {
-                                _units[i].PreferredVel = Vec2.Zero;
-                                if (_units[i].AttackCooldown <= 0f && _units[i].PendingAttack.IsNone)
-                                {
-                                    FireArrowAt(i, targetIdx, 0);
-                                    _units[i].AttackCooldown = _units[i].Stats.RangedCooldownTime.Count > 0
-                                        ? _units[i].Stats.RangedCooldownTime[0] : 2f;
-                                }
-                            }
-                            else
-                                MoveTowardUnit(i, targetIdx, _units[i].MaxSpeed);
-                        }
-                        else _units[i].PreferredVel = Vec2.Zero;
-                    }
-                    else _units[i].PreferredVel = Vec2.Zero;
-                    break;
-                }
-
                 case AIBehavior.MoveToPoint:
                 {
                     var toTarget = _units[i].MoveTarget - _units[i].Position;
@@ -1191,134 +1154,9 @@ public class Simulation
                 // stub, OrderAttack — superseded by HordeMinionHandler CommandTo /
                 // the Worker archetype).
 
-                case AIBehavior.AttackClosestRetarget:
-                {
-                    _units[i].RetargetTimer -= dt;
-                    if (_units[i].RetargetTimer <= 0f || !IsTargetAlive(_units[i].Target))
-                    {
-                        _units[i].Target = FindBestEnemyTarget(i);
-                        _units[i].RetargetTimer = 2f;
-                    }
-                    goto default;
-                }
-
-                case AIBehavior.FleeWhenHit:
-                {
-                    // Deer-like behavior: idle normally, flee when hit at effect time.
-                    // Mirror the flee state so the hit-react flinch is suppressed while
-                    // running (a fleeing unit keeps its run anim when hit again).
-                    _units[i].Fleeing = _units[i].FleeTimer > 0f;
-                    if (_units[i].FleeTimer > 0)
-                    {
-                        // Currently fleeing — force disengage
-                        Disengage(i);
-                        _units[i].EngagedTarget = CombatTarget.None;
-
-                        _units[i].FleeTimer -= dt;
-                        int attackerIdx = UnitUtil.ResolveUnitIndex(_units, _units[i].LastAttackerID);
-                        if (attackerIdx >= 0)
-                        {
-                            Vec2 awayDir = (_units[i].Position - _units[attackerIdx].Position);
-                            float dist = awayDir.Length();
-                            if (dist > 15f)
-                            {
-                                _units[i].FleeTimer = 0;
-                                _units[i].LastAttackerID = GameConstants.InvalidUnit;
-                                _units[i].PreferredVel = Vec2.Zero;
-                            }
-                            else
-                            {
-                                awayDir = dist > 0.01f ? awayDir * (1f / dist) : new Vec2(1, 0);
-                                // Pathfind to a point far away from the attacker
-                                Vec2 fleeDest = _units[i].Position + awayDir * 15f;
-                                MoveTowardPosition(i, fleeDest, _units[i].MaxSpeed);
-                            }
-                        }
-                        else
-                        {
-                            // No attacker found (e.g. poison damage) — flee along current facing.
-                            // FacingAngle is DEGREES; AngleToDir applies the deg->rad conversion the
-                            // old inline `new Vec2(Cos(angle), Sin(angle))` was missing (flee-dir bug).
-                            Vec2 fleeDest = _units[i].Position + Movement.FacingUtil.AngleToDir(_units[i].FacingAngle) * 15f;
-                            MoveTowardPosition(i, fleeDest, _units[i].MaxSpeed);
-                        }
-                    }
-                    else if (_units[i].LastAttackerID != GameConstants.InvalidUnit || _units[i].HitReacting)
-                    {
-                        // Got hit (by attacker or poison/environmental damage) — flee
-                        if (_units[i].PostAttackTimer > 0f || !_units[i].PendingAttack.IsNone)
-                        {
-                            // Mid-attack: queue flee for when we're free
-                            _units[i].QueuedAction = QueuedUnitAction.Flee;
-                        }
-                        else
-                        {
-                            // Free to flee now
-                            _units[i].FleeTimer = 5f;
-                            Disengage(i);
-                            _units[i].EngagedTarget = CombatTarget.None;
-                            _units[i].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
-                        }
-                    }
-                    else if (_units[i].QueuedAction == QueuedUnitAction.Flee
-                             && _units[i].PostAttackTimer <= 0f
-                             && _units[i].PendingAttack.IsNone)
-                    {
-                        // Queued flee — now free to execute
-                        _units[i].QueuedAction = QueuedUnitAction.None;
-                        _units[i].FleeTimer = 5f;
-                        Disengage(i);
-                        _units[i].EngagedTarget = CombatTarget.None;
-                        _units[i].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
-                    }
-                    else
-                    {
-                        _units[i].PreferredVel = Vec2.Zero; // idle
-                    }
-                    break;
-                }
-
-                case AIBehavior.NeutralFightBack:
-                {
-                    // Neutral: ignore enemies unless hit, then fight attacker
-                    if (_units[i].LastAttackerID != GameConstants.InvalidUnit)
-                    {
-                        // We've been hit before — fight the attacker (or any enemy if attacker dead)
-                        if (!IsTargetAlive(_units[i].Target))
-                        {
-                            int attackerIdx = UnitUtil.ResolveUnitIndex(_units, _units[i].LastAttackerID);
-                            if (attackerIdx >= 0 && _units[attackerIdx].Alive)
-                                _units[i].Target = CombatTarget.Unit(_units[i].LastAttackerID);
-                            else
-                                _units[i].Target = FindBestEnemyTarget(i);
-                            if (_units[i].Target.IsUnit)
-                                _units[i].ShowStatusSymbol(UnitStatusSymbol.React, 1.5f);
-                        }
-
-                        if (_units[i].Target.IsUnit)
-                        {
-                            int targetIdx = ResolveUnitTarget(_units[i].Target);
-                            if (targetIdx >= 0)
-                            {
-                                MoveTowardUnit(i, targetIdx, _units[i].MaxSpeed);
-                                // Engage when in range
-                                float dist = (_units[targetIdx].Position - _units[i].Position).Length();
-                                float engageRange = Combat.MeleeRangeUtil.Compute(_units, i, targetIdx, _gameData);
-                                if (dist <= engageRange && _units[i].EngagedTarget.IsNone)
-                                    _units[i].EngagedTarget = _units[i].Target;
-                            }
-                            else
-                                _units[i].PreferredVel = Vec2.Zero;
-                        }
-                        else
-                            _units[i].PreferredVel = Vec2.Zero;
-                    }
-                    else
-                    {
-                        _units[i].PreferredVel = Vec2.Zero; // peaceful until provoked
-                    }
-                    break;
-                }
+                // ArcherAttack → ArcherUnit/RangedUnitHandler; AttackClosestRetarget →
+                // HordeMinion; FleeWhenHit / NeutralFightBack → DeerHerdHandler
+                // (female flee / male fight-back).
 
                 case AIBehavior.WolfHitAndRun:
                 case AIBehavior.WolfOpportunist:

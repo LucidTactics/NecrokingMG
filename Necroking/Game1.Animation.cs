@@ -347,7 +347,7 @@ public partial class Game1
                 // get an AnimController, so neither recovery path could ever tick its
                 // recover-timer down — leaving it Incap-locked forever. Release the
                 // lock here so a missing/broken sprite degrades to "no rise", not "stuck".
-                if (unitDef.Sprite == null) { if (_sim.Units[i].Incap.Recovering) _sim.UnitsMut[i].Incap = default; continue; }
+                if (unitDef?.Sprite == null) { if (_sim.Units[i].Incap.Recovering) _sim.UnitsMut[i].Incap = default; continue; }
                 var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
                 var spriteData = _atlases[atlasId].GetUnit(unitDef.Sprite.SpriteName);
                 if (spriteData == null) { if (_sim.Units[i].Incap.Recovering) _sim.UnitsMut[i].Incap = default; continue; }

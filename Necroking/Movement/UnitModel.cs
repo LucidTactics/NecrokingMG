@@ -188,7 +188,6 @@ public class Unit
     /// <summary>Minimum time remaining before a routing unit may rally.</summary>
     public float RoutTimer;
     public CombatTarget Target = CombatTarget.None;
-    public float RetargetTimer;
 
     // State
     public bool Alive = true;

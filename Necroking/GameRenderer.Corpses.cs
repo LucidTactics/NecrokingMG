@@ -142,7 +142,7 @@ partial class GameRenderer
             }
 
             var unitDef = _g._gameData.Units.Get(corpse.UnitDefID);
-            if (unitDef.Sprite == null) continue;
+            if (unitDef?.Sprite == null) continue;  // unresolvable def id (scenario-made corpse) — skip, don't crash
             var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
             var atlas = _g._atlases[atlasId];
             if (!atlas.IsLoaded) continue;
