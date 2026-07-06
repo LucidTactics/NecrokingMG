@@ -123,9 +123,14 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
   via `kb.IsKeyDown(K) && _prevKb.IsKeyUp(K)`.
 - **Save**: `SaveMap()` writes `assets/maps/<map>.json` with `Utf8JsonWriter` — env objects
   go in the `placedObjects` array (`defId, x, y, scale, seed`) straight from
-  `_envSystem.Objects`, so anything placed via `AddObject` is persisted automatically. Env
-  *defs* save separately via `MapData.SaveEnvDefs("data/env_defs.json")`; zones to the
-  `SaveZones` sidecar (see [zones.md](zones.md)).
+  `_envSystem.Objects`, so anything placed via `AddObject` is persisted automatically —
+  **including gameplay-spawned objects** (zone spawns, village structures, boar drops,
+  player buildings), which then re-load AND re-spawn next run = compounding map growth.
+  See [world.md](world.md) "Runtime env-object spawn census" for the call-site list and
+  where a don't-save flag goes. Units are immune: `placedUnits` is written from the
+  editor's own `_placedUnits` list only, never from live sim units. Env *defs* save
+  separately via `MapData.SaveEnvDefs("data/env_defs.json")`; zones to the `SaveZones`
+  sidecar (see [zones.md](zones.md)).
 - **Def-dropdown precedent**: `DrawZoneSpawnPanel` rows use `_eb.DrawCombo` with cached
   filtered id arrays (`GetZoneForagableIdOptions` filters `_envSystem` defs by `IsForagable`,
   cache invalidated on `DefCount` change) — copy this for any "pick an env def" UI.

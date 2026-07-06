@@ -69,6 +69,26 @@ stale outside `Simulation.Tick`). Don't write new ad-hoc `bestSq` scans — and 
 touching the remaining unmigrated ones (WorkerSystem finds, CorpseInteractionManager,
 SpellCasting/Projectile corpse scans, VillageThreat, BoarForageAI), migrate them here.
 
+## Runtime env-object spawn census & the map-save pollution loop
+
+`MapEditorWindow.SaveMap()` writes **every** live object in `_envSystem.Objects` into the
+map's `placedObjects` array — `PlacedObject` has no "who spawned me" flag — so any
+gameplay-spawned object present at save time gets baked into the map JSON and re-loaded
+next run, compounding. The non-editor `AddObject` call sites (the census):
+- `Game1.Zones.cs` `TryPlaceSpaced` (zone foragable spawns via `TrySpawnZoneForagable`;
+  note it first tries `TryReviveForagableInRect`, which reuses an existing object)
+- `Game1.Villages.cs` `PlaceStructure` (village structures/graves stamped **every load**
+  from `assets/maps/<map>_villages.json` — double-compounds if also saved into placedObjects)
+- `Game/Simulation.cs` boar belly spit in `RemoveDeadUnits`
+- `UI/BuildingMenuUI.cs` player-built buildings (also `AddObjectAsBlueprint` path)
+- `Game1.Dev.cs` dev commands; `Scenario/` (never saved, irrelevant)
+Units do NOT have this problem: `SaveMap` writes only the editor's own `_placedUnits`
+list (set from map JSON at load, edited only by the Units tab) — live sim units are never
+merged back. A "gameplay-spawned, don't save" flag belongs on the `PlacedObject` struct
+(`EnvironmentSystem.cs`) + an `AddObject` parameter; filter in `SaveMap`'s placedObjects
+loop. Editor-placed callers: `MapData.Load`, `MapEditorWindow` paint/single/procgen + its
+undo-redo re-adds (`UndoObjectRemove`/batch structs call `Env.AddObject`).
+
 ## Death → corpse → drop path (cross-area: Simulation)
 
 - **`Necroking/Game/Simulation.cs` `RemoveDeadUnits()`** (`~line 3664`) — the per-unit
