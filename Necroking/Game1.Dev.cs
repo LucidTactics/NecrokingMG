@@ -212,7 +212,10 @@ public partial class Game1 {
                }
 
                _camera.Position = new Vec2(DevFloat(c.Args[0]), DevFloat(c.Args[1]));
-               if (c.Args.Length >= 3) _camera.Zoom = DevFloat(c.Args[2]);
+               // Clamp like the scroll-wheel path — a raw 0/negative zoom NaNs the
+               // world transform until the next camera command.
+               if (c.Args.Length >= 3)
+                  _camera.Zoom = Math.Clamp(DevFloat(c.Args[2]), _camera.MinZoom, _camera.MaxZoom);
                // Detach from the necromancer so the set position actually sticks (otherwise the
                // follow snaps back next frame). Re-attach with 'free_camera off'. This is why dev
                // testing no longer needs to remove the necromancer (which triggered game-over).
@@ -358,12 +361,14 @@ public partial class Game1 {
 
             // List env objects as JSON: `objects [substring]` filters by def id
             // (e.g. `objects mush`); `objects foragable` lists foragables only.
+            // Listing caps at 100 entries; `count` is the full match total so a
+            // capped result is distinguishable from "exactly 100 objects".
             case "objects": {
                string filter = c.Args.Length > 0 ? c.Args[0].ToLowerInvariant() : "";
                bool foragableOnly = filter == "foragable";
                var sb = new System.Text.StringBuilder("[");
                int n = 0;
-               for (int i = 0; i < _envSystem.ObjectCount && n < 100; i++)
+               for (int i = 0; i < _envSystem.ObjectCount; i++)
                {
                   if (!_envSystem.IsObjectVisible(i)) continue;
                   var obj = _envSystem.GetObject(i);
@@ -371,12 +376,15 @@ public partial class Game1 {
                   if (foragableOnly && !def.IsForagable) continue;
                   if (!foragableOnly && filter.Length > 0
                       && !def.Id.ToLowerInvariant().Contains(filter)) continue;
-                  if (n > 0) sb.Append(',');
-                  sb.Append($"{{\"idx\":{i},\"def\":\"{def.Id}\",\"x\":{obj.X:F1},\"y\":{obj.Y:F1},\"foragable\":{(def.IsForagable ? "true" : "false")}}}");
+                  if (n < 100) {
+                     if (n > 0) sb.Append(',');
+                     sb.Append($"{{\"idx\":{i},\"def\":\"{def.Id}\",\"x\":{obj.X:F1},\"y\":{obj.Y:F1},\"foragable\":{(def.IsForagable ? "true" : "false")}}}");
+                  }
                   n++;
                }
                sb.Append(']');
-               c.Complete(Necroking.Dev.DevServer.OkRaw(sb.ToString()));
+               c.Complete(Necroking.Dev.DevServer.OkRaw(
+                  $"{{\"count\":{n},\"truncated\":{(n > 100 ? "true" : "false")},\"objects\":{sb}}}"));
                break;
             }
 
@@ -568,8 +576,7 @@ public partial class Game1 {
                   // Use the Game1 wrapper (not bare SpawnUnitByID) so the def's
                   // Archetype + handler OnSpawn are applied — dev spawns then match
                   // real map/game spawns (e.g. an animal's WolfPack/DeerHerd AI).
-                  SpawnUnit(c.Args[0], new Vec2(bx + i, by));
-                  idxs.Add(_sim.Units.Count - 1);
+                  idxs.Add(SpawnUnit(c.Args[0], new Vec2(bx + i, by)));
                }
                c.Complete(Necroking.Dev.DevServer.OkRaw(
                   $"{{\"def\":{System.Text.Json.JsonSerializer.Serialize(c.Args[0])},\"count\":{count},\"indices\":[{string.Join(",", idxs)}]}}"));
@@ -720,6 +727,9 @@ public partial class Game1 {
                string missing = "";
                foreach (var r in req) if (Def(r) < 0) { missing = r; break; }
                if (missing != "") { c.Complete(Necroking.Dev.DevServer.Error($"missing env def: {missing}")); break; }
+               // Guard the worker unit def too — SpawnUnit on a missing def would
+               // silently add a default-stats Dynamic unit instead of failing.
+               if (_gameData.Units.Get("skeleton") == null) { c.Complete(Necroking.Dev.DevServer.Error("missing unit def: skeleton")); break; }
                int Place(string id, float x, float y, float s = 1f) => _envSystem.AddObject((ushort)Def(id), x, y, s);
 
                // Buildings
@@ -744,9 +754,8 @@ public partial class Game1 {
                int assigned = 0;
                for (int w = 0; w < graves.Count; w++)
                {
-                  SpawnUnit("skeleton", new Vec2(nb.X - 8 + w * 1.5f, nb.Y + 4));   // spread out below the graves
-                  uint wid = _sim.Units[_sim.Units.Count - 1].Id;
-                  if (_workerSystem.AssignWorker(wid, graves[w])) assigned++;
+                  int widx = SpawnUnit("skeleton", new Vec2(nb.X - 8 + w * 1.5f, nb.Y + 4));   // spread out below the graves
+                  if (_workerSystem.AssignWorker(_sim.Units[widx].Id, graves[w])) assigned++;
                }
                c.Complete(Necroking.Dev.DevServer.Ok($"scene built: {graves.Count} graves, 7 buildings, sources + 8 corpses, {assigned} workers assigned"));
                break;
@@ -1515,7 +1524,9 @@ public partial class Game1 {
             // Set the F7 gameplay-debug overlay: 0=Off, 1=Horde, 2=Unit Info.
             // window.dev('gpdebug',['1'])  (no arg → Horde)
             case "gpdebug": {
-               _gameplayDebugMode = c.Args.Length >= 1 ? (int)DevFloat(c.Args[0]) % 3 : 1;
+               // Euclidean wrap — C# % keeps the sign, and a negative mode is "off"-ish garbage.
+               int gpMode = c.Args.Length >= 1 ? (int)DevFloat(c.Args[0]) : 1;
+               _gameplayDebugMode = ((gpMode % 3) + 3) % 3;
                c.Complete(Necroking.Dev.DevServer.Ok($"gameplayDebugMode={_gameplayDebugMode}"));
                break;
             }
@@ -1724,7 +1735,7 @@ public partial class Game1 {
                   "panels", "panel <name> [tab]", "tab <name>", "ui_rects",
                   "overlay <name> [open|close|toggle]", "select <name|id|index>",
                   // batching & data injection
-                  "batch  opts:{script:[{cmd,args,opts}|{wait:n}|{wait_real:n}|{wait_frames:n}|{shot:\"name\"}]}",
+                  "batch  opts:{script:[{cmd,args,opts}|{wait:n}|{wait_real:n}|{wait_frames:n}|{shot:\"name\",...shotOpts}]}",
                   "job [jobId|cancel]",
                   "add_data [spell|unit|item|buff|weapon|armor|shield|potion|flipbook]  opts:{json:<entry|array|datafile>,open}  (alias add_json)",
                   "save_data",
@@ -2208,11 +2219,18 @@ public partial class Game1 {
                continue;
             }
 
-            // "shot" sugar → a screenshot command carrying the same opts.
+            // "shot" sugar → a screenshot command carrying the same opts. Screenshot
+            // opts may sit at the top level ({shot:"x", no_ui:true}) or in an
+            // explicit opts:{} object; both reach the command's Opts (opts:{} wins).
             if (el.TryGetProperty("shot", out var shot)) {
                var cmd = Necroking.Dev.DevCommand.FromElement(el, "screenshot");
                cmd.Cmd = "screenshot";
                cmd.Args = new[] { shot.GetString() ?? "shot" };
+               foreach (var p in el.EnumerateObject()) {
+                  if (p.Name is "shot" or "cmd" or "args" or "opts") continue;
+                  if (!cmd.Opts.ContainsKey(p.Name))
+                     cmd.Opts[p.Name] = Necroking.Dev.DevCommand.NormalizeOptValue(p.Value);
+               }
                steps.Add(new Necroking.Dev.DevScriptStep { Cmd = cmd });
                continue;
             }
@@ -2239,13 +2257,27 @@ public partial class Game1 {
       }
    }
 
-   /// <summary>Status of a batch job as JSON (the `job` command's payload).</summary>
-   static string DevJobStatusJson(Necroking.Dev.DevJob job) {
+   /// <summary>Status of a batch job as JSON (the `job` command's payload). Reports
+   /// the active wait so a poller can see WHY the job isn't advancing — in particular
+   /// a sim-seconds wait while the game is paused never elapses (blockedByPause).</summary>
+   string DevJobStatusJson(Necroking.Dev.DevJob job) {
+      var ci = System.Globalization.CultureInfo.InvariantCulture;
+      string wait = "";
+      if (!job.Done) {
+         if (job.WaitFrames > 0) wait = $"\"waitFrames\":{job.WaitFrames},";
+         else if (job.WaitSim > 0f) wait = $"\"waitSim\":{job.WaitSim.ToString("F2", ci)},";
+         else if (job.WaitReal > 0f) wait = $"\"waitReal\":{job.WaitReal.ToString("F2", ci)},";
+         // A sim wait can't elapse while the sim is frozen (pause, full-screen
+         // editor, no world) — surface it so a poller doesn't spin forever.
+         if (job.WaitSim > 0f && (_clock.Paused || EditorActive || !_gameWorldLoaded))
+            wait += $"\"simWaitBlockedBy\":\"{(_clock.Paused ? "pause" : EditorActive ? "editor" : "no_world")}\",";
+      }
       return "{" +
              $"\"id\":\"{job.Id}\"," +
              $"\"done\":{(job.Done ? "true" : "false")}," +
              $"\"canceled\":{(job.Canceled ? "true" : "false")}," +
              $"\"step\":{job.Cursor},\"total\":{job.Steps.Count}," +
+             wait +
              $"\"results\":[{string.Join(",", job.Results)}]" +
              "}";
    }

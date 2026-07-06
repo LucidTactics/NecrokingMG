@@ -2169,13 +2169,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _menuState = MenuState.None;
     }
 
-    private void SpawnUnit(string unitDefID, Vec2 pos)
+    private int SpawnUnit(string unitDefID, Vec2 pos)
     {
         int idx = _sim.UnitsMut.AddUnit(pos, UnitType.Dynamic);
         _sim.UnitsMut[idx].UnitDefID = unitDefID;
 
         var unitDef = _gameData.Units.Get(unitDefID);
-        if (unitDef == null) return;
+        if (unitDef == null) return idx;
 
         _sim.UnitsMut[idx].SpriteScale = unitDef.SpriteScale;
         _sim.UnitsMut[idx].OrcaPriority = unitDef.OrcaPriority;
@@ -2293,6 +2293,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 };
             }
         }
+
+        return idx;
     }
 
     protected override void LoadContent()
@@ -2825,7 +2827,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         // Step the active dev batch script (if any) over the same sim/real clock a
         // scenario's OnTick uses, so scripted waits + screenshots land deterministically.
-        if (_devJob != null) UpdateDevScript(dt, rawDt);
+        // The sim-seconds dt must mirror the world gate (GateWorld runs later this
+        // frame, so predict it): VisualDt keeps flowing while a full-screen editor
+        // suspends the world or no world is loaded, but the sim doesn't — burning
+        // VisualDt there would complete a {wait:n} while the sim is frozen.
+        if (_devJob != null)
+            UpdateDevScript(EditorActive || !_gameWorldLoaded ? 0f : dt, rawDt);
 
         // --- Diagnostic: auto-click Start Game from command line (--autostart) ---
         if (_menuState == MenuState.MainMenu && LaunchArgs.AutoStart)

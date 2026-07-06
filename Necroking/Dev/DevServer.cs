@@ -61,16 +61,20 @@ public sealed class DevCommand
         if (root.TryGetProperty("opts", out var o) && o.ValueKind == JsonValueKind.Object)
         {
             foreach (var p in o.EnumerateObject())
-                result.Opts[p.Name] = p.Value.ValueKind switch
-                {
-                    JsonValueKind.String => p.Value.GetString() ?? "",
-                    JsonValueKind.True => "true",
-                    JsonValueKind.False => "false",
-                    _ => p.Value.GetRawText(),
-                };
+                result.Opts[p.Name] = NormalizeOptValue(p.Value);
         }
         return result;
     }
+
+    /// <summary>Normalise a JSON opt value to the string form Opts stores
+    /// (bools → "true"/"false", numbers → raw text).</summary>
+    public static string NormalizeOptValue(JsonElement v) => v.ValueKind switch
+    {
+        JsonValueKind.String => v.GetString() ?? "",
+        JsonValueKind.True => "true",
+        JsonValueKind.False => "false",
+        _ => v.GetRawText(),
+    };
 }
 
 /// <summary>

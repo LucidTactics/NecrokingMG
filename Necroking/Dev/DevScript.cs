@@ -11,9 +11,13 @@ namespace Necroking.Dev;
 public sealed class DevScriptStep
 {
     public DevCommand? Cmd;     // non-null => run this command, then advance
-    public float WaitSimSecs;   // >0 => wait this many SIM seconds (frozen while paused/speed 0)
+    public float WaitSimSecs;   // >0 => wait this many SIM seconds (frozen while the sim is:
+                                //       paused, world-suspended by a full-screen editor, or no
+                                //       world loaded — the `job` poll reports simWaitBlockedBy.
+                                //       Note `speed 0` clamps to 0.01, so only `pause` freezes.)
     public float WaitRealSecs;  // >0 => wait this many wall-clock seconds (ignores pause)
-    public int WaitFrames;      // >0 => wait this many rendered frames
+    public int WaitFrames;      // >0 => wait this many Update ticks (≈rendered frames; under
+                                //       fixed-timestep catch-up several Updates can share one Draw)
 
     public bool IsWait => Cmd == null;
 }
@@ -22,7 +26,8 @@ public sealed class DevScriptStep
 /// A queued dev batch: a list of steps the game steps through across frames. The
 /// HTTP "batch" command returns the job id immediately (so the request never
 /// blocks past the proxy timeout); progress + per-step results are polled with
-/// the "job" command. Only one job runs at a time — starting another replaces it.
+/// the "job" command. Only one job runs at a time — starting another while one is
+/// running is rejected; 'job cancel' first.
 /// </summary>
 public sealed class DevJob
 {
