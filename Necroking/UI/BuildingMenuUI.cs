@@ -19,37 +19,27 @@ namespace Necroking.UI;
 /// resource costs with icons and quantities. Handles selection, resource checking,
 /// ghost preview, and placement.
 /// </summary>
-public class BuildingMenuUI : IModalLayer
+public class BuildingMenuUI : SideListMenu
 {
-    private const string MenuWidgetId = "BuildingMenu";
-    private const string ItemWidgetId = "BuildingItem";
-    private const string InstanceId = "buildmenu";
+    protected override string MenuWidgetId => "BuildingMenu";
+    protected override string ItemWidgetId => "BuildingItem";
+    protected override string InstanceId => "buildmenu";
+    protected override string ItemChildPrefix => "building_";
 
-    private RuntimeWidgetRenderer _renderer = null!;
     private EnvironmentSystem _envSystem = null!;
     private Inventory _inventory = null!;
     private ItemRegistry _items = null!;
-    private SpriteBatch _batch = null!;
-    private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
-    private Texture2D _pixel = null!;
     private MagicGlyphSystem? _glyphs;
     private SpellRegistry? _spells;
     private Simulation? _sim;
-
-    private bool _visible;
-    private InputState? _lastInput;
-    private int _screenX, _screenY;
-    private int _widgetW, _widgetH;
 
     // Buildable defs (cached when menu opens)
     private readonly List<int> _buildableDefIndices = new();
     private int _selectedIndex = -1;
     private bool _placementActive; // ghost follows cursor
 
-    // Widget child mapping
-    private int[] _itemChildIndices = Array.Empty<int>();
+    protected override int ItemCount => _buildableDefIndices.Count;
 
-    public bool IsVisible => _visible;
     public bool IsPlacementActive => _placementActive && _selectedIndex >= 0;
     public int SelectedDefIndex => _selectedIndex >= 0 && _selectedIndex < _buildableDefIndices.Count
         ? _buildableDefIndices[_selectedIndex] : -1;
@@ -78,24 +68,11 @@ public class BuildingMenuUI : IModalLayer
         def.Height = screenH; // modify the def so layout uses full height
     }
 
-    public void Open(int screenW, int screenH)
+    public override void Open(int screenW, int screenH)
     {
-        _visible = true;
         _placementActive = false;
         _selectedIndex = -1;
-
-        // Position: left-aligned, 12px off-screen
-        _screenX = -12;
-        _screenY = 0;
-
-        // Stretch to screen height
-        var def = _renderer.GetWidgetDef(MenuWidgetId);
-        if (def != null)
-        {
-            def.Height = screenH;
-            _widgetH = screenH;
-            _widgetW = def.Width;
-        }
+        OpenAnchorStretch(screenH);
 
         // Cache buildable defs
         _buildableDefIndices.Clear();
@@ -105,136 +82,66 @@ public class BuildingMenuUI : IModalLayer
                 _buildableDefIndices.Add(di);
         }
 
-        // Ensure enough BuildingItem children in the widget
-        if (def != null)
-            EnsureItemChildren(def);
-
-        SyncItems();
+        RebuildItems();
     }
 
-    public void Close()
+    public override void Close()
     {
         _visible = false;
         _placementActive = false;
         _selectedIndex = -1;
     }
 
-    // === IModalLayer ===
-    // Side-panel UI. Not light-dismiss — clicking outside doesn't auto-close
-    // (the menu stays open while the user picks a placement target out in
-    // the world). PopupManager still consumes clicks while it's open so the
-    // spell-bar and world-edit code don't dual-fire.
-    public bool LightDismiss => false;
-    // Non-blocking side panel — placement mode needs world clicks to land.
-    // ContainsMouse is the existing public method.
-    public bool IsBlocking => false;
-    public void OnCancel() => Close();
-
-    public void Toggle(int screenW, int screenH)
+    /// <summary>Bind building <paramref name="i"/>'s name + up to 2 resource costs.</summary>
+    protected override void BindItem(string subId, int i)
     {
-        if (_visible) Close();
-        else Open(screenW, screenH);
+        int defIdx = _buildableDefIndices[i];
+        var envDef = _envSystem.Defs[defIdx];
+
+        string name = string.IsNullOrEmpty(envDef.Name) ? envDef.Id : envDef.Name;
+        _renderer.SetText(subId, "child_0", name);
+
+        // Cost 1
+        bool hasCost1 = !string.IsNullOrEmpty(envDef.Cost1ItemId) && envDef.Cost1Amount > 0;
+        bool hasCost2 = !string.IsNullOrEmpty(envDef.Cost2ItemId) && envDef.Cost2Amount > 0;
+
+        if (hasCost1)
+        {
+            var item1 = _items.Get(envDef.Cost1ItemId);
+            _renderer.SetText(subId, "Quant1", envDef.Cost1Amount.ToString());
+            if (item1 != null)
+                _renderer.SetImage(subId, "Icon1", item1.Icon);
+        }
+        else
+        {
+            _renderer.SetText(subId, "Quant1", "");
+            _renderer.SetImage(subId, "Icon1", ""); // empty path = nothing rendered
+        }
+
+        if (hasCost2)
+        {
+            var item2 = _items.Get(envDef.Cost2ItemId);
+            _renderer.SetText(subId, "Quant2", envDef.Cost2Amount.ToString());
+            if (item2 != null)
+                _renderer.SetImage(subId, "Icon2", item2.Icon);
+        }
+        else
+        {
+            _renderer.SetText(subId, "Quant2", "");
+            _renderer.SetImage(subId, "Icon2", ""); // hide cost 2 when not needed
+        }
     }
 
-    /// <summary>Ensure the widget def has exactly the right number of BuildingItem children.</summary>
-    private void EnsureItemChildren(Editor.UIEditorWidgetDef def)
+    protected override bool CanAfford(int i)
+        => CanAfford(_envSystem.Defs[_buildableDefIndices[i]]);
+
+    protected override bool IsItemSelected(int i) => i == _selectedIndex && _placementActive;
+
+    /// <summary>An affordable building row was clicked — arm placement mode.</summary>
+    protected override void OnItemClicked(int i)
     {
-        // Get template dimensions from first BuildingItem child
-        int templateW = 218, templateH = 68;
-        for (int i = 0; i < def.Children.Count; i++)
-        {
-            if (def.Children[i].Widget == ItemWidgetId)
-            {
-                templateW = def.Children[i].Width;
-                templateH = def.Children[i].Height;
-                break;
-            }
-        }
-
-        // Remove all existing BuildingItem children
-        def.Children.RemoveAll(c => c.Widget == ItemWidgetId);
-
-        // Add exactly the number we need
-        int needed = _buildableDefIndices.Count;
-        var itemIndices = new List<int>();
-        for (int i = 0; i < needed; i++)
-        {
-            var child = new Editor.UIEditorChildDef
-            {
-                Name = $"building_{i}",
-                Widget = ItemWidgetId,
-                Width = templateW,
-                Height = templateH,
-                Anchor = 0,
-            };
-            def.Children.Add(child);
-            itemIndices.Add(def.Children.Count - 1);
-        }
-
-        _itemChildIndices = itemIndices.ToArray();
-    }
-
-    /// <summary>Push building data into widget overrides.</summary>
-    private void SyncItems()
-    {
-        if (_itemChildIndices.Length == 0) return;
-
-        for (int i = 0; i < _itemChildIndices.Length; i++)
-        {
-            int childIdx = _itemChildIndices[i];
-            string subId = $"{InstanceId}.{childIdx}";
-
-            if (i >= _buildableDefIndices.Count)
-            {
-                // Hide excess items — use empty widget or clear
-                _renderer.SetChildWidget(InstanceId, childIdx, "Item Slot_Empty");
-                _renderer.ClearOverrides(subId);
-                continue;
-            }
-
-            int defIdx = _buildableDefIndices[i];
-            var envDef = _envSystem.Defs[defIdx];
-
-            // Use BuildingItem widget
-            _renderer.SetChildWidget(InstanceId, childIdx, ItemWidgetId);
-
-            // Set building name
-            string name = string.IsNullOrEmpty(envDef.Name) ? envDef.Id : envDef.Name;
-            bool canAfford = CanAfford(envDef);
-
-            // Building name — dim if can't afford
-            _renderer.SetText(subId, "child_0", name);
-
-            // Cost 1
-            bool hasCost1 = !string.IsNullOrEmpty(envDef.Cost1ItemId) && envDef.Cost1Amount > 0;
-            bool hasCost2 = !string.IsNullOrEmpty(envDef.Cost2ItemId) && envDef.Cost2Amount > 0;
-
-            if (hasCost1)
-            {
-                var item1 = _items.Get(envDef.Cost1ItemId);
-                _renderer.SetText(subId, "Quant1", envDef.Cost1Amount.ToString());
-                if (item1 != null)
-                    _renderer.SetImage(subId, "Icon1", item1.Icon);
-            }
-            else
-            {
-                _renderer.SetText(subId, "Quant1", "");
-                _renderer.SetImage(subId, "Icon1", ""); // empty path = nothing rendered
-            }
-
-            if (hasCost2)
-            {
-                var item2 = _items.Get(envDef.Cost2ItemId);
-                _renderer.SetText(subId, "Quant2", envDef.Cost2Amount.ToString());
-                if (item2 != null)
-                    _renderer.SetImage(subId, "Icon2", item2.Icon);
-            }
-            else
-            {
-                _renderer.SetText(subId, "Quant2", "");
-                _renderer.SetImage(subId, "Icon2", ""); // hide cost 2 when not needed
-            }
-        }
+        _selectedIndex = i;
+        _placementActive = true;
     }
 
     /// <summary>Check if the player can afford a building.</summary>
@@ -275,39 +182,7 @@ public class BuildingMenuUI : IModalLayer
         if (!_visible) return;
 
         SyncItems();
-
-        int mx = (int)input.MousePos.X, my = (int)input.MousePos.Y;
-
-        // Click detection on building items
-        if (input.LeftPressed)
-        {
-            // Check if click is within the menu panel
-            int menuRight = _screenX + _widgetW;
-            if (mx < menuRight && my >= 0)
-            {
-                // Hit-test against item rects
-                var def = _renderer.GetWidgetDef(MenuWidgetId);
-                if (def != null)
-                {
-                    var rects = ComputeItemRects(def);
-                    for (int i = 0; i < rects.Count && i < _buildableDefIndices.Count; i++)
-                    {
-                        if (rects[i].Contains(mx, my))
-                        {
-                            int envDefIdx = _buildableDefIndices[i];
-                            var envDef = _envSystem.Defs[envDefIdx];
-                            if (CanAfford(envDef))
-                            {
-                                _selectedIndex = i;
-                                _placementActive = true;
-                            }
-                            // PopupManager already consumed this inside-panel click.
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+        HandleItemClick(input);
 
         // Right-click or Escape cancels placement
         if (_placementActive && input.RightPressed)
@@ -383,46 +258,8 @@ public class BuildingMenuUI : IModalLayer
         if (!_visible) return;
         _renderer.DrawWidget(MenuWidgetId, _screenX, _screenY, InstanceId);
 
-        // Draw affordability overlays on top of each item
-        DrawAffordabilityOverlays();
-    }
-
-    /// <summary>Draw colored overlays for affordability feedback.</summary>
-    private void DrawAffordabilityOverlays()
-    {
-        var def = _renderer.GetWidgetDef(MenuWidgetId);
-        if (def == null) return;
-
-        var rects = ComputeItemRects(def);
-        for (int i = 0; i < rects.Count && i < _buildableDefIndices.Count; i++)
-        {
-            int defIdx = _buildableDefIndices[i];
-            var envDef = _envSystem.Defs[defIdx];
-            bool canAfford = CanAfford(envDef);
-            bool isSelected = (i == _selectedIndex && _placementActive);
-
-            // Hover highlight
-            if (_lastInput != null)
-            {
-                var r = rects[i];
-                int hmx = (int)_lastInput.MousePos.X, hmy = (int)_lastInput.MousePos.Y;
-                if (r.Contains(hmx, hmy) && canAfford)
-                    DrawRect(r, new Color(255, 255, 255, 26));
-            }
-
-            // Selected highlight
-            if (isSelected)
-            {
-                var r = rects[i];
-                DrawBorder(r, new Color(100, 255, 100, 80), 2);
-            }
-
-            if (!canAfford)
-            {
-                var r = rects[i];
-                DrawRect(r, new Color(0, 0, 0, 80));
-            }
-        }
+        // Hover / selected / can't-afford overlays (shared side-list mechanics).
+        DrawItemOverlays();
     }
 
     /// <summary>Draw ghost preview of building at cursor position.</summary>
@@ -459,56 +296,6 @@ public class BuildingMenuUI : IModalLayer
             Render.DrawUtils.DrawCircleOutline(batch, pixel, screenPos, radiusPixels,
                 canPlace ? new Color(50, 200, 50, 40) : new Color(200, 50, 50, 40), 16);
         }
-    }
-
-    /// <summary>Check if mouse is over the building menu panel.</summary>
-    public bool ContainsMouse(int mouseX, int mouseY)
-    {
-        if (!_visible) return false;
-        return mouseX >= _screenX && mouseX < _screenX + _widgetW &&
-               mouseY >= _screenY && mouseY < _screenY + _widgetH;
-    }
-
-    public Rectangle? HitBounds(int screenW, int screenH)
-        => _visible ? new Rectangle(_screenX, _screenY, _widgetW, _widgetH) : null;
-
-    // ═══════════════════════════════════════
-    //  Helpers
-    // ═══════════════════════════════════════
-
-    private List<Rectangle> ComputeItemRects(Editor.UIEditorWidgetDef def)
-    {
-        // Use the same layout computation as the renderer
-        var allRects = new List<Rectangle>();
-        bool isVert = def.Layout == "vertical";
-
-        int padL = def.LayoutPadLeft > 0 ? def.LayoutPadLeft : def.LayoutPadding;
-        int padT = def.LayoutPadTop > 0 ? def.LayoutPadTop : def.LayoutPadding;
-        int spacY = def.LayoutSpacingY > 0 ? def.LayoutSpacingY : def.LayoutSpacing;
-
-        int curY = padT;
-        for (int i = 0; i < _itemChildIndices.Length && i < _buildableDefIndices.Count; i++)
-        {
-            int childIdx = _itemChildIndices[i];
-            if (childIdx >= def.Children.Count) break;
-            var child = def.Children[childIdx];
-            int cw = child.Width > 0 ? child.Width : 218;
-            int ch = child.Height > 0 ? child.Height : 68;
-
-            allRects.Add(new Rectangle(_screenX + padL, _screenY + curY, cw, ch));
-            curY += ch + spacY;
-        }
-        return allRects;
-    }
-
-    private void DrawRect(Rectangle r, Color c)
-    {
-        Scope.Draw(_pixel, r, c);
-    }
-
-    private void DrawBorder(Rectangle r, Color c, int t = 1)
-    {
-        Necroking.Render.DrawUtils.DrawRectBorder(_batch, _pixel, r, c, t);
     }
 
 }

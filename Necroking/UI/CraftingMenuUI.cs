@@ -17,26 +17,19 @@ namespace Necroking.UI;
 /// up to 2 ingredient costs. Handles selection, affordability, 1s crafting
 /// progress bar, and inventory output.
 /// </summary>
-public class CraftingMenuUI : IModalLayer
+public class CraftingMenuUI : SideListMenu
 {
-    private const string MenuWidgetId = "CraftingMenu";
-    private const string ItemWidgetId = "CraftingItem";
-    private const string InstanceId = "craftmenu";
+    protected override string MenuWidgetId => "CraftingMenu";
+    protected override string ItemWidgetId => "CraftingItem";
+    protected override string InstanceId => "craftmenu";
+    protected override string ItemChildPrefix => "recipe_";
 
-    private RuntimeWidgetRenderer _renderer = null!;
     private Inventory _inventory = null!;
     private ItemRegistry _items = null!;
     private GameData _gameData = null!;
-    private SpriteBatch _batch = null!;
-    private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
-    private Texture2D _pixel = null!;
     private SkillBookState? _bookState;
     private readonly Random _rng = new();
 
-    private bool _visible;
-    private InputState? _lastInput;
-    private int _screenX, _screenY;
-    private int _widgetW, _widgetH;
     private int _lastScreenW, _lastScreenH;
 
     // Rich tooltip styling + mechanics live in UI/RichTip.cs (shared with the
@@ -50,10 +43,7 @@ public class CraftingMenuUI : IModalLayer
     private bool _crafting;
     private int _craftingIndex = -1;
 
-    // Widget child mapping
-    private int[] _itemChildIndices = Array.Empty<int>();
-
-    public bool IsVisible => _visible;
+    protected override int ItemCount => _potionIds.Count;
 
     public void Init(RuntimeWidgetRenderer renderer, Inventory inventory,
         ItemRegistry items, GameData gameData, int screenH,
@@ -79,25 +69,13 @@ public class CraftingMenuUI : IModalLayer
     /// 25% skip-cost for the Efficient Tinctures passive.</summary>
     public void SetSkillBook(SkillBookState bookState) => _bookState = bookState;
 
-    public void Open(int screenW, int screenH)
+    public override void Open(int screenW, int screenH)
     {
-        _visible = true;
         _selectedIndex = -1;
         _crafting = false;
         _craftProgress = 0f;
         _craftingIndex = -1;
-
-        // Left-aligned, same as build menu
-        _screenX = -12;
-        _screenY = 0;
-
-        var def = _renderer.GetWidgetDef(MenuWidgetId);
-        if (def != null)
-        {
-            def.Height = screenH;
-            _widgetH = screenH;
-            _widgetW = def.Width;
-        }
+        OpenAnchorStretch(screenH);
 
         // Cache potion IDs — filtered by skill-tree unlocks. Empty book = empty
         // list (player hasn't learned the root yet). The crafting menu is opt-in
@@ -114,14 +92,10 @@ public class CraftingMenuUI : IModalLayer
                 if (_bookState.IsPotionUnlocked(allIds[i])) _potionIds.Add(allIds[i]);
         }
 
-        // Ensure enough CraftingItem children
-        if (def != null)
-            EnsureItemChildren(def);
-
-        SyncItems();
+        RebuildItems();
     }
 
-    public void Close()
+    public override void Close()
     {
         _visible = false;
         _crafting = false;
@@ -130,113 +104,80 @@ public class CraftingMenuUI : IModalLayer
         _selectedIndex = -1;
     }
 
-    // === IModalLayer ===
-    public bool LightDismiss => false;
-    public bool IsBlocking => false;  // side panel — gameplay coexists
-    // ContainsMouse is the existing public method on this class.
-    public void OnCancel() => Close();
-
-    public void Toggle(int screenW, int screenH)
+    /// <summary>Bind potion <paramref name="i"/>'s name, icon and up to 2
+    /// ingredient costs.</summary>
+    protected override void BindItem(string subId, int i)
     {
-        if (_visible) Close();
-        else Open(screenW, screenH);
+        var potion = _gameData.Potions.Get(_potionIds[i]);
+        if (potion == null) return;
+
+        // Potion name
+        _renderer.SetText(subId, "child_0", potion.DisplayName);
+
+        // Large potion icon on left (Icon2_copy)
+        var potionItem = _items.Get(potion.ItemID);
+        if (potionItem != null && !string.IsNullOrEmpty(potionItem.Icon))
+            _renderer.SetImage(subId, "Icon2_copy", potionItem.Icon);
+        else if (!string.IsNullOrEmpty(potion.Icon))
+            _renderer.SetImage(subId, "Icon2_copy", potion.Icon);
+
+        // Cost 1
+        if (potion.Recipe.Count > 0)
+        {
+            var ing1 = potion.Recipe[0];
+            var ingItem1 = _items.Get(ing1.ItemId);
+            _renderer.SetText(subId, "Quant1", ing1.Amount.ToString());
+            if (ingItem1 != null)
+                _renderer.SetImage(subId, "Icon1", ingItem1.Icon);
+        }
+        else
+        {
+            _renderer.SetText(subId, "Quant1", "");
+            _renderer.SetImage(subId, "Icon1", "");
+        }
+
+        // Cost 2
+        if (potion.Recipe.Count > 1)
+        {
+            var ing2 = potion.Recipe[1];
+            var ingItem2 = _items.Get(ing2.ItemId);
+            _renderer.SetText(subId, "Quant2", ing2.Amount.ToString());
+            if (ingItem2 != null)
+                _renderer.SetImage(subId, "Icon2", ingItem2.Icon);
+        }
+        else
+        {
+            _renderer.SetText(subId, "Quant2", "");
+            _renderer.SetImage(subId, "Icon2", "");
+        }
     }
 
-    private void EnsureItemChildren(Editor.UIEditorWidgetDef def)
+    protected override bool CanAfford(int i)
     {
-        int templateW = 218, templateH = 68;
-        for (int i = 0; i < def.Children.Count; i++)
-        {
-            if (def.Children[i].Widget == ItemWidgetId)
-            {
-                templateW = def.Children[i].Width;
-                templateH = def.Children[i].Height;
-                break;
-            }
-        }
-
-        def.Children.RemoveAll(c => c.Widget == ItemWidgetId);
-
-        int needed = _potionIds.Count;
-        var itemIndices = new List<int>();
-        for (int i = 0; i < needed; i++)
-        {
-            var child = new Editor.UIEditorChildDef
-            {
-                Name = $"recipe_{i}",
-                Widget = ItemWidgetId,
-                Width = templateW,
-                Height = templateH,
-                Anchor = 0,
-            };
-            def.Children.Add(child);
-            itemIndices.Add(def.Children.Count - 1);
-        }
-
-        _itemChildIndices = itemIndices.ToArray();
+        var potion = _gameData.Potions.Get(_potionIds[i]);
+        return potion != null && CanAfford(potion);
     }
 
-    private void SyncItems()
+    protected override bool IsItemSelected(int i) => i == _selectedIndex;
+
+    /// <summary>An affordable recipe row was clicked — start crafting it.</summary>
+    protected override void OnItemClicked(int i)
     {
-        if (_itemChildIndices.Length == 0) return;
+        _selectedIndex = i;
+        _crafting = true;
+        _craftProgress = 0f;
+        _craftingIndex = i;
+    }
 
-        for (int i = 0; i < _itemChildIndices.Length; i++)
-        {
-            int childIdx = _itemChildIndices[i];
-            string subId = $"{InstanceId}.{childIdx}";
-
-            if (i >= _potionIds.Count)
-            {
-                _renderer.SetChildWidget(InstanceId, childIdx, "Item Slot_Empty");
-                _renderer.ClearOverrides(subId);
-                continue;
-            }
-
-            _renderer.SetChildWidget(InstanceId, childIdx, ItemWidgetId);
-
-            var potion = _gameData.Potions.Get(_potionIds[i]);
-            if (potion == null) continue;
-
-            // Potion name
-            _renderer.SetText(subId, "child_0", potion.DisplayName);
-
-            // Large potion icon on left (Icon2_copy)
-            var potionItem = _items.Get(potion.ItemID);
-            if (potionItem != null && !string.IsNullOrEmpty(potionItem.Icon))
-                _renderer.SetImage(subId, "Icon2_copy", potionItem.Icon);
-            else if (!string.IsNullOrEmpty(potion.Icon))
-                _renderer.SetImage(subId, "Icon2_copy", potion.Icon);
-
-            // Cost 1
-            if (potion.Recipe.Count > 0)
-            {
-                var ing1 = potion.Recipe[0];
-                var ingItem1 = _items.Get(ing1.ItemId);
-                _renderer.SetText(subId, "Quant1", ing1.Amount.ToString());
-                if (ingItem1 != null)
-                    _renderer.SetImage(subId, "Icon1", ingItem1.Icon);
-            }
-            else
-            {
-                _renderer.SetText(subId, "Quant1", "");
-                _renderer.SetImage(subId, "Icon1", "");
-            }
-
-            // Cost 2
-            if (potion.Recipe.Count > 1)
-            {
-                var ing2 = potion.Recipe[1];
-                var ingItem2 = _items.Get(ing2.ItemId);
-                _renderer.SetText(subId, "Quant2", ing2.Amount.ToString());
-                if (ingItem2 != null)
-                    _renderer.SetImage(subId, "Icon2", ingItem2.Icon);
-            }
-            else
-            {
-                _renderer.SetText(subId, "Quant2", "");
-                _renderer.SetImage(subId, "Icon2", "");
-            }
-        }
+    /// <summary>Crafting progress bar along the bottom of the crafting row.</summary>
+    protected override void DrawItemExtras(Rectangle r, int i)
+    {
+        if (!(_crafting && _craftingIndex == i)) return;
+        int barH = 6;
+        int barY = r.Y + r.Height - barH - 2;
+        int barW = r.Width - 4;
+        Scope.Draw(_pixel, new Rectangle(r.X + 2, barY, barW, barH), new Color(20, 20, 30, 200));
+        Scope.Draw(_pixel, new Rectangle(r.X + 2, barY, (int)(barW * _craftProgress), barH), new Color(80, 160, 80, 220));
     }
 
     private bool CanAfford(PotionDef potion)
@@ -285,38 +226,7 @@ public class CraftingMenuUI : IModalLayer
         if (!_visible) return;
 
         SyncItems();
-
-        int mx = (int)input.MousePos.X, my = (int)input.MousePos.Y;
-
-        // Click detection
-        if (input.LeftPressed)
-        {
-            int menuRight = _screenX + _widgetW;
-            if (mx < menuRight && my >= 0)
-            {
-                var def = _renderer.GetWidgetDef(MenuWidgetId);
-                if (def != null)
-                {
-                    var rects = ComputeItemRects(def);
-                    for (int i = 0; i < rects.Count && i < _potionIds.Count; i++)
-                    {
-                        if (rects[i].Contains(mx, my))
-                        {
-                            var potion = _gameData.Potions.Get(_potionIds[i]);
-                            if (potion != null && CanAfford(potion))
-                            {
-                                _selectedIndex = i;
-                                _crafting = true;
-                                _craftProgress = 0f;
-                                _craftingIndex = i;
-                            }
-                            // PopupManager already consumed this inside-panel click.
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+        HandleItemClick(input);
 
         // Tick crafting progress
         if (_crafting && _craftingIndex >= 0 && _craftingIndex < _potionIds.Count)
@@ -345,49 +255,9 @@ public class CraftingMenuUI : IModalLayer
         if (!_visible) return;
         _renderer.DrawWidget(MenuWidgetId, _screenX, _screenY, InstanceId);
 
-        // Draw affordability + crafting overlays
-        var def = _renderer.GetWidgetDef(MenuWidgetId);
-        if (def == null) return;
-
-        var rects = ComputeItemRects(def);
-        int hoveredIdx = -1;
-        for (int i = 0; i < rects.Count && i < _potionIds.Count; i++)
-        {
-            var potion = _gameData.Potions.Get(_potionIds[i]);
-            if (potion == null) continue;
-
-            bool canAfford = CanAfford(potion);
-            bool isSelected = (i == _selectedIndex);
-
-            // Hover highlight
-            if (_lastInput != null)
-            {
-                int hmx = (int)_lastInput.MousePos.X, hmy = (int)_lastInput.MousePos.Y;
-                if (rects[i].Contains(hmx, hmy))
-                {
-                    hoveredIdx = i;
-                    if (canAfford)
-                        Scope.Draw(_pixel, rects[i], new Color(255, 255, 255, 26));
-                }
-            }
-
-            if (isSelected)
-                DrawBorder(rects[i], new Color(100, 255, 100, 80), 2);
-
-            if (!canAfford)
-                Scope.Draw(_pixel, rects[i], new Color(0, 0, 0, 80));
-
-            // Crafting progress bar
-            if (_crafting && _craftingIndex == i)
-            {
-                var r = rects[i];
-                int barH = 6;
-                int barY = r.Y + r.Height - barH - 2;
-                int barW = r.Width - 4;
-                Scope.Draw(_pixel, new Rectangle(r.X + 2, barY, barW, barH), new Color(20, 20, 30, 200));
-                Scope.Draw(_pixel, new Rectangle(r.X + 2, barY, (int)(barW * _craftProgress), barH), new Color(80, 160, 80, 220));
-            }
-        }
+        // Hover / selected / can't-afford overlays + the per-row craft progress
+        // bar (DrawItemExtras). Returns the hovered row for the tooltip below.
+        int hoveredIdx = DrawItemOverlays();
 
         // Tooltip for the hovered recipe, drawn last so it sits on top.
         if (hoveredIdx >= 0 && _lastInput != null)
@@ -431,43 +301,5 @@ public class CraftingMenuUI : IModalLayer
 
         RichTip.Draw(backend, RichTip.Palette.Default, potion.DisplayName, null,
             descLines, rows, mx, my, sw, sh, TipW, Pad);
-    }
-
-    public bool ContainsMouse(int mouseX, int mouseY)
-    {
-        if (!_visible) return false;
-        return mouseX >= _screenX && mouseX < _screenX + _widgetW &&
-               mouseY >= _screenY && mouseY < _screenY + _widgetH;
-    }
-
-    public Rectangle? HitBounds(int screenW, int screenH)
-        => _visible ? new Rectangle(_screenX, _screenY, _widgetW, _widgetH) : null;
-
-    private List<Rectangle> ComputeItemRects(Editor.UIEditorWidgetDef def)
-    {
-        var allRects = new List<Rectangle>();
-
-        int padL = def.LayoutPadLeft > 0 ? def.LayoutPadLeft : def.LayoutPadding;
-        int padT = def.LayoutPadTop > 0 ? def.LayoutPadTop : def.LayoutPadding;
-        int spacY = def.LayoutSpacingY > 0 ? def.LayoutSpacingY : def.LayoutSpacing;
-
-        int curY = padT;
-        for (int i = 0; i < _itemChildIndices.Length && i < _potionIds.Count; i++)
-        {
-            int childIdx = _itemChildIndices[i];
-            if (childIdx >= def.Children.Count) break;
-            var child = def.Children[childIdx];
-            int cw = child.Width > 0 ? child.Width : 218;
-            int ch = child.Height > 0 ? child.Height : 68;
-
-            allRects.Add(new Rectangle(_screenX + padL, _screenY + curY, cw, ch));
-            curY += ch + spacY;
-        }
-        return allRects;
-    }
-
-    private void DrawBorder(Rectangle r, Color c, int t = 1)
-    {
-        Necroking.Render.DrawUtils.DrawRectBorder(_batch, _pixel, r, c, t);
     }
 }
