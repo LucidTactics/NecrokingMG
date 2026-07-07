@@ -38,3 +38,61 @@ public struct WeaponBonusEffect
     public static WeaponBonusEffect ZombieOnDeath(int chancePct)
         => new() { Kind = BonusEffectKind.ZombieOnDeath, ChancePct = (byte)chancePct, Permanent = true };
 }
+
+/// <summary>
+/// Lifecycle owner for per-unit WeaponBonusEffect lists (Unit.BonusEffects).
+/// Add merges/refreshes timed entries; Tick expires them. This is the single
+/// home for "this unit's melee hits carry a timed extra effect" — potion weapon
+/// coats (poison / zombie) are expressed as timed entries here, not as ad-hoc
+/// unit fields.
+/// </summary>
+public static class WeaponBonusEffectSystem
+{
+    /// <summary>
+    /// Add a bonus effect to a unit's BonusEffects list (lazy-allocated).
+    /// Timed entries (Permanent=false) merge with an existing timed entry of the
+    /// same Kind+DmgType — re-applying (e.g. re-drinking a coat potion) refreshes
+    /// the timer/amount instead of stacking a duplicate. Permanent entries
+    /// (table-crafted) always append and are never merge targets.
+    /// </summary>
+    public static void Add(Necroking.Movement.UnitArrays units, int unitIdx, WeaponBonusEffect effect)
+    {
+        if (unitIdx < 0 || unitIdx >= units.Count) return;
+        var u = units[unitIdx];
+        u.BonusEffects ??= new System.Collections.Generic.List<WeaponBonusEffect>();
+        if (!effect.Permanent)
+        {
+            for (int i = 0; i < u.BonusEffects.Count; i++)
+            {
+                var e = u.BonusEffects[i];
+                if (!e.Permanent && e.Kind == effect.Kind && e.DmgType == effect.DmgType)
+                {
+                    u.BonusEffects[i] = effect; // refresh timer + amount
+                    return;
+                }
+            }
+        }
+        u.BonusEffects.Add(effect);
+    }
+
+    /// <summary>
+    /// Decrement ExpiryTimer on every non-Permanent bonus effect and remove entries
+    /// that reach 0. Called once per world tick from Simulation.Tick.
+    /// </summary>
+    public static void Tick(Necroking.Movement.UnitArrays units, float dt)
+    {
+        for (int i = 0; i < units.Count; i++)
+        {
+            var list = units[i].BonusEffects;
+            if (list == null || list.Count == 0) continue;
+            for (int j = list.Count - 1; j >= 0; j--)
+            {
+                var e = list[j];
+                if (e.Permanent) continue;
+                e.ExpiryTimer -= dt;
+                if (e.ExpiryTimer <= 0f) list.RemoveAt(j);
+                else list[j] = e;
+            }
+        }
+    }
+}

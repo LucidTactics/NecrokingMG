@@ -144,22 +144,13 @@ public static class PotionSystem
     {
         if (unitIdx < 0 || unitIdx >= units.Count) return;
 
-        // Apply frenzy buff (permanent)
-        var buffDef = BuffSystem.ApplyBuffById(units, unitIdx, buffs, potion.BuffID);
-        if (buffDef != null)
+        // Apply frenzy buff (permanent). Duration <= 0 at apply time means
+        // "permanent until explicitly removed" (see ApplyBuffWithDuration).
+        if (!string.IsNullOrEmpty(potion.BuffID))
         {
-            // Mark the buff as permanent
-            var activeBuffs = units[unitIdx].ActiveBuffs;
-            for (int i = 0; i < activeBuffs.Count; i++)
-            {
-                if (activeBuffs[i].BuffDefID == buffDef.Id)
-                {
-                    var b = activeBuffs[i];
-                    b.Permanent = true;
-                    activeBuffs[i] = b;
-                    break;
-                }
-            }
+            var buffDef = buffs.Get(potion.BuffID);
+            if (buffDef != null)
+                BuffSystem.ApplyBuffWithDuration(units, unitIdx, buffDef, 0f);
         }
 
         // Set frenzy behavior flag
@@ -210,8 +201,9 @@ public static class PotionSystem
         // Hit a unit
         if (units[unitIdx].Faction == ownerFaction)
         {
-            // Friendly: coat weapons with zombie curse
-            units[unitIdx].WeaponZombieCoatTimer = 300f; // 5 minutes
+            // Friendly: coat weapons with zombie curse (timed on-hit bonus effect)
+            WeaponBonusEffectSystem.Add(units, unitIdx,
+                WeaponBonusEffect.ZombieOnDeath(100) with { Permanent = false, ExpiryTimer = WeaponCoatDuration });
 
             if (!string.IsNullOrEmpty(potion.BuffID))
             {
@@ -240,9 +232,10 @@ public static class PotionSystem
 
         if (units[unitIdx].Faction == ownerFaction)
         {
-            // Friendly: coat weapons with poison
-            units[unitIdx].WeaponPoisonCoatTimer = 300f; // 5 minutes
-            units[unitIdx].WeaponPoisonAmount = 5;
+            // Friendly: coat weapons with poison (timed on-hit bonus effect).
+            // Weapon poison goes through armor (no ArmorNegating flag).
+            WeaponBonusEffectSystem.Add(units, unitIdx,
+                WeaponBonusEffect.Damage(DamageType.Poison, 5) with { Permanent = false, ExpiryTimer = WeaponCoatDuration });
             BuffSystem.ApplyBuffById(units, unitIdx, buffs, potion.BuffID);
         }
         else
@@ -254,6 +247,9 @@ public static class PotionSystem
             BuffSystem.ApplyBuffById(units, unitIdx, buffs, potion.BuffID);
         }
     }
+
+    /// <summary>How long a potion weapon coat (poison/zombie) lasts, in seconds.</summary>
+    public const float WeaponCoatDuration = 300f; // 5 minutes
 
     // Paralysis timings (seconds).
     public const float ParalyzeSlowDuration = 8f;
@@ -355,24 +351,6 @@ public static class PotionSystem
                     if (units[i].PoisonStacks > 0)
                         units[i].PoisonTickTimer = 3f;
                 }
-            }
-
-            // --- Weapon coat timers ---
-            if (units[i].WeaponPoisonCoatTimer > 0f)
-            {
-                units[i].WeaponPoisonCoatTimer -= dt;
-                if (units[i].WeaponPoisonCoatTimer <= 0f)
-                {
-                    units[i].WeaponPoisonCoatTimer = 0f;
-                    units[i].WeaponPoisonAmount = 0;
-                }
-            }
-
-            if (units[i].WeaponZombieCoatTimer > 0f)
-            {
-                units[i].WeaponZombieCoatTimer -= dt;
-                if (units[i].WeaponZombieCoatTimer <= 0f)
-                    units[i].WeaponZombieCoatTimer = 0f;
             }
         }
     }

@@ -593,6 +593,8 @@ public class Simulation
         // Tick potion effects before AI so poison HitReacting is visible to flee logic
         PhaseStart();
         PotionSystem.TickPotionEffects(_units, _damageEvents, dt);
+        // Expire timed weapon bonus effects (e.g. potion weapon coats).
+        GameSystems.WeaponBonusEffectSystem.Tick(_units, dt);
         PhaseEnd("potions");
 
         // Table crafting timer + completion. Runs after AI-derived state from the
@@ -2780,21 +2782,11 @@ public class Simulation
         if (weaponKnockdown && _units[defenderIdx].Alive)
             TryApplyKnockdownOnHit(attackerIdx, defenderIdx);
 
-        // Weapon coats: apply poison and/or zombie-on-death to defender
+        // On-hit weapon bonus effects (potion coats + table-crafted bonuses).
         if (hit && defenderIdx >= 0 && defenderIdx < _units.Count && _units[defenderIdx].Alive)
         {
-            if (_units[attackerIdx].WeaponPoisonCoatTimer > 0f && _units[attackerIdx].WeaponPoisonAmount > 0)
-            {
-                // Weapon poison goes through armor (no AN flag)
-                DamageSystem.Apply(_units, defenderIdx, _units[attackerIdx].WeaponPoisonAmount,
-                    GameSystems.DamageType.Poison, GameSystems.DamageFlags.None, _damageEvents, attackerIdx);
-            }
-            if (_units[attackerIdx].WeaponZombieCoatTimer > 0f)
-            {
-                _units[defenderIdx].ZombieOnDeath = true;
-            }
-
-            // Per-unit weapon bonus effects (e.g. table-crafted permanent buffs).
+            // Per-unit weapon bonus effects (potion weapon coats, table-crafted
+            // permanent buffs — all expressed as WeaponBonusEffect entries).
             // Each effect runs independently and uses DamageSystem.Apply with its own
             // DamageType/Flags — that path does not re-enter this block, so an
             // effect like "5 poison on hit" cannot recurse and stack on itself.
