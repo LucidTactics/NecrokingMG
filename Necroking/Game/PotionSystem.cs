@@ -274,7 +274,14 @@ public static class PotionSystem
     /// <summary>
     /// Tick all potion effects each frame. Called from Simulation.Tick().
     /// </summary>
-    public static void TickPotionEffects(UnitArrays units, List<DamageEvent> damageEvents, float dt)
+    /// <summary>The Incapacitating buff that owns the stun phase's Incap state + Stunned
+    /// anim hold (see data/buffs.json). Applied with ParalyzeStunDuration as override
+    /// duration so the timing has a single source of truth (the const above). BuffSystem
+    /// is the sole writer of Unit.Incap; this system keeps only the timers (speed curve,
+    /// stat fraction) which are structural to paralysis.</summary>
+    public const string ParalysisStunBuffID = "buff_paralysis_stun";
+
+    public static void TickPotionEffects(UnitArrays units, List<DamageEvent> damageEvents, BuffRegistry? buffs, float dt)
     {
         for (int i = 0; i < units.Count; i++)
         {
@@ -294,31 +301,32 @@ public static class PotionSystem
                     units[i].ParalysisSlowTimer = 0f;
                     units[i].ParalysisStunTimer = ParalyzeStunDuration;
                     units[i].AttackCooldown = ParalyzeStunDuration;
-                    units[i].Incap = new IncapState
-                    {
-                        Active = true,
-                        HoldAnim = AnimState.Stunned,
-                        RecoverAnim = AnimState.Idle,
-                        RecoverTime = 0f,
-                        RecoverTimer = 0f,
-                        HoldAtEnd = false,
-                    };
-                    // Permanent stun hold — lifetime owned by ParalysisStunTimer /
-                    // the paralysis buff, which will explicitly swap this out.
-                    AnimResolver.SetOverride(units[i], AnimRequest.Hold(AnimState.Stunned, priority: 3));
+                    // Incap state + Stunned anim hold come from the Incapacitating buff —
+                    // BuffSystem owns Unit.Incap (apply, hold, release on expiry). The buff's
+                    // incapRecoverTime is 0 => instant recovery, matching the old inline
+                    // "Incap = default at stun end" behavior.
+                    var stunDef = buffs?.Get(ParalysisStunBuffID);
+                    if (stunDef != null)
+                        BuffSystem.ApplyBuffWithDuration(units, i, stunDef, ParalyzeStunDuration);
+                    else
+                        DebugLog.Log("combat", $"[PotionSystem] '{ParalysisStunBuffID}' missing from BuffRegistry — stun phase has no incap/anim");
                 }
             }
 
             // --- Paralysis stun phase ---
             // (MaxSpeed = 0 during stun is applied by Locomotion.UpdateSpeeds.)
-            if (units[i].ParalysisStunTimer > 0f)
+            // `else if`: no decrement on the transition frame, so this timer stays in
+            // lockstep with buff_paralysis_stun's RemainingDuration (whose first TickBuffs
+            // decrement is also next frame) and both expire on the same frame.
+            else if (units[i].ParalysisStunTimer > 0f)
             {
                 units[i].ParalysisStunTimer -= dt;
 
                 if (units[i].ParalysisStunTimer <= 0f)
                 {
                     units[i].ParalysisStunTimer = 0f;
-                    units[i].Incap = default; // clear incapacitation, unit recovers
+                    // Incap clears via buff_paralysis_stun expiry in BuffSystem.TickBuffs
+                    // (same tick — both timers start at ParalyzeStunDuration).
                 }
             }
 

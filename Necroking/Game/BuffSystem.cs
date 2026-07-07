@@ -241,14 +241,26 @@ public static class BuffSystem
                 }
                 if (!buffStillActive)
                 {
-                    // Buff expired without early recovery trigger — immediate recovery
                     var incap = units[i].Incap;
-                    incap.Recovering = true;
-                    incap.RecoverTimer = -1f; // Animation system will set real duration
-                    units[i].Incap = incap;
+                    if (incap.RecoverTime <= 0f)
+                    {
+                        // IncapRecoverTime <= 0 => instant recovery: no Recovering-phase
+                        // anim lock at all. Drop the incap and release the Priority-3
+                        // hold so locomotion takes over immediately (paralysis stun —
+                        // the unit just resumes, no standup animation).
+                        units[i].Incap = default;
+                        AnimResolver.ClearOverride(units[i]);
+                    }
+                    else
+                    {
+                        // Buff expired without early recovery trigger — immediate recovery
+                        incap.Recovering = true;
+                        incap.RecoverTimer = -1f; // Animation system will set real duration
+                        units[i].Incap = incap;
 
-                    // Forced so it can replace the Priority-3 Knockdown hold override.
-                    AnimResolver.SetOverride(units[i], AnimRequest.Forced(incap.RecoverAnim));
+                        // Forced so it can replace the Priority-3 Knockdown hold override.
+                        AnimResolver.SetOverride(units[i], AnimRequest.Forced(incap.RecoverAnim));
+                    }
                 }
             }
         }

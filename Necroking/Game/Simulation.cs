@@ -592,7 +592,7 @@ public class Simulation
 
         // Tick potion effects before AI so poison HitReacting is visible to flee logic
         PhaseStart();
-        PotionSystem.TickPotionEffects(_units, _damageEvents, dt);
+        PotionSystem.TickPotionEffects(_units, _damageEvents, _gameData?.Buffs, dt);
         // Expire timed weapon bonus effects (e.g. potion weapon coats).
         GameSystems.WeaponBonusEffectSystem.Tick(_units, dt);
         PhaseEnd("potions");
