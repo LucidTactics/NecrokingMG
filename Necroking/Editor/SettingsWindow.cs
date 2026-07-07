@@ -492,7 +492,7 @@ public class SettingsWindow
         int rowH = 26;
         var c = _gameData.Settings.Corruption;
 
-        DrawSectionHeader("Trees", x, ref y);
+        DrawSectionHeader("Trees", x, ref y, w);
 
         float treeHeal = _ui.DrawFloatField("set_corr_treeheal", "Heal Rate (stress/s)", c.TreeHealRate, x, y, w, 0.5f);
         if (MathF.Abs(treeHeal - c.TreeHealRate) > 0.001f) { c.TreeHealRate = MathF.Max(0f, treeHeal); MarkDirty(); }
@@ -510,7 +510,7 @@ public class SettingsWindow
         if (MathF.Abs(treeFade - c.TreeFadeDuration) > 0.001f) { c.TreeFadeDuration = MathF.Max(0.1f, treeFade); MarkDirty(); }
         y += rowH;
 
-        DrawSectionHeader("Ground", x, ref y);
+        DrawSectionHeader("Ground", x, ref y, w);
 
         float groundRate = _ui.DrawFloatField("set_corr_groundrate", "Max Rate at d=1 (/s)", c.GroundMaxRatePerSec, x, y, w, 0.01f);
         if (MathF.Abs(groundRate - c.GroundMaxRatePerSec) > 0.0001f) { c.GroundMaxRatePerSec = Math.Clamp(groundRate, 0f, 1f); MarkDirty(); }
@@ -520,13 +520,13 @@ public class SettingsWindow
         if (MathF.Abs(groundFade - c.GroundFadeDuration) > 0.001f) { c.GroundFadeDuration = MathF.Max(0.1f, groundFade); MarkDirty(); }
         y += rowH;
 
-        DrawSectionHeader("Grass", x, ref y);
+        DrawSectionHeader("Grass", x, ref y, w);
 
         float grassFade = _ui.DrawFloatField("set_corr_grassfade", "Tint Fade Duration (s)", c.GrassFadeDuration, x, y, w, 0.5f);
         if (MathF.Abs(grassFade - c.GrassFadeDuration) > 0.001f) { c.GrassFadeDuration = MathF.Max(0.1f, grassFade); MarkDirty(); }
         y += rowH;
 
-        DrawSectionHeader("Fog Simulation", x, ref y);
+        DrawSectionHeader("Fog Simulation", x, ref y, w);
 
         float diff = _ui.DrawFloatField("set_corr_diff", "Diffusion Rate (<0.25)", c.DiffusionRate, x, y, w, 0.01f);
         if (MathF.Abs(diff - c.DiffusionRate) > 0.0001f) { c.DiffusionRate = Math.Clamp(diff, 0f, 0.249f); MarkDirty(); }
@@ -540,7 +540,7 @@ public class SettingsWindow
         if (MathF.Abs(sink - c.SinkRateScale) > 0.001f) { c.SinkRateScale = MathF.Max(0f, sink); MarkDirty(); }
         y += rowH;
 
-        DrawSectionHeader("Fog Visual (death-fog overlay)", x, ref y);
+        DrawSectionHeader("Fog Visual (death-fog overlay)", x, ref y, w);
 
         float vis = _ui.DrawFloatField("set_corr_vis", "Visibility Threshold", c.FogVisibilityThreshold, x, y, w, 0.005f);
         if (MathF.Abs(vis - c.FogVisibilityThreshold) > 0.0001f) { c.FogVisibilityThreshold = Math.Clamp(vis, 0f, 1f); MarkDirty(); }
@@ -594,7 +594,7 @@ public class SettingsWindow
         int rowH = 26;
         var a = _gameData.Settings.Animation;
 
-        DrawSectionHeader("Player Casting", x, ref y);
+        DrawSectionHeader("Player Casting", x, ref y, w);
 
         // Q3: recovery frames cancel into locomotion when movement is held.
         bool tail = _ui.DrawCheckbox("Cancel cast recovery into movement (hold a direction)", a.CastTailCancel, x, y);
@@ -618,7 +618,7 @@ public class SettingsWindow
         y += rowH;
 
         y += 6;
-        DrawSectionHeader("Hit Feedback", x, ref y);
+        DrawSectionHeader("Hit Feedback", x, ref y, w);
 
         // White flash on damaged units — the feedback that survives suppressed
         // flinches (fleeing / mid-attack / reaction-cooldown units).
@@ -639,7 +639,7 @@ public class SettingsWindow
         int rowH = 26;
         var t = _gameData.Settings.Tooltips;
 
-        DrawSectionHeader("Unit Stat Sheet", x, ref y);
+        DrawSectionHeader("Unit Stat Sheet", x, ref y, w);
 
         // Main toggle: hover-to-show vs press-L-to-inspect.
         bool autoShow = _ui.DrawCheckbox("Auto-show on hover (Factorio-style)", t.AutoShowUnitStats, x, y);
@@ -660,7 +660,7 @@ public class SettingsWindow
         }
 
         y += 6;
-        DrawSectionHeader("Ground Objects", x, ref y);
+        DrawSectionHeader("Ground Objects", x, ref y, w);
 
         // Buildings / structures hover tooltip.
         bool bInfo = _ui.DrawCheckbox("Show building info on hover", t.ShowBuildingInfo, x, y);
@@ -722,7 +722,7 @@ public class SettingsWindow
         }
 
         y += 6;
-        DrawSectionHeader("World Position Debug", x, ref y);
+        DrawSectionHeader("World Position Debug", x, ref y, w);
 
         // Bottom-left readout of the exact world position under the cursor.
         bool worldDbg = _ui.DrawCheckbox("Show world position info (bottom-left)", t.ShowWorldHoverDebug, x, y);
@@ -752,8 +752,8 @@ public class SettingsWindow
         return y - startY;
     }
 
-    private void DrawSectionHeader(string label, int x, ref int y)
-        => _ui.DrawSectionHeader(label, x, ref y, 0, EditorBase.SectionHeaderStyle.Label);
+    private void DrawSectionHeader(string label, int x, ref int y, int w)
+        => _ui.DrawSectionHeader(label, x, ref y, w);
 
     // ----------------------------------------------------------------
     //  Stub tabs (placeholder for future implementation)

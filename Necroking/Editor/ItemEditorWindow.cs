@@ -415,7 +415,7 @@ public class ItemEditorWindow
         if (def.Category == "potion")
         {
             curY += 4;
-            DrawSectionHeader(x + 8, ref curY, fieldW, "POTION PROPERTIES", new Color(120, 200, 255));
+            DrawSectionHeader(x + 8, ref curY, fieldW, "POTION PROPERTIES");
 
             // Find matching PotionDef by ItemID
             PotionDef? potionDef = FindPotionForItem(def.Id);
@@ -469,7 +469,7 @@ public class ItemEditorWindow
 
         // =================== RECIPE ===================
         curY += 4;
-        DrawSectionHeader(x, ref curY, w, "RECIPE", new Color(200, 180, 100));
+        DrawSectionHeader(x, ref curY, w, "RECIPE");
 
         def.Recipe ??= new List<RecipeIngredient>();
 
@@ -570,8 +570,8 @@ public class ItemEditorWindow
         _statusTimer = 3f;
     }
 
-    private void DrawSectionHeader(int x, ref int curY, int w, string text, Color color)
-        => _ui.DrawSectionHeader(text, x, ref curY, w, EditorBase.SectionHeaderStyle.Rule, color);
+    private void DrawSectionHeader(int x, ref int curY, int w, string text)
+        => _ui.DrawSectionHeader(text, x, ref curY, w);
 
     private static Color GetCategoryColor(string category)
     {

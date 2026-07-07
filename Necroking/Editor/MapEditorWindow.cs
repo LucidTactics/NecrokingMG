@@ -6303,9 +6303,13 @@ public class MapEditorWindow
 
     private void DrawSectionHeader(int panelX, ref int y, string text)
     {
-        Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, HeaderHeight), HeaderBg);
-        DrawSmallText(text, panelX + Margin, y + 6, TextBright);
-        y += HeaderHeight + 4;
+        // Delegates to the shared EditorBase section-header bar (consolidation B7:
+        // one header look across all editors). The local draw below is only a
+        // degraded fallback for the no-EditorBase case.
+        if (_eb != null) { _eb.DrawSectionHeader(text, panelX, ref y, PanelWidth); return; }
+        Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 22), HeaderBg);
+        DrawSmallText(text, panelX + Margin, y + 3, TextBright);
+        y += 24;
     }
 
     private void DrawSmallText(string text, int x, int y, Color color)
