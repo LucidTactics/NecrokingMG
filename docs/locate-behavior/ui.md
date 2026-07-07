@@ -143,6 +143,53 @@ Belly contents are stored per unit id in **`Necroking/Game/Simulation.cs`**:
    right-side sheet, add a small widget-backed panel in `UI/` next to `UnitInfoPanel` (or a
    variant mode of it) — heavier.
 
+## Panel open/close toggling & dock sides (no central manager)
+
+There is **no central panel manager and no side/dock concept in code** — each panel owns
+its own `IsVisible` + `Toggle()`/`Close()`/`Hide()` and pushes/pops itself on the
+`Game1.Popups` stack (`UI/PopupManager.cs` is input routing/ESC only, NOT exclusivity).
+The only mutual-exclusion that exists is the **building↔crafting mutual-close, duplicated
+in two places** (a consolidation target for any per-side exclusivity work).
+
+**Toggle entry points (all three must route through any new exclusivity logic):**
+1. **Keyboard, `Necroking/Game1.cs` Update** (gated `_menuState == MenuState.None` +
+   `!anyTextInputActive`): 'I' inventory (~3059), 'O' job board (~3067), 'Tab' character
+   stats (~3075), 'K' skill book (~3079), 'J' grimoire (~3083), 'U' unit-info pin (~3090);
+   'B' building + 'C' crafting live further down (~3621/3629) *with* the inline
+   mutual-close (`if (_craftingMenu.IsVisible) _craftingMenu.Close();` etc.).
+2. **Mouse menu buttons — `Necroking/GameRenderer.Hud.cs` `ToggleCoreMenu(idx, screenW,
+   screenH)`** — the click-side mirror of the shortcuts, switch on `HUDRenderer.Menu*`
+   index; contains a **second copy** of the building↔crafting mutual-close.
+   `BuildMenuOpenMask()` right above it is the "which menus are open" bitmask for button
+   highlighting.
+3. **Dev commands — `Necroking/Game1.Dev.cs`** `ui …` verbs (~1900-1940) toggle
+   inventory/charstats/skillbook/grimoire directly (no mutual-close).
+
+**Which side each panel docks to (implicit in each panel's own position math — verified):**
+- **Left:** `CraftingMenuUI` (`_screenX = -12`), `BuildingMenuUI` (`_screenX = -12`),
+  `GrimoireOverlay` (`Layout`: `_x = 0`), `CharacterStatsUI` (`const AnchorX = 10`, spans
+  three sub-panels rightward), `JobBoardUI` (`_x = 40` on open, draggable).
+- **Right:** `UnitInfoPanel` (`_panelX = screenW - PanelW - 12`, set in `Draw`) — currently
+  the only right-side panel.
+- **Center:** `InventoryUI` (`(screenW - _widgetW)/2`, draggable), `SkillBookOverlay`
+  (`_x = (sw - _w)/2`), `GraveRosterUI` (centered), `MultiplayerWindow` (pause menu).
+
+**Close APIs are heterogeneous:** `Close()` on InventoryUI/CraftingMenuUI/BuildingMenuUI/
+JobBoardUI/GraveRosterUI, `Hide()` on GrimoireOverlay/UnitInfoPanel, **Toggle-only** on
+`CharacterStatsUI` (no Close; `Toggle()` pops when visible) and `SkillBookOverlay` has
+`Close()` via `Toggle()`. Always close via the panel's own method (they pop themselves off
+`Game1.Popups`); never touch the popup stack directly.
+
+**Look/edit here when:** adding per-side panel exclusivity ("one left + one right panel at
+a time"), changing which key opens what, or the menu-button click behavior. Natural shape:
+one helper in `Game1.cs` (e.g. `CloseSidePanels(side, except)`) with a hardcoded
+panel→side table, called from all three entry points — replacing the duplicated
+building↔crafting inline closes. Gotchas: `GrimoireOverlay.Hide()` clears assign mode
+(`_onPick`) — force-closing it cancels a pending spellbar assignment (acceptable);
+`UnitInfoPanel` transient auto-hover shows/hides every frame (`ShowForUnitTransient`, not
+on the popup stack) — exclude transient shows from exclusivity or hover will slam other
+right-side panels shut.
+
 ## The Grimoire (spell list / spells menu panel)
 
 `Necroking/UI/GrimoireOverlay.cs` — **the spell-list panel** ('J' to browse; also opened in
