@@ -2320,17 +2320,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     internal int SpawnUnit(string unitDefID, Vec2 pos)
     {
-        int idx = _sim.UnitsMut.AddUnit(pos, UnitType.Dynamic);
-        _sim.UnitsMut[idx].UnitDefID = unitDefID;
+        // Core spawn (AddUnit + def runtime fields + built stats + skill-tree
+        // intrinsic buffs) is the single sim-level implementation shared with
+        // every other spawn path — see Simulation.SpawnUnitByID. Game1 adds only
+        // its client-side extras below.
+        int idx = _sim.SpawnUnitByID(unitDefID, pos);
+        if (idx < 0) return idx;
 
         var unitDef = _gameData.Units.Get(unitDefID);
         if (unitDef == null) return idx;
-
-        // All def-derived runtime fields (sprite/size/faction/awareness/AI+archetype/
-        // stats/caster resources) come from the single canonical copy shared with
-        // SpawnUnitByID and TransformUnit.
-        var builtStats = _gameData.Units.BuildStats(unitDefID, _gameData.Weapons, _gameData.Armors, _gameData.Shields);
-        _sim.ApplyDefRuntimeFields(idx, unitDef, builtStats);
 
         // If necromancer, record index in simulation
         if (unitDef.AI == "PlayerControlled")
@@ -2343,55 +2341,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             && _sim.Units[idx].AI != AIBehavior.PlayerControlled)
             _sim.Horde.AddUnit(_sim.Units[idx].Id);
 
-        // Set up animation
-        if (unitDef.Sprite != null)
-        {
-            var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
-            var spriteData = _atlases[atlasId].GetUnit(unitDef.Sprite.SpriteName);
-            if (spriteData != null)
-            {
-                var ctrl = new AnimController();
-                ctrl.Init(spriteData);
-                ctrl.ForceState(AnimState.Idle);
-
-                // Wire animation metadata
-                if (_animMeta.Count > 0)
-                    ctrl.SetAnimMeta(_animMeta, unitDef.Sprite.SpriteName);
-
-                if (unitDef.AttackAnim != null)
-                    ctrl.SetAttackAnimOverride(unitDef.AttackAnim);
-
-                // Wire per-unit animation timing overrides (from unit editor)
-                if (unitDef.AnimTimings.Count > 0)
-                {
-                    var overrides = new Dictionary<string, AnimTimingOverride>();
-                    foreach (var (anim, ov) in unitDef.AnimTimings)
-                        overrides[anim] = new AnimTimingOverride
-                        {
-                            FrameDurationsMs = new List<int>(ov.FrameDurationsMs),
-                            EffectTimeMs = ov.EffectTimeMs
-                        };
-                    ctrl.SetAnimTimings(overrides);
-                }
-
-                float refH = 128f;
-                var idleAnim = spriteData.GetAnim("Idle");
-                if (idleAnim != null)
-                {
-                    var kfs = GameRenderer.PickIdleFrames(idleAnim);
-                    if (kfs != null && kfs.Count > 0)
-                        refH = kfs[0].Frame.Rect.Height;
-                }
-
-                _unitAnims[_sim.Units[idx].Id] = new UnitAnimData
-                {
-                    Ctrl = ctrl,
-                    AtlasID = atlasId,
-                    RefFrameHeight = refH,
-                    CachedDefID = unitDefID
-                };
-            }
-        }
+        // Set up animation (shared factory — see Game1.Animation.cs)
+        var anim = BuildUnitAnimData(unitDefID);
+        if (anim != null)
+            _unitAnims[_sim.Units[idx].Id] = anim.Value;
 
         return idx;
     }

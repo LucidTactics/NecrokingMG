@@ -24,16 +24,22 @@ namespace Necroking;
 public partial class Game1
 {
     /// <summary>
-    /// Rebuild animation data for a unit (e.g. after transform).
+    /// Single canonical "build UnitAnimData from a unit def" factory: controller
+    /// init, anim metadata, per-def attack-anim override, per-unit AnimTimings
+    /// overrides from the unit editor (incl. EffectTimeMs, which times when attack
+    /// damage lands), and the Idle reference frame height. Used by SpawnUnit,
+    /// RebuildUnitAnim and the lazy per-frame init in UpdateAnimations. Returns
+    /// null when the def is missing, has no sprite, or the sprite doesn't resolve
+    /// in its atlas.
     /// </summary>
-    internal void RebuildUnitAnim(int unitIdx, string unitDefID)
+    internal UnitAnimData? BuildUnitAnimData(string unitDefID)
     {
         var unitDef = _gameData.Units.Get(unitDefID);
-        if (unitDef.Sprite == null) return;
+        if (unitDef?.Sprite == null) return null;
 
         var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
         var spriteData = _atlases[atlasId].GetUnit(unitDef.Sprite.SpriteName);
-        if (spriteData == null) return;
+        if (spriteData == null) return null;
 
         var ctrl = new AnimController();
         ctrl.Init(spriteData);
@@ -45,6 +51,19 @@ public partial class Game1
         if (unitDef.AttackAnim != null)
             ctrl.SetAttackAnimOverride(unitDef.AttackAnim);
 
+        // Wire per-unit animation timing overrides (from unit editor)
+        if (unitDef.AnimTimings.Count > 0)
+        {
+            var overrides = new Dictionary<string, AnimTimingOverride>();
+            foreach (var (anim, ov) in unitDef.AnimTimings)
+                overrides[anim] = new AnimTimingOverride
+                {
+                    FrameDurationsMs = new List<int>(ov.FrameDurationsMs),
+                    EffectTimeMs = ov.EffectTimeMs
+                };
+            ctrl.SetAnimTimings(overrides);
+        }
+
         float refH = 128f;
         var idleAnim = spriteData.GetAnim("Idle");
         if (idleAnim != null)
@@ -54,13 +73,23 @@ public partial class Game1
                 refH = kfs[0].Frame.Rect.Height;
         }
 
-        _unitAnims[_sim.Units[unitIdx].Id] = new UnitAnimData
+        return new UnitAnimData
         {
             Ctrl = ctrl,
             AtlasID = atlasId,
             RefFrameHeight = refH,
             CachedDefID = unitDefID
         };
+    }
+
+    /// <summary>
+    /// Rebuild animation data for a unit (e.g. after transform).
+    /// </summary>
+    internal void RebuildUnitAnim(int unitIdx, string unitDefID)
+    {
+        var anim = BuildUnitAnimData(unitDefID);
+        if (anim == null) return;
+        _unitAnims[_sim.Units[unitIdx].Id] = anim.Value;
     }
 
     /// <summary>Per-unit attack cycle in seconds: weapon.CooldownRounds × RoundDuration.
@@ -340,33 +369,14 @@ public partial class Game1
 
             if (!_unitAnims.TryGetValue(uid, out var animData))
             {
-                // Try to init from defID
-                string defID = _sim.Units[i].UnitDefID;
-                var unitDef = _gameData.Units.Get(defID);
+                // Try to init from defID via the shared factory.
                 // Defensive: a reanimated unit whose sprite can't resolve would never
                 // get an AnimController, so neither recovery path could ever tick its
                 // recover-timer down — leaving it Incap-locked forever. Release the
                 // lock here so a missing/broken sprite degrades to "no rise", not "stuck".
-                if (unitDef?.Sprite == null) { if (_sim.Units[i].Incap.Recovering) _sim.UnitsMut[i].Incap = default; continue; }
-                var atlasId = AtlasDefs.ResolveAtlasName(unitDef.Sprite.AtlasName);
-                var spriteData = _atlases[atlasId].GetUnit(unitDef.Sprite.SpriteName);
-                if (spriteData == null) { if (_sim.Units[i].Incap.Recovering) _sim.UnitsMut[i].Incap = default; continue; }
-
-                var ctrl = new AnimController();
-                ctrl.Init(spriteData);
-                if (_animMeta.Count > 0)
-                    ctrl.SetAnimMeta(_animMeta, unitDef.Sprite.SpriteName);
-                if (unitDef.AttackAnim != null)
-                    ctrl.SetAttackAnimOverride(unitDef.AttackAnim);
-                animData = new UnitAnimData { Ctrl = ctrl, AtlasID = atlasId, RefFrameHeight = 128f, CachedDefID = defID };
-
-                var idleAnim = spriteData.GetAnim("Idle");
-                if (idleAnim != null)
-                {
-                    var kfs = GameRenderer.PickIdleFrames(idleAnim);
-                    if (kfs != null && kfs.Count > 0)
-                        animData.RefFrameHeight = kfs[0].Frame.Rect.Height;
-                }
+                var built = BuildUnitAnimData(_sim.Units[i].UnitDefID);
+                if (built == null) { if (_sim.Units[i].Incap.Recovering) _sim.UnitsMut[i].Incap = default; continue; }
+                animData = built.Value;
                 _unitAnims[uid] = animData;
             }
 
