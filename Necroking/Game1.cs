@@ -2364,21 +2364,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             DebugLog.Log("startup", $"GPU warning: {_gpuWarnToastMsg}");
         }
 
-        // Create radial glow texture (64x64 with smooth quadratic falloff)
-        _glowTex = new Texture2D(GraphicsDevice, 64, 64);
-        var glowData = new Color[64 * 64];
-        for (int gy = 0; gy < 64; gy++)
-            for (int gx = 0; gx < 64; gx++)
-            {
-                float dx = (gx - 31.5f) / 31.5f;
-                float dy = (gy - 31.5f) / 31.5f;
-                float dist = MathF.Sqrt(dx * dx + dy * dy);
-                float alpha = MathF.Max(0, 1f - dist);
-                alpha *= alpha; // quadratic falloff for soft glow
-                byte a = (byte)(alpha * 255);
-                glowData[gy * 64 + gx] = new Color(a, a, a, a); // premultiplied
-            }
-        _glowTex.SetData(glowData);
+        // Shared radial glow texture (64x64, quadratic falloff) — cached in TextureUtil.
+        _glowTex = TextureUtil.GetRadialGlow(GraphicsDevice);
 
         LogTiming("Glow texture created");
 
@@ -4282,8 +4269,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     protected override void UnloadContent()
     {
         _widgetRenderer.Shutdown();
-        // _pixel is the shared TextureUtil.GetWhitePixel cache — do NOT dispose it here.
-        _glowTex?.Dispose();
+        // _pixel / _glowTex are shared TextureUtil caches (GetWhitePixel / GetRadialGlow)
+        // — do NOT dispose them here.
         _mainMenuBg?.Dispose();
         _groundVertexMapTex?.Dispose();
         foreach (var atlas in _atlases)

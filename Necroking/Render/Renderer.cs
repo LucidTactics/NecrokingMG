@@ -42,28 +42,17 @@ public class Renderer
     }
 
     // World-unit height: scales with zoom. Use for jumps, projectile altitude, arc heights, Z.
+    // Delegates to Camera25D (single home for the 2.5D projection) with our screen size.
     public Vector2 WorldToScreen(Vec2 worldPos, float worldHeight, Camera25D cam)
-    {
-        float sx = (worldPos.X - cam.Position.X) * cam.Zoom + _screenW * 0.5f;
-        float sy = (worldPos.Y - cam.Position.Y) * cam.Zoom * cam.YRatio + _screenH * 0.5f - worldHeight * cam.Zoom * cam.YRatio;
-        return new Vector2(sx, sy);
-    }
+        => cam.WorldToScreen(worldPos, worldHeight, _screenW, _screenH);
 
     // Pixel-space height: literal screen pixels, zoom-independent.
     // Use for screen-space effects (rain streaks, lightning arcs) anchored to a world point.
     public Vector2 WorldToScreenPx(Vec2 worldPos, float pixelHeight, Camera25D cam)
-    {
-        float sx = (worldPos.X - cam.Position.X) * cam.Zoom + _screenW * 0.5f;
-        float sy = (worldPos.Y - cam.Position.Y) * cam.Zoom * cam.YRatio + _screenH * 0.5f - pixelHeight;
-        return new Vector2(sx, sy);
-    }
+        => cam.WorldToScreenPx(worldPos, pixelHeight, _screenW, _screenH);
 
     public Vec2 ScreenToWorld(Vector2 screenPos, Camera25D cam)
-    {
-        float wx = (screenPos.X - _screenW * 0.5f) / cam.Zoom + cam.Position.X;
-        float wy = (screenPos.Y - _screenH * 0.5f) / (cam.Zoom * cam.YRatio) + cam.Position.Y;
-        return new Vec2(wx, wy);
-    }
+        => cam.ScreenToWorld(screenPos, _screenW, _screenH);
 
     /// <summary>
     /// Draw a sprite frame from an atlas at a world position.

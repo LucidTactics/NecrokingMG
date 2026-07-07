@@ -97,77 +97,57 @@ public class RuntimeWidgetRenderer
     //  Override API (for game code to modify widget content)
     // ═══════════════════════════════════════
 
+    /// <summary>Shared plumbing for the per-instance override dicts: get-or-create the
+    /// inner map for <paramref name="instanceId"/>, then assign <paramref name="value"/>.
+    /// The public Set* methods keep their own typed signatures and clear semantics.</summary>
+    private static void SetOverride<TK, TV>(Dictionary<string, Dictionary<TK, TV>> store,
+        string instanceId, TK key, TV value) where TK : notnull
+    {
+        if (!store.TryGetValue(instanceId, out var map))
+        {
+            map = new Dictionary<TK, TV>();
+            store[instanceId] = map;
+        }
+        map[key] = value;
+    }
+
     /// <summary>Set text for a named child within a widget instance.</summary>
     public void SetText(string instanceId, string childName, string text)
-    {
-        if (!_textOverrides.TryGetValue(instanceId, out var map))
-        {
-            map = new Dictionary<string, string>();
-            _textOverrides[instanceId] = map;
-        }
-        map[childName] = text;
-    }
+        => SetOverride(_textOverrides, instanceId, childName, text);
 
     /// <summary>Set image path for a named child within a widget instance.</summary>
     public void SetImage(string instanceId, string childName, string imagePath)
-    {
-        if (!_imageOverrides.TryGetValue(instanceId, out var map))
-        {
-            map = new Dictionary<string, string>();
-            _imageOverrides[instanceId] = map;
-        }
-        map[childName] = imagePath;
-    }
+        => SetOverride(_imageOverrides, instanceId, childName, imagePath);
 
     /// <summary>Override which widget a child slot uses (e.g., swap "Item Slot" for "Item Slot_Empty").</summary>
     public void SetChildWidget(string instanceId, int childIndex, string widgetId)
-    {
-        if (!_childWidgetOverrides.TryGetValue(instanceId, out var map))
-        {
-            map = new Dictionary<int, string>();
-            _childWidgetOverrides[instanceId] = map;
-        }
-        map[childIndex] = widgetId;
-    }
+        => SetOverride(_childWidgetOverrides, instanceId, childIndex, widgetId);
 
     /// <summary>Override the font color of a named text child within a widget
     /// instance (e.g. green/red tabulation values).</summary>
     public void SetTextColor(string instanceId, string childName, byte rr, byte g, byte b, byte a = 255)
-    {
-        if (!_textColorOverrides.TryGetValue(instanceId, out var map))
-        {
-            map = new Dictionary<string, Color>();
-            _textColorOverrides[instanceId] = map;
-        }
-        map[childName] = new Color(rr, g, b, a);
-    }
+        => SetOverride(_textColorOverrides, instanceId, childName, new Color(rr, g, b, a));
 
     /// <summary>Override the tint of a named image / nine-slice child within a
     /// widget instance. Multiplies the (possibly harmonized) source texture, so
     /// white = unchanged, grey = dimmed. Used to show selected/pressed button
     /// state (bright = active, dim = inactive).</summary>
     public void SetElementTint(string instanceId, string childName, Color tint)
-    {
-        if (!_elementTintOverrides.TryGetValue(instanceId, out var map))
-        {
-            map = new Dictionary<string, Color>();
-            _elementTintOverrides[instanceId] = map;
-        }
-        map[childName] = tint;
-    }
+        => SetOverride(_elementTintOverrides, instanceId, childName, tint);
 
     /// <summary>Override a child's layout height within a widget instance, used
     /// to grow an auto-height section (e.g. a wrapping icon row). Pass a value
     /// &lt;= 0 to clear the override for that child.</summary>
     public void SetChildHeight(string instanceId, string childName, int height)
     {
+        if (height > 0) { SetOverride(_childHeightOverrides, instanceId, childName, height); return; }
+        // Clear semantics preserved: the instance map is materialized even when clearing.
         if (!_childHeightOverrides.TryGetValue(instanceId, out var map))
         {
             map = new Dictionary<string, int>();
             _childHeightOverrides[instanceId] = map;
         }
-        if (height > 0) map[childName] = height;
-        else map.Remove(childName);
+        map.Remove(childName);
     }
 
     /// <summary>A child's effective layout height: instance override if set,
@@ -183,14 +163,9 @@ public class RuntimeWidgetRenderer
     /// tabs to evenly fill the bar for the current tab count). Pass &lt;=0 to clear.</summary>
     public void SetChildWidth(string instanceId, string childName, int width)
     {
-        if (!_childWidthOverrides.TryGetValue(instanceId, out var map))
-        {
-            if (width <= 0) return;
-            map = new Dictionary<string, int>();
-            _childWidthOverrides[instanceId] = map;
-        }
-        if (width > 0) map[childName] = width;
-        else map.Remove(childName);
+        if (width > 0) { SetOverride(_childWidthOverrides, instanceId, childName, width); return; }
+        // Clear semantics preserved: an absent instance map is left absent (no allocation).
+        if (_childWidthOverrides.TryGetValue(instanceId, out var map)) map.Remove(childName);
     }
 
     /// <summary>A child's effective layout width: instance override if set, else def width.</summary>

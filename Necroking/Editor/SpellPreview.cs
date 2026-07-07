@@ -226,21 +226,8 @@ public class SpellPreview
         _rt = new RenderTarget2D(gd, _previewWidth, _previewHeight, false,
             rtFormat, DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
 
-        // Create radial glow texture (64x64 with smooth quadratic falloff) — matches Game1's _glowTex
-        _glowTex = new Texture2D(gd, 64, 64);
-        var glowData = new Color[64 * 64];
-        for (int gy = 0; gy < 64; gy++)
-            for (int gx = 0; gx < 64; gx++)
-            {
-                float dx = (gx - 31.5f) / 31.5f;
-                float dy = (gy - 31.5f) / 31.5f;
-                float dist = MathF.Sqrt(dx * dx + dy * dy);
-                float alpha = MathF.Max(0, 1f - dist);
-                alpha *= alpha; // quadratic falloff for soft glow
-                byte a = (byte)(alpha * 255);
-                glowData[gy * 64 + gx] = new Color(a, a, a, a); // premultiplied
-            }
-        _glowTex.SetData(glowData);
+        // Shared radial glow texture (cached in TextureUtil — matches Game1's _glowTex).
+        _glowTex = TextureUtil.GetRadialGlow(gd);
 
         _initialized = true;
     }
@@ -249,7 +236,7 @@ public class SpellPreview
     {
         _rt?.Dispose();
         _rt = null;
-        _glowTex?.Dispose();
+        // _glowTex is the shared TextureUtil.GetRadialGlow cache — do NOT dispose it here.
         _sb?.Dispose();
         _initialized = false;
     }

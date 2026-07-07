@@ -303,10 +303,11 @@ public class GrassTuftRenderer
 
         var t = _visibleTufts[index];
         float zoom = _drawCamera.Zoom;
-        float yRatio = _drawCamera.YRatio;
 
-        float sx = (t.Wx - _drawCamera.Position.X) * zoom + _drawScreenW * 0.5f;
-        float sy = (t.Wy - _drawCamera.Position.Y) * zoom * yRatio + _drawScreenH * 0.5f;
+        // Height-0 case of the 2.5D projection — delegate to Camera25D (single home).
+        var screen = _drawCamera.WorldToScreen(new Vec2(t.Wx, t.Wy), 0f, _drawScreenW, _drawScreenH);
+        float sx = screen.X;
+        float sy = screen.Y;
 
         float spriteSizePx = t.WorldSize * zoom;
         var origin = new Vector2(t.Tex.Width * 0.5f, t.Tex.Height * 0.75f);

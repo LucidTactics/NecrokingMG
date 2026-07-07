@@ -833,20 +833,8 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
     private void EnsureGlowTex()
     {
         if (_glowTex != null) return;
-        _glowTex = new Texture2D(_device, 64, 64);
-        var data = new Color[64 * 64];
-        for (int gy = 0; gy < 64; gy++)
-            for (int gx = 0; gx < 64; gx++)
-            {
-                float dx = (gx - 31.5f) / 31.5f;
-                float dy = (gy - 31.5f) / 31.5f;
-                float dist = MathF.Sqrt(dx * dx + dy * dy);
-                float alpha = MathF.Max(0f, 1f - dist);
-                alpha *= alpha; // quadratic falloff, same as Game1._glowTex
-                byte a = (byte)(alpha * 255);
-                data[gy * 64 + gx] = new Color(a, a, a, a); // premultiplied
-            }
-        _glowTex.SetData(data);
+        // Shared radial glow texture (cached in TextureUtil — same as Game1._glowTex).
+        _glowTex = Render.TextureUtil.GetRadialGlow(_device);
     }
 
     /// <summary>Update hover flags for collision center / edge.</summary>
