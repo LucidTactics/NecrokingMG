@@ -246,116 +246,111 @@ public partial class HUDRenderer
     //  Core-menu buttons (top-right)
     // ═══════════════════════════════════════
 
-    /// <summary>Right-aligned, auto-sized rects for the top-right menu buttons,
-    /// computed into _menuBtnRects. Shared by draw + hit-test so they never
-    /// desync. Returns false when no font is available (can't measure labels).</summary>
-    private bool LayoutMenuButtons(int screenW)
+    // The core-menu row and the editor-launcher row are the same right-aligned,
+    // auto-sized button strip with different labels/top-Y/rect array and a
+    // different open/hover/idle palette. One ButtonRow helper owns the mechanics
+    // (Layout + HitTest + Draw); the public wrappers below stay 1-liners so the
+    // Game1/router call sites (HitTest*/Draw*) are untouched.
+    private readonly struct ButtonRowStyle
+    {
+        public readonly Color OpenBg, HoverBg, IdleBg, AccentOpen, AccentIdle, LabelOpen, LabelIdle;
+        public ButtonRowStyle(Color openBg, Color hoverBg, Color idleBg,
+            Color accentOpen, Color accentIdle, Color labelOpen, Color labelIdle)
+        {
+            OpenBg = openBg; HoverBg = hoverBg; IdleBg = idleBg;
+            AccentOpen = accentOpen; AccentIdle = accentIdle;
+            LabelOpen = labelOpen; LabelIdle = labelIdle;
+        }
+    }
+
+    private static readonly ButtonRowStyle MenuRowStyle = new(
+        new Color(70, 100, 160, 220), new Color(50, 60, 80, 200), new Color(20, 20, 30, 160),
+        new Color(140, 180, 255), new Color(90, 90, 120, 180),
+        Color.White, new Color(210, 210, 230));
+
+    private static readonly ButtonRowStyle EditorRowStyle = new(
+        new Color(160, 100, 70, 220), new Color(80, 60, 50, 200), new Color(30, 20, 20, 160),
+        new Color(255, 180, 140), new Color(120, 90, 90, 180),
+        Color.White, new Color(230, 210, 210));
+
+    /// <summary>Right-aligned, auto-sized rects for a top-right button row,
+    /// computed into <paramref name="rects"/>. Shared by draw + hit-test so they
+    /// never desync. Returns false when no font is available (can't measure).</summary>
+    private bool LayoutButtonRow(string[] labels, int top, int screenW, Rectangle[] rects)
     {
         if (_smallFont == null) return false;
-        Span<int> ws = stackalloc int[MenuBtnCount];
-        int totalW = MenuBtnGap * (MenuBtnCount - 1);
-        for (int i = 0; i < MenuBtnCount; i++)
+        int n = labels.Length;
+        Span<int> ws = stackalloc int[n];
+        int totalW = MenuBtnGap * (n - 1);
+        for (int i = 0; i < n; i++)
         {
-            ws[i] = (int)_smallFont.MeasureString(MenuButtonLabels[i]).X + MenuBtnPadX * 2;
+            ws[i] = (int)_smallFont.MeasureString(labels[i]).X + MenuBtnPadX * 2;
             totalW += ws[i];
         }
         int x = screenW - MenuBtnRightMargin - totalW;
-        for (int i = 0; i < MenuBtnCount; i++)
+        for (int i = 0; i < n; i++)
         {
-            _menuBtnRects[i] = new Rectangle(x, MenuBtnTop, ws[i], MenuBtnH);
+            rects[i] = new Rectangle(x, top, ws[i], MenuBtnH);
             x += ws[i] + MenuBtnGap;
         }
         return true;
     }
 
-    /// <summary>Returns the menu-button index under the cursor, or -1.</summary>
-    public int HitTestMenuButtons(int screenW, int mouseX, int mouseY)
+    /// <summary>Index of the row button under the cursor, or -1.</summary>
+    private static int HitTestButtonRow(Rectangle[] rects, int mouseX, int mouseY)
     {
-        if (!LayoutMenuButtons(screenW)) return -1;
-        for (int i = 0; i < MenuBtnCount; i++)
-            if (_menuBtnRects[i].Contains(mouseX, mouseY)) return i;
+        for (int i = 0; i < rects.Length; i++)
+            if (rects[i].Contains(mouseX, mouseY)) return i;
         return -1;
     }
+
+    /// <summary>Draw one button row. <paramref name="openMask"/> bit i set =
+    /// button i currently open (highlighted).</summary>
+    private void DrawButtonRow(string[] labels, Rectangle[] rects, int openMask,
+        int mx, int my, in ButtonRowStyle style)
+    {
+        for (int i = 0; i < labels.Length; i++)
+        {
+            var r = rects[i];
+            bool open = (openMask & (1 << i)) != 0;
+            bool hover = r.Contains(mx, my);
+            Color bg = open ? style.OpenBg : hover ? style.HoverBg : style.IdleBg;
+            Scope.Draw(_pixel, r, bg);
+            // Top accent line — brighter when open.
+            Scope.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, 2),
+                open ? style.AccentOpen : style.AccentIdle);
+            string label = labels[i];
+            var ls = _smallFont!.MeasureString(label);
+            Text(_smallFont, label,
+                new Vector2(r.X + r.Width / 2f - ls.X / 2f, r.Y + r.Height / 2f - ls.Y / 2f),
+                open ? style.LabelOpen : style.LabelIdle);
+        }
+    }
+
+    /// <summary>Returns the menu-button index under the cursor, or -1.</summary>
+    public int HitTestMenuButtons(int screenW, int mouseX, int mouseY)
+        => LayoutButtonRow(MenuButtonLabels, MenuBtnTop, screenW, _menuBtnRects)
+            ? HitTestButtonRow(_menuBtnRects, mouseX, mouseY) : -1;
 
     /// <summary>Draw the row of core-menu buttons. <paramref name="menuOpenMask"/>
     /// has bit i set when menu i is currently open (highlighted).</summary>
     internal void DrawMenuButtons(int screenW, int menuOpenMask, int mx, int my)
     {
-        if (!LayoutMenuButtons(screenW)) return;
-        for (int i = 0; i < MenuBtnCount; i++)
-        {
-            var r = _menuBtnRects[i];
-            bool open = (menuOpenMask & (1 << i)) != 0;
-            bool hover = r.Contains(mx, my);
-            Color bg = open  ? new Color(70, 100, 160, 220)
-                     : hover ? new Color(50, 60, 80, 200)
-                             : new Color(20, 20, 30, 160);
-            Scope.Draw(_pixel, r, bg);
-            // Top accent line — brighter when open.
-            Scope.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, 2),
-                open ? new Color(140, 180, 255) : new Color(90, 90, 120, 180));
-            string label = MenuButtonLabels[i];
-            var ls = _smallFont!.MeasureString(label);
-            Text(_smallFont, label,
-                new Vector2(r.X + r.Width / 2f - ls.X / 2f, r.Y + r.Height / 2f - ls.Y / 2f),
-                open ? Color.White : new Color(210, 210, 230));
-        }
-    }
-
-    /// <summary>Right-aligned, auto-sized rects for the editor-launcher row (below
-    /// the core-menu row), computed into _editorBtnRects. Shared by draw + hit-test
-    /// so they never desync. Returns false when no font is available.</summary>
-    private bool LayoutEditorButtons(int screenW)
-    {
-        if (_smallFont == null) return false;
-        Span<int> ws = stackalloc int[EditorBtnCount];
-        int totalW = MenuBtnGap * (EditorBtnCount - 1);
-        for (int i = 0; i < EditorBtnCount; i++)
-        {
-            ws[i] = (int)_smallFont.MeasureString(EditorButtonLabels[i]).X + MenuBtnPadX * 2;
-            totalW += ws[i];
-        }
-        int x = screenW - MenuBtnRightMargin - totalW;
-        for (int i = 0; i < EditorBtnCount; i++)
-        {
-            _editorBtnRects[i] = new Rectangle(x, EditorBtnTop, ws[i], MenuBtnH);
-            x += ws[i] + MenuBtnGap;
-        }
-        return true;
+        if (!LayoutButtonRow(MenuButtonLabels, MenuBtnTop, screenW, _menuBtnRects)) return;
+        DrawButtonRow(MenuButtonLabels, _menuBtnRects, menuOpenMask, mx, my, MenuRowStyle);
     }
 
     /// <summary>Returns the editor-button index under the cursor, or -1.</summary>
     public int HitTestEditorButtons(int screenW, int mouseX, int mouseY)
-    {
-        if (!LayoutEditorButtons(screenW)) return -1;
-        for (int i = 0; i < EditorBtnCount; i++)
-            if (_editorBtnRects[i].Contains(mouseX, mouseY)) return i;
-        return -1;
-    }
+        => LayoutButtonRow(EditorButtonLabels, EditorBtnTop, screenW, _editorBtnRects)
+            ? HitTestButtonRow(_editorBtnRects, mouseX, mouseY) : -1;
 
     /// <summary>Draw the editor-launcher row. <paramref name="editorOpenMask"/> has
     /// bit i set when editor i is the one currently open (highlighted).</summary>
     internal void DrawEditorButtons(int screenW, int editorOpenMask, int mx, int my)
     {
-        if (!LayoutEditorButtons(screenW)) return;
-        for (int i = 0; i < EditorBtnCount; i++)
-        {
-            var r = _editorBtnRects[i];
-            bool open = (editorOpenMask & (1 << i)) != 0;
-            bool hover = r.Contains(mx, my);
-            Color bg = open  ? new Color(160, 100, 70, 220)
-                     : hover ? new Color(80, 60, 50, 200)
-                             : new Color(30, 20, 20, 160);
-            Scope.Draw(_pixel, r, bg);
-            // Top accent line — brighter when open.
-            Scope.Draw(_pixel, new Rectangle(r.X, r.Y, r.Width, 2),
-                open ? new Color(255, 180, 140) : new Color(120, 90, 90, 180));
-            string label = EditorButtonLabels[i];
-            var ls = _smallFont!.MeasureString(label);
-            Text(_smallFont, label,
-                new Vector2(r.X + r.Width / 2f - ls.X / 2f, r.Y + r.Height / 2f - ls.Y / 2f),
-                open ? Color.White : new Color(230, 210, 210));
-        }
+        if (!LayoutButtonRow(EditorButtonLabels, EditorBtnTop, screenW, _editorBtnRects)) return;
+        DrawButtonRow(EditorButtonLabels, _editorBtnRects, editorOpenMask, mx, my, EditorRowStyle);
     }
 
     // ═══════════════════════════════════════
@@ -595,10 +590,10 @@ public partial class HUDRenderer
             reg.Add("hud.time_controls", new Rectangle(tcBaseX, tcBaseY, tcW, TcBtnH));
         }
 
-        if (LayoutMenuButtons(screenW))
+        if (LayoutButtonRow(MenuButtonLabels, MenuBtnTop, screenW, _menuBtnRects))
             for (int i = 0; i < MenuBtnCount; i++)
                 reg.Add($"hud.menu_row.{i}", _menuBtnRects[i]);
-        if (LayoutEditorButtons(screenW))
+        if (LayoutButtonRow(EditorButtonLabels, EditorBtnTop, screenW, _editorBtnRects))
             for (int i = 0; i < EditorBtnCount; i++)
                 reg.Add($"hud.editor_row.{i}", _editorBtnRects[i]);
     }
