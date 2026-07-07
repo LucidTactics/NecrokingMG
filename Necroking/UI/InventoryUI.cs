@@ -40,15 +40,9 @@ public class InventoryUI : IModalLayer
     private int _screenX, _screenY;
     private int _widgetW, _widgetH;
 
-    // Tooltip styling (matches crafting menu / character stats tooltips)
-    private static readonly Color TipBg = new(20, 20, 32, 245);
-    private static readonly Color TipBorder = new(120, 120, 170, 240);
-    private static readonly Color TipTitle = new(255, 220, 140);
-    private static readonly Color TipDesc = new(200, 200, 215);
-    private static readonly Color TipDim = new(150, 150, 165);
-    private static readonly Color TipValue = new(230, 230, 240);
-    private const int TipTitleSize = 18;
-    private const int TipBodySize = 14;
+    // Rich tooltip styling + mechanics live in UI/RichTip.cs (shared with the
+    // crafting menu and character-stats tooltips). This is the RICH tooltip;
+    // HUDRenderer.DrawCursorTooltip is the separate SIMPLE plain-string one.
 
     // Slot mapping: which widget child indices are inventory slots
     private int[] _slotChildIndices = Array.Empty<int>();
@@ -292,97 +286,25 @@ public class InventoryUI : IModalLayer
         const int Pad = 8;
         int innerW = TipW - Pad * 2;
 
+        var backend = new RichTip.WidgetBackend(_renderer, Scope, _pixel);
         string category = string.IsNullOrEmpty(item.Category)
             ? "" : char.ToUpper(item.Category[0]) + item.Category.Substring(1);
-        var descLines = WrapText(item.Description, TipBodySize, innerW);
+        var descLines = RichTip.Wrap(s => _renderer.MeasureText(s, RichTip.BodySize).X, item.Description, innerW);
 
-        var lines = new System.Collections.Generic.List<(string Label, string Value, Color Color)>
+        var rows = new System.Collections.Generic.List<RichTip.Row>
         {
-            ("Quantity", quantity.ToString(), TipValue),
-            ("Max stack", item.MaxStack.ToString(), TipDim),
+            new("Quantity", quantity.ToString(), RichTip.Value),
+            new("Max stack", item.MaxStack.ToString(), RichTip.Dim),
         };
-
-        int lineH = (int)System.MathF.Ceiling(_renderer.MeasureText("Ay", TipBodySize).Y);
-        int titleH = (int)System.MathF.Ceiling(_renderer.MeasureText(item.DisplayName, TipTitleSize).Y);
-
-        int height = Pad + titleH + 2;
-        if (!string.IsNullOrEmpty(category)) height += lineH;
-        height += 4 + descLines.Count * lineH;
-        height += 8 + lines.Count * lineH; // divider gap + breakdown rows
-        height += Pad;
 
         int sw = screenW > 0 ? screenW : _screenX + _widgetW;
         int sh = screenH > 0 ? screenH : _screenY + _widgetH;
-        int tx = mx + 16, ty = my + 20;
-        if (tx + TipW > sw - 4) tx = mx - TipW - 8;
-        if (ty + height > sh - 4) ty = my - height - 8;
-        tx = System.Math.Max(4, tx);
-        ty = System.Math.Max(4, ty);
 
-        Scope.Draw(_pixel, new Rectangle(tx, ty, TipW, height), TipBg);
-        DrawTipBorder(tx, ty, TipW, height, TipBorder, 2);
-
-        int cy = ty + Pad;
-        _renderer.DrawText(item.DisplayName, tx + Pad, cy, TipTitleSize, TipTitle);
-        cy += titleH + 2;
-
-        if (!string.IsNullOrEmpty(category))
-        {
-            _renderer.DrawText(category, tx + Pad, cy, TipBodySize, TipDim);
-            cy += lineH;
-        }
-        cy += 4;
-
-        foreach (var ln in descLines)
-        {
-            _renderer.DrawText(ln, tx + Pad, cy, TipBodySize, TipDesc);
-            cy += lineH;
-        }
-
-        cy += 3;
-        Scope.Draw(_pixel, new Rectangle(tx + Pad, cy, innerW, 1), TipBorder);
-        cy += 5;
-        foreach (var (label, value, color) in lines)
-        {
-            _renderer.DrawText(label, tx + Pad, cy, TipBodySize, TipDim);
-            var vs = _renderer.MeasureText(value, TipBodySize);
-            _renderer.DrawText(value, (int)(tx + TipW - Pad - vs.X), cy, TipBodySize, color);
-            cy += lineH;
-        }
-    }
-
-    private void DrawTipBorder(int x, int y, int w, int h, Color c, int t)
-    {
-        if (_batch == null || _pixel == null) return;
-        Scope.Draw(_pixel, new Rectangle(x, y, w, t), c);
-        Scope.Draw(_pixel, new Rectangle(x, y + h - t, w, t), c);
-        Scope.Draw(_pixel, new Rectangle(x, y + t, t, h - t * 2), c);
-        Scope.Draw(_pixel, new Rectangle(x + w - t, y + t, t, h - t * 2), c);
-    }
-
-    /// <summary>Greedy word-wrap to a pixel width using the widget font.</summary>
-    private System.Collections.Generic.List<string> WrapText(string text, int fontSize, float maxW)
-    {
-        var result = new System.Collections.Generic.List<string>();
-        if (string.IsNullOrEmpty(text)) return result;
-        var sb = new System.Text.StringBuilder();
-        foreach (var word in text.Split(' '))
-        {
-            string trial = sb.Length == 0 ? word : sb + " " + word;
-            if (sb.Length > 0 && _renderer.MeasureText(trial, fontSize).X > maxW)
-            {
-                result.Add(sb.ToString());
-                sb.Clear();
-                sb.Append(word);
-            }
-            else
-            {
-                if (sb.Length > 0) sb.Append(' ');
-                sb.Append(word);
-            }
-        }
-        if (sb.Length > 0) result.Add(sb.ToString());
-        return result;
+        // gapAfterTitle:2 + gapBeforeDesc:4 preserves the item tooltip's subtitle spacing.
+        RichTip.Draw(backend, RichTip.Palette.Default, item.DisplayName,
+            string.IsNullOrEmpty(category) ? null : category,
+            descLines, rows, mx, my, sw, sh, TipW, Pad,
+            gapAfterTitle: 2, gapBeforeDesc: 4);
     }
 
     /// <summary>Check if mouse is over the inventory window (for blocking game input).</summary>

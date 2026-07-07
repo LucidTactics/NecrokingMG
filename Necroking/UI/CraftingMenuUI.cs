@@ -39,16 +39,9 @@ public class CraftingMenuUI : IModalLayer
     private int _widgetW, _widgetH;
     private int _lastScreenW, _lastScreenH;
 
-    // Tooltip styling
-    private static readonly Color TipBg = new(20, 20, 32, 245);
-    private static readonly Color TipBorder = new(120, 120, 170, 240);
-    private static readonly Color TipTitle = new(255, 220, 140);
-    private static readonly Color TipDesc = new(200, 200, 215);
-    private static readonly Color TipDim = new(150, 150, 165);
-    private static readonly Color TipGreen = new(120, 230, 120);
-    private static readonly Color TipRed = new(230, 110, 110);
-    private const int TipTitleSize = 18;
-    private const int TipBodySize = 14;
+    // Rich tooltip styling + mechanics live in UI/RichTip.cs (shared with the
+    // inventory and character-stats tooltips). This is the RICH tooltip;
+    // HUDRenderer.DrawCursorTooltip is the separate SIMPLE plain-string one.
 
     // Cached potion IDs
     private readonly List<string> _potionIds = new();
@@ -411,10 +404,11 @@ public class CraftingMenuUI : IModalLayer
         const int Pad = 8;
         int innerW = TipW - Pad * 2;
 
-        var descLines = WrapText(potion.Description, TipBodySize, innerW);
+        var backend = new RichTip.WidgetBackend(_renderer, Scope, _pixel);
+        var descLines = RichTip.Wrap(s => _renderer.MeasureText(s, RichTip.BodySize).X, potion.Description, innerW);
 
         // Breakdown: ingredients (with have/need + affordability color), then meta.
-        var lines = new List<(string Label, string Value, Color Color)>();
+        var rows = new List<RichTip.Row>();
         bool anyIngredient = false;
         foreach (var ing in potion.Recipe)
         {
@@ -422,81 +416,21 @@ public class CraftingMenuUI : IModalLayer
             anyIngredient = true;
             int have = _inventory.GetItemCount(ing.ItemId);
             string name = _items.NameOf(ing.ItemId);
-            lines.Add((name, $"{have}/{ing.Amount}", have >= ing.Amount ? TipGreen : TipRed));
+            rows.Add(new(name, $"{have}/{ing.Amount}", have >= ing.Amount ? RichTip.Green : RichTip.Red));
         }
         if (!anyIngredient)
-            lines.Add(("Cost", "Free", TipGreen));
+            rows.Add(new("Cost", "Free", RichTip.Green));
 
-        lines.Add(("Target", potion.TargetType, TipDim));
+        rows.Add(new("Target", potion.TargetType, RichTip.Dim));
         if (potion.ThrowRange > 0)
-            lines.Add(("Throw range", potion.ThrowRange.ToString("0.#"), TipDim));
-        lines.Add(("Craft time", $"{potion.CraftTime:0.#}s", TipDim));
-
-        // Measure.
-        int lineH = (int)System.MathF.Ceiling(_renderer.MeasureText("Ay", TipBodySize).Y);
-        int titleH = (int)System.MathF.Ceiling(_renderer.MeasureText(potion.DisplayName, TipTitleSize).Y);
-
-        int height = Pad + titleH + 4;
-        height += descLines.Count * lineH;
-        height += 8 + lines.Count * lineH; // divider gap + breakdown rows
-        height += Pad;
+            rows.Add(new("Throw range", potion.ThrowRange.ToString("0.#"), RichTip.Dim));
+        rows.Add(new("Craft time", $"{potion.CraftTime:0.#}s", RichTip.Dim));
 
         int sw = _lastScreenW > 0 ? _lastScreenW : (_screenX + _widgetW + TipW + 16);
         int sh = _lastScreenH > 0 ? _lastScreenH : _widgetH;
-        int tx = mx + 16, ty = my + 20;
-        if (tx + TipW > sw - 4) tx = mx - TipW - 8;
-        if (ty + height > sh - 4) ty = my - height - 8;
-        tx = System.Math.Max(4, tx);
-        ty = System.Math.Max(4, ty);
 
-        Scope.Draw(_pixel, new Rectangle(tx, ty, TipW, height), TipBg);
-        DrawBorder(new Rectangle(tx, ty, TipW, height), TipBorder, 2);
-
-        int cy = ty + Pad;
-        _renderer.DrawText(potion.DisplayName, tx + Pad, cy, TipTitleSize, TipTitle);
-        cy += titleH + 4;
-
-        foreach (var ln in descLines)
-        {
-            _renderer.DrawText(ln, tx + Pad, cy, TipBodySize, TipDesc);
-            cy += lineH;
-        }
-
-        cy += 3;
-        Scope.Draw(_pixel, new Rectangle(tx + Pad, cy, innerW, 1), TipBorder);
-        cy += 5;
-        foreach (var (label, value, color) in lines)
-        {
-            _renderer.DrawText(label, tx + Pad, cy, TipBodySize, TipDim);
-            var vs = _renderer.MeasureText(value, TipBodySize);
-            _renderer.DrawText(value, (int)(tx + TipW - Pad - vs.X), cy, TipBodySize, color);
-            cy += lineH;
-        }
-    }
-
-    /// <summary>Greedy word-wrap to a pixel width using the widget font.</summary>
-    private List<string> WrapText(string text, int fontSize, float maxW)
-    {
-        var result = new List<string>();
-        if (string.IsNullOrEmpty(text)) return result;
-        var sb = new System.Text.StringBuilder();
-        foreach (var word in text.Split(' '))
-        {
-            string trial = sb.Length == 0 ? word : sb + " " + word;
-            if (sb.Length > 0 && _renderer.MeasureText(trial, fontSize).X > maxW)
-            {
-                result.Add(sb.ToString());
-                sb.Clear();
-                sb.Append(word);
-            }
-            else
-            {
-                if (sb.Length > 0) sb.Append(' ');
-                sb.Append(word);
-            }
-        }
-        if (sb.Length > 0) result.Add(sb.ToString());
-        return result;
+        RichTip.Draw(backend, RichTip.Palette.Default, potion.DisplayName, null,
+            descLines, rows, mx, my, sw, sh, TipW, Pad);
     }
 
     public bool ContainsMouse(int mouseX, int mouseY)

@@ -217,8 +217,6 @@ public class CharacterStatsUI : IModalLayer
     // Hover regions for stat rows, rebuilt each Draw.
     private readonly List<StatHover> _statHover = new();
 
-    private static readonly Color TipBg = new(20, 20, 32, 245);
-
     // What each stat does. Wording is shared with the unit-sheet tooltips
     // (Necroking.UI.StatTooltips) so descriptions stay in one place; rows the
     // unit sheet doesn't cover (mana, per-slot armor) get their own text here.
@@ -588,85 +586,21 @@ public class CharacterStatsUI : IModalLayer
         int innerW = TipW - Pad * 2;
 
         string desc = StatDesc.TryGetValue(h.Label, out var d) ? d : "";
-        var descLines = WrapText(rowFont, desc, innerW);
+        var descLines = RichTip.Wrap(s => rowFont.MeasureString(s).X, desc, innerW);
 
         // Breakdown: explicit lines if provided, else a single "Base" line so
         // every stat still shows its number.
         var bdLines = h.Lines ?? (string.IsNullOrEmpty(h.Value)
             ? new List<TipLine>()
             : new List<TipLine> { new("Base", h.Value, ValueColor) });
+        var rows = new List<RichTip.Row>(bdLines.Count);
+        foreach (var ln in bdLines) rows.Add(new(ln.Label, ln.Value, ln.Color));
 
-        int lineH = rowFont.LineSpacing;
-        int titleH = (int)_font.MeasureString(h.Label).Y;
-
-        int height = Pad + titleH + 4;
-        height += descLines.Count * lineH;
-        if (bdLines.Count > 0) height += 8 + bdLines.Count * lineH; // divider gap + rows
-        height += Pad;
-
-        var (tx, ty) = PlaceTip(mx, my, TipW, height, screenW, screenH);
-
-        Scope.Draw(_pixel, new Rectangle(tx, ty, TipW, height), TipBg);
-        DrawBorder(tx, ty, TipW, height, PanelBorder);
-
-        int cy = ty + Pad;
-        Scope.DrawString(_font, h.Label, new Vector2(tx + Pad, cy), TitleColor);
-        cy += titleH + 4;
-
-        foreach (var ln in descLines)
-        {
-            Scope.DrawString(rowFont, ln, new Vector2(tx + Pad, cy), LabelColor);
-            cy += lineH;
-        }
-
-        if (bdLines.Count > 0)
-        {
-            cy += 3;
-            Scope.Draw(_pixel, new Rectangle(tx + Pad, cy, innerW, 1), PanelBorder);
-            cy += 5;
-            foreach (var ln in bdLines)
-            {
-                Scope.DrawString(rowFont, ln.Label, new Vector2(tx + Pad, cy), LabelColor);
-                var vs = rowFont.MeasureString(ln.Value);
-                Scope.DrawString(rowFont, ln.Value,
-                    new Vector2((int)(tx + TipW - Pad - vs.X), cy), ln.Color);
-                cy += lineH;
-            }
-        }
-    }
-
-    /// <summary>Greedy word-wrap to a pixel width.</summary>
-    private static List<string> WrapText(SpriteFont font, string text, float maxW)
-    {
-        var result = new List<string>();
-        if (string.IsNullOrEmpty(text)) return result;
-        var sb = new System.Text.StringBuilder();
-        foreach (var word in text.Split(' '))
-        {
-            string trial = sb.Length == 0 ? word : sb + " " + word;
-            if (sb.Length > 0 && font.MeasureString(trial).X > maxW)
-            {
-                result.Add(sb.ToString());
-                sb.Clear();
-                sb.Append(word);
-            }
-            else
-            {
-                if (sb.Length > 0) sb.Append(' ');
-                sb.Append(word);
-            }
-        }
-        if (sb.Length > 0) result.Add(sb.ToString());
-        return result;
-    }
-
-    /// <summary>Cursor offset +16/+20, flipped when it would clip a screen edge.</summary>
-    private static (int, int) PlaceTip(int mx, int my, int w, int h, int sw, int sh)
-    {
-        int x = mx + 16, y = my + 20;
-        if (x + w > sw - 4) x = mx - w - 8;
-        if (y + h > sh - 4) y = my - h - 8;
-        return (System.Math.Max(4, x), System.Math.Max(4, y));
+        // The stat tooltip reuses the panel's own colors so it stays in step
+        // with the sheet behind it (desc + label share LabelColor here).
+        var backend = new RichTip.FontBackend(_font, rowFont, Scope, _pixel);
+        var pal = new RichTip.Palette(new Color(20, 20, 32, 245), PanelBorder, TitleColor, LabelColor, LabelColor);
+        RichTip.Draw(backend, pal, h.Label, null, descLines, rows, mx, my, screenW, screenH, TipW, Pad);
     }
 
     /// <summary>Find the closest non-dissolving corpse within range and consume
