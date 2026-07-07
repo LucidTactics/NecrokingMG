@@ -53,13 +53,7 @@ public class SoloPredatorHandler : IArchetypeHandler
 
     public SoloPredatorHandler(bool opportunist) { _opportunist = opportunist; }
 
-    public void OnSpawn(ref AIContext ctx)
-    {
-        ctx.Units[ctx.UnitIndex].SpawnPosition = ctx.MyPos;
-        ctx.Routine = RoutineIdle;
-        ctx.Subroutine = 0;
-        ctx.SubroutineTimer = 0f;
-    }
+    public void OnSpawn(ref AIContext ctx) => SentryTransitions.SpawnAtIdle(ref ctx);
 
     public void OnRoutineExit(ref AIContext ctx, byte oldRoutine, byte newRoutine)
     {
@@ -85,60 +79,15 @@ public class SoloPredatorHandler : IArchetypeHandler
 
     private static void EvaluateRoutine(ref AIContext ctx)
     {
-        byte alert = ctx.AlertState;
-
-        if (alert >= (byte)UnitAlertState.Alert && ctx.Routine == RoutineIdle)
-        {
-            ctx.TransitionTo(RoutineAlert);
-            return;
-        }
-
-        if (alert == (byte)UnitAlertState.Aggressive && ctx.Routine <= RoutineAlert)
-        {
-            if (ctx.AlertTarget != GameConstants.InvalidUnit)
-            {
-                ctx.TransitionTo(RoutineCombat);
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.AlertTarget);
-                return;
-            }
-        }
-
-        // Self-acquire: legacy wolves aggroed anything inside WolfAggroRange
-        // regardless of awareness state.
-        if (ctx.Routine <= RoutineAlert)
-        {
-            int enemy = SubroutineSteps.FindClosestEnemy(ref ctx, AggroRange);
-            if (enemy >= 0)
-            {
-                ctx.TransitionTo(RoutineCombat);
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[enemy].Id);
-                return;
-            }
-        }
-
-        if (ctx.Routine == RoutineCombat && !SubroutineSteps.IsTargetAlive(ref ctx))
-        {
-            // Target died — reacquire in aggro range or go home.
-            int next = SubroutineSteps.FindClosestEnemy(ref ctx, AggroRange);
-            if (next >= 0)
-            {
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[next].Id);
-                ctx.Subroutine = SubEngage;
-                ctx.SubroutineTimer = 0f;
-            }
-            else
-            {
-                // OnRoutineExit(Combat) clears Target/EngagedTarget.
-                ctx.TransitionTo(RoutineReturn);
-                ctx.AlertState = (byte)UnitAlertState.Unaware;
-                ctx.AlertTarget = GameConstants.InvalidUnit;
-            }
-        }
-
-        if (alert == (byte)UnitAlertState.Unaware && ctx.Routine == RoutineAlert)
-        {
-            ctx.TransitionTo(RoutineIdle);
-        }
+        // Shared sentry ladder. Self-acquire at AggroRange (legacy wolves aggroed
+        // anything inside WolfAggroRange regardless of awareness state); reacquire
+        // in AggroRange, restarting the engage cycle on a new target.
+        var cfg = new SentryConfig(
+            selfAcquireRange: AggroRange,
+            reacquireRange: AggroRange,
+            reacquireResetsSubroutine: true,  // Subroutine 0 == SubEngage
+            reacquireResetsTimer: true);
+        SentryTransitions.EvaluateSentryRoutine(ref ctx, cfg);
     }
 
     private static void UpdateIdle(ref AIContext ctx)
@@ -280,24 +229,7 @@ public class SoloPredatorHandler : IArchetypeHandler
         }
     }
 
-    private static void UpdateReturn(ref AIContext ctx)
-    {
-        ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
-        ctx.Units[ctx.UnitIndex].InCombat = false;
-
-        Vec2 returnPos = ctx.Units[ctx.UnitIndex].SpawnPosition;
-        if ((ctx.MyPos - returnPos).Length() > 2f)
-        {
-            bool stillThreatened = ctx.AlertState >= (byte)UnitAlertState.Alert;
-            SubroutineSteps.SetEffort(ref ctx, stillThreatened ? MoveEffort.Sprint : MoveEffort.Walk);
-            SubroutineSteps.MoveToward(ref ctx, returnPos, ctx.MyMaxSpeed);
-        }
-        else
-        {
-            ctx.TransitionTo(RoutineIdle);
-            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
-        }
-    }
+    private static void UpdateReturn(ref AIContext ctx) => SentryTransitions.UpdateReturn(ref ctx);
 
     /// <summary>Is the target facing more than angleDeg away from this unit?
     /// (Migrated from Simulation.IsTargetFacingAway.)</summary>

@@ -49,13 +49,7 @@ public class CombatUnitHandler : IArchetypeHandler
 
     public CombatUnitHandler(byte archetypeId) { _archetypeId = archetypeId; }
 
-    public void OnSpawn(ref AIContext ctx)
-    {
-        ctx.Units[ctx.UnitIndex].SpawnPosition = ctx.MyPos;
-        ctx.Routine = RoutineIdle;
-        ctx.Subroutine = 0;
-        ctx.SubroutineTimer = 0f;
-    }
+    public void OnSpawn(ref AIContext ctx) => SentryTransitions.SpawnAtIdle(ref ctx);
 
     public void OnRoutineExit(ref AIContext ctx, byte oldRoutine, byte newRoutine)
     {
@@ -82,57 +76,16 @@ public class CombatUnitHandler : IArchetypeHandler
         }
     }
 
-    private void EvaluateRoutine(ref AIContext ctx)
+    private static void EvaluateRoutine(ref AIContext ctx)
     {
-        byte alert = ctx.AlertState;
-
-        // Alert → enter Alert routine
-        if (alert >= (byte)UnitAlertState.Alert && ctx.Routine == RoutineIdle)
-        {
-            ctx.TransitionTo(RoutineAlert);
-            return;
-        }
-
-        // Aggressive → enter Combat
-        if (alert == (byte)UnitAlertState.Aggressive && ctx.Routine <= RoutineAlert)
-        {
-            uint threatId = ctx.AlertTarget;
-            if (threatId != GameConstants.InvalidUnit)
-            {
-                ctx.TransitionTo(RoutineCombat, CombatChase);
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(threatId);
-                return;
-            }
-        }
-
-        // Target dead in combat → return (unless frenzied)
-        if (ctx.Routine == RoutineCombat && !SubroutineSteps.IsTargetAlive(ref ctx))
-        {
-            // Frenzied units search wider and never return to leash
-            bool frenzied = ctx.Units[ctx.UnitIndex].Frenzied;
-            float range = ctx.Units[ctx.UnitIndex].DetectionRange;
-            float searchRange = frenzied ? MathF.Max(range, 30f) : (range > 0 ? range : 12f);
-            int next = SubroutineSteps.FindClosestEnemy(ref ctx, searchRange);
-            if (next >= 0)
-            {
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[next].Id);
-                ctx.Subroutine = CombatChase;
-            }
-            else if (!frenzied)
-            {
-                // OnRoutineExit(Combat) clears Target/EngagedTarget/PendingAttack/InCombat.
-                ctx.TransitionTo(RoutineReturn);
-                ctx.AlertState = (byte)UnitAlertState.Unaware;
-                ctx.AlertTarget = GameConstants.InvalidUnit;
-            }
-            // else frenzied with no targets: stay in combat routine, will recheck next tick
-        }
-
-        // Threat gone → return
-        if (alert == (byte)UnitAlertState.Unaware && ctx.Routine == RoutineAlert)
-        {
-            ctx.TransitionTo(RoutineIdle);
-        }
+        // Shared sentry ladder (no self-acquire; reacquire falls back to 12u and
+        // re-enters the chase subroutine on a new target).
+        float range = ctx.Units[ctx.UnitIndex].DetectionRange;
+        var cfg = new SentryConfig(
+            selfAcquireRange: 0f,
+            reacquireRange: range > 0 ? range : 12f,
+            reacquireResetsSubroutine: true); // Subroutine 0 == CombatChase
+        SentryTransitions.EvaluateSentryRoutine(ref ctx, cfg);
     }
 
     // ═══════════════════════════════════════
@@ -243,39 +196,7 @@ public class CombatUnitHandler : IArchetypeHandler
         }
     }
 
-    private static void UpdateReturn(ref AIContext ctx)
-    {
-        // Frenzied units don't return — go back to idle/combat search
-        if (ctx.Units[ctx.UnitIndex].Frenzied)
-        {
-            ctx.TransitionTo(RoutineIdle);
-            return;
-        }
-
-        ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
-        ctx.Units[ctx.UnitIndex].InCombat = false;
-
-        Vec2 returnPos = ctx.Units[ctx.UnitIndex].SpawnPosition;
-        float dist = (ctx.MyPos - returnPos).Length();
-        if (dist > 2f)
-        {
-            // Effort depends on whether threats are still detected. Awareness
-            // state Alert/Aggressive (and a non-Unaware AlertState) means
-            // enemies haven't fully cleared yet — retreat under pursuit
-            // warrants Sprint. Otherwise it's just a stroll home.
-            bool stillThreatened = ctx.AlertState >= (byte)UnitAlertState.Alert;
-            if (stillThreatened)
-                SubroutineSteps.SetEffort(ref ctx, MoveEffort.Sprint);
-            else
-                SubroutineSteps.SetEffort(ref ctx, MoveEffort.Walk);
-            SubroutineSteps.MoveToward(ref ctx, returnPos, ctx.MyMaxSpeed);
-        }
-        else
-        {
-            ctx.TransitionTo(RoutineIdle);
-            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
-        }
-    }
+    private static void UpdateReturn(ref AIContext ctx) => SentryTransitions.UpdateReturn(ref ctx);
 
     public string GetRoutineName(byte routine) => routine switch
     {

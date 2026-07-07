@@ -44,13 +44,7 @@ public class RangedUnitHandler : IArchetypeHandler
 
     public RangedUnitHandler(byte archetypeId) { _archetypeId = archetypeId; }
 
-    public void OnSpawn(ref AIContext ctx)
-    {
-        ctx.Units[ctx.UnitIndex].SpawnPosition = ctx.MyPos;
-        ctx.Routine = RoutineIdle;
-        ctx.Subroutine = 0;
-        ctx.SubroutineTimer = 0f;
-    }
+    public void OnSpawn(ref AIContext ctx) => SentryTransitions.SpawnAtIdle(ref ctx);
 
     public void OnRoutineExit(ref AIContext ctx, byte oldRoutine, byte newRoutine)
     {
@@ -78,43 +72,13 @@ public class RangedUnitHandler : IArchetypeHandler
 
     private static void EvaluateRoutine(ref AIContext ctx)
     {
-        byte alert = ctx.AlertState;
-
-        if (alert >= (byte)UnitAlertState.Alert && ctx.Routine == RoutineIdle)
-        {
-            ctx.TransitionTo(RoutineAlert);
-            return;
-        }
-
-        if (alert == (byte)UnitAlertState.Aggressive && ctx.Routine <= RoutineAlert)
-        {
-            if (ctx.AlertTarget != GameConstants.InvalidUnit)
-            {
-                ctx.TransitionTo(RoutineCombat);
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.AlertTarget);
-                return;
-            }
-        }
-
-        if (ctx.Routine == RoutineCombat && !SubroutineSteps.IsTargetAlive(ref ctx))
-        {
-            float range = ctx.Units[ctx.UnitIndex].DetectionRange;
-            int next = SubroutineSteps.FindClosestEnemy(ref ctx, range > 0 ? range : 15f);
-            if (next >= 0)
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[next].Id);
-            else
-            {
-                // OnRoutineExit(Combat) clears Target/EngagedTarget.
-                ctx.TransitionTo(RoutineReturn);
-                ctx.AlertState = (byte)UnitAlertState.Unaware;
-                ctx.AlertTarget = GameConstants.InvalidUnit;
-            }
-        }
-
-        if (alert == (byte)UnitAlertState.Unaware && ctx.Routine == RoutineAlert)
-        {
-            ctx.TransitionTo(RoutineIdle);
-        }
+        // Shared sentry ladder (no self-acquire; reacquire falls back to 15u,
+        // keeping the current subroutine so an archer mid-kite stays kiting).
+        float range = ctx.Units[ctx.UnitIndex].DetectionRange;
+        var cfg = new SentryConfig(
+            selfAcquireRange: 0f,
+            reacquireRange: range > 0 ? range : 15f);
+        SentryTransitions.EvaluateSentryRoutine(ref ctx, cfg);
     }
 
     private static void UpdateIdle(ref AIContext ctx)
@@ -242,26 +206,7 @@ public class RangedUnitHandler : IArchetypeHandler
         return true;
     }
 
-    private static void UpdateReturn(ref AIContext ctx)
-    {
-        ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
-        ctx.Units[ctx.UnitIndex].InCombat = false;
-
-        Vec2 returnPos = ctx.Units[ctx.UnitIndex].SpawnPosition;
-        if ((ctx.MyPos - returnPos).Length() > 2f)
-        {
-            // Same context-aware return as melee: Sprint under pursuit,
-            // Walk if all clear.
-            bool stillThreatened = ctx.AlertState >= (byte)UnitAlertState.Alert;
-            SubroutineSteps.SetEffort(ref ctx, stillThreatened ? MoveEffort.Sprint : MoveEffort.Walk);
-            SubroutineSteps.MoveToward(ref ctx, returnPos, ctx.MyMaxSpeed);
-        }
-        else
-        {
-            ctx.TransitionTo(RoutineIdle);
-            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
-        }
-    }
+    private static void UpdateReturn(ref AIContext ctx) => SentryTransitions.UpdateReturn(ref ctx);
 
     public string GetRoutineName(byte routine) => routine switch
     {

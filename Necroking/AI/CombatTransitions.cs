@@ -3,9 +3,13 @@ using Necroking.Core;
 namespace Necroking.AI;
 
 /// <summary>
-/// Shared combat-routine state transitions used by archetype handlers that
-/// follow the canonical "chase / engage / return" pattern (HordeMinionHandler,
-/// WolfPackHandler's Fighting routine, DeerHerdHandler's FightBack, etc.).
+/// Shared combat-routine state transitions for archetype handlers that follow
+/// the canonical "chase / engage / return" pattern. Current user:
+/// HordeMinionHandler. (WolfPackHandler's Fighting and DeerHerdHandler's
+/// FightBack do NOT use these — their exit semantics are structurally different
+/// (time-of-day routines / stance cycles, no chase-return split) and were
+/// deliberately never migrated. The sentry archetypes' shared ladder lives in
+/// <see cref="SentryTransitions"/>.)
 ///
 /// Each handler used to open-code its own exit conditions and forget cases —
 /// which is how the "horde unit stands still while target kites" and "chaser

@@ -39,13 +39,7 @@ public class CasterUnitHandler : IArchetypeHandler
 
     private const float DefaultRange = 18f;  // fallback if the spell def is missing
 
-    public void OnSpawn(ref AIContext ctx)
-    {
-        ctx.Units[ctx.UnitIndex].SpawnPosition = ctx.MyPos;
-        ctx.Routine = RoutineIdle;
-        ctx.Subroutine = 0;
-        ctx.SubroutineTimer = 0f;
-    }
+    public void OnSpawn(ref AIContext ctx) => SentryTransitions.SpawnAtIdle(ref ctx);
 
     public void OnRoutineExit(ref AIContext ctx, byte oldRoutine, byte newRoutine)
     {
@@ -94,62 +88,16 @@ public class CasterUnitHandler : IArchetypeHandler
 
     private static void EvaluateRoutine(ref AIContext ctx)
     {
-        byte alert = ctx.AlertState;
-
-        if (alert >= (byte)UnitAlertState.Alert && ctx.Routine == RoutineIdle)
-        {
-            ctx.TransitionTo(RoutineAlert);
-            return;
-        }
-
-        if (alert == (byte)UnitAlertState.Aggressive && ctx.Routine <= RoutineAlert)
-        {
-            if (ctx.AlertTarget != GameConstants.InvalidUnit)
-            {
-                ctx.TransitionTo(RoutineCombat);
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.AlertTarget);
-                return;
-            }
-        }
-
-        // Self-acquire: an enemy inside spell range is engaged even without an
-        // awareness escalation. The legacy Caster block zapped anything in range
-        // regardless of alert state — this keeps that behavior (and covers
-        // scenario-spawned casters with no awareness config).
-        if (ctx.Routine <= RoutineAlert)
-        {
-            var spell = GetSpell(ref ctx);
-            if (spell != null)
-            {
-                int enemy = SubroutineSteps.FindClosestEnemy(ref ctx, spell.Range);
-                if (enemy >= 0)
-                {
-                    ctx.TransitionTo(RoutineCombat);
-                    ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[enemy].Id);
-                    return;
-                }
-            }
-        }
-
-        if (ctx.Routine == RoutineCombat && !SubroutineSteps.IsTargetAlive(ref ctx))
-        {
-            float range = ctx.Units[ctx.UnitIndex].DetectionRange;
-            int next = SubroutineSteps.FindClosestEnemy(ref ctx, range > 0 ? range : 15f);
-            if (next >= 0)
-                ctx.Units[ctx.UnitIndex].Target = CombatTarget.Unit(ctx.Units[next].Id);
-            else
-            {
-                // OnRoutineExit(Combat) clears Target/EngagedTarget.
-                ctx.TransitionTo(RoutineReturn);
-                ctx.AlertState = (byte)UnitAlertState.Unaware;
-                ctx.AlertTarget = GameConstants.InvalidUnit;
-            }
-        }
-
-        if (alert == (byte)UnitAlertState.Unaware && ctx.Routine == RoutineAlert)
-        {
-            ctx.TransitionTo(RoutineIdle);
-        }
+        // Shared sentry ladder. Self-acquire at spell range — the legacy Caster
+        // block zapped anything in range regardless of alert state (and this
+        // covers scenario-spawned casters with no awareness config); the spell
+        // is re-fetched each tick, as before. Reacquire falls back to 15u.
+        var spell = GetSpell(ref ctx);
+        float range = ctx.Units[ctx.UnitIndex].DetectionRange;
+        var cfg = new SentryConfig(
+            selfAcquireRange: spell?.Range ?? 0f,
+            reacquireRange: range > 0 ? range : 15f);
+        SentryTransitions.EvaluateSentryRoutine(ref ctx, cfg);
     }
 
     private static void UpdateIdle(ref AIContext ctx)
@@ -203,24 +151,7 @@ public class CasterUnitHandler : IArchetypeHandler
             TryCast(ref ctx, targetIdx, spell);
     }
 
-    private static void UpdateReturn(ref AIContext ctx)
-    {
-        ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
-        ctx.Units[ctx.UnitIndex].InCombat = false;
-
-        Vec2 returnPos = ctx.Units[ctx.UnitIndex].SpawnPosition;
-        if ((ctx.MyPos - returnPos).Length() > 2f)
-        {
-            bool stillThreatened = ctx.AlertState >= (byte)UnitAlertState.Alert;
-            SubroutineSteps.SetEffort(ref ctx, stillThreatened ? MoveEffort.Sprint : MoveEffort.Walk);
-            SubroutineSteps.MoveToward(ref ctx, returnPos, ctx.MyMaxSpeed);
-        }
-        else
-        {
-            ctx.TransitionTo(RoutineIdle);
-            ctx.Units[ctx.UnitIndex].PreferredVel = Vec2.Zero;
-        }
-    }
+    private static void UpdateReturn(ref AIContext ctx) => SentryTransitions.UpdateReturn(ref ctx);
 
     /// <summary>This unit's spell def (Unit.SpellID), or null when it has none /
     /// no mana pool — a caster without a castable spell just behaves like a
