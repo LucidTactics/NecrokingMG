@@ -2,8 +2,17 @@
 
 Design report (2026-07-07): how to store and reuse the 2026-07-06 semantic-duplication
 review so that (1) the full review is re-runnable on demand and (2) new code gets checked
-against the existing codebase at authoring time. **Design only — nothing here is built yet
-except the persisted label store** (see "Already done" below).
+against the existing codebase at authoring time.
+
+> **Status (2026-07-07): built.** The tooling below is implemented and committed —
+> `tools/label_store.py` (all 7 verbs), the `MethodExtractor` BodyHash/Key emission,
+> `cluster_labels.py --store`, and the `/dup-review` skill. See the checklist in §6 for
+> per-item status. **Two user decisions recorded this build:**
+> - **locate-behavior integration was declined** (§3 option (d)). find-similar is NOT wired
+>   into the locate-behavior finder. It stays a **user-invoked skill (`/dup-review`)** plus a
+>   **manual `tools/label_store.py query` CLI** (kept explicitly so find-similar remains
+>   available on request). Future sessions: do not re-add the locate-behavior integration.
+> - The re-runnable review is a **user-invoked skill only**, never auto-triggered.
 
 ---
 
@@ -16,7 +25,7 @@ except the persisted label store** (see "Already done" below).
 | Method identity | `file::type::name::sig-hash` key + comment/whitespace-stripped body hash (`body12`) for staleness/rename detection |
 | Verdicts | Persisted in the store (`verdicts.json`, anchored to method keys) so KEEP_SEPARATE rulings are never re-litigated blind |
 | Use 1 (full re-run) | New curated skill **`/dup-review`** — user-invoked only, incremental by default (re-labels only drifted methods, re-judges only units whose evidence changed) |
-| Use 2 (authoring-time) | **Extend the `locate-behavior` finder** to query the store (primary), plus a direct `tools/label_store.py query` CLI as the fallback/post-authoring path. No hooks. |
+| Use 2 (authoring-time) | **Manual `tools/label_store.py query` CLI** (locate-behavior integration was **declined** by the user — see §3). The finder may still be asked to run a query, but nothing auto-wires it. No hooks. |
 | New machinery | One new tool: `tools/label_store.py` (~300 lines, stdlib-only). Two small mods: MethodExtractor emits `BodyHash`; `cluster_labels.py` reads the store. |
 | Typical costs | find-similar query ≈ 0 agent tokens / seconds · label one new file ≈ 1–3k in-session tokens · full re-run after normal drift ≈ 1.5–2.5M tokens (vs ~4.5–5M from scratch) |
 
@@ -211,7 +220,10 @@ reminder to the hottest path in every session. A narrowly-scoped variant — rem
 when a Write creates a *new* `.cs` file — is defensible and listed as an optional later
 experiment, off by default.
 
-**(d) Integrate into `locate-behavior`.** **Recommended primary.** Reasons:
+**(d) Integrate into `locate-behavior`.** Was the design's recommended primary — **but the
+user DECLINED it.** find-similar is not wired into the finder; use the manual
+`tools/label_store.py query` CLI (option below) instead. The original rationale is kept
+here for the record, not as an active plan:
 - "Where should this code go" and "what similar code already exists" are the same lookup
   at different zoom levels, and locate-behavior is *already mandatory* at the start of any
   change per CLAUDE.md — zero new routing burden.
@@ -224,12 +236,15 @@ experiment, off by default.
 
 ### 3.2 Recommended design
 
-**Primary — extend the locate-behavior finder** (edits to `docs/locate-behavior/README.md`
-[the finder's operating manual] + a paragraph in the skill's SKILL.md + the finder agent
-shim's tool list already includes Bash):
+**Primary (as-built) — manual `tools/label_store.py query`.** The user declined wiring this
+into the locate-behavior finder, so the CLI *is* the authoring-time path: run it directly
+when you want to know whether similar code already exists. The finder can be *asked* to run
+the query, but nothing routes to it automatically.
 
-When the ask involves *adding* code (vs. just finding existing behavior), the finder
-additionally:
+**Declined design (kept for the record) — extend the locate-behavior finder** (would have
+edited `docs/locate-behavior/README.md` + a paragraph in the skill's SKILL.md; the finder
+agent shim's tool list already includes Bash). Under it, when the ask involved *adding* code
+(vs. just finding existing behavior), the finder would additionally:
 1. Derives facets for the intended code from `store/taxonomy.md` — pick verb, target,
    2–3 mechanism/name keywords. (~50 lines of taxonomy to read; the finder does this
    itself, no extra agent.)
@@ -337,11 +352,25 @@ Already done this session (needs only a commit by the orchestrator):
 - [x] `docs/consolidation-review/store/{taxonomy.md, labels.json, verdicts.json, meta.json}` persisted from the scratchpad (3,551 entries; 116 anchored findings).
 - [x] This report.
 
-To build (ordered; 1–3 unlock everything else):
-1. [ ] `tools/label_store.py` — CLI per §4 spec (~300 lines, stdlib-only). The one real build item.
-2. [ ] `tools/MethodExtractor/Program.cs` — emit `BodyHash` (normalization per `store/meta.json`) and the composed `Key`; optional `--files` filter. (~15 lines.)
-3. [ ] `tools/cluster_labels.py` — add store+cache input mode (keep the old scratch-dir mode or delete it).
-4. [ ] `.claude/skills/dup-review/` — `SKILL.md` (pipeline §2.2, budgets §2.3, user-invoked-only wording), `labeler-prompt.md`, `judge-prompt.md`. Plus `!.claude/skills/dup-review/` in `.gitignore`.
-5. [ ] `docs/locate-behavior/README.md` — add the "Similar existing code" step (§3.2) to the finder manual; one-line pointer in the locate-behavior SKILL.md.
-6. [ ] `CLAUDE.md` — two pointer lines: under the consolidation section ("label store + `/dup-review`: see docs/consolidation-review/operationalizing.md") and the post-authoring check convention (§3.2 fallback).
+Built this session (ordered; 1–3 unlocked everything else):
+1. [x] `tools/label_store.py` — CLI per §4 spec (stdlib-only). All 7 verbs implemented and
+   tested against the real store: `query` (facet/exemplar/free-text scoring + verdict-anchor
+   join), `diff`, `status`, `relink`, `add`, `import`, `reconcile`. Run via
+   `C:/Users/Raymo/Tools/python-3.11-embed/python.exe`.
+2. [x] `tools/MethodExtractor/Program.cs` — emits `BodyHash` (comment+whitespace-stripped
+   sha1[:12]) and the composed `Key` (`file::type::name::sha1(sig_no_ws)[:8]`), normalization
+   per `store/meta.json`. **Validated end-to-end:** 2,657 unchanged methods fingerprint-match
+   the persisted store; the ~16% that drifted are the ones the consolidation batches touched.
+3. [x] `tools/cluster_labels.py` — added `--store` input mode (reads the persisted
+   `labels.json`, optional line refresh from `--extract-dir`); original scratch-dir mode kept.
+4. [x] `.claude/skills/dup-review/` — `SKILL.md` (pipeline §2.2, budgets §2.3,
+   user-invoked-only), `labeler-prompt.md`, `judge-prompt.md`. Plus `!.claude/skills/dup-review/`
+   in `.gitignore`.
+5. [ ] **DECLINED by the user** — `docs/locate-behavior/README.md` "Similar existing code"
+   step. Not built and not to be built; the manual `label_store.py query` CLI is the
+   authoring-time path instead.
+6. [ ] `CLAUDE.md` pointer lines — **not done this build** (CLAUDE.md was out of the build
+   agent's territory). Still worth adding by a session that owns root files: one line under
+   the consolidation section pointing at this doc + the label store, and one for the
+   post-authoring `label_store.py query`/`add` convention (§3.2). Low priority.
 7. [ ] Optional, later, off by default: Write-hook reminder when a *new* `.cs` file is created (§3.1c).
