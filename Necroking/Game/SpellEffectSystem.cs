@@ -397,6 +397,15 @@ public static class SpellEffectSystem
     // shared RNG (events seed their own), and the swirl only affects the visual arc.
     private static readonly Random _projRng = new();
 
+    /// <summary>Randomize the swirl params (freq/amplitude/phase) on a projectile —
+    /// shared by the Swirly and HomingSwirly trajectories.</summary>
+    private static void ApplySwirl(Projectile p)
+    {
+        p.SwirlFreq = 3f + (float)_projRng.NextDouble() * 5f;
+        p.SwirlAmplitude = 0.5f + (float)_projRng.NextDouble() * 1.5f;
+        p.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
+    }
+
     /// <summary>Spawn a spell projectile and post-configure it: tag it with the spell id
     /// (impact knockback / blight-bomb lookup), apply the def's Trajectory, and copy the
     /// projectile/hit-effect flipbook refs. Public — Game1.TickPendingProjectiles also
@@ -424,55 +433,35 @@ public static class SpellEffectSystem
                 lastProj.DetonateAtTarget = true;
             }
 
-            // Apply trajectory type
+            // Apply trajectory type. Lob keeps SpawnFireball's arc; every other
+            // trajectory is a flat direct-fire launch through the ONE shared
+            // solver (the four cases used to re-paste the 5° solve, and it
+            // pointlessly overwrote SpawnFireball's lob solve four ways).
             var traj = Enum.TryParse<Trajectory>(spell.Trajectory, true, out var t) ? t : Trajectory.Lob;
-            var dir = (target - origin).Normalized();
-            float speed = spell.ProjectileSpeed > 0 ? spell.ProjectileSpeed : ProjectileManager.MagicSpeed;
+            if (traj != Trajectory.Lob) {
+                var dir = (target - origin).Normalized();
+                float speed = spell.ProjectileSpeed > 0 ? spell.ProjectileSpeed : ProjectileManager.MagicSpeed;
+                (lastProj.Velocity, lastProj.VelocityZ) =
+                    ProjectileManager.BallisticVelocity(dir, speed, ProjectileManager.DirectFireTheta);
+                lastProj.BaseDirection = dir;
+                lastProj.IsLob = false;
+            }
 
             switch (traj) {
-                case Trajectory.DirectFire: {
-                    float theta = 5f * MathF.PI / 180f;
-                    lastProj.Velocity = dir * speed * MathF.Cos(theta);
-                    lastProj.VelocityZ = speed * MathF.Sin(theta);
-                    lastProj.BaseDirection = dir;
-                    lastProj.IsLob = false;
+                case Trajectory.Swirly:
+                    ApplySwirl(lastProj);
                     break;
-                }
-                case Trajectory.Swirly: {
-                    float theta = 5f * MathF.PI / 180f;
-                    lastProj.Velocity = dir * speed * MathF.Cos(theta);
-                    lastProj.VelocityZ = speed * MathF.Sin(theta);
-                    lastProj.BaseDirection = dir;
-                    lastProj.IsLob = false;
-                    lastProj.SwirlFreq = 3f + (float)_projRng.NextDouble() * 5f;
-                    lastProj.SwirlAmplitude = 0.5f + (float)_projRng.NextDouble() * 1.5f;
-                    lastProj.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
-                    break;
-                }
-                case Trajectory.Homing: {
-                    float theta = 5f * MathF.PI / 180f;
-                    lastProj.Velocity = dir * speed * MathF.Cos(theta);
-                    lastProj.VelocityZ = speed * MathF.Sin(theta);
-                    lastProj.BaseDirection = dir;
-                    lastProj.IsLob = false;
+                case Trajectory.Homing:
                     lastProj.TargetPos = target;
                     lastProj.HomingStrength = 5f;
                     break;
-                }
-                case Trajectory.HomingSwirly: {
-                    float theta = 5f * MathF.PI / 180f;
-                    lastProj.Velocity = dir * speed * MathF.Cos(theta);
-                    lastProj.VelocityZ = speed * MathF.Sin(theta);
-                    lastProj.BaseDirection = dir;
-                    lastProj.IsLob = false;
+                case Trajectory.HomingSwirly:
                     lastProj.TargetPos = target;
                     lastProj.HomingStrength = 5f;
-                    lastProj.SwirlFreq = 3f + (float)_projRng.NextDouble() * 5f;
-                    lastProj.SwirlAmplitude = 0.5f + (float)_projRng.NextDouble() * 1.5f;
-                    lastProj.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
+                    ApplySwirl(lastProj);
                     break;
-                }
-                // Lob is the default from SpawnFireball — no changes needed
+                // DirectFire needs nothing beyond the shared launch above;
+                // Lob is the default from SpawnFireball — no changes needed.
             }
 
             if (spell.ProjectileFlipbook != null) {

@@ -109,6 +109,10 @@ public class ProjectileManager
     private const float Pi = 3.14159265f;
     private const float Deg2Rad = Pi / 180f;
 
+    /// <summary>Launch angle of a flat direct-fire shot (arrows outside volleys,
+    /// DirectFire/Swirly/Homing spell trajectories).</summary>
+    public const float DirectFireTheta = 5f * Deg2Rad;
+
     private static readonly Random _rng = new();
 
     private readonly List<Projectile> _projectiles = new();
@@ -118,6 +122,37 @@ public class ProjectileManager
     public IReadOnlyList<Projectile> Projectiles => _projectiles;
     public IReadOnlyList<ImpactEvent> Impacts => _impacts;
     public IReadOnlyList<ProjectileHit> Hits => _hits;
+
+    // ------------------------------------------------------------ arc solver
+    // THE ballistic solve — every projectile launch (arrows, fireballs, potion
+    // lobs, spell trajectories) derives its velocity through these two helpers
+    // so the launch model has one home. (Editor/SpellPreview still carries its
+    // own copy — a later consolidation batch adopts this solver there.)
+
+    /// <summary>Launch angle (radians) for a ballistic lob that lands
+    /// <paramref name="dist"/> away at <paramref name="speed"/> under
+    /// <see cref="Gravity"/>: θ = ½·asin(min(d·g/v², 1)). Optional clamp —
+    /// arrow volleys use [10°, 45°] so short lobs still arc visibly.</summary>
+    public static float SolveLobTheta(float dist, float speed,
+        float minTheta = 0f, float maxTheta = Pi / 2f)
+    {
+        float sinTwoTheta = MathF.Min(dist * Gravity / (speed * speed), 1f);
+        return MathUtil.Clamp(0.5f * MathF.Asin(sinTwoTheta), minTheta, maxTheta);
+    }
+
+    /// <summary>Split a launch (dir, speed, theta) into the planar Velocity and
+    /// vertical VelocityZ — the shared final step of every lob/direct solve.</summary>
+    public static (Vec2 vel, float velZ) BallisticVelocity(Vec2 dir, float speed, float theta)
+        => (dir * speed * MathF.Cos(theta), speed * MathF.Sin(theta));
+
+    /// <summary>The shared aim preamble: normalized direction + distance with a
+    /// 0.1 floor (a zero-length shot would NaN the solve).</summary>
+    private static void PrepAim(Vec2 from, Vec2 target, out Vec2 dir, out float dist)
+    {
+        dir = (target - from).Normalized();
+        dist = (target - from).Length();
+        if (dist < 0.1f) dist = 0.1f;
+    }
 
     /// <summary>
     /// Spawn an arrow projectile. <paramref name="spawnHeight"/> is the arrow's
@@ -130,9 +165,7 @@ public class ProjectileManager
     public void SpawnArrow(Vec2 from, Vec2 target, Faction faction, uint owner, int damage,
                            bool volley, int precision, string weaponName = "", float spawnHeight = 0.6f)
     {
-        var dir = (target - from).Normalized();
-        float dist = (target - from).Length();
-        if (dist < 0.1f) dist = 0.1f;
+        PrepAim(from, target, out var dir, out float dist);
         float speed = ArrowSpeed;
 
         var p = new Projectile
@@ -152,16 +185,12 @@ public class ProjectileManager
             dir = (target - from).Normalized();
             dist = (target - from).Length();
 
-            float sinTwoTheta = MathF.Min(dist * Gravity / (speed * speed), 1f);
-            float theta = MathUtil.Clamp(0.5f * MathF.Asin(sinTwoTheta), 10f * Deg2Rad, 45f * Deg2Rad);
-            p.Velocity = dir * speed * MathF.Cos(theta);
-            p.VelocityZ = speed * MathF.Sin(theta);
+            float theta = SolveLobTheta(dist, speed, 10f * Deg2Rad, 45f * Deg2Rad);
+            (p.Velocity, p.VelocityZ) = BallisticVelocity(dir, speed, theta);
         }
         else
         {
-            float theta = 5f * Deg2Rad;
-            p.Velocity = dir * speed * MathF.Cos(theta);
-            p.VelocityZ = speed * MathF.Sin(theta);
+            (p.Velocity, p.VelocityZ) = BallisticVelocity(dir, speed, DirectFireTheta);
         }
 
         _projectiles.Add(p);
@@ -174,13 +203,9 @@ public class ProjectileManager
     public void SpawnFireball(Vec2 from, Vec2 target, Faction faction, uint owner,
                               int damage, float aoeRadius, string weaponName = "", float spawnHeight = 0.6f)
     {
-        var dir = (target - from).Normalized();
-        float dist = (target - from).Length();
-        if (dist < 0.1f) dist = 0.1f;
+        PrepAim(from, target, out var dir, out float dist);
         float speed = MagicSpeed;
-
-        float sinTwoTheta = MathF.Min(dist * Gravity / (speed * speed), 1f);
-        float theta = 0.5f * MathF.Asin(sinTwoTheta);
+        var (vel, velZ) = BallisticVelocity(dir, speed, SolveLobTheta(dist, speed));
 
         _projectiles.Add(new Projectile
         {
@@ -188,8 +213,8 @@ public class ProjectileManager
             OwnerFaction = faction, OwnerID = owner, Damage = damage,
             AoeRadius = aoeRadius, WeaponName = weaponName,
             NoFriendlyFire = false, IsLob = true,
-            Velocity = dir * speed * MathF.Cos(theta),
-            VelocityZ = speed * MathF.Sin(theta)
+            Velocity = vel,
+            VelocityZ = velZ
         });
     }
 
@@ -200,13 +225,9 @@ public class ProjectileManager
     public void SpawnPotionLob(Vec2 from, Vec2 target, Faction faction, uint owner,
                                string potionId, float scale = 0.5f, float spawnHeight = 0.6f)
     {
-        var dir = (target - from).Normalized();
-        float dist = (target - from).Length();
-        if (dist < 0.1f) dist = 0.1f;
+        PrepAim(from, target, out var dir, out float dist);
         float speed = MagicSpeed * 0.7f; // potions are slower than fireballs
-
-        float sinTwoTheta = MathF.Min(dist * Gravity / (speed * speed), 1f);
-        float theta = 0.5f * MathF.Asin(sinTwoTheta);
+        var (vel, velZ) = BallisticVelocity(dir, speed, SolveLobTheta(dist, speed));
 
         _projectiles.Add(new Projectile
         {
@@ -215,8 +236,8 @@ public class ProjectileManager
             AoeRadius = 1.0f, PotionID = potionId,
             NoFriendlyFire = false, IsLob = true,
             ParticleScale = scale,
-            Velocity = dir * speed * MathF.Cos(theta),
-            VelocityZ = speed * MathF.Sin(theta)
+            Velocity = vel,
+            VelocityZ = velZ
         });
     }
 
