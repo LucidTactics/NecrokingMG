@@ -16,7 +16,6 @@ public class HordeUnitData
     public int SlotIndex = -1;
     public HordeUnitState State = HordeUnitState.Following;
     public uint ChasingTarget = GameConstants.InvalidUnit;
-    public float NoisePhase;
 
     // Discrete slot offset — added to the Fibonacci slot position to break up the
     // uniform pattern. Stays constant between shifts so the unit's target tile is
@@ -53,6 +52,11 @@ public class HordeSystem
     // "no trailing free slots" invariant by compacting inside FreeSlot.
     private readonly SortedSet<int> _freeSlots = new();
     private int _nextSlot;
+
+    // Scratch buffers for UpdateStates — reused across frames to avoid per-frame
+    // list allocations in the state loop and the aggro scan.
+    private readonly List<uint> _nearbyIDs = new();
+    private readonly List<int> _enemiesInCircle = new();
 
     // "Baseline" horde size: the population at which the formation matches the
     // configured Settings.CircleRadius. SlotSpacing is derived so that slot
@@ -147,7 +151,6 @@ public class HordeSystem
         {
             UnitID = id,
             SlotIndex = slot,
-            NoisePhase = (float)(_rng.Next(10000)) / 100f,
             DiscreteOffset = RandomShiftOffset(),
             // Stagger first shift so fresh units don't all re-roll on the same tick.
             NextShiftAt = _globalTime + RandomShiftInterval(),
@@ -315,7 +318,17 @@ public class HordeSystem
     {
         if (necroIdx < 0) return;
 
-        var nearbyIDs = new List<uint>();
+        // Hoisted once per call — the getters recompute (incl. a sqrt via
+        // EffectiveRadius) and were being re-evaluated per unit inside the loop.
+        // EffectiveRadius only changes on Add/RemoveUnit, so this is safe.
+        float leashRadius = LeashRadius;
+        float engagementRange = EngagementRange;
+
+        // Shared ~0.5 s cadence for the horde aggro scan and the per-engaged-unit
+        // "any enemy still nearby?" quadtree checks.
+        _aggroScanTimer -= dt;
+        bool scanTick = _aggroScanTimer <= 0f;
+        if (scanTick) _aggroScanTimer = 0.5f;
 
         // Per-unit state transitions
         foreach (var hu in _hordeUnits)
@@ -410,12 +423,13 @@ public class HordeSystem
                     // there were two thresholds (probabilistic soft return at 1× leash,
                     // forced hard return at 1.5×); now consolidated into one because
                     // the user wants a clear "cross the red circle → start returning"
-                    // rule with no fuzzy band beyond it.
-                    Vec2 slotPos = ComputeSlotPosition(hu.SlotIndex);
-                    float distToSlot = (units[idx].Position - slotPos).Length();
+                    // rule with no fuzzy band beyond it. Measured from the circle
+                    // center so it matches the F7 red ring and the AI-side leash
+                    // breaks (StandardChasingExits/StandardEngagedExits) exactly.
+                    float distToCenter = (units[idx].Position - _circleCenter).Length();
                     // Same pack-hunt exemption as the Chasing leash above: a wolf finishing
                     // its driven kill fights past this radius on purpose.
-                    if (distToSlot > LeashRadius && units[idx].WolfHuntTargetId == 0)
+                    if (distToCenter > leashRadius && units[idx].WolfHuntTargetId == 0)
                     {
                         hu.State = HordeUnitState.Returning;
                         break;
@@ -423,15 +437,18 @@ public class HordeSystem
 
                     // Check if any enemy still nearby (use the dynamic engagement
                     // range so this scales with horde size, with a small 1.5× to
-                    // give a brief hysteresis after engagement starts).
-                    nearbyIDs.Clear();
-                    qt.QueryRadiusByFaction(units[idx].Position, EngagementRange * 1.5f,
-                        FactionMaskExt.AllExcept(Faction.Undead), nearbyIDs);
+                    // give a brief hysteresis after engagement starts). Only on the
+                    // ~0.5 s scan tick — a per-engaged-unit quadtree query every
+                    // frame was the most expensive part of UpdateStates, and a
+                    // ≤0.5 s delay before Returning is invisible.
+                    if (!scanTick) break;
+                    _nearbyIDs.Clear();
+                    qt.QueryRadiusByFaction(units[idx].Position, engagementRange * 1.5f,
+                        FactionMaskExt.AllExcept(Faction.Undead), _nearbyIDs);
                     bool anyEnemy = false;
-                    foreach (uint nid in nearbyIDs)
+                    foreach (uint nid in _nearbyIDs)
                     {
-                        int ni = UnitUtil.ResolveUnitIndex(units, nid);
-                        if (ni < 0 || !units[ni].Alive) continue;
+                        if (UnitUtil.ResolveUnitIndex(units, nid) < 0) continue;
                         anyEnemy = true;
                         break;
                     }
@@ -441,7 +458,11 @@ public class HordeSystem
 
                 case HordeUnitState.Returning:
                 {
-                    Vec2 slotPos = ComputeSlotPosition(hu.SlotIndex);
+                    // Measure against the actual movement target (slot + discrete
+                    // offset, same as GetTargetPosition) — against the raw slot a
+                    // unit could park up to |offset| + arrival tolerance away and
+                    // idle in Returning until its offset re-rolled seconds later.
+                    Vec2 slotPos = ComputeSlotPosition(hu.SlotIndex) + hu.DiscreteOffset;
                     float distToSlot = (units[idx].Position - slotPos).Length();
                     if (distToSlot < 2f) hu.State = HordeUnitState.Following;
                     break;
@@ -450,21 +471,18 @@ public class HordeSystem
         }
 
         // Horde aggro scan (~2/sec)
-        _aggroScanTimer -= dt;
-        if (_aggroScanTimer <= 0f)
+        if (scanTick)
         {
-            _aggroScanTimer = 0.5f;
-
-            nearbyIDs.Clear();
+            _nearbyIDs.Clear();
             qt.QueryRadiusByFaction(_circleCenter, AggroRadius,
-                FactionMaskExt.AllExcept(Faction.Undead), nearbyIDs);
+                FactionMaskExt.AllExcept(Faction.Undead), _nearbyIDs);
 
-            var enemiesInCircle = new List<int>();
-            foreach (uint nid in nearbyIDs)
+            _enemiesInCircle.Clear();
+            foreach (uint nid in _nearbyIDs)
             {
                 int ni = UnitUtil.ResolveUnitIndex(units, nid);
                 if (ni < 0) continue;
-                enemiesInCircle.Add(ni);
+                _enemiesInCircle.Add(ni);
             }
 
             // Count state breakdown for the per-scan summary line.
@@ -482,14 +500,14 @@ public class HordeSystem
             DebugLog.Log("horde_aggro",
                 $"[AggroScan] center=({_circleCenter.X:F1},{_circleCenter.Y:F1}) " +
                 $"aggroRadius={AggroRadius:F1} effRadius={EffectiveRadius:F1} " +
-                $"enemies={enemiesInCircle.Count} horde={_hordeUnits.Count} " +
+                $"enemies={_enemiesInCircle.Count} horde={_hordeUnits.Count} " +
                 $"(F={nFollowing} C={nChasing} E={nEngaged} R={nReturning})");
 
-            if (enemiesInCircle.Count > 0)
+            if (_enemiesInCircle.Count > 0)
             {
                 // Log the first few enemies + their distance to center (cap to avoid spam).
                 int nLogged = 0;
-                foreach (int e in enemiesInCircle)
+                foreach (int e in _enemiesInCircle)
                 {
                     if (nLogged >= 3) break;
                     float d = (units[e].Position - _circleCenter).Length();
@@ -520,7 +538,7 @@ public class HordeSystem
                     // Pick closest enemy
                     int bestEnemy = -1;
                     float bestDist2 = float.MaxValue;
-                    foreach (int e in enemiesInCircle)
+                    foreach (int e in _enemiesInCircle)
                     {
                         float d2 = Vec2.DistSq(units[e].Position, units[unitIdx].Position);
                         if (d2 < bestDist2) { bestDist2 = d2; bestEnemy = e; }
@@ -570,7 +588,12 @@ public class HordeSystem
 
     private static float LerpAngle(float from, float to, float t)
     {
-        float diff = ((to - from + MathF.PI) % (2f * MathF.PI)) - MathF.PI;
+        // C#'s % keeps the dividend's sign, so normalize to [-pi, pi] explicitly —
+        // the old single-mod form returned the long-way-around diff whenever
+        // to - from < -pi (facing crossing west in one turn direction).
+        float diff = (to - from) % (2f * MathF.PI);
+        if (diff > MathF.PI) diff -= 2f * MathF.PI;
+        else if (diff < -MathF.PI) diff += 2f * MathF.PI;
         return from + diff * t;
     }
 
