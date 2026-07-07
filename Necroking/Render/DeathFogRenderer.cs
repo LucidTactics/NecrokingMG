@@ -103,9 +103,9 @@ internal class DeathFogRenderer
             int cx = idx % width;
             int cy = idx / width;
 
-            uint h = CellHash(cx, cy);
-            float jx = (HashToFloat(h * 374761393u) * 2f - 1f) * jitterRange;
-            float jy = (HashToFloat(h * 668265263u) * 2f - 1f) * jitterRange;
+            uint h = HashNoise.CellHash(cx, cy);
+            float jx = (HashNoise.ToFloat(h * 374761393u) * 2f - 1f) * jitterRange;
+            float jy = (HashNoise.ToFloat(h * 668265263u) * 2f - 1f) * jitterRange;
             float wx = cx * cellSize + halfCell + jx;
             float wy = cy * cellSize + halfCell + jy;
 
@@ -115,14 +115,14 @@ internal class DeathFogRenderer
             float alpha = MaxAlpha * t;
             float scale = baseScale * (0.85f + 0.3f * t);
 
-            float phaseOffset = HashToFloat(h * 2654435761u) * totalFrames;
+            float phaseOffset = HashNoise.ToFloat(h * 2654435761u) * totalFrames;
             float cyclePos = (_gameTime / MathF.Max(FlipbookCycleSeconds, 0.01f)) * totalFrames + phaseOffset;
             int frame = (int)(cyclePos % totalFrames);
             if (frame < 0) frame += totalFrames;
             var src = fb.GetFrameRect(frame);
 
-            float rotSpeed = (0.12f + 0.25f * HashToFloat(h * 1103515245u)) * ((h & 1u) == 0 ? 1f : -1f);
-            float rotation = _gameTime * rotSpeed + HashToFloat(h * 7919u) * MathF.PI * 2f;
+            float rotSpeed = (0.12f + 0.25f * HashNoise.ToFloat(h * 1103515245u)) * ((h & 1u) == 0 ? 1f : -1f);
+            float rotation = _gameTime * rotSpeed + HashNoise.ToFloat(h * 7919u) * MathF.PI * 2f;
 
             var screenPos = _renderer.WorldToScreen(new Vec2(wx, wy), 0f, _camera);
 
@@ -165,13 +165,4 @@ internal class DeathFogRenderer
             p.Rotation, origin, p.Scale, SpriteEffects.None, 0f);
     }
 
-    private static uint CellHash(int cx, int cy)
-    {
-        uint h = (uint)cx * 374761393u + (uint)cy * 668265263u;
-        h = (h ^ (h >> 13)) * 1274126177u;
-        h ^= h >> 16;
-        return h;
-    }
-
-    private static float HashToFloat(uint h) => (h & 0xFFFFFFu) / (float)0xFFFFFFu;
 }

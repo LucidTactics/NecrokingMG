@@ -241,20 +241,20 @@ public class GrassTuftRenderer
                 float frac = typeDensity - tuftCount;
                 if (frac > 0f)
                 {
-                    uint hFrac = TileHash(cx, cy, -1);
-                    if (HashToFloat(hFrac) < frac) tuftCount++;
+                    uint hFrac = HashNoise.CellHash(cx, cy, -1);
+                    if (HashNoise.ToFloat(hFrac) < frac) tuftCount++;
                 }
                 if (tuftCount > MaxTuftsPerCell) tuftCount = MaxTuftsPerCell;
                 if (tuftCount <= 0) continue;
 
                 for (int ti = 0; ti < tuftCount; ti++)
                 {
-                    uint h = TileHash(cx, cy, ti);
+                    uint h = HashNoise.CellHash(cx, cy, ti);
                     var tex = typeTextures[(int)((h * 2654435761u) % (uint)typeTextures.Length)];
 
-                    float fx = HashToFloat(h * 7919u);
-                    float fy = HashToFloat(h * 1103515245u);
-                    float fs = HashToFloat(h * 340573321u);
+                    float fx = HashNoise.ToFloat(h * 7919u);
+                    float fy = HashNoise.ToFloat(h * 1103515245u);
+                    float fs = HashNoise.ToFloat(h * 340573321u);
                     bool flip = (h & 1u) == 0u;
 
                     float worldSize = tuftWorldSize * typeScale * (0.8f + fs * 0.4f);
@@ -327,18 +327,6 @@ public class GrassTuftRenderer
     {
         return ColorUtils.Multiply(a, b);
     }
-
-    // Same hash as the old GrassRenderer — keeps tuft placement stable if we
-    // ever re-enable the old system alongside for comparison.
-    private static uint TileHash(int tx, int ty, int idx)
-    {
-        uint h = (uint)tx * 374761393u + (uint)ty * 668265263u + (uint)idx * 2654435769u;
-        h = (h ^ (h >> 13)) * 1274126177u;
-        h ^= h >> 16;
-        return h;
-    }
-
-    private static float HashToFloat(uint h) => (h & 0xFFFFFFu) / (float)0xFFFFFFu;
 
     public void Dispose()
     {
