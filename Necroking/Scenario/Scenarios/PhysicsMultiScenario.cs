@@ -56,7 +56,7 @@ public class PhysicsMultiScenario : ScenarioBase
         {
             _exploded = true;
             int launched = sim.Physics.ApplyRadialImpulse(sim.UnitsMut,
-                new Vec2(15, 15), 3f, 20f, 10f, Faction.Undead);
+                new Vec2(15, 15), 3f, 20f, 10f);
             DebugLog.Log(ScenarioLog, $"[{_elapsed:F2}s] Radial explosion! Launched {launched} units");
             DeferredScreenshot = "physics_multi_explode";
         }

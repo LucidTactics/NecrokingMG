@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using Necroking.Core;
-using Necroking.Data;
 using Necroking.Movement;
 using Necroking.Render;
 
@@ -23,8 +22,6 @@ public class PhysicsSystem
     public float DefaultDrag = 2.0f;        // XY velocity decay
     public float UpwardBias = 1.2f;         // multiplier on Z impulse
     public float MinLaunchZ = 4.0f;         // minimum upward velocity for visible arc
-    public float KnockdownTimeMin = 1.0f;
-    public float KnockdownTimeMax = 2.0f;
     public float ResistanceMultiplier = 2.0f; // size * this = resistance threshold
 
     private struct PhysicsBody
@@ -37,7 +34,6 @@ public class PhysicsSystem
         public Vec2 VelocityXY;
         public float VelocityZ;
         public float Drag;
-        public bool Active;
         public float LaunchGrace;  // Seconds before collision checks start (prevents instant re-collision)
         public float GravityMul;   // Per-body gravity scale; 1.0 = full Gravity, 0.3 = floaty
                                    // (trample uses ~0.3 to give visible arcs at the launch
@@ -45,7 +41,6 @@ public class PhysicsSystem
     }
 
     private readonly List<PhysicsBody> _bodies = new();
-    private static readonly Random _rng = new();
     private Data.Registries.BuffDef? _knockdownBuff;
 
     private const string KnockdownBuffID = "buff_knockdown";
@@ -105,6 +100,16 @@ public class PhysicsSystem
         float rawZ = (upwardForce > 0f ? upwardForce : effectiveForce * 0.5f) * UpwardBias;
         float launchZ = bypassMinZ ? rawZ : MathF.Max(MinLaunchZ, rawZ);
 
+        // Physics overrides other scripted motion: cancel an in-flight dodge hop
+        // or jump/pounce so two systems never fight over Position/Z. (The dodge
+        // lerp in Simulation.Tick and JumpSystem's ApplyArc both write Position
+        // absolutely each tick and would silently override the launch, then snap
+        // Z to 0 at their end — triggering a bogus Land + knockdown. Charges are
+        // the one motion that resists impulses — checked above.)
+        units[unitIdx].DodgeTimer = 0f;
+        if (units[unitIdx].JumpPhase != 0)
+            JumpSystem.CancelJump(units, unitIdx);
+
         // Enter physics state
         units[unitIdx].InPhysics = true;
         units[unitIdx].PreferredVel = Vec2.Zero;
@@ -123,7 +128,6 @@ public class PhysicsSystem
             VelocityXY = launchXY,
             VelocityZ = launchZ,
             Drag = DefaultDrag * dragMul,
-            Active = true,
             LaunchGrace = 0.05f,  // 50ms before collision checks start (prevents same-frame re-collision)
             GravityMul = gravityMul,
         });
@@ -135,16 +139,16 @@ public class PhysicsSystem
     }
 
     /// <summary>
-    /// Apply a radial impulse (explosion) to all enemy units within radius.
+    /// Apply a radial impulse (explosion) to all units within radius —
+    /// deliberately including friendlies (physics knockback is faction-blind).
     /// </summary>
     public int ApplyRadialImpulse(UnitArrays units, Vec2 center, float radius, float force,
-        float upwardForce, Faction ownerFaction)
+        float upwardForce)
     {
         int launched = 0;
         for (int i = 0; i < units.Count; i++)
         {
             if (!units[i].Alive || units[i].InPhysics) continue;
-            // Physics knockback hits everyone (friendly fire)
 
             Vec2 delta = units[i].Position - center;
             float dist = delta.Length();
@@ -181,10 +185,10 @@ public class PhysicsSystem
         for (int bi = _bodies.Count - 1; bi >= 0; bi--)
         {
             var body = _bodies[bi];
-            int idx = body.Active ? UnitUtil.ResolveUnitIndex(units, body.UnitId) : -1;
+            int idx = UnitUtil.ResolveUnitIndex(units, body.UnitId);
             if (idx < 0)
             {
-                // Unit no longer exists (removed) or body deactivated — drop the body.
+                // Unit no longer exists (removed) — drop the body.
                 _bodies.RemoveAt(bi);
                 continue;
             }
@@ -213,9 +217,6 @@ public class PhysicsSystem
             if (dragFactor < 0f) dragFactor = 0f;
             body.VelocityXY *= dragFactor;
 
-            // Also set unit Velocity for animation/rendering
-            units[idx].Velocity = body.VelocityXY;
-
             // Tick launch grace period
             if (body.LaunchGrace > 0f)
                 body.LaunchGrace -= dt;
@@ -226,6 +227,10 @@ public class PhysicsSystem
             {
                 CheckUnitCollisions(ref body, idx, units, dt, quadtree);
             }
+
+            // Set unit Velocity for animation/rendering — after collisions, so a
+            // chain hit's momentum loss shows this frame rather than one late.
+            units[idx].Velocity = body.VelocityXY;
 
             // --- Map-bounds clamp (the load-bearing half of the wall TODO) ---
             // Keep the airborne body on the map: an off-map Land() position corrupts the
@@ -258,8 +263,6 @@ public class PhysicsSystem
     {
         float flyerSpeed = body.VelocityXY.Length();
         if (flyerSpeed < MinTransferSpeed) return; // too slow to register
-
-        if (units[flyerIdx].Z > 2f) return; // too high to hit anyone
 
         float flyerMass = MassOf(units[flyerIdx]);
 
@@ -314,8 +317,12 @@ public class PhysicsSystem
             float normalLen = normal.Length();
             if (normalLen < 0.001f)
             {
-                // Co-located: fall back to flyer's motion direction.
-                normal = body.VelocityXY * (1f / flyerSpeed);
+                // Co-located: fall back to flyer's motion direction. Recompute the
+                // length — an earlier collision this frame may have shrunk VelocityXY,
+                // making the entry-time flyerSpeed stale (normal must be unit-length).
+                float speedNow = body.VelocityXY.Length();
+                if (speedNow < 0.001f) continue;
+                normal = body.VelocityXY * (1f / speedNow);
             }
             else
             {
@@ -388,7 +395,7 @@ public class PhysicsSystem
     {
         for (int i = 0; i < _bodies.Count; i++)
         {
-            if (_bodies[i].Active && _bodies[i].UnitId == unitId)
+            if (_bodies[i].UnitId == unitId)
             {
                 velocityXY = _bodies[i].VelocityXY;
                 velocityZ = _bodies[i].VelocityZ;
@@ -422,10 +429,10 @@ public class PhysicsSystem
     {
         for (int i = 0; i < _bodies.Count; i++)
         {
-            if (_bodies[i].Active && _bodies[i].UnitId == unitId)
+            if (_bodies[i].UnitId == unitId)
             {
                 gravityMul = _bodies[i].GravityMul > 0f ? _bodies[i].GravityMul : 1f;
-                dragMul = _bodies[i].Drag / DefaultDrag;
+                dragMul = DefaultDrag > 0f ? _bodies[i].Drag / DefaultDrag : 1f;
                 return true;
             }
         }

@@ -309,6 +309,19 @@ public static class JumpSystem
         units[idx].StuckTime = 0f; // hand back to normal movement without stale escape bias
     }
 
+    /// <summary>Abort a jump in any phase WITHOUT touching Position/Z/Velocity — used when
+    /// an external system takes over the unit's motion mid-jump (PhysicsSystem.ApplyImpulse:
+    /// a knockback must win over the scripted arc, and the new owner controls Z from here;
+    /// EndJump's Z=0 would read as an instant physics landing).</summary>
+    public static void CancelJump(UnitArrays units, int idx)
+    {
+        units[idx].JumpPhase = 0;
+        units[idx].Jumping = false;
+        units[idx].JumpAttackFired = false;
+        units[idx].JumpKind = 0;
+        units[idx].JumpPlaybackSpeed = 1f;
+    }
+
     // --- Helpers ---
 
     private static float ComputeAirDuration(Vec2 start, Vec2 end)

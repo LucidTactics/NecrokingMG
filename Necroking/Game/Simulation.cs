@@ -794,7 +794,7 @@ public class Simulation
             {
                 float kbRadius = spellDef.KnockbackRadius > 0f ? spellDef.KnockbackRadius : hit.AoeRadius;
                 _physics.ApplyRadialImpulse(_units, hit.ImpactPos, kbRadius,
-                    spellDef.KnockbackForce, spellDef.KnockbackUpward, hit.OwnerFaction);
+                    spellDef.KnockbackForce, spellDef.KnockbackUpward);
             }
 
             // Directional impact: shove the struck unit along the projectile's flight
@@ -3616,6 +3616,16 @@ public class Simulation
             float drag = 1f - _physics.DefaultDrag * c.DragMul * dt;
             if (drag < 0f) drag = 0f;
             c.VelocityXY *= drag;
+            // Map-bounds clamp, same reason as PhysicsSystem's for units: an off-map
+            // corpse position feeds reanimation (SpawnZombieMinion at corpse.Position),
+            // which would corrupt the quadtree / WorldToGrid with a negative-tile unit.
+            {
+                float maxX = MathF.Max(0.5f, _grid.Width * GameConstants.TileSize - 0.5f);
+                float maxY = MathF.Max(0.5f, _grid.Height * GameConstants.TileSize - 0.5f);
+                c.Position = new Vec2(
+                    MathF.Min(MathF.Max(c.Position.X, 0.5f), maxX),
+                    MathF.Min(MathF.Max(c.Position.Y, 0.5f), maxY));
+            }
             if (c.Z <= 0f)
             {
                 c.Z = 0f;

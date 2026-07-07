@@ -131,9 +131,12 @@ chains into standing units via inelastic mass³ momentum transfer, and lands wit
 - **`ApplyImpulse(units, unitIdx, direction, force, upwardForce, bypassResistance,
   bypassMinZ, gravityMul, dragMul)`** — the single-unit directional launch (size-based
   resistance: `Size * ResistanceMultiplier` subtracts from force; charging trample units
-  are immune).
-- **`ApplyRadialImpulse(units, center, radius, force, upwardForce, ownerFaction)`** —
-  explosion knockback with linear falloff; **hits everyone incl. friendlies**.
+  are immune). A successful launch cancels competing scripted motion: zeroes `DodgeTimer`
+  (trample-dodge hop) and calls `JumpSystem.CancelJump` — those systems write Position/Z
+  absolutely and would otherwise fight the physics body.
+- **`ApplyRadialImpulse(units, center, radius, force, upwardForce)`** —
+  explosion knockback with linear falloff; **hits everyone incl. friendlies** (no
+  faction parameter — knockback is deliberately faction-blind).
 - Bodies are keyed by stable `UnitId`, not index. Ticked from `Simulation.Tick`.
 - Corpses inherit the body's velocity at death (`TryGetBodyVelocity`/`TryGetBodyTuning`
   → corpse arc integrated in `Simulation.UpdateCorpses`). **Environment objects/props
