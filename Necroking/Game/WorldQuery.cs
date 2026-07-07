@@ -121,6 +121,13 @@ public readonly struct EnvBerryBushes : IEnvQueryFilter
     }
 }
 
+/// <summary>Match-all env filter (no gates) — for picks that must see every
+/// placed object regardless of runtime state (e.g. map-editor removal).</summary>
+public readonly struct EnvAny : IEnvQueryFilter
+{
+    public bool Match(EnvironmentSystem env, int i) => true;
+}
+
 /// <summary>
 /// Central world-query engine: nearest-of / under-cursor / all-in-radius over
 /// units, env objects, and corpses. One canonical implementation of the
@@ -247,6 +254,12 @@ public sealed class WorldQuery
     /// <summary>Nearest living unit of exactly <paramref name="faction"/>,
     /// optionally excluding one index (the caster). Linear scan — UI-safe.</summary>
     public int NearestAllyToPoint(Vec2 pos, float range, Faction faction, int excludeIdx = -1)
+        => NearestUnitOfFaction(pos, range, faction, excludeIdx);
+
+    /// <summary>Nearest living unit of exactly <paramref name="faction"/> —
+    /// neutral-name core shared by ally scans and one-faction threat scans
+    /// (e.g. the village alarm's "nearest Undead"). Linear scan — UI/AI-safe.</summary>
+    public int NearestUnitOfFaction(Vec2 pos, float range, Faction faction, int excludeIdx = -1)
         => NearestUnitLinear(pos, range, faction.Bit(), excludeIdx);
 
     /// <summary>Nearest living unit of any faction within the pick radius —

@@ -1030,8 +1030,15 @@ public class EnvironmentSystem
     /// <summary>Pending trap fire events from the last UpdateTraps call. Consumed by Game1.</summary>
     public readonly List<TrapFireEvent> TrapFireEvents = new();
 
-    /// <summary>Update trap cooldowns and find targets. Populates TrapFireEvents.</summary>
-    public void UpdateTraps(float dt, UnitArrays units)
+    /// <summary>Trap target-detection range (world units) — slightly larger than
+    /// trap_zap's 1.5 spell range. The actual nearest-enemy query is supplied by
+    /// the caller (Game1 passes the canonical _sim.Query scan).</summary>
+    public const float TrapDetectRange = 2.5f;
+
+    /// <summary>Update trap cooldowns and find targets. Populates TrapFireEvents.
+    /// <paramref name="findNearestEnemy"/>: (point, trapFaction) → nearest enemy
+    /// unit index within <see cref="TrapDetectRange"/>, or -1.</summary>
+    public void UpdateTraps(float dt, System.Func<Vec2, Faction, int> findNearestEnemy)
     {
         TrapFireEvents.Clear();
 
@@ -1058,9 +1065,11 @@ public class EnvironmentSystem
                         continue;
                     }
 
-                    // Find first enemy in range
+                    // Find first enemy in range. Faction rule: owner 0 = the
+                    // player's (Undead) trap, anything else = Human-built.
                     var trapPos = new Vec2(_objects[i].X, _objects[i].Y);
-                    int target = FindTrapTarget(trapPos, def, rt.Owner, units);
+                    var trapFaction = rt.Owner == 0 ? Faction.Undead : Faction.Human;
+                    int target = findNearestEnemy(trapPos, trapFaction);
                     if (target < 0) continue;
 
                     // Fire! Transition to Triggered
@@ -1139,28 +1148,6 @@ public class EnvironmentSystem
         var rt = _objectRuntime[objIdx];
         rt.TrapCooldownTimer = cooldown;
         _objectRuntime[objIdx] = rt;
-    }
-
-    private static int FindTrapTarget(Vec2 trapPos, EnvironmentObjectDef def, int trapOwner,
-        UnitArrays units)
-    {
-        // Use the spell range from the def name — but we don't have SpellRegistry here.
-        // Use a fixed detection range based on typical trap spell range.
-        // Game1 can override with actual spell range if needed.
-        float rangeSq = 2.5f * 2.5f; // slightly larger than trap_zap range of 1.5
-
-        float bestDist = rangeSq;
-        int bestIdx = -1;
-        Faction trapFaction = trapOwner == 0 ? Faction.Undead : Faction.Human;
-
-        for (int u = 0; u < units.Count; u++)
-        {
-            if (!units[u].Alive) continue;
-            if (units[u].Faction == trapFaction) continue; // skip friendlies
-            float d = (units[u].Position - trapPos).LengthSq();
-            if (d < bestDist) { bestDist = d; bestIdx = u; }
-        }
-        return bestIdx;
     }
 
     /// <summary>

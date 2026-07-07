@@ -11,10 +11,15 @@ namespace Necroking.AI;
 /// </summary>
 internal static class VillageThreat
 {
-    /// <summary>Nearest living Undead within <paramref name="range"/>, or -1. Linear scan —
-    /// only a handful of villagers/dogs call this per frame.</summary>
+    /// <summary>Nearest living Undead within <paramref name="range"/>, or -1.
+    /// Wrapper kept for the POLICY (village alarms react to the undead faction
+    /// only); the scan itself is the canonical WorldQuery linear query. Linear
+    /// fallback only for hand-built minimal contexts without a Query handle.</summary>
     public static int FindNearestUndead(ref AIContext ctx, float range)
     {
+        if (ctx.Query != null)
+            return ctx.Query.NearestUnitOfFaction(ctx.MyPos, range, Faction.Undead);
+
         float best = range * range;
         int bestIdx = -1;
         var me = ctx.MyPos;

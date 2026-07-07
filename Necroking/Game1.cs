@@ -147,30 +147,24 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     // Pick the nearest unit or corpse to a world point, within RopeAttachRadius. Claimed
     // corpses (already tethered/carried) are skipped unless includeClaimedCorpses is set.
+    // WorldQuery does both halves; only the cross-collection "nearest of either"
+    // comparison lives here (tie goes to the corpse, matching the old scan order).
     private bool TryPickTetherEnd(Vec2 worldPos, out TetherEnd end, bool includeClaimedCorpses = false)
     {
         end = default;
-        bool found = false;
-        float best = RopeAttachRadius * RopeAttachRadius;
-        var corpses = _sim.Corpses;
-        for (int ci = 0; ci < corpses.Count; ci++)
-        {
-            var cp = corpses[ci];
-            if (cp.ConsumedBySummon || cp.Dissolving || cp.Bagged) continue;
-            if (!includeClaimedCorpses && cp.DraggedByUnitID != GameConstants.InvalidUnit) continue;
-            float dx = cp.Position.X - worldPos.X, dy = cp.Position.Y - worldPos.Y;
-            float d2 = dx * dx + dy * dy;
-            if (d2 < best) { best = d2; end = TetherEnd.ForCorpse(cp.CorpseID); found = true; }
-        }
-        for (int ui = 0; ui < _sim.Units.Count; ui++)
-        {
-            var u = _sim.Units[ui];
-            if (!u.Alive) continue;
-            float dx = u.Position.X - worldPos.X, dy = u.Position.Y - worldPos.Y;
-            float d2 = dx * dx + dy * dy;
-            if (d2 < best) { best = d2; end = TetherEnd.ForUnit(u.Id); found = true; }
-        }
-        return found;
+        var exclude = includeClaimedCorpses
+            ? CorpseExclude.Free & ~CorpseExclude.Dragged
+            : CorpseExclude.Free;
+        int ci = _sim.Query.NearestCorpse(worldPos, RopeAttachRadius, exclude);
+        int ui = _sim.Query.UnitUnderCursor(worldPos, RopeAttachRadius);
+        if (ci < 0 && ui < 0) return false;
+
+        float cd = ci >= 0 ? (_sim.Corpses[ci].Position - worldPos).LengthSq() : float.MaxValue;
+        float ud = ui >= 0 ? (_sim.Units[ui].Position - worldPos).LengthSq() : float.MaxValue;
+        end = ud < cd
+            ? TetherEnd.ForUnit(_sim.Units[ui].Id)
+            : TetherEnd.ForCorpse(_sim.Corpses[ci].CorpseID);
+        return true;
     }
 
     // Create a tether between two endpoints. If exactly one end is a corpse and the other a
@@ -3644,7 +3638,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             UpdateZoneSpawns(_clock.WorldDt);
             _envSystem.UpdateBerryBushes(_clock.WorldDt);
             _envSystem.UpdateAnimations(_clock.WorldDt, _clock.VisualTime);
-            _envSystem.UpdateTraps(_clock.WorldDt, _sim.Units);
+            // Trap targeting uses the canonical WorldQuery scan; the delegate is
+            // cached (reads _sim at invoke time, so it survives map reloads).
+            _trapTargetFinder ??= (pos, trapFaction) => _sim.Query.NearestEnemyToPoint(
+                pos, World.EnvironmentSystem.TrapDetectRange, trapFaction);
+            _envSystem.UpdateTraps(_clock.WorldDt, _trapTargetFinder);
             ProcessTrapFireEvents();
 
             // --- Scenario tick ---
@@ -3904,6 +3902,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         base.Update(gameTime);
     }
 
+    /// <summary>Cached trap-target query passed to EnvironmentSystem.UpdateTraps
+    /// (see the call site in Update — avoids a per-frame closure allocation).</summary>
+    private Func<Vec2, Faction, int>? _trapTargetFinder;
+
     /// <summary>Process trap fire events from EnvironmentSystem.UpdateTraps — cast spells and apply damage.</summary>
     private void ProcessTrapFireEvents()
     {
@@ -4041,22 +4043,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Pick a berry bush in Berries state nearest to <paramref name="worldPos"/>.
     /// Returns -1 if no eligible bush is within <paramref name="maxRadius"/>.</summary>
     private int FindBerryBushNear(Vec2 worldPos, float maxRadius)
-    {
-        int best = -1;
-        float bestD = maxRadius * maxRadius;
-        for (int i = 0; i < _envSystem.ObjectCount; i++)
-        {
-            var def = _envSystem.GetDef(_envSystem.GetObject(i).DefIndex);
-            if (!def.IsBerryBush) continue;
-            var rt = _envSystem.GetObjectRuntime(i);
-            if (!rt.Alive || rt.BerryState != World.BerryState.Berries) continue;
-            var obj = _envSystem.GetObject(i);
-            float dx = obj.X - worldPos.X, dy = obj.Y - worldPos.Y;
-            float d = dx * dx + dy * dy;
-            if (d < bestD) { bestD = d; best = i; }
-        }
-        return best;
-    }
+        => _sim.Query.NearestEnvObject(worldPos, maxRadius, new EnvBerryBushes());
 
     /// <summary>Post-AI hook. Fires the moment WorkLoop completes (signalled
     /// by Subroutine == BushSub_AwaitFinalize) — applies the bush poison and

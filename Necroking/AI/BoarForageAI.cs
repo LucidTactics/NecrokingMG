@@ -81,7 +81,7 @@ public static class BoarForageAI
 
                 // Timer done — the mushroom may have moved out of reach or been
                 // grabbed by the player meanwhile, so re-find the nearest in bite range.
-                int eatIdx = FindNearestMushroom(env, myPos, EatRadius);
+                int eatIdx = FindNearestMushroom(sim, myPos, EatRadius);
                 if (eatIdx >= 0)
                 {
                     var eObj = env.Objects[eatIdx];
@@ -96,7 +96,7 @@ public static class BoarForageAI
             }
 
             // Look for the nearest mushroom to go eat.
-            int targetIdx = FindNearestMushroom(env, myPos, ForageRange);
+            int targetIdx = FindNearestMushroom(sim, myPos, ForageRange);
             if (targetIdx < 0) continue;                    // none nearby — stay with the horde
 
             var mObj = env.Objects[targetIdx];
@@ -114,27 +114,21 @@ public static class BoarForageAI
         }
     }
 
-    /// <summary>Nearest visible mushroom foragable within <paramref name="maxDist"/> of
-    /// <paramref name="fromPos"/>, or -1. Mushrooms are foragables whose art lives under
-    /// assets/Environment/Mushrooms/ (Deathcap, Ghostcap, Magic/Poison Mushroom, Rotgill,
-    /// Toadstool) — distinguishes them from berries, logs and dropped potions.</summary>
-    private static int FindNearestMushroom(EnvironmentSystem env, Vec2 fromPos, float maxDist)
+    /// <summary>Visible mushroom foragables (see <see cref="IsMushroom"/>) — the
+    /// caller-side filter for the canonical WorldQuery env scan. Mushrooms are
+    /// foragables whose art lives under assets/Environment/Mushrooms/ (Deathcap,
+    /// Ghostcap, Magic/Poison Mushroom, Rotgill, Toadstool) — distinguishes them
+    /// from berries, logs and dropped potions.</summary>
+    private readonly struct EnvMushrooms : IEnvQueryFilter
     {
-        float bestSq = maxDist * maxDist;
-        int bestIdx = -1;
-        for (int i = 0; i < env.ObjectCount; i++)
-        {
-            if (!env.IsObjectVisible(i)) continue;
-            var def = env.Defs[env.Objects[i].DefIndex];
-            if (!def.IsForagable) continue;
-            if (!IsMushroom(def)) continue;
-            var obj = env.Objects[i];
-            float dx = obj.X - fromPos.X, dy = obj.Y - fromPos.Y;
-            float d2 = dx * dx + dy * dy;
-            if (d2 < bestSq) { bestSq = d2; bestIdx = i; }
-        }
-        return bestIdx;
+        public bool Match(EnvironmentSystem env, int i)
+            => env.IsObjectVisible(i) && IsMushroom(env.Defs[env.Objects[i].DefIndex]);
     }
+
+    /// <summary>Nearest visible mushroom foragable within <paramref name="maxDist"/> of
+    /// <paramref name="fromPos"/>, or -1.</summary>
+    private static int FindNearestMushroom(Simulation sim, Vec2 fromPos, float maxDist)
+        => sim.Query.NearestEnvObject(fromPos, maxDist, new EnvMushrooms());
 
     public static bool IsMushroom(EnvironmentObjectDef def) =>
         def.IsForagable

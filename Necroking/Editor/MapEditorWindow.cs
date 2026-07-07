@@ -7000,18 +7000,8 @@ public class MapEditorWindow
         }
     }
 
+    // Canonical WorldQuery scan with the match-all filter — editor removal must
+    // see every placed object regardless of runtime state.
     private int FindClosestObject(Vec2 worldPos, float maxDist)
-    {
-        float bestDist = maxDist * maxDist;
-        int best = -1;
-        for (int i = 0; i < _envSystem.ObjectCount; i++)
-        {
-            var obj = _envSystem.GetObject(i);
-            float dx = obj.X - worldPos.X;
-            float dy = obj.Y - worldPos.Y;
-            float d2 = dx * dx + dy * dy;
-            if (d2 < bestDist) { bestDist = d2; best = i; }
-        }
-        return best;
-    }
+        => _game._sim.Query.NearestEnvObject(worldPos, maxDist, new GameSystems.EnvAny());
 }
