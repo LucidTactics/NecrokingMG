@@ -88,13 +88,51 @@ public sealed class MapEditorLayer : UILayer
 }
 
 /// <summary>
-/// The remaining full-screen editors (unit/spell/UI/item) as ONE opaque
-/// blocking layer. Editor internals (immediate-mode input during Draw,
-/// EditorBase machinery) are untouched — this seat only provides the blocking
-/// blanket, ESC-to-close, and the z-position above menus and below editor
-/// sub-popups. Replaces the per-editor ActionModalLayers +
-/// ReconcileTopLevelEditorLayers. The map editor has its own panel-like seat
-/// (<see cref="MapEditorLayer"/>).
+/// The UI editor as its own router layer. Unlike the map editor it IS modal —
+/// a full-screen dim with a large centered window — so it stays BLOCKING, but
+/// its ContainsMouse is the actual window rect (via
+/// <see cref="Editor.UIEditorWindow.IsPanelAt"/>) so hover ownership over the
+/// 30px dim margin is "blocked", not "inside the editor". Editor internals
+/// (its own EditorBase input, immediate-mode draw) are untouched.
+/// </summary>
+public sealed class UIEditorLayer : UILayer
+{
+    private readonly Game1 _g;
+    public UIEditorLayer(Game1 g) { _g = g; Band = UIBand.Editor; }
+
+    public override string Id => "editor.ui";
+    public override bool Visible => _g._menuState == MenuState.UIEditor;
+    public override bool Blocking => true;
+    public override bool Closable => true;
+
+    public override bool ContainsMouse(int mx, int my, in UICtx ctx)
+        => _g._uiEditor.IsPanelAt(mx, my, ctx.ScreenW, ctx.ScreenH);
+
+    public override void OnCancel()
+    {
+        // The UI editor IS its own EditorBase instance (_uiEditor, not
+        // _editorUi) — resetting the wrong one left stale focus across
+        // close/reopen (the original per-layer OnCancelAction comment).
+        _g._uiEditor?.ResetAllState();
+        _g._menuState = MenuState.None;
+    }
+
+    public override void Draw(in UICtx ctx)
+    {
+        var gt = ctx.GameTime;
+        if (gt != null) _g._uiEditor.Draw(ctx.ScreenW, ctx.ScreenH, gt);
+        else _g._uiEditor.Draw(ctx.ScreenW, ctx.ScreenH);
+    }
+}
+
+/// <summary>
+/// The remaining full-screen editors (unit/spell/item) as ONE opaque blocking
+/// layer. Editor internals (immediate-mode input during Draw, EditorBase
+/// machinery) are untouched — this seat only provides the blocking blanket,
+/// ESC-to-close, and the z-position above menus and below editor sub-popups.
+/// Replaces the per-editor ActionModalLayers + ReconcileTopLevelEditorLayers.
+/// The map editor (<see cref="MapEditorLayer"/>) and UI editor
+/// (<see cref="UIEditorLayer"/>) have their own seats.
 /// </summary>
 public sealed class EditorHostLayer : UILayer
 {
@@ -102,17 +140,17 @@ public sealed class EditorHostLayer : UILayer
     public EditorHostLayer(Game1 g) { _g = g; Band = UIBand.Editor; }
 
     public override string Id => "editor.host";
-    public override bool Visible => _g.EditorActive && _g._menuState != MenuState.MapEditor;
+    public override bool Visible => _g.EditorActive
+        && _g._menuState != MenuState.MapEditor
+        && _g._menuState != MenuState.UIEditor;
     public override bool Blocking => true;
     public override bool Closable => true;
     public override bool ContainsMouse(int mx, int my, in UICtx ctx) => true;
 
     public override void OnCancel()
     {
-        // Same cleanup the old per-editor OnCancelActions did: reset the
-        // owning EditorBase (the UI editor IS its own EditorBase instance).
-        if (_g._menuState == MenuState.UIEditor) _g._uiEditor?.ResetAllState();
-        else _g._editorUi?.ResetAllState();
+        // Same cleanup the old per-editor OnCancelActions did.
+        _g._editorUi?.ResetAllState();
         _g._menuState = MenuState.None;
     }
 
@@ -141,9 +179,6 @@ public sealed class EditorHostLayer : UILayer
                     _g._editorUi.ResetAllState();
                     _g._menuState = MenuState.None;
                 }
-                break;
-            case MenuState.UIEditor:
-                _g._uiEditor.Draw(ctx.ScreenW, ctx.ScreenH);
                 break;
             case MenuState.ItemEditor:
                 if (gt == null) break;

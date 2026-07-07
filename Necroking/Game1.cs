@@ -986,10 +986,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         // Menus, editors, and the editors' transient sub-popup stack, top bands.
         // The map editor gets its own panel-like seat (non-blocking, footprint =
-        // its side panel); the remaining full-screen editors share the opaque
-        // EditorHostLayer. Mutually exclusive via _menuState.
+        // its side panel) and the UI editor its own modal seat (blocking,
+        // footprint = its centered window); the remaining full-screen editors
+        // share the opaque EditorHostLayer. Mutually exclusive via _menuState.
         _uiRouter.Register(new Necroking.UI.MenuHostLayer(this));
         _uiRouter.Register(new Necroking.UI.MapEditorLayer(this, _popups));
+        _uiRouter.Register(new Necroking.UI.UIEditorLayer(this));
         _uiRouter.Register(new Necroking.UI.EditorHostLayer(this));
         _uiRouter.Register(new Necroking.UI.ModalStackLayer(_popups));
 

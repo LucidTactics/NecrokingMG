@@ -1444,10 +1444,19 @@ public partial class UIEditorWindow : EditorBase
 
     public bool IsMouseOverPanel(int screenW, int screenH)
     {
+        var mouse = _input.Mouse;
+        return IsPanelAt(mouse.X, mouse.Y, screenW, screenH);
+    }
+
+    /// <summary>Pure point test against the editor's window rect (the centered
+    /// panel inside the 30px margins). The UI-editor layer's ContainsMouse in
+    /// the UI router; the layer is still BLOCKING (the dim overlay behind the
+    /// window swallows outside clicks), this just makes hover ownership exact.</summary>
+    public bool IsPanelAt(int mx, int my, int screenW, int screenH)
+    {
         int margin = 30;
         var r = new Rectangle(margin, margin, screenW - margin * 2, screenH - margin * 2);
-        var mouse = _input.Mouse;
-        return r.Contains(mouse.X, mouse.Y);
+        return r.Contains(mx, my);
     }
 
     // ═══════════════════════════════════════════════
