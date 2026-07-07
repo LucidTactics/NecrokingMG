@@ -2,8 +2,10 @@
 //  - catalog.json  (metadata, no bodies) for clustering
 //  - batches/batch_NNN.json (with bodies) for LLM labeling agents
 // Usage: MethodExtractor <repoRoot> <outDir>
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -52,8 +54,15 @@ Console.WriteLine($"Extracted {records.Count} methods/ctors from {records.Select
 
 var jsonOpts = new JsonSerializerOptions { WriteIndented = false, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-// catalog: no bodies
-var catalog = records.Select(r => new { r.Id, r.File, r.Type, r.Name, r.Kind, r.Sig, r.StartLine, r.EndLine, r.Lines, r.Doc }).ToList();
+// catalog: no bodies, but carries the identity hashes (BodyHash/Key) the label store keys on.
+// Normalization MUST match docs/consolidation-review/store/meta.json and tools/label_store.py:
+//   Key     = file::type::name::sha1(sig_no_whitespace)[:8]
+//   BodyHash= sha1( body, block+line comments stripped, ALL whitespace stripped )[:12]
+var catalog = records.Select(r => new {
+    r.Id, r.File, r.Type, r.Name, r.Kind, r.Sig, r.StartLine, r.EndLine, r.Lines, r.Doc,
+    BodyHash = Body12(r.Body),
+    Key = ComposeKey(r.File, r.Type, r.Name, r.Sig)
+}).ToList();
 File.WriteAllText(Path.Combine(outDir, "catalog.json"), JsonSerializer.Serialize(catalog, jsonOpts));
 
 // Auto-labeled scenario boilerplate: skip from agent batches
@@ -122,6 +131,26 @@ static string GetDocComment(SyntaxNode node)
     string s = sb.ToString().Trim();
     return s.Length > 500 ? s[..500] : s;
 }
+
+// --- identity hashes (mirror of store/meta.json + tools/label_store.py) ---
+static string Sha1Hex(string s)
+{
+    byte[] h = SHA1.HashData(Encoding.UTF8.GetBytes(s));
+    var sb = new StringBuilder(h.Length * 2);
+    foreach (byte b in h) sb.Append(b.ToString("x2"));
+    return sb.ToString();
+}
+
+static string Body12(string body)
+{
+    string s = Regex.Replace(body, @"/\*.*?\*/", "", RegexOptions.Singleline); // block comments
+    s = Regex.Replace(s, @"//[^\n]*", "");                                        // line + /// doc comments
+    s = Regex.Replace(s, @"\s+", "");                                             // all whitespace
+    return Sha1Hex(s)[..12];
+}
+
+static string ComposeKey(string file, string type, string name, string sig)
+    => $"{file}::{type}::{name}::{Sha1Hex(Regex.Replace(sig, @"\s+", ""))[..8]}";
 
 record MethodRec(int Id, string File, string Type, string Name, string Kind, string Sig,
     int StartLine, int EndLine, int Lines, string Doc, string Body);
