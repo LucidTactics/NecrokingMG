@@ -3916,31 +3916,20 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _envSystem.SetTrapCooldown(evt.ObjectIndex, spell.Cooldown);
 
             var targetPos = _sim.Units[evt.TargetUnitIdx].Position;
-            float targetH = 1.0f;
-            var tDef = _gameData.Units.Get(_sim.Units[evt.TargetUnitIdx].UnitDefID);
-            if (tDef != null) targetH = tDef.SpriteWorldHeight * 0.5f;
 
-            if (spell.Category == "Strike" && spell.StrikeTargetUnit)
+            if (spell.Category == "Strike")
             {
-                // Zap from trap to target
-                var style = spell.BuildStrikeStyle();
-                _sim.Lightning.SpawnZap(evt.TrapPos, targetPos,
-                    spell.ZapDuration > 0 ? spell.ZapDuration : 0.2f,
-                    style, 0.3f, targetH);
-                _sim.DealDamage(evt.TargetUnitIdx, spell.Damage);
-                _damageNumbers.Add(new DamageNumber
-                {
-                    WorldPos = targetPos, Damage = spell.Damage, Timer = 0f, Height = targetH
-                });
-            }
-            else if (spell.Category == "Strike")
-            {
-                // Ground strike at target position
-                var style = spell.BuildStrikeStyle();
-                var sVis = spell.StrikeVisualType == "GodRay" ? StrikeVisual.GodRay : StrikeVisual.Lightning;
-                _sim.Lightning.SpawnStrike(targetPos, spell.TelegraphDuration,
-                    spell.StrikeDuration, spell.AoeRadius, spell.Damage,
-                    style, spell.Id, sVis, telegraphVisible: spell.TelegraphVisible);
+                // Shared strike executor — traps go through the same pipeline as
+                // player/AI casts (MR penetration gate, damage number, god-ray
+                // params + target filter on ground strikes). casterIdx -1 =
+                // casterless source: base spell penetration, no killer credit.
+                // Faction mirrors EnvironmentSystem.FindTrapTarget's owner rule.
+                var trapFaction = evt.TrapOwner == 0 ? Faction.Undead : Faction.Human;
+                GameSystems.SpellEffectSystem.ExecuteStrikeFrom(spell, _sim, _gameData,
+                    casterIdx: -1, ownerUid: GameConstants.InvalidUnit,
+                    origin: evt.TrapPos, originHeight: 0.3f,
+                    target: targetPos, sourceFaction: trapFaction,
+                    damageNumbers: _damageNumbers);
             }
             else if (spell.Category == "Cloud")
             {

@@ -497,6 +497,26 @@ public static class SpellEffectSystem
         int casterIdx, Vec2 target, Vec2 effectOrigin, List<DamageNumber> damageNumbers)
     {
         var units = sim.UnitsMut;
+        ExecuteStrikeFrom(spell, sim, gameData, casterIdx, units[casterIdx].Id,
+            effectOrigin, units[casterIdx].EffectSpawnHeight, target,
+            units[casterIdx].Faction, damageNumbers);
+    }
+
+    /// <summary>
+    /// Origin-based strike executor — the single Strike-category implementation
+    /// for every source: player casts, AI casts (both via <see cref="Execute"/>)
+    /// and casterless sources like traps, which have a world-space origin but no
+    /// caster unit. Pass <paramref name="casterIdx"/> = -1 for casterless
+    /// sources: the MR gate then uses base spell penetration (no caster path
+    /// bonus) and kills carry no attacker credit; pass
+    /// <see cref="GameConstants.InvalidUnit"/> as <paramref name="ownerUid"/> so
+    /// ground strikes stay unattributed.
+    /// </summary>
+    public static void ExecuteStrikeFrom(SpellDef spell, Simulation sim, GameData gameData,
+        int casterIdx, uint ownerUid, Vec2 origin, float originHeight,
+        Vec2 target, Faction sourceFaction, List<DamageNumber> damageNumbers)
+    {
+        var units = sim.UnitsMut;
         var style = spell.BuildStrikeStyle();
         var sVis = spell.StrikeVisualType == "GodRay" ? StrikeVisual.GodRay : StrikeVisual.Lightning;
         var sGrp = spell.BuildGodRayParams();
@@ -504,8 +524,7 @@ public static class SpellEffectSystem
 
         if (spell.StrikeTargetUnit)
         {
-            float casterH = units[casterIdx].EffectSpawnHeight;
-            int enemy = FindClosestEnemy(sim, target, spell.Range, units[casterIdx].Faction);
+            int enemy = FindClosestEnemy(sim, target, spell.Range, sourceFaction);
             if (enemy >= 0)
             {
                 var targetPos = units[enemy].Position;
@@ -513,9 +532,9 @@ public static class SpellEffectSystem
                 var tDef = gameData.Units.Get(units[enemy].UnitDefID);
                 if (tDef != null) targetH = tDef.SpriteWorldHeight * 0.5f;
 
-                sim.Lightning.SpawnZap(effectOrigin, targetPos,
+                sim.Lightning.SpawnZap(origin, targetPos,
                     spell.ZapDuration > 0 ? spell.ZapDuration : spell.StrikeDuration,
-                    style, casterH, targetH);
+                    style, originHeight, targetH);
                 // Magic-resistance gate: an MR-checked strike only lands if it
                 // penetrates the target's MR.
                 if (SpellPenetration.Affects(gameData, units, casterIdx, enemy, spell))
@@ -534,7 +553,7 @@ public static class SpellEffectSystem
             sim.Lightning.SpawnStrike(target, spell.TelegraphDuration,
                 spell.StrikeDuration, spell.AoeRadius, spell.Damage,
                 style, spell.Id, sVis, sGrp, sTF, spell.TelegraphVisible,
-                units[casterIdx].Id);
+                ownerUid);
         }
     }
 
