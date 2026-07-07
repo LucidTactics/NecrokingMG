@@ -42,7 +42,7 @@ public class WeatherEffects
     [JsonPropertyName("windAngle")] public float WindAngle { get; set; }
 }
 
-public class WeatherPresetDef : IHasId
+public class WeatherPresetDef : INamedDef
 {
     [JsonPropertyName("id")] public string Id { get; set; } = "";
     [JsonPropertyName("name")] public string DisplayName { get; set; } = "";

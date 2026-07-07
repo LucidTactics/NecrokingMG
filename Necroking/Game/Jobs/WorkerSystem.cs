@@ -107,8 +107,7 @@ public class WorkerSystem
             var u = _sim.Units[i];
             var def = _gameData.Units.Get(u.UnitDefID);
             if (def != null && def.UndeadCategory == Data.Registries.UndeadCategory.Monster) continue; // humanoids only
-            string name = def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName
-                        : (string.IsNullOrEmpty(u.UnitDefID) ? u.Type.ToString() : u.UnitDefID);
+            string name = string.IsNullOrEmpty(u.UnitDefID) ? u.Type.ToString() : _gameData.Units.NameOf(u.UnitDefID);
             list.Add(new WorkerCandidate { Id = u.Id, Name = $"{name} #{u.Id}" });
         }
         return list;
@@ -121,9 +120,7 @@ public class WorkerSystem
             var u = _sim.Units[i];
             if (u.Alive && u.Archetype == WorkerArchetype && u.WorkerHomeObjIdx == graveObjIdx)
             {
-                var def = _gameData.Units.Get(u.UnitDefID);
-                string name = def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName
-                            : (string.IsNullOrEmpty(u.UnitDefID) ? u.Type.ToString() : u.UnitDefID);
+                string name = string.IsNullOrEmpty(u.UnitDefID) ? u.Type.ToString() : _gameData.Units.NameOf(u.UnitDefID);
                 return new WorkerCandidate { Id = u.Id, Name = $"{name} #{u.Id}" };
             }
         }
@@ -501,11 +498,7 @@ public class WorkerSystem
     }
 
     private string CorpseLabel(string unitDefId)
-    {
-        if (string.IsNullOrEmpty(unitDefId)) return "Corpse";
-        var def = _gameData.Units.Get(unitDefId);
-        return def != null && !string.IsNullOrEmpty(def.DisplayName) ? def.DisplayName : unitDefId;
-    }
+        => string.IsNullOrEmpty(unitDefId) ? "Corpse" : _gameData.Units.NameOf(unitDefId);
 
     /// <summary>UI: human-readable lines listing the corpses piled at a building,
     /// grouped by body type with counts (e.g. "Skeleton ×3"). The abstract Corpse

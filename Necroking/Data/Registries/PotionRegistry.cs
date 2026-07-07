@@ -10,7 +10,7 @@ public class RecipeIngredient
     [JsonPropertyName("amount")] public int Amount { get; set; } = 1;
 }
 
-public class PotionDef : IHasId
+public class PotionDef : INamedDef
 {
     [EditorHide] [JsonPropertyName("id")] public string Id { get; set; } = "";
     [EditorHide] [JsonPropertyName("displayName")] public string DisplayName { get; set; } = "";

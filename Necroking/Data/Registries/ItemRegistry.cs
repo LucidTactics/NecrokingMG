@@ -2,7 +2,7 @@ using Necroking.Editor;
 
 namespace Necroking.Data.Registries;
 
-public class ItemDef : IHasId
+public class ItemDef : INamedDef
 {
     [EditorField(Label = "ID", Order = 0)]
     public string Id { get; set; } = "";

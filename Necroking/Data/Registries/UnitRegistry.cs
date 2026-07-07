@@ -149,7 +149,7 @@ public class UnitStatsJson
     [JsonPropertyName("combatSpeed")] public float CombatSpeed { get; set; } = 8.0f;
 }
 
-public class UnitDef : IHasId
+public class UnitDef : INamedDef
 {
     [JsonPropertyName("id")] public string Id { get; set; } = "";
     [JsonPropertyName("name")] public string DisplayName { get; set; } = "";

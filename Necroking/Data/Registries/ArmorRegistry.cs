@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace Necroking.Data.Registries;
 
-public class ArmorDef : IHasId
+public class ArmorDef : INamedDef
 {
     [JsonPropertyName("id")] public string Id { get; set; } = "";
     [JsonPropertyName("name")] public string DisplayName { get; set; } = "";

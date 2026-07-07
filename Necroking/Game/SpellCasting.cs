@@ -473,7 +473,7 @@ public static class SpellCaster
         // Floating spell-name label above the necromancer — only on confirmed
         // cast, never on a failed validation, or the label lies (says "Fireball"
         // when nothing fired). See UnitData.ActionLabel.
-        units[casterIdx].ActionLabel = string.IsNullOrEmpty(spell.DisplayName) ? spell.Id : spell.DisplayName;
+        units[casterIdx].ActionLabel = gameData.Spells.NameOf(spellID);
         units[casterIdx].ActionLabelTimer = 1.5f;
 
         return CastResult.Success;

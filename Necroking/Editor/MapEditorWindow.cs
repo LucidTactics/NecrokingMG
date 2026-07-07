@@ -5620,8 +5620,7 @@ public class MapEditorWindow
             // Label
             if (_smallFont != null)
             {
-                var def = _gameData.Units.Get(pu.UnitDefId);
-                string label = def?.DisplayName ?? pu.UnitDefId;
+                string label = _gameData.Units.NameOf(pu.UnitDefId);
                 if (label.Length > 10) label = label[..10];
                 // Explicitly tag corpses so they're identifiable like living units are.
                 if (pu.IsCorpse) label += " (corpse)";

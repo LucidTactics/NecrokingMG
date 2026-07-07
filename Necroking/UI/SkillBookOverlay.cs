@@ -745,10 +745,11 @@ public class SkillBookOverlay : IModalLayer
         return $"Grant {BuffName(buff)} to {who}";
     }
 
-    private string SpellName(string id) { var d = _gameData.Spells?.Get(id); return d != null && Has(d.DisplayName) ? d.DisplayName : id; }
-    private string ItemName(string id)  { var d = _gameData.Items?.Get(id);  return d != null && Has(d.DisplayName) ? d.DisplayName : id; }
-    private string UnitName(string id)  { var d = _gameData.Units?.Get(id);  return d != null && Has(d.DisplayName) ? d.DisplayName : id; }
-    private string BuffName(string id)  { var d = _gameData.Buffs?.Get(id);  return d != null && Has(d.DisplayName) ? d.DisplayName : Humanize(id); }
+    private string SpellName(string id) => _gameData.Spells?.NameOf(id) ?? id;
+    private string ItemName(string id)  => _gameData.Items?.NameOf(id) ?? id;
+    private string UnitName(string id)  => _gameData.Units?.NameOf(id) ?? id;
+    // Buffs keep their extra flavor: a nameless buff humanizes its id instead.
+    private string BuffName(string id)  { var n = _gameData.Buffs?.NameOf(id) ?? id; return n == id ? Humanize(id) : n; }
 
     private string NameList(string csv, Func<string, string> map)
         => string.Join(", ", System.Linq.Enumerable.Select(SplitTrim(csv), map));

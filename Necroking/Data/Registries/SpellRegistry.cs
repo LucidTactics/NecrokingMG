@@ -38,7 +38,7 @@ public class FlipbookRef
     [JsonPropertyName("duration")] public float Duration { get; set; } = -1.0f;
 }
 
-public class SpellDef : IHasId
+public class SpellDef : INamedDef
 {
     // ============ Top fields (ungrouped) ============
     [EditorField(Label = "Name", Order = 0)]

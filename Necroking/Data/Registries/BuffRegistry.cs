@@ -101,7 +101,7 @@ public class ColorJson
     [JsonPropertyName("a")] public int A { get; set; }
 }
 
-public class BuffDef : IHasId
+public class BuffDef : INamedDef
 {
     [JsonPropertyName("id")] public string Id { get; set; } = "";
     [JsonPropertyName("name")] public string DisplayName { get; set; } = "";

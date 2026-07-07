@@ -407,10 +407,7 @@ public class SpellEditorWindow : EditorWindow
 
         var displayItems = new List<string>();
         foreach (var id in _filteredIds)
-        {
-            var def = _gameData.Spells.Get(id);
-            displayItems.Add(def?.DisplayName ?? id);
-        }
+            displayItems.Add(_gameData.Spells.NameOf(id));
 
         // Shared scrollable list with custom renderer for category color dots
         int clicked = _ui.DrawScrollableList("spellList", displayItems, filteredSelectedIdx,

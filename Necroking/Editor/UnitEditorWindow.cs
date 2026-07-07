@@ -723,8 +723,7 @@ public class UnitEditorWindow
         foreach (var id in _filteredIds)
         {
             var def = _gameData.Units.Get(id);
-            string name = def?.DisplayName ?? id;
-            displayItems.Add("     " + name); // leading space for dot
+            displayItems.Add("     " + _gameData.Units.NameOf(id)); // leading space for dot
             string faction = def?.Faction ?? "";
             factionColors.Add(faction == "Undead" ? new Color(80, 200, 80) :
                               faction == "Human" ? new Color(80, 140, 220) :
@@ -2662,10 +2661,7 @@ public class UnitEditorWindow
         var groupIds = _gameData.UnitGroups.GetIDs();
         var groupDisplayItems = new List<string>();
         foreach (var id in groupIds)
-        {
-            var gDef = _gameData.UnitGroups.Get(id);
-            groupDisplayItems.Add(gDef?.DisplayName ?? id);
-        }
+            groupDisplayItems.Add(_gameData.UnitGroups.NameOf(id));
 
         int filteredGroupSelIdx = _groupSelectedIdx >= 0 && _groupSelectedIdx < groupIds.Count
             ? _groupSelectedIdx : -1;
@@ -2834,20 +2830,11 @@ public class UnitEditorWindow
     }
 
     // RU32: Build unit dropdown with "DisplayName [id]" format and parallel ID list
+    // (leading blank entry = "no unit"; square brackets are this dropdown's
+    // historical format, kept as parameters of the shared builder).
     private void BuildUnitDisplayDropdownLists(out string[] displayNames, out string[] ids)
-    {
-        var dispList = new List<string> { "" };
-        var idList = new List<string> { "" };
-        foreach (var id in _gameData.Units.GetIDs())
-        {
-            var u = _gameData.Units.Get(id);
-            string name = u?.DisplayName ?? "";
-            dispList.Add(string.IsNullOrEmpty(name) ? id : $"{name} [{id}]");
-            idList.Add(id);
-        }
-        displayNames = dispList.ToArray();
-        ids = idList.ToArray();
-    }
+        => BuildDropdownLists(_gameData.Units, out displayNames, out ids,
+            includeEmpty: true, fmt: "{0} [{1}]");
 
     // =========================================================================
     //  SUB-EDITOR POPUP (Weapon / Armor / Shield)
@@ -2921,8 +2908,7 @@ public class UnitEditorWindow
         var filteredIds = new List<string>();
         foreach (var id in ids)
         {
-            var d = _gameData.Weapons.Get(id);
-            string name = d?.DisplayName ?? id;
+            string name = _gameData.Weapons.NameOf(id);
             if (!string.IsNullOrEmpty(_subSearchFilter) &&
                 !id.Contains(_subSearchFilter, StringComparison.OrdinalIgnoreCase) &&
                 !name.Contains(_subSearchFilter, StringComparison.OrdinalIgnoreCase))
@@ -3187,8 +3173,7 @@ public class UnitEditorWindow
         var filteredIds = new List<string>();
         foreach (var id in ids)
         {
-            var d = _gameData.Armors.Get(id);
-            string name = d?.DisplayName ?? id;
+            string name = _gameData.Armors.NameOf(id);
             if (!string.IsNullOrEmpty(_subSearchFilter) &&
                 !id.Contains(_subSearchFilter, StringComparison.OrdinalIgnoreCase) &&
                 !name.Contains(_subSearchFilter, StringComparison.OrdinalIgnoreCase))
@@ -3291,8 +3276,7 @@ public class UnitEditorWindow
         var filteredIds = new List<string>();
         foreach (var id in ids)
         {
-            var d = _gameData.Shields.Get(id);
-            string name = d?.DisplayName ?? id;
+            string name = _gameData.Shields.NameOf(id);
             if (!string.IsNullOrEmpty(_subSearchFilter) &&
                 !id.Contains(_subSearchFilter, StringComparison.OrdinalIgnoreCase) &&
                 !name.Contains(_subSearchFilter, StringComparison.OrdinalIgnoreCase))
@@ -3681,11 +3665,7 @@ public class UnitEditorWindow
         {
             list.Add("-- Groups --");
             foreach (var gId in groupIds)
-            {
-                var gDef = _gameData.UnitGroups.Get(gId);
-                string displayName = gDef?.DisplayName ?? gId;
-                list.Add($"Group: {displayName} [{gId}]");
-            }
+                list.Add($"Group: {_gameData.UnitGroups.NameOf(gId)} [{gId}]");
         }
         return list.ToArray();
     }
@@ -3701,56 +3681,38 @@ public class UnitEditorWindow
     // U17: Build spell dropdown with "DisplayName (id)" format
     private string[] BuildSpellDropdownDisplayList()
     {
-        var list = new List<string>();
-        foreach (var id in _gameData.Spells.GetIDs())
-        {
-            var spell = _gameData.Spells.Get(id);
-            string displayName = spell?.DisplayName ?? "";
-            list.Add(string.IsNullOrEmpty(displayName) ? id : $"{displayName} ({id})");
-        }
-        return list.ToArray();
+        BuildDropdownLists(_gameData.Spells, out var displayNames, out _);
+        return displayNames;
     }
 
-    // RU33: Build weapon dropdown with display names and parallel ID list
+    // RU33: Weapon/Armor/Shield dropdowns share the generic builder below.
     private void BuildWeaponDropdownLists(out string[] displayNames, out string[] ids)
-    {
-        var dispList = new List<string>();
-        var idList = new List<string>();
-        foreach (var id in _gameData.Weapons.GetIDs())
-        {
-            var w = _gameData.Weapons.Get(id);
-            string name = w?.DisplayName ?? "";
-            dispList.Add(string.IsNullOrEmpty(name) ? id : $"{name} ({id})");
-            idList.Add(id);
-        }
-        displayNames = dispList.ToArray();
-        ids = idList.ToArray();
-    }
+        => BuildDropdownLists(_gameData.Weapons, out displayNames, out ids);
 
     private void BuildArmorDropdownLists(out string[] displayNames, out string[] ids)
-    {
-        var dispList = new List<string>();
-        var idList = new List<string>();
-        foreach (var id in _gameData.Armors.GetIDs())
-        {
-            var a = _gameData.Armors.Get(id);
-            string name = a?.DisplayName ?? "";
-            dispList.Add(string.IsNullOrEmpty(name) ? id : $"{name} ({id})");
-            idList.Add(id);
-        }
-        displayNames = dispList.ToArray();
-        ids = idList.ToArray();
-    }
+        => BuildDropdownLists(_gameData.Armors, out displayNames, out ids);
 
     private void BuildShieldDropdownLists(out string[] displayNames, out string[] ids)
+        => BuildDropdownLists(_gameData.Shields, out displayNames, out ids);
+
+    /// <summary>Shared registry-dropdown builder: parallel display/id arrays,
+    /// formatting each entry via <paramref name="fmt"/> ({0}=DisplayName,
+    /// {1}=id), with a bare id for blank display names. The unit dropdown
+    /// passes <paramref name="includeEmpty"/> for its leading "no unit" entry
+    /// and its historical square-bracket format. Editor owns the presentation;
+    /// the registry layer stays format-free.</summary>
+    private static void BuildDropdownLists<TDef>(Data.Registries.RegistryBase<TDef> reg,
+        out string[] displayNames, out string[] ids,
+        bool includeEmpty = false, string fmt = "{0} ({1})")
+        where TDef : class, Data.Registries.INamedDef, new()
     {
         var dispList = new List<string>();
         var idList = new List<string>();
-        foreach (var id in _gameData.Shields.GetIDs())
+        if (includeEmpty) { dispList.Add(""); idList.Add(""); }
+        foreach (var id in reg.GetIDs())
         {
-            var s = _gameData.Shields.Get(id);
-            string name = s?.DisplayName ?? "";
-            dispList.Add(string.IsNullOrEmpty(name) ? id : $"{name} ({id})");
+            string name = reg.Get(id)?.DisplayName ?? "";
+            dispList.Add(string.IsNullOrEmpty(name) ? id : string.Format(fmt, name, id));
             idList.Add(id);
         }
         displayNames = dispList.ToArray();

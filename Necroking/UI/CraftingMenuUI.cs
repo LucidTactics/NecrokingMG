@@ -421,7 +421,7 @@ public class CraftingMenuUI : IModalLayer
             if (string.IsNullOrEmpty(ing.ItemId)) continue;
             anyIngredient = true;
             int have = _inventory.GetItemCount(ing.ItemId);
-            string name = _items.Get(ing.ItemId)?.DisplayName ?? ing.ItemId;
+            string name = _items.NameOf(ing.ItemId);
             lines.Add((name, $"{have}/{ing.Amount}", have >= ing.Amount ? TipGreen : TipRed));
         }
         if (!anyIngredient)

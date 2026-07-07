@@ -12,6 +12,15 @@ public interface IHasId
     string Id { get; set; }
 }
 
+/// <summary>A def with a human-facing display name. All registry def types
+/// implement this; it powers <see cref="RegistryBase{TDef}.NameOf"/> and
+/// generic editor helpers (dropdown builders) that need compile-time access
+/// to DisplayName.</summary>
+public interface INamedDef : IHasId
+{
+    string DisplayName { get; set; }
+}
+
 public abstract class RegistryBase<TDef> where TDef : class, IHasId, new()
 {
     protected readonly Dictionary<string, TDef> _defs = new();
@@ -20,6 +29,17 @@ public abstract class RegistryBase<TDef> where TDef : class, IHasId, new()
     protected abstract string RootKey { get; }
 
     public TDef? Get(string id) => _defs.GetValueOrDefault(id);
+
+    /// <summary>Display name for an id, falling back to the id itself when the
+    /// def is missing OR its DisplayName is empty (defs default DisplayName to
+    /// "", so a bare <c>?.DisplayName ?? id</c> renders blank — the historical
+    /// hand-rolled sites disagreed on this; this is the one canonical rule).</summary>
+    public string NameOf(string id)
+    {
+        var d = Get(id);
+        return d is INamedDef n && !string.IsNullOrEmpty(n.DisplayName) ? n.DisplayName : id;
+    }
+
     public IReadOnlyList<string> GetIDs() => _orderedIDs;
     public int Count => _orderedIDs.Count;
     /// <summary>Iterate every loaded def in registration order. Used for post-load

@@ -787,7 +787,7 @@ public partial class HUDRenderer
         else if (_hoverSlotSpell != null)
         {
             var sp = _hoverSlotSpell;
-            lines.Add(!string.IsNullOrEmpty(sp.DisplayName) ? sp.DisplayName : sp.Id);
+            lines.Add(gameData.Spells.NameOf(sp.Id));
 
             string kind = !string.IsNullOrEmpty(sp.School) ? sp.School
                         : !string.IsNullOrEmpty(sp.Category) ? sp.Category : "";

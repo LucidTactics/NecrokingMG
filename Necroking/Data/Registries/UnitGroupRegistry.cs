@@ -10,7 +10,7 @@ public class UnitGroupEntry
     [JsonPropertyName("weight")] public float Weight { get; set; } = 1.0f;
 }
 
-public class UnitGroupDef : IHasId
+public class UnitGroupDef : INamedDef
 {
     [JsonPropertyName("id")] public string Id { get; set; } = "";
     [JsonPropertyName("name")] public string DisplayName { get; set; } = "";

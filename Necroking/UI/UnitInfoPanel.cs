@@ -312,8 +312,8 @@ public class UnitInfoPanel : IModalLayer
         r.ClearOverridesRecursive(InstanceId);
 
         var def = _gameData.Units.Get(unit.UnitDefID);
-        string name = !string.IsNullOrEmpty(def?.DisplayName) ? def!.DisplayName
-                    : !string.IsNullOrEmpty(unit.UnitDefID) ? unit.UnitDefID : unit.Type.ToString();
+        string name = !string.IsNullOrEmpty(unit.UnitDefID)
+            ? _gameData.Units.NameOf(unit.UnitDefID) : unit.Type.ToString();
         r.SetText(Desc, "ud_title", name);
         r.SetText(Desc, "ud_title_drop", name);
 
