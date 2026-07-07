@@ -741,11 +741,8 @@ public class SpellEditorWindow : EditorWindow
                     string newId = src.Id + "_copy";
                     int n = 2;
                     while (_gameData.Flipbooks.Get(newId) != null) newId = src.Id + "_copy" + n++;
-                    var copy = new FlipbookDef
-                    {
-                        Id = newId, DisplayName = src.DisplayName + " (Copy)",
-                        Path = src.Path, Cols = src.Cols, Rows = src.Rows, DefaultFPS = src.DefaultFPS
-                    };
+                    var copy = _gameData.Flipbooks.CloneDef(src, newId) ?? new FlipbookDef { Id = newId };
+                    copy.DisplayName = src.DisplayName + " (Copy)";
                     _gameData.Flipbooks.AddAfter(copy, src.Id);
                     MarkDirty();
                 }
