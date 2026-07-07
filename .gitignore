@@ -53,6 +53,7 @@ desktop.ini
 !.claude/skills/test-scenario/
 !.claude/skills/add-spell/
 !.claude/skills/import-ui-design/
+!.claude/skills/dup-review/
 ## Curated subagents (same default-ignore + explicit un-ignore as skills):
 !.claude/agents/
 .claude/agents/*
