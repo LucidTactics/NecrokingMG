@@ -1137,11 +1137,7 @@ public class Simulation
                 {
                     var toTarget = _units[i].MoveTarget - _units[i].Position;
                     if (toTarget.LengthSq() > 1f)
-                    {
-                        int sizeTier = TerrainCosts.SizeToTier(_units[i].Size);
-                        var dir = _pathfinder.GetDirection(_units[i].Position, _units[i].MoveTarget, _frameNumber, sizeTier, _units[i].Id);
-                        _units[i].PreferredVel = dir * _units[i].MaxSpeed;
-                    }
+                        MoveTowardPosition(i, _units[i].MoveTarget, _units[i].MaxSpeed, dt);
                     else
                         _units[i].PreferredVel = Vec2.Zero;
                     break;
@@ -1157,14 +1153,14 @@ public class Simulation
                         if (eDist < 10f)
                         {
                             _units[i].Target = CombatTarget.Unit(_units[enemy].Id);
-                            MoveTowardUnit(i, enemy, _units[i].MaxSpeed);
+                            MoveTowardUnit(i, enemy, _units[i].MaxSpeed, dt);
                             break;
                         }
                     }
                     // Return to idle point
                     var toIdle = _units[i].MoveTarget - _units[i].Position;
                     if (toIdle.LengthSq() > 4f)
-                        MoveTowardPosition(i, _units[i].MoveTarget, _units[i].MaxSpeed * 0.5f);
+                        MoveTowardPosition(i, _units[i].MoveTarget, _units[i].MaxSpeed * 0.5f, dt);
                     else
                         _units[i].PreferredVel = Vec2.Zero;
                     break;
@@ -1197,7 +1193,7 @@ public class Simulation
                         {
                             float distToSlot = (_units[i].Position - returnSlot).Length();
                             if (distToSlot > 0.5f)
-                                MoveTowardPosition(i, returnSlot, _units[i].MaxSpeed * _horde.Settings.ReturnSpeedMult);
+                                MoveTowardPosition(i, returnSlot, _units[i].MaxSpeed * _horde.Settings.ReturnSpeedMult, dt);
                             else
                                 _units[i].PreferredVel = Vec2.Zero;
                         }
@@ -1233,7 +1229,7 @@ public class Simulation
                         int targetIdx = ResolveUnitTarget(_units[i].Target);
                         if (targetIdx >= 0)
                         {
-                            MoveTowardUnit(i, targetIdx, _units[i].MaxSpeed);
+                            MoveTowardUnit(i, targetIdx, _units[i].MaxSpeed, dt);
                             // Auto-engage when in melee range
                             float dist = (_units[targetIdx].Position - _units[i].Position).Length();
                             float engageRange = Combat.MeleeRangeUtil.Compute(_units, i, targetIdx, _gameData);
@@ -1252,7 +1248,7 @@ public class Simulation
                         {
                             float distToSlot = (_units[i].Position - slotPos).Length();
                             if (distToSlot > 0.5f)
-                                MoveTowardPosition(i, slotPos, _units[i].MaxSpeed);
+                                MoveTowardPosition(i, slotPos, _units[i].MaxSpeed, dt);
                             else
                                 _units[i].PreferredVel = Vec2.Zero;
                         }
@@ -3354,28 +3350,20 @@ public class Simulation
     }
 
     // --- Helpers ---
-    private void MoveTowardUnit(int i, int targetIdx, float speed)
+    private void MoveTowardUnit(int i, int targetIdx, float speed, float dt)
     {
-        MoveTowardPosition(i, _units[targetIdx].Position, speed);
+        MoveTowardPosition(i, _units[targetIdx].Position, speed, dt);
     }
 
-    /// <summary>Move unit toward a world position using pathfinding for longer distances.</summary>
-    private void MoveTowardPosition(int i, Vec2 targetPos, float speed)
+    /// <summary>Move unit toward a world position using pathfinding for longer
+    /// distances. Bridge to <see cref="AI.SubroutineSteps.MoveToward"/> (the ONE
+    /// seek primitive — same pattern as <see cref="AIForageMove"/>), so legacy
+    /// AIBehavior units share the pathfind-or-direct steering and the locomotion
+    /// anim reset with archetype handlers.</summary>
+    private void MoveTowardPosition(int i, Vec2 targetPos, float speed, float dt)
     {
-        Vec2 myPos = _units[i].Position;
-        float dist = (targetPos - myPos).Length();
-
-        if (dist > 3f && _pathfinder != null && _pathfinder.Grid != null)
-        {
-            int sizeTier = TerrainCosts.SizeToTier(_units[i].Size);
-            Vec2 dir = _pathfinder.GetDirection(myPos, targetPos, _frameNumber, sizeTier, _units[i].Id);
-            _units[i].PreferredVel = dir * speed;
-        }
-        else
-        {
-            Vec2 dir = dist > 0.01f ? (targetPos - myPos) * (1f / dist) : Vec2.Zero;
-            _units[i].PreferredVel = dir * speed;
-        }
+        var ctx = BuildAIContext(i, dt, 0f, false);
+        AI.SubroutineSteps.MoveToward(ref ctx, targetPos, speed);
     }
 
     /// <summary>
