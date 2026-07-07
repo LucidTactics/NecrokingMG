@@ -457,21 +457,7 @@ public static class BuffSystem
     public static float GetModifiedExtra(UnitArrays units, int unitIdx, string stat, float baseValue)
     {
         if (unitIdx < 0 || unitIdx >= units.Count) return baseValue;
-        float additive = 0f;
-        float multiplicative = 1f;
-        float? setValue = null;
-        foreach (var buff in units[unitIdx].ActiveBuffs)
-            foreach (var eff in buff.Effects)
-            {
-                if (eff.Stat != stat) continue;
-                switch (eff.Type)
-                {
-                    case "Add": additive += eff.Value * buff.StackCount; break;
-                    case "Multiply": multiplicative *= MathF.Pow(eff.Value, buff.StackCount); break;
-                    case "Set": setValue = eff.Value; break;
-                }
-            }
-        return setValue ?? (baseValue + additive) * multiplicative;
+        return ModifyCore(units[unitIdx].ActiveBuffs, stat, baseValue);
     }
 
     /// <summary>Largest "Set" buff effect value on this unit with the named
@@ -536,8 +522,15 @@ public static class BuffSystem
     /// Combination: (base + sum of Add) * product of Multiply, unless a Set
     /// effect is present (last Set wins, overriding everything).</summary>
     public static float GetModifiedStat(IReadOnlyList<ActiveBuff> buffs, BuffStat stat, float baseValue)
+        => ModifyCore(buffs, stat.ToString(), baseValue);
+
+    /// <summary>The ONE buff-modifier combination formula, shared by the enum-keyed
+    /// (<see cref="GetModifiedStat(IReadOnlyList{ActiveBuff}, BuffStat, float)"/>, unit
+    /// stats) and string-keyed (<see cref="GetModifiedExtra"/>, necromancer resources)
+    /// entry points: (base + ΣAdd·stacks) × ∏Multiply^stacks, unless a Set effect is
+    /// present (last Set wins, overriding everything).</summary>
+    private static float ModifyCore(IReadOnlyList<ActiveBuff> buffs, string statName, float baseValue)
     {
-        string statName = stat.ToString();
         float additive = 0f;
         float multiplicative = 1f;
         float? setValue = null;
