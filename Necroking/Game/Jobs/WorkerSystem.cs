@@ -339,23 +339,66 @@ public class WorkerSystem
 
     public int DerivedMax(JobDef def) => CountBuildings(def.BuildingDefId) * def.WorkerSlotsPerBuilding;
 
+    // ── Caller-side WorldQuery filters (per the WorldQuery escape-hatch doc:
+    // odd extra conditions live in small structs next to the caller). They
+    // capture `this` for the stockpile lookups — struct-holding-a-class-ref,
+    // zero-alloc on the query path. ──
+
+    /// <summary>Built + stockpiles the resource + has space.</summary>
+    private readonly struct DepositBuildings : IEnvQueryFilter
+    {
+        private readonly WorkerSystem _ws; private readonly string _resource;
+        public DepositBuildings(WorkerSystem ws, string resource) { _ws = ws; _resource = resource; }
+        public bool Match(EnvironmentSystem env, int i)
+            => _ws.Built(i)
+               && string.Equals(env.GetDef(env.GetObject(i).DefIndex).StoredResource,
+                   _resource, StringComparison.OrdinalIgnoreCase)
+               && _ws.TotalStored(i) < _ws.BuildingCap(i);
+    }
+
+    /// <summary>Built + holds at least minAmount of the resource.</summary>
+    private readonly struct WithdrawBuildings : IEnvQueryFilter
+    {
+        private readonly WorkerSystem _ws; private readonly string _resource; private readonly int _minAmount;
+        public WithdrawBuildings(WorkerSystem ws, string resource, int minAmount)
+        { _ws = ws; _resource = resource; _minAmount = minAmount; }
+        public bool Match(EnvironmentSystem env, int i)
+            => _ws.Built(i) && _ws.StoredOf(i, _resource) >= _minAmount;
+    }
+
+    /// <summary>Job host building: def match + Built + output room when required.</summary>
+    private readonly struct HostBuildings : IEnvQueryFilter
+    {
+        private readonly WorkerSystem _ws; private readonly int _defIdx; private readonly bool _needsRoom;
+        public HostBuildings(WorkerSystem ws, int defIdx, bool needsRoom)
+        { _ws = ws; _defIdx = defIdx; _needsRoom = needsRoom; }
+        public bool Match(EnvironmentSystem env, int i)
+            => env.GetObject(i).DefIndex == _defIdx
+               && _ws.Built(i)
+               && (!_needsRoom || _ws.TotalStored(i) < _ws.BuildingCap(i));
+    }
+
+    /// <summary>Visible foragables, optionally restricted to one ForagableType.</summary>
+    private readonly struct ForagablesOfType : IEnvQueryFilter
+    {
+        private readonly string? _type;
+        public ForagablesOfType(string? type) { _type = type; }
+        public bool Match(EnvironmentSystem env, int i)
+        {
+            if (!env.IsObjectVisible(i)) return false;
+            var d = env.GetDef(env.GetObject(i).DefIndex);
+            if (!d.IsForagable) return false;
+            return string.IsNullOrEmpty(_type)
+                || string.Equals(d.ForagableType, _type, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     /// <summary>Nearest alive building that stockpiles <paramref name="resource"/>
     /// and still has space, or -1.</summary>
     public int FindDepositBuilding(string resource, Vec2 from)
     {
         if (string.IsNullOrEmpty(resource)) return -1;
-        int best = -1; float bestSq = float.MaxValue;
-        for (int i = 0; i < _env.ObjectCount; i++)
-        {
-            if (!Built(i)) continue;
-            var bdef = _env.GetDef(_env.GetObject(i).DefIndex);
-            if (!string.Equals(bdef.StoredResource, resource, StringComparison.OrdinalIgnoreCase)) continue;
-            if (TotalStored(i) >= BuildingCap(i)) continue;
-            var obj = _env.GetObject(i);
-            float sq = (new Vec2(obj.X, obj.Y) - from).LengthSq();
-            if (sq < bestSq) { bestSq = sq; best = i; }
-        }
-        return best;
+        return _sim.Query.NearestEnvObject(from, 0f, new DepositBuildings(this, resource));
     }
 
     /// <summary>Nearest alive building holding at least <paramref name="minAmount"/>
@@ -363,16 +406,7 @@ public class WorkerSystem
     public int FindWithdrawBuilding(string resource, Vec2 from, int minAmount)
     {
         if (string.IsNullOrEmpty(resource)) return -1;
-        int best = -1; float bestSq = float.MaxValue;
-        for (int i = 0; i < _env.ObjectCount; i++)
-        {
-            if (!Built(i)) continue;
-            if (StoredOf(i, resource) < minAmount) continue;
-            var obj = _env.GetObject(i);
-            float sq = (new Vec2(obj.X, obj.Y) - from).LengthSq();
-            if (sq < bestSq) { bestSq = sq; best = i; }
-        }
-        return best;
+        return _sim.Query.NearestEnvObject(from, 0f, new WithdrawBuildings(this, resource, minAmount));
     }
 
     /// <summary>Nearest alive host building (BuildingDefId) for a job with output
@@ -381,19 +415,9 @@ public class WorkerSystem
     {
         int defIdx = _env.FindDef(def.BuildingDefId);
         if (defIdx < 0) return -1;
-        int best = -1; float bestSq = float.MaxValue;
-        for (int i = 0; i < _env.ObjectCount; i++)
-        {
-            if (_env.GetObject(i).DefIndex != defIdx) continue;
-            if (!Built(i)) continue;
-            // Output room: spawn-unit jobs need no storage; others need building space.
-            if (!def.SpawnsUnit && HostOutputResource(def) != JobResources.Essence
-                && TotalStored(i) >= BuildingCap(i)) continue;
-            var obj = _env.GetObject(i);
-            float sq = (new Vec2(obj.X, obj.Y) - from).LengthSq();
-            if (sq < bestSq) { bestSq = sq; best = i; }
-        }
-        return best;
+        // Output room: spawn-unit jobs need no storage; others need building space.
+        bool needsRoom = !def.SpawnsUnit && HostOutputResource(def) != JobResources.Essence;
+        return _sim.Query.NearestEnvObject(from, 0f, new HostBuildings(this, defIdx, needsRoom));
     }
 
     /// <summary>Nearest collectable source for a Collect job, or -1.</summary>
@@ -408,55 +432,20 @@ public class WorkerSystem
     }
 
     private int FindNearestForagable(JobDef def, Vec2 from)
-    {
-        int best = -1; float bestSq = float.MaxValue;
-        for (int i = 0; i < _env.ObjectCount; i++)
-        {
-            if (!_env.IsObjectVisible(i)) continue;
-            var d = _env.GetDef(_env.GetObject(i).DefIndex);
-            if (!d.IsForagable) continue;
-            if (!string.IsNullOrEmpty(def.SourceForagableType)
-                && !string.Equals(d.ForagableType, def.SourceForagableType, StringComparison.OrdinalIgnoreCase))
-                continue;
-            var obj = _env.GetObject(i);
-            float sq = (new Vec2(obj.X, obj.Y) - from).LengthSq();
-            if (sq < bestSq) { bestSq = sq; best = i; }
-        }
-        return best;
-    }
+        => _sim.Query.NearestEnvObject(from, 0f, new ForagablesOfType(def.SourceForagableType));
 
     private int FindNearestBerryBush(Vec2 from)
-    {
-        int best = -1; float bestSq = float.MaxValue;
-        for (int i = 0; i < _env.ObjectCount; i++)
-        {
-            if (!_env.GetObjectRuntime(i).Alive) continue;
-            var d = _env.GetDef(_env.GetObject(i).DefIndex);
-            if (!d.IsBerryBush) continue;
-            if (_env.GetObjectRuntime(i).BerryState != BerryState.Berries) continue;
-            var obj = _env.GetObject(i);
-            float sq = (new Vec2(obj.X, obj.Y) - from).LengthSq();
-            if (sq < bestSq) { bestSq = sq; best = i; }
-        }
-        return best;
-    }
+        => _sim.Query.NearestEnvObject(from, 0f, new EnvBerryBushes());
 
     // For corpse jobs, FindNearestSource returns a CorpseID (not an env index);
     // the handler stores it in WorkerTargetObjIdx and resolves position via CorpsePos.
     private int FindNearestCorpseObj(Vec2 from)
     {
-        int best = -1; float bestSq = float.MaxValue;
-        var cs = _sim.Corpses;
-        for (int i = 0; i < cs.Count; i++)
-        {
-            var c = cs[i];
-            if (c.Dissolving || c.ConsumedBySummon) continue;
-            if (c.ReanimInstanceId != 0) continue;
-            if (c.DraggedByUnitID != GameConstants.InvalidUnit) continue;
-            float sq = (c.Position - from).LengthSq();
-            if (sq < bestSq) { bestSq = sq; best = c.CorpseID; }
-        }
-        return best;
+        // Canonical gate: CorpseExclude.Free also skips Bagged corpses, which the
+        // old scan missed (workers pathed to bodies already stuffed in a bag).
+        int idx = _sim.Query.NearestCorpse(from, 0f,
+            CorpseExclude.Free | CorpseExclude.Reanimating);
+        return idx < 0 ? -1 : _sim.Corpses[idx].CorpseID;
     }
 
     public Vec2? CorpsePos(int corpseId)
