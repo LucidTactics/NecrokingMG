@@ -1,59 +1,122 @@
 # Consolidation Opportunities
 
-Actionable queue of duplicate-implementation cleanups. Source: the 2026-07-06 full-codebase
-semantic-duplication review — details, evidence, and migration sketches per item in
-[docs/consolidation-review/](../docs/consolidation-review/README.md) (README lists the
-shipped bugs; `dossiers/<unit>.md` has file:line evidence and the proposed canonical design).
+Categorized queue (reconciled 2026-07-07 against Johan's 22 pulled commits). Source review:
+[docs/consolidation-review/](../docs/consolidation-review/README.md) (dossiers have file:line
+evidence per item). ⚠ = also fixes a confirmed live bug. Effort S/M/L.
 
-Items are grouped by unit. Effort S/M/L; ⚠ = consolidating also fixes a confirmed live bug.
-Remove items when done or judged not worthwhile.
+**Awaiting user selection of which categories/items to execute.** Item IDs (A1, B3, ...) are
+stable — reference them when choosing. Remove items when done or declined.
 
-## Fixes a shipped bug (do first)
+## Done by Johan (pulled 2026-07-07 — removed from queue)
 
-- ⚠ **unit-spawning** (M): `Game1.SpawnUnit` re-implements `Simulation.SpawnUnitByID` — summons/map/dev spawns miss skill-tree intrinsic buffs. Make SpawnUnit delegate. Also: extract one `BuildUnitAnimData` factory (3 copies, 2 drop `SetAnimTimings` → editor timing overrides ignored).
-- ⚠ **casting-pipelines** (M): Strike execution triplicated (SpellEffectSystem.ExecuteStrike / CasterUnitHandler.TryCast / ProcessTrapFireEvents) with diverged MR gate, damage flags, kill attribution. Merge into a caster-agnostic `SpellEffectSystem.ExecuteStrike`.
-- ⚠ **ai-handler-boilerplate** (M): Sentry skeleton (Idle/Alert/Combat/Return) quadruplicated in CombatUnit/RangedUnit/CasterUnit/SoloPredator handlers; frenzy handling only in one copy. Extract `SentryTransitions` static helper (CombatTransitions style).
-- ⚠ **registry-json-io** (M): Map sidecars (triggers/zones/roads) split loader (MapData.cs) / saver (MapEditorWindow.cs) — circle trigger regions revert to rects on load; road junctions never restored. Consolidate onto attribute DTOs + Core.JsonFile. Also: main map save non-atomic (`File.Create`) — add AtomicFile stream API.
-- ⚠ **buff-effect-application** (M): Potion weapon coats duplicate `WeaponBonusEffect`, whose expiry ticker doesn't exist (never-expires bug). Canonical: `Unit.BonusEffects` + a real expiry tick. Also (S): `GetModifiedStat`/`GetModifiedExtra` identical modifier math → one private `ModifyCore`.
-- ⚠ **small-util-duplicates** (S): Angle delta/lerp ×4 — `HordeSystem.LerpAngle` has a negative-modulo bug (horde rotates the long way). Consolidate into MathUtil (leave Net/RemotePlayer copy alone — Net/ is do-not-touch).
-- ⚠ **under-cursor-picking** (S): `TryMeleeOrGather` vs `TryAttackClick` — two diverged click-to-melee range/cooldown formulas. Extract one `TryOrderMeleeAtCursor` on `MeleeRangeUtil.Compute`.
-- ⚠ **nearest-envobject-queries** (M): WorkerSystem's six private find-scans duplicate WorldQuery; `FindNearestCorpseObj` already misses the bagged-corpse exclusion. Migrate to `_sim.Query` with caller-side `IEnvQueryFilter` structs.
+- NPC caster unification: `ICasterResources` gate, caster-agnostic `TryStartSpellCast`,
+  category-aware AI casting, faction un-hardcoded, per-spell cooldowns. (was: casting-pipelines
+  #1 NPC half + #2; supersedes the "shared gate" half of the resource-model question)
+- `AwarenessSystem.FindClosestThreat` → WorldQuery via new `DetectableFrom` filter (supersedes
+  our KEEP_SEPARATE — the variable radius fit the filter API after all; pattern now blessed).
+- Horde `LerpAngle` short-way bug fixed in place (HordeSystem.cs:589). Consolidation of the
+  4 angle-math implementations remains as hygiene (→ C10).
+- Blocking/collision queries consolidated behind WorldQuery facade + shared circle math.
+- UIRouter phases 1–4 + exclusive panel docking (re-scopes the ui-panel items; panel lifecycle
+  even more settled as KEEP_SEPARATE).
 
-## Cheap S-effort wins
+## A — Certain (mechanical, verified, no design judgment; behavior changes already sanctioned)
 
-- **under-cursor-picking**: `FindBerryBushNear` → existing (unused!) `EnvBerryBushes` filter; `TryPickTetherEnd` → two WorldQuery calls.
-- **nearest-unit-queries**: Quadtree nearest-enemy scan ×3 outside `WorldQuery.NearestEnemyOf` (Simulation forwarder + `WorldQuery?` on AIContext); `VillageThreat.FindNearestUndead` → `NearestUnitLinear` alias; trap targeting → `NearestEnemyToPoint`.
-- **nearest-envobject-queries**: stragglers `FindNearestMushroom` (BoarForageAI), `FindClosestObject` (MapEditor) → `_sim.Query.NearestEnvObject`.
-- **projectile-arcs**: ballistic lob/direct-fire solve copied 7-8× (Projectile.cs ×3, SpellEffectSystem ×4-5) → static `SolveLobTheta`/`BallisticVelocity` on ProjectileManager.
-- **unit-spawning**: `ScatterSpot`/`InRect`/`Near` trio → one helper with region overloads (keep rng streams identical).
-- **damage-application**: death-finalization block ×4 (limb-chop misses prone-snap, poison misses death anim, trigger kill is raw `Alive=false`) → `DamageSystem.Kill`; attacker-attribution tail duplicated in Apply/ApplyDirect → `StampAttacker`.
-- **movement-steering-helpers**: legacy `Simulation.MoveTowardPosition` + inline MoveToPoint duplicate `SubroutineSteps.MoveToward` (already diverged); StrideCalibration formula ×2 → `CycleDistanceWorld`; `SoloPredatorHandler.SubDisengage` → `SubroutineSteps.Disengage`.
-- **registry-json-io**: `WadingDefaultsFile` → Core.JsonFile (JsonFile's own doc names it as an intended user); `SkillBookData` File.WriteAllText → AtomicFile.
-- **mapeditor-paint-undo**: delete dead `PaintObjects` (superseded by PaintObjectsBatch); merge `EraseWalls` into `PaintWalls(wallType)`; extract `FinalizeBatchPlaceStroke` (×2) and `FinalizeWallStroke` (×2); delete dead `UndoObjectRemove`.
-- **editor-parallel-subeditors**: Flipbook Copy button hand-clones fields → `Flipbooks.CloneDef` (one line, prevents silent field loss); SpellPreview five age/expire loops → generic `AgeAndExpire<T>`.
-- **small-util-duplicates**: `Quadtree.QueryRadius` → delegate to `QueryRadiusByFaction(All)`; scalar `Lerp` ×4 → MathUtil.Lerp; editor `IndexOf` ×4 → EditorBase static; `WeatherRenderer.Init` → delegate to `Resize`.
-- **texture-asset-caching**: delete dead `Game1.GetItemTexture`; TextureUtil premultiply loop ×3 → one helper.
-- **vfx-floating-text**: DamageNumber spawned inline ×6 with 4 height conventions → `FloatingText` helper next to the struct; WadingWakeSystem entry/exit splash bookkeeping → `SplashSession` struct.
-- **wildcard-sweep**: 2.5D projection copied into Renderer + GrassTuftRenderer → delegate to Camera25D; radial glow texture ×3 → `TextureUtil.GetRadialGlow`; `RuntimeWidgetRenderer.Set*Override` ×7 → generic `SetOverride<TK,TV>`; EnvObjectEditor pivot-drag pair → `TrackPivotDrag`.
-- **equipment-name-lookups**: `RegistryBase.NameOf(id)` (~16 hand-rolled `?.DisplayName ?? id` sites, half render blank names); UnitEditor dropdown builders ×4 → one generic.
-- **editor-widget-toolkit**: dead `SettingsGeneralTab.Draw` overloads ×2 — delete.
+- A1 ⚠ (S) `Game1.SpawnUnit` → delegate to `Simulation.SpawnUnitByID` (summons/map/dev spawns
+  gain intrinsic buffs — Q1 yes); one `BuildUnitAnimData` factory (2 of 3 copies drop
+  `SetAnimTimings`). [unit-spawning]
+- A2 ⚠ (M) Map sidecar round-trips: circle trigger regions + road junctions (loader/saver split)
+  → attribute DTOs + JsonFile; atomic main-map save (AtomicFile stream) + SkillBookData atomic
+  write. (Q5 lossless) [registry-json-io]
+- A3 ⚠ (S) `WeaponBonusEffect` expiry tick (documented Tick doesn't exist) + fold potion coats
+  into BonusEffects at their existing 300s; delete 4 coat fields. (Q4 resolved) [buff-effect-application]
+- A4 ⚠ (S) `TryMeleeOrGather` vs `TryAttackClick`: one `TryOrderMeleeAtCursor` on
+  MeleeRangeUtil. [under-cursor-picking]
+- A5 ⚠ (M) Traps through the shared cast pipeline (the remaining Q3 half — Johan did NPCs):
+  `ProcessTrapFireEvents` strike → `SpellEffectSystem` executor; MR/attribution from def tags. [casting-pipelines]
+- A6 ⚠ (M) `SentryTransitions` for CombatUnit/RangedUnit/CasterUnit/SoloPredator (frenzy applies
+  to everyone — Q2 yes). [ai-handler-boilerplate]
+- A7 ⚠ (S) Flipbook Copy → `Flipbooks.CloneDef` (violates repo clone standard; silent field loss). [editor-parallel-subeditors]
+- A8 (S) `DamageSystem.Kill` (4 inconsistent death-finalization sites) + `StampAttacker`
+  (verbatim attribution tail ×2). [damage-application]
+- A9 (S) BuffSystem `ModifyCore` (GetModifiedStat/GetModifiedExtra identical math, zero
+  call-site change). [buff-effect-application]
+- A10 (S) Projectile arc solver: `SolveLobTheta`/`BallisticVelocity` on ProjectileManager
+  (7–8 game copies) + SpellPreview constants dedup. [projectile-arcs]
+- A11 (S) Dead code: `PaintObjects`, `UndoObjectRemove` (build even warns), `Game1.GetItemTexture`,
+  SettingsGeneralTab dead Draw overloads ×2.
+- A12 (S) Trivial dedups: scalar Lerp ×4 → MathUtil; editor IndexOf ×4 → EditorBase;
+  WeatherRenderer.Init → Resize; Quadtree.QueryRadius → delegate; TextureUtil premultiply ×3.
+- A13 (S) WorldQuery rewires with existing/trivial filters: FindBerryBushNear (unused filter!),
+  TryPickTetherEnd, FindNearestMushroom, MapEditor FindClosestObject, VillageThreat alias,
+  trap targeting. [nearest-*-queries]
+- A14 (S) Legacy `Simulation.MoveTowardPosition` + inline MoveToPoint → `SubroutineSteps.MoveToward`
+  (byte-copies, already diverged). [movement-steering-helpers]
+- A15 (S) `WadingDefaultsFile` → Core.JsonFile (JsonFile's docs name it as intended user). [registry-json-io]
 
-## Editor/UI mechanics extractions (M, editor-only risk)
+## B — High confidence (clear duplication; small new-API shape or many call sites)
 
-- **editor-parallel-subeditors**: generic `RegistryCrudPanel<TDef>` for the 5× list+detail+CRUD scaffold (weapon/armor/shield sub-editors + buff/flipbook popups); detail forms stay caller-owned.
-- **editor-widget-toolkit**: finish DrawUtils migration (~10 line + 7 circle/ellipse private copies despite DrawUtils being documented canonical); `FieldCore` for DrawTextField/Int/Float/Search (cursor-positioning only works in one); `DrawSectionHeader` ×6 → one styled helper; brush-size steppers ×2 → `DrawStepperRow`; env category/group distinct-scans ×5 → on EnvironmentSystem.
-- **ui-panel-boilerplate**: `SideListMenu` base for BuildingMenuUI/CraftingMenuUI (layout math can desync hit rects); `UI/RichTip.cs` for the tripled rich tooltip (3× WrapText, hand-synced palette); HUDRenderer ButtonRow for menu/editor button triples.
-- **texture-asset-caching**: `Render/TextureCache` for the 6× get-or-load idiom; `WidgetResourceCache` shared editor↔runtime (~120 mirrored lines); SpriteAtlas sync pipeline reimplemented on split-phase primitives.
-- **registry-json-io**: UI widget defs parsed twice (UIEditorWindow + RuntimeWidgetRenderer, ~600 lines TryGetProperty boilerplate, already drifting on harmonize) → RegistryBase subclasses or shared UIDefsIO.
+- B1 ⚠ (M) WorkerSystem six finders → `_sim.Query` + IEnvQueryFilter structs (fixes bagged-corpse
+  gap). [nearest-envobject-queries]
+- B2 (S-M) `Simulation.FindNearestEnemyIndex` forwarder + WorldQuery handle on AIContext
+  (SubroutineSteps.FindClosestEnemy, 12 call sites). [nearest-unit-queries]
+- B3 (S) ScatterSpot/InRect/Near trio → one helper with region overloads (keep rng streams
+  identical). [unit-spawning]
+- B4 (M) UI widget defs single parser (UIEditorWindow + RuntimeWidgetRenderer ~600 lines →
+  RegistryBase subclasses or UIDefsIO). Notify-to-pull protocol on file-shape change (Q8 OK'd). [registry-json-io]
+- B5 (M) DrawUtils primitive migration (~10 line + 7 circle/ellipse private copies; canonical
+  documented). [editor-widget-toolkit]
+- B6 (M) EditorBase `FieldCore` (text/int/float/search fields; cursor-positioning drift is
+  user-visible). [editor-widget-toolkit]
+- B7 (S) DrawSectionHeader ×6 → one styled helper; DrawStepperRow ×2; env category/group
+  distinct-scans ×5 → EnvironmentSystem. [editor-widget-toolkit]
+- B8 (M) `Render/TextureCache` for the 6× get-or-load idiom (drifted on negative-caching/paths). [texture-asset-caching]
+- B9 (S) `FloatingText` helper for DamageNumber (6 spawn sites, 4 height conventions). [vfx-floating-text]
+- B10 (S) StrideCalibration `CycleDistanceWorld` (editor suggestion vs runtime formula);
+  SoloPredator SubDisengage → SubroutineSteps.Disengage. [movement-steering-helpers]
+- B11 (S) PaintWalls/EraseWalls merge + FinalizeWallStroke / FinalizeBatchPlaceStroke extracts
+  (each duplicated ×2). [mapeditor-paint-undo]
+- B12 (S) `RegistryBase.NameOf(id)` (~16 sites, half render blank names) + UnitEditor generic
+  dropdown builder ×4. [equipment-name-lookups]
+- B13 (S each) Wildcard smalls: Camera25D projection delegation (Renderer + GrassTuftRenderer);
+  TextureUtil.GetRadialGlow ×3; RuntimeWidgetRenderer SetOverride<TK,TV> ×7; EnvObjectEditor
+  TrackPivotDrag; SpellPreview AgeAndExpire<T> ×5; WadingWake SplashSession. [wildcard-sweep]
 
-## Design decisions needed (INVESTIGATE)
+## C — Moderate confidence (real duplication; scope/design tradeoff — review individually)
 
-- **Unit resource model**: NecroState vs per-unit Mana — the blocker for a true single "unit casts spell" gate (also: SpellEffectSystem hardcodes Faction.Undead + necromancer re-anchor; NPC TryCast ignores spell.Category). The user's original priest-vs-necromancer observation lands here.
-- **Trap strikes & magic resistance**: should casterless trap zaps respect MR/kill credit? Gate for extracting `ExecuteStrikeFrom`.
-- **Paralysis**: fold the stun phase into BuffSystem's Incapacitating machinery so there's one writer to `Unit.Incap`?
-- **Poison DoT**: route only death through `DamageSystem.Kill`, or add a silent `DamageType.DoT` entry (if burn/bleed are coming)?
-- **Villages vs zones**: deprecate the legacy `_villages.json` population path (SpawnGroup) in favor of zones instead of merging the mirrored loops?
-- **env_defs.json**: ~80-field reader (MapData) / writer (EnvironmentSystem) in different files — DTO consolidation needs custom converters and changes on-disk shape of a Drive-synced file.
-- **SpellPreview trajectory drift**: editor `VelocityZ*0.5f` vs game full `sin(theta)` — intentional preview framing or drift? (Constant dedup is unambiguous either way.)
-- **Y-sorted puff layers**: DeathFog/PoisonCloud/GrassTuft deliberate mirroring vs minimal `DepthSpriteLayer` extract (move the byte-identical hash helpers regardless).
-- **Editor preview shadow**: should `DrawPreviewShadow` read live ShadowSettings instead of hardcoded copies of settings.json defaults?
+- C1 (M) `RegistryCrudPanel<TDef>` for the 5× list+detail+CRUD editor scaffolds. Real drift, but
+  it's a mini-framework — worth it only if editors keep growing. [editor-parallel-subeditors]
+- C2 (M) `SideListMenu` base for BuildingMenuUI/CraftingMenuUI (re-check scope against UIRouter
+  before starting). [ui-panel-boilerplate]
+- C3 (S-M) `UI/RichTip` shared rich-tooltip (3 copies, 3× WrapText, hand-synced palette). [ui-panel-boilerplate]
+- C4 (S) HUDRenderer ButtonRow (menu/editor triples verified still present post-UIRouter — but
+  UI layer is actively moving; coordinate with Johan). [ui-panel-boilerplate]
+- C5 (M) `WidgetResourceCache` editor↔runtime (~120 mirrored lines; keep the two harmonize bakes
+  separate). [texture-asset-caching]
+- C6 (S, medium risk) SpriteAtlas sync pipeline reimplemented on split-phase primitives
+  (threading — needs multi-sheet verification). [texture-asset-caching]
+- C7 (M) env_defs.json DTO consolidation (~80-field reader/writer in different files; needs
+  custom converters; changes Drive-synced file shape — notify-to-pull, Q12 OK'd). [registry-json-io]
+- C8 (M) Paralysis stun phase → Incapacitating buff (single writer to Unit.Incap; judge
+  recommends yes; gameplay-feel check needed). [buff-effect-application]
+- C9 (S) Poison DoT entry point in DamageSystem (route death through Kill at minimum — that part
+  is A8; the DamageType.DoT entry depends on burn/bleed plans). [damage-application]
+- C10 (S) Angle-math hygiene: 4 implementations (deg/rad conventions) → MathUtil (bug already
+  fixed in place by Johan; remaining value is drift prevention; Net/ copy stays). [small-util-duplicates]
+- C11 (S) Villages SpawnGroup vs zones SpawnZoneGroup: deprecate `_villages.json` path or merge
+  loops (deprecation decision). [unit-spawning]
+- C12 (L, own project) Necromancer-as-normal-unit (Q9 direction confirmed; Johan's
+  ICasterResources did the casting half — remaining: HP/stats/HUD/save/ghosts. Requires the
+  agreed sub-plan + obstacles report BEFORE implementation). [casting-pipelines]
+- C13 (S) SpellPreview 0.5f trajectory vs game full sin(theta) — visual side-by-side first,
+  then either fix or comment-document. [projectile-arcs]
+- C14 (S) Puff-layer shared hash helpers move (byte-identical ×3); full DepthSpriteLayer extract
+  probably not worth it (documented mirroring). [wildcard-sweep]
+
+## D — Low value / opportunistic only
+
+- D1 Editor preview shadow reading live ShadowSettings instead of copied constants. [wildcard-sweep]
+- D2 ApplyFrenzy manual Permanent loop → ApplyBuffWithDuration(...,0f); CombatTransitions stale
+  doc comment (names non-users); fold UndoObjectPlace into batch class. [misc dossier nits]
+- D3 MakeBuffedRow/MakeBuffedRowF int/float twins (judge leaned keep; ~10 lines saved at
+  readability cost). [ui-panel-boilerplate]

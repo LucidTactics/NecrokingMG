@@ -4,8 +4,13 @@ Executes the findings from [docs/consolidation-review/](../docs/consolidation-re
 (116 findings; queue in [memory/consolidation_opportunities.md](../memory/consolidation_opportunities.md)).
 Check off items here as they land; delete this file when the queue is drained.
 
-**Status: Key Questions answered (see bottom) — DO NOT START implementation. User is waiting on
-colleague feedback and will explicitly say go. When greenlit: Phase 0 → 1 → 2 in order.**
+**Status (2026-07-07): reconciled against Johan's 22 pulled commits — he already implemented the
+NPC-caster unification (ICasterResources), the AwarenessSystem→WorldQuery reroute, the horde
+LerpAngle bug fix, a blocking-query facade, and the UIRouter panel work. Remaining items are now
+CATEGORIZED BY CONFIDENCE (A certain / B high / C moderate / D low) in
+memory/consolidation_opportunities.md — user is selecting which to execute. DO NOT START until
+the user picks. The phase structure below still applies to whatever subset is chosen
+(bugs → mechanical → editor/UI → design items).**
 
 Design north star from the user (2026-07-06): attacks are processed by ONE tag-driven pipeline
 (tags on the weapon/spell def decide armor interaction etc.; traps get a weapon/spell def), and
