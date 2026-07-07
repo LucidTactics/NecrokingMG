@@ -421,7 +421,7 @@ public class EnvironmentSystem
     private readonly List<string> _groups = new();
     private readonly List<EnvironmentObjectDef> _defs = new();
     private readonly List<Texture2D?> _textures = new();
-    private readonly Dictionary<string, Texture2D?> _overrideTextures = new(); // cached single-frame overrides (trap & corrupted sprites)
+    private readonly Render.TextureCache _overrideTextures = new("startup"); // cached single-frame overrides (trap & corrupted sprites)
     // Per-def harmonized corrupt textures. Keyed by def index (NOT path) because
     // defs can share a corrupt sprite path but harmonize it differently. The
     // cached value is the texture to return (may be the shared raw on fallback);
@@ -1515,36 +1515,7 @@ public class EnvironmentSystem
     }
 
     private Texture2D? GetOrLoadOverrideTexture(string path)
-    {
-        if (string.IsNullOrEmpty(path)) return null;
-        if (_overrideTextures.TryGetValue(path, out var cached)) return cached;
-        if (_device == null)
-        {
-            Core.DebugLog.Log("startup", $"  Override sprite '{path}' requested before GraphicsDevice ready — caching null");
-            _overrideTextures[path] = null;
-            return null;
-        }
-        string resolved = Core.GamePaths.Resolve(path);
-        if (!System.IO.File.Exists(resolved))
-        {
-            Core.DebugLog.Log("startup", $"  Override sprite missing: '{path}' (resolved to '{resolved}')");
-            _overrideTextures[path] = null;
-            return null;
-        }
-        try
-        {
-            var tex = Render.TextureUtil.LoadPremultiplied(_device, path);
-            _overrideTextures[path] = tex;
-            Core.DebugLog.Log("startup", $"  Override sprite loaded: '{path}' ({tex.Width}x{tex.Height})");
-            return tex;
-        }
-        catch (Exception ex)
-        {
-            Core.DebugLog.Log("startup", $"  Override sprite load FAILED: '{path}' — {ex.Message}");
-            _overrideTextures[path] = null;
-            return null;
-        }
-    }
+        => _overrideTextures.GetOrLoad(_device, path);
 
     /// <summary>
     /// Reload texture for a single def (e.g. after changing TexturePath in the editor).

@@ -31,7 +31,7 @@ public class RuntimeWidgetRenderer
     private readonly List<UIEditorWidgetDef> _widgetDefs = new();
 
     // Texture/nine-slice cache
-    private readonly Dictionary<string, Texture2D> _textures = new();
+    private readonly Render.TextureCache _textures = new("error");
     private readonly Dictionary<string, NineSlice> _nsInstances = new();
 
     // Harmonized texture/nine-slice cache (layer-prefixed keys like editor: "bg|texPath")
@@ -749,20 +749,7 @@ public class RuntimeWidgetRenderer
         return font == null ? Vector2.Zero : font.MeasureString(text);
     }
 
-    private Texture2D? GetOrLoadTexture(string texPath)
-    {
-        if (string.IsNullOrEmpty(texPath)) return null;
-        if (_textures.TryGetValue(texPath, out var tex)) return tex;
-        string resolved = Core.GamePaths.Resolve(texPath);
-        if (!File.Exists(resolved)) return null;
-        try
-        {
-            tex = TextureUtil.LoadPremultiplied(_device, texPath);
-            _textures[texPath] = tex;
-            return tex;
-        }
-        catch (Exception ex) { DebugLog.Log("error", $"Failed to load texture '{texPath}': {ex.Message}"); return null; }
-    }
+    private Texture2D? GetOrLoadTexture(string texPath) => _textures.GetOrLoad(_device, texPath);
 
     private NineSlice? GetOrLoadNineSlice(string nsId)
     {
@@ -973,8 +960,7 @@ public class RuntimeWidgetRenderer
         _nsInstances.Clear();
         foreach (var ns in _harmonizedNineSlices.Values) ns.Unload();
         _harmonizedNineSlices.Clear();
-        foreach (var tex in _textures.Values) tex.Dispose();
-        _textures.Clear();
+        _textures.DisposeAll();
         foreach (var tex in _harmonizedTextures.Values) tex.Dispose();
         _harmonizedTextures.Clear();
         // _pixel is the shared TextureUtil.GetWhitePixel cache — do NOT dispose it here.

@@ -74,7 +74,7 @@ public class GrassTuftRenderer
 
     // Shared texture cache keyed by project-relative path. Multiple types can
     // reference the same sprite; each texture is only loaded once.
-    private readonly Dictionary<string, Texture2D> _texCache = new();
+    private readonly TextureCache _texCache = new("error");
 
     private GraphicsDevice? _device;
 
@@ -103,19 +103,8 @@ public class GrassTuftRenderer
             foreach (var rawPath in t.SpritePaths)
             {
                 if (string.IsNullOrEmpty(rawPath)) continue;
-                if (!_texCache.TryGetValue(rawPath, out var tex))
-                {
-                    try
-                    {
-                        tex = TextureUtil.LoadPremultiplied(_device, rawPath);
-                        _texCache[rawPath] = tex;
-                    }
-                    catch (Exception ex)
-                    {
-                        DebugLog.Log("error", $"GrassTuftRenderer: failed to load {rawPath}: {ex.Message}");
-                        continue;
-                    }
-                }
+                var tex = _texCache.GetOrLoad(_device, rawPath);
+                if (tex == null) continue;
                 list.Add(tex);
             }
             _typeTextures.Add(list.ToArray());
@@ -352,8 +341,7 @@ public class GrassTuftRenderer
 
     public void Dispose()
     {
-        foreach (var kv in _texCache) kv.Value?.Dispose();
-        _texCache.Clear();
+        _texCache.DisposeAll();
         _typeTextures.Clear();
     }
 }

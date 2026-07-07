@@ -30,7 +30,7 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
     private string _selectedFile = "";          // highlighted file (not yet committed)
     private Texture2D? _previewTexture;
     private GraphicsDevice? _graphicsDevice;
-    private readonly Dictionary<string, Texture2D> _textureCache = new();
+    private readonly Necroking.Render.TextureCache _textureCache = new();
 
     // Scroll state
     private float _scrollOffset;
@@ -130,9 +130,7 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
         // Preview textures are session-scoped: keep them cached while browsing
         // (avoids reloading on every click), release them all on close so VRAM
         // doesn't grow unboundedly across sessions.
-        foreach (var tex in _textureCache.Values)
-            tex.Dispose();
-        _textureCache.Clear();
+        _textureCache.DisposeAll();
         _previewTexture = null;
         Necroking.Game1.Popups.Pop(this);
     }
@@ -391,20 +389,7 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
         RefreshListing();
     }
 
-    private Texture2D? LoadPreviewTexture(string path)
-    {
-        if (string.IsNullOrEmpty(path) || _graphicsDevice == null) return null;
-        if (_textureCache.TryGetValue(path, out var cached)) return cached;
-        string resolved = System.IO.Path.IsPathRooted(path) ? path : Necroking.Core.GamePaths.Resolve(path);
-        if (!File.Exists(resolved)) return null;
-        try
-        {
-            var tex = Necroking.Render.TextureUtil.LoadPremultiplied(_graphicsDevice, path);
-            _textureCache[path] = tex;
-            return tex;
-        }
-        catch { return null; }
-    }
+    private Texture2D? LoadPreviewTexture(string path) => _textureCache.GetOrLoad(_graphicsDevice, path);
 
     private void RefreshListing()
     {

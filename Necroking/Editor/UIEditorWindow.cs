@@ -325,7 +325,7 @@ public partial class UIEditorWindow : EditorBase
     private int _wDragOrigX, _wDragOrigY, _wDragOrigW, _wDragOrigH;
 
     // Loaded textures (for nine-slice display)
-    private readonly Dictionary<string, Texture2D> _textures = new();
+    private readonly Render.TextureCache _textures = new();
 
     // Harmonized texture cache (per-pixel color-shifted copies, keyed by source path)
     private readonly Dictionary<string, Texture2D> _harmonizedTextures = new();
@@ -453,23 +453,7 @@ public partial class UIEditorWindow : EditorBase
     //  Texture loading helpers
     // ═══════════════════════════════════════
 
-    private Texture2D? GetOrLoadTexture(string texPath)
-    {
-        if (string.IsNullOrEmpty(texPath) || _device == null) return null;
-        if (_textures.TryGetValue(texPath, out var tex)) return tex;
-
-        // Resolve project-relative paths (assets/...) — at runtime the CWD is
-        // the exe directory, not the project root, so raw File.Exists fails.
-        string resolved = Core.GamePaths.Resolve(texPath);
-        if (!File.Exists(resolved)) return null;
-        try
-        {
-            tex = Render.TextureUtil.LoadPremultiplied(_device, resolved);
-            _textures[texPath] = tex;
-            return tex;
-        }
-        catch { return null; }
-    }
+    private Texture2D? GetOrLoadTexture(string texPath) => _textures.GetOrLoad(_device, texPath);
 
     private NineSlice? GetOrLoadNineSlice(string nsId)
     {

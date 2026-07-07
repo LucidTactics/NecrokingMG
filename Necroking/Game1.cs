@@ -646,7 +646,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // Dev cursor override for headless hover testing (set via the `mousepos` dev command).
     private Microsoft.Xna.Framework.Vector2? _devMouseOverride;
     internal int _channelingSlot = -1;
-    private readonly Dictionary<string, Texture2D?> _itemTextureCache = new();
+    private readonly TextureCache _itemTextureCache = new();
     internal int _hoveredObjectIdx = -1;
     internal int _hoveredCorpseIdx = -1;
     internal int _hoveredUnitIdx = -1;
@@ -4142,17 +4142,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     }
 
     internal Texture2D? GetItemTextureByPath(string path)
-    {
-        if (string.IsNullOrEmpty(path)) return null;
-        if (_itemTextureCache.TryGetValue(path, out var cached)) return cached;
-        try
-        {
-            var tex = TextureUtil.LoadPremultiplied(GraphicsDevice, GamePaths.Resolve(path));
-            _itemTextureCache[path] = tex;
-            return tex;
-        }
-        catch { _itemTextureCache[path] = null; return null; }
-    }
+        => _itemTextureCache.GetOrLoad(GraphicsDevice, path);
 
     // Enemy = different faction from the necromancer (undead).
     private int FindClosestEnemyToPoint(Vec2 worldPos, float maxRange)
