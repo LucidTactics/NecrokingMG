@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "labeled_date": "2026-07-06",
+  "persisted_date": "2026-07-07",
+  "persisted_at_commit": "a112fffb4fef1a6dc23a21c787d88d099f96a023",
+  "note": "Labels were generated from the 2026-07-06 working tree; consolidation commits landed afterwards, so some body12 hashes will already read as stale vs HEAD. Line numbers are advisory (as of extraction).",
+  "counts": {
+    "total": 3551,
+    "labeled": 3025,
+    "auto_scenario": 526,
+    "unlabeled": 0,
+    "key_collisions_disambiguated": 0
+  },
+  "key_format": "file::type::name::sha1(sig_no_ws)[:8]  (+'@line' on collision)",
+  "body12": "sha1 of body with block+line comments removed and all whitespace removed, first 12 hex",
+  "cost_note": "labeling ~2.6M Sonnet agent tokens; judging ~1.8M Fable tokens (2026-07-06 run)",
+  "bad_label_files": []
+}
