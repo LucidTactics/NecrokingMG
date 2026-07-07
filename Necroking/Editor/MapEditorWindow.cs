@@ -383,18 +383,8 @@ public class MapEditorWindow
         }
     }
 
-    private class UndoObjectPlace : UndoAction
-    {
-        public EnvironmentSystem Env = null!;
-        public int ObjectIndex;
-        public override void Undo()
-        {
-            if (ObjectIndex >= 0 && ObjectIndex < Env.ObjectCount)
-                Env.RemoveObject(ObjectIndex);
-        }
-    }
-
-    // M28: Batch undo for paint-mode object placement
+    // M28: Batch undo for paint-mode object placement (also used for single placement
+    // as a one-element batch — see UpdateObjectsTab single-place path)
     private class UndoObjectBatchPlace : UndoAction
     {
         public EnvironmentSystem Env = null!;
@@ -2318,7 +2308,7 @@ public class MapEditorWindow
                             var groundOld = new Dictionary<long, byte>();
                             bool groundChanged = StampAutoGround(_objectsAutoGround, worldPos.X, worldPos.Y, groundOld);
                             if (groundChanged) _onVertexMapChanged?.Invoke();
-                            UndoAction placeUndo = new UndoObjectPlace { Env = _envSystem, ObjectIndex = newIdx };
+                            UndoAction placeUndo = new UndoObjectBatchPlace { Env = _envSystem, ObjectIndices = new List<int> { newIdx } };
                             if (groundChanged)
                             {
                                 var comp = new UndoComposite();
@@ -2351,36 +2341,8 @@ public class MapEditorWindow
                         _autoGroundStrokeOld = new();
                     PaintObjectsBatch(mouse, screenW, screenH);
                 }
-                if (leftUp && _batchPlacedObjects != null)
-                {
-                    if (_batchPlacedObjects.Count > 0)
-                    {
-                        var batchUndo = new UndoObjectBatchPlace
-                        {
-                            Env = _envSystem,
-                            ObjectIndices = new List<int>(_batchPlacedObjects.Select(b => b.objIdx))
-                        };
-                        // Tier fields were kept current via StampObjectCollisionAt
-                        // inside the stroke loop — no full rebake needed here.
-                        // Bundle any auto-ground stamped during the stroke so one
-                        // undo reverts both the objects and the ground under them.
-                        if (_autoGroundStrokeOld != null && _autoGroundStrokeOld.Count > 0)
-                        {
-                            var comp = new UndoComposite();
-                            comp.Actions.Add(batchUndo);
-                            comp.Actions.Add(new UndoGroundStroke
-                            {
-                                Ground = _groundSystem,
-                                OldValues = _autoGroundStrokeOld,
-                                OnChanged = _onVertexMapChanged
-                            });
-                            PushUndo(comp);
-                        }
-                        else PushUndo(batchUndo);
-                    }
-                    _batchPlacedObjects = null;
-                    _autoGroundStrokeOld = null;
-                }
+                if (leftUp)
+                    FinalizeBatchPlaceStroke();
             }
         }
 
@@ -3010,34 +2972,16 @@ public class MapEditorWindow
             }
         }
 
-        // Paint walls (left-click uses selected type)
+        // Paint walls (left-click uses selected type; RM11 right-click erases = type 0)
         if (leftDown && !overPanel)
         {
             if (!_painting)
                 _wallStrokeOld = new Dictionary<int, (byte type, short hp)>();
             _painting = true;
-            PaintWalls(mouse, screenW, screenH);
+            PaintWalls(mouse, screenW, screenH, SelectedWallType);
         }
         if (leftUp)
-        {
-            if (_painting)
-            {
-                if (_wallStrokeOld != null && _wallStrokeOld.Count > 0)
-                {
-                    PushUndo(new UndoWallStroke
-                    {
-                        Walls = _wallSystem,
-                        OldValues = _wallStrokeOld,
-                        WallWidth = _wallSystem.Width
-                    });
-                }
-                _wallStrokeOld = null;
-                // Rebuild cost field and bake walls after painting
-                _tileGrid.RebuildCostField();
-                _wallSystem.BakeWalls(_tileGrid);
-            }
-            _painting = false;
-        }
+            FinalizeWallStroke();
 
         // RM11: Right-click to erase walls regardless of selected type
         if (rightDown && !overPanel)
@@ -3045,30 +2989,16 @@ public class MapEditorWindow
             if (!_painting)
                 _wallStrokeOld = new Dictionary<int, (byte type, short hp)>();
             _painting = true;
-            EraseWalls(mouse, screenW, screenH);
+            PaintWalls(mouse, screenW, screenH, 0);
         }
         if (rightUp)
-        {
-            if (_painting)
-            {
-                if (_wallStrokeOld != null && _wallStrokeOld.Count > 0)
-                {
-                    PushUndo(new UndoWallStroke
-                    {
-                        Walls = _wallSystem,
-                        OldValues = _wallStrokeOld,
-                        WallWidth = _wallSystem.Width
-                    });
-                }
-                _wallStrokeOld = null;
-                _tileGrid.RebuildCostField();
-                _wallSystem.BakeWalls(_tileGrid);
-            }
-            _painting = false;
-        }
+            FinalizeWallStroke();
     }
 
-    private void PaintWalls(MouseState mouse, int screenW, int screenH)
+    /// <summary>Paint (or erase) walls under the brush. <paramref name="wallType"/> == 0
+    /// clears; otherwise stamps that type. Records pre-stroke values into
+    /// _wallStrokeOld for undo.</summary>
+    private void PaintWalls(MouseState mouse, int screenW, int screenH, int wallType)
     {
         Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
         int wx = WallSystem.SnapToWallGrid((int)MathF.Round(worldPos.X));
@@ -3089,40 +3019,34 @@ public class MapEditorWindow
                 int idx = ty * _wallSystem.Width + tx;
                 _wallStrokeOld?.TryAdd(idx, (types[idx], hps[idx]));
 
-                if (SelectedWallType == 0)
+                if (wallType == 0)
                     _wallSystem.ClearWall(tx, ty);
                 else
-                    _wallSystem.SetWall(tx, ty, (byte)SelectedWallType);
+                    _wallSystem.SetWall(tx, ty, (byte)wallType);
             }
         }
     }
 
-    /// <summary>
-    /// RM11: Erase walls under the brush, regardless of selected wall type.
-    /// </summary>
-    private void EraseWalls(MouseState mouse, int screenW, int screenH)
+    /// <summary>End of a wall paint/erase stroke: push the accumulated undo, rebuild the
+    /// cost field, re-bake walls. Shared by the left (paint) and right (erase) mouse-up.</summary>
+    private void FinalizeWallStroke()
     {
-        Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
-        int wx = WallSystem.SnapToWallGrid((int)MathF.Round(worldPos.X));
-        int wy = WallSystem.SnapToWallGrid((int)MathF.Round(worldPos.Y));
-
-        var types = _wallSystem.GetTypes();
-        var hps = _wallSystem.GetHPArray();
-
-        for (int dy = -BrushRadius; dy <= BrushRadius; dy++)
+        if (_painting)
         {
-            for (int dx = -BrushRadius; dx <= BrushRadius; dx++)
+            if (_wallStrokeOld != null && _wallStrokeOld.Count > 0)
             {
-                if (dx * dx + dy * dy > BrushRadius * BrushRadius) continue;
-                int tx = wx + dx * WallSystem.WallStep;
-                int ty = wy + dy * WallSystem.WallStep;
-                if (!_wallSystem.InBounds(tx, ty)) continue;
-
-                int idx = ty * _wallSystem.Width + tx;
-                _wallStrokeOld?.TryAdd(idx, (types[idx], hps[idx]));
-                _wallSystem.ClearWall(tx, ty);
+                PushUndo(new UndoWallStroke
+                {
+                    Walls = _wallSystem,
+                    OldValues = _wallStrokeOld,
+                    WallWidth = _wallSystem.Width
+                });
             }
+            _wallStrokeOld = null;
+            _tileGrid.RebuildCostField();
+            _wallSystem.BakeWalls(_tileGrid);
         }
+        _painting = false;
     }
 
     private void DrawWallsTab(int panelX, int contentY, int contentH, int screenW, int screenH)
@@ -5635,35 +5559,44 @@ public class MapEditorWindow
             foreach (var cat in _procGenStyles[SelectedProcGenStyle].Categories) cat.Accum = 0f;
         }
 
-        if (leftUp && _batchPlacedObjects != null)
+        if (leftUp)
+            FinalizeBatchPlaceStroke();
+    }
+
+    /// <summary>Finalize a batch object-placement stroke (Objects paint or ProcGen tab):
+    /// build an UndoObjectBatchPlace from _batchPlacedObjects, composite it with an
+    /// UndoGroundStroke from _autoGroundStrokeOld when auto-ground was stamped during the
+    /// stroke, push, and reset both accumulators. Tier cost fields were kept current via
+    /// StampObjectCollisionAt inside the stroke loop, so no full rebake here. Call on
+    /// left-mouse-up.</summary>
+    private void FinalizeBatchPlaceStroke()
+    {
+        if (_batchPlacedObjects == null) return;
+        if (_batchPlacedObjects.Count > 0)
         {
-            if (_batchPlacedObjects.Count > 0)
+            var batchUndo = new UndoObjectBatchPlace
             {
-                var batchUndo = new UndoObjectBatchPlace
+                Env = _envSystem,
+                ObjectIndices = new List<int>(_batchPlacedObjects.Select(b => b.objIdx))
+            };
+            // Bundle any auto-ground stamped during the stroke so one undo reverts both
+            // the objects and the ground under them.
+            if (_autoGroundStrokeOld != null && _autoGroundStrokeOld.Count > 0)
+            {
+                var comp = new UndoComposite();
+                comp.Actions.Add(batchUndo);
+                comp.Actions.Add(new UndoGroundStroke
                 {
-                    Env = _envSystem,
-                    ObjectIndices = new List<int>(_batchPlacedObjects.Select(b => b.objIdx))
-                };
-                // Bundle any per-pool auto-ground stamped during the stroke so one
-                // undo reverts both the objects and the ground under them (mirrors
-                // the Objects paint stroke).
-                if (_autoGroundStrokeOld != null && _autoGroundStrokeOld.Count > 0)
-                {
-                    var comp = new UndoComposite();
-                    comp.Actions.Add(batchUndo);
-                    comp.Actions.Add(new UndoGroundStroke
-                    {
-                        Ground = _groundSystem,
-                        OldValues = _autoGroundStrokeOld,
-                        OnChanged = _onVertexMapChanged
-                    });
-                    PushUndo(comp);
-                }
-                else PushUndo(batchUndo);
+                    Ground = _groundSystem,
+                    OldValues = _autoGroundStrokeOld,
+                    OnChanged = _onVertexMapChanged
+                });
+                PushUndo(comp);
             }
-            _batchPlacedObjects = null;
-            _autoGroundStrokeOld = null;
+            else PushUndo(batchUndo);
         }
+        _batchPlacedObjects = null;
+        _autoGroundStrokeOld = null;
     }
 
     /// <summary>One held-brush tick: each category accrues density*5 placement
