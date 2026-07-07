@@ -1247,18 +1247,18 @@ partial class GameRenderer
             {
                 // Hover area = the drawn marker footprint; score by distance to the collision centre.
                 if (!CursorInObjectMarker(oi, buildingShape, cursorScreen)) continue;
-                float es = d.Scale * obj.Scale;
-                float cx = (obj.X + d.CollisionOffsetX * es) - cursorWorld.X;
-                float cy = (obj.Y + d.CollisionOffsetY * es) - cursorWorld.Y;
+                var cc = EnvironmentSystem.GetCollisionCircle(d, in obj);
+                float cx = cc.CX - cursorWorld.X;
+                float cy = cc.CY - cursorWorld.Y;
                 score = cx * cx + cy * cy;
             }
             else
             {
                 // Anchor the forgiving radius pick at the collision centre (where the marker is
                 // drawn), not the sprite origin — robust if a ground item ever gets a collision offset.
-                float es = d.Scale * obj.Scale;
-                float hdx = (obj.X + d.CollisionOffsetX * es) - cursorWorld.X;
-                float hdy = (obj.Y + d.CollisionOffsetY * es) - cursorWorld.Y;
+                var cc = EnvironmentSystem.GetCollisionCircle(d, in obj);
+                float hdx = cc.CX - cursorWorld.X;
+                float hdy = cc.CY - cursorWorld.Y;
                 score = hdx * hdx + hdy * hdy;
                 if (score >= pr * pr) continue;
             }
@@ -1276,9 +1276,10 @@ partial class GameRenderer
     {
         var obj = _g._envSystem.GetObject(oi);
         var def = _g._envSystem.Defs[obj.DefIndex];
-        float es = def.Scale * obj.Scale;
-        var ccen = new Vec2(obj.X + def.CollisionOffsetX * es, obj.Y + def.CollisionOffsetY * es);
-        float worldR = MathF.Max(def.CollisionRadius * es, 0.45f * es) * HoverMarkerRadiusMul;
+        float es = def.Scale * obj.Scale; // for the min-radius fallback only
+        var cc = EnvironmentSystem.GetCollisionCircle(def, in obj);
+        var ccen = new Vec2(cc.CX, cc.CY);
+        float worldR = MathF.Max(cc.R, 0.45f * es) * HoverMarkerRadiusMul;
         var cenS  = _g._renderer.WorldToScreen(ccen, 0f, _g._camera);
         var edgeS = _g._renderer.WorldToScreen(ccen + new Vec2(worldR, 0f), 0f, _g._camera);
         float rx = MathF.Abs(edgeS.X - cenS.X);
@@ -1348,13 +1349,13 @@ partial class GameRenderer
         {
             var obj = _g._envSystem.GetObject(_g._hoveredObjectIdx);
             var def = _g._envSystem.Defs[obj.DefIndex];
-            // Match the baked collision footprint exactly (StampObjectCollisionInto): effective scale
-            // folds in BOTH the def scale AND the placed scale, and the footprint is offset from the
-            // object origin — buildings have large offsets/def-scales, so using obj.Scale + obj.X/Y
-            // alone left the marker mis-sized and shifted off the actual collision area.
-            float es = def.Scale * obj.Scale;
-            var ccen = new Vec2(obj.X + def.CollisionOffsetX * es, obj.Y + def.CollisionOffsetY * es);
-            float cr = MathF.Max(def.CollisionRadius * es, 0.45f * es);
+            // Match the baked collision footprint exactly (GetCollisionCircle = the same circle
+            // StampObjectCollisionInto bakes) — buildings have large offsets/def-scales, so using
+            // obj.Scale + obj.X/Y alone left the marker mis-sized and shifted off the collision area.
+            float es = def.Scale * obj.Scale; // for the min-radius fallback only
+            var cc = EnvironmentSystem.GetCollisionCircle(def, in obj);
+            var ccen = new Vec2(cc.CX, cc.CY);
+            float cr = MathF.Max(cc.R, 0.45f * es);
             Mark(ccen, cr * RadiusMul, HoverVariantFor(def.IsBuilding));
         }
         if (_g._hoveredCorpseIdx >= 0 && _g._hoveredCorpseIdx < _g._sim.Corpses.Count)

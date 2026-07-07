@@ -129,6 +129,9 @@ public class Simulation
     public AI.SquadSystem Squads => _squads;
     // Spatial index over env objects (trees, rocks, etc.) — rebuilt only on
     // OnCollisionsDirty, so ORCA static-obstacle queries are free per-frame.
+    // Direct access is for the internal hot loops below (ORCA static gather,
+    // player env clipping, stuck escape); external callers go through
+    // Query.IsSpotBlocked (see the EnvIndex accessor).
     private readonly EnvSpatialIndex _envIndex = new();
     private UnitArrays _units = new();
     private ProjectileManager _projectiles = new();
@@ -185,6 +188,12 @@ public class Simulation
     public UnitArrays Units => _units;
     public UnitArrays UnitsMut => _units;
     public Quadtree Quadtree => _quadtree;
+    /// <summary>Static env-object collision circles (rebuilt with the pathfinder —
+    /// see RebuildPathfinder). LOW-LEVEL: gameplay/UI callers use
+    /// _sim.Query.IsSpotBlocked / IsWallBlocked instead; direct access is for
+    /// Simulation-internal hot loops (ORCA static gather, escapes, player
+    /// clipping) and WorldQuery itself.</summary>
+    public EnvSpatialIndex EnvIndex => _envIndex;
     /// <summary>Central world-query engine (nearest / under-cursor / in-radius over
     /// units, env objects, corpses). Reach it as _sim.Query.… per call — never cache
     /// it in a field, same rule as _sim itself (recreated with the session).</summary>
@@ -1980,38 +1989,7 @@ public class Simulation
     // wall loop doesn't allocate a fresh array each execution.
     private static readonly float[] WallGapProbes = { 0.1f, -0.1f, 0.2f, -0.2f, 0.3f, -0.3f };
 
-    private bool IsBlocked(float px, float py, float r)
-    {
-        int gx0 = (int)MathF.Floor(px - r);
-        int gy0 = (int)MathF.Floor(py - r);
-        int gx1 = (int)MathF.Floor(px + r);
-        int gy1 = (int)MathF.Floor(py + r);
-        for (int gy = gy0; gy <= gy1; gy++)
-            for (int gx = gx0; gx <= gx1; gx++)
-                if (_grid.InBounds(gx, gy) && _grid.GetCost(gx, gy) == 255) return true;
-        return false;
-    }
-
-    private readonly List<EnvSpatialIndex.Entry> _spotCheckScratch = new();
-
-    /// <summary>True if a unit of the given radius can NOT stand at pos:
-    /// overlaps an impassable tile (checked at the wall-collision radius,
-    /// Radius*0.7, same as UpdateMovement) or a static env collision circle.
-    /// For teleport-style destination checks (dodge hops, spawn placement) —
-    /// those bypass normal collision, so landing spots must be validated.</summary>
-    public bool IsSpotBlocked(Vec2 pos, float unitRadius)
-    {
-        if (IsBlocked(pos.X, pos.Y, unitRadius * 0.7f)) return true;
-        _spotCheckScratch.Clear();
-        _envIndex.QueryRadius(pos, unitRadius, _spotCheckScratch);
-        foreach (var e in _spotCheckScratch)
-        {
-            float dx = pos.X - e.CX, dy = pos.Y - e.CY;
-            float combined = unitRadius + e.Radius;
-            if (dx * dx + dy * dy < combined * combined) return true;
-        }
-        return false;
-    }
+    private bool IsBlocked(float px, float py, float r) => _grid.OverlapsImpassable(px, py, r);
 
     // --- Facing Angles ---
     // The facing priority ladder lives in Movement.Locomotion.UpdateFacing

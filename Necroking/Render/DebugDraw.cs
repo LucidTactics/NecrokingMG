@@ -274,12 +274,8 @@ public class DebugDraw
                     if (!rt.Alive || rt.Collected) continue;
                 }
 
-                // Same math as BakeCollisions / EnvSpatialIndex: offset and radius
-                // both scale by def.Scale * obj.Scale.
-                float es = def.Scale * obj.Scale;
-                float cx = obj.X + def.CollisionOffsetX * es;
-                float cy = obj.Y + def.CollisionOffsetY * es;
-                float radius = def.CollisionRadius * es;
+                var circle = EnvironmentSystem.GetCollisionCircle(def, in obj);
+                float cx = circle.CX, cy = circle.CY, radius = circle.R;
 
                 // Magenta outline = what ORCA actually avoids.
                 DrawCircle(batch, renderer, cam, new Vec2(cx, cy), radius, new Color(255, 80, 255, 220));

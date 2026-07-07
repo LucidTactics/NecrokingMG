@@ -68,6 +68,10 @@ queries ride the per-tick quadtree; UI/paused picks use the linear methods (quad
 stale outside `Simulation.Tick`). Don't write new ad-hoc `bestSq` scans — and when
 touching the remaining unmigrated ones (WorkerSystem finds, CorpseInteractionManager,
 SpellCasting/Projectile corpse scans, VillageThreat, BoarForageAI), migrate them here.
+Since 2026-07-07 it is also the blocking facade: `IsSpotBlocked(pos, radius)` (walls +
+env circles = "can a unit stand here") and `IsWallBlocked` — with the env collision
+circle single-sourced in `EnvironmentSystem.GetCollisionCircle`. Full blocking map:
+[blocking.md](blocking.md).
 
 ## Runtime env-object spawn census & the map-save pollution loop
 

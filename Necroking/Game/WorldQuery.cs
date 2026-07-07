@@ -366,6 +366,39 @@ public sealed class WorldQuery
         return found;
     }
 
+    // ---------------------------------------------------------------- blocking
+
+    // Scratch for env-circle probes — reused, so blocking queries are not
+    // re-entrant (same contract as _idScratch; fine, the sim is single-threaded).
+    private readonly List<EnvSpatialIndex.Entry> _envScratch = new();
+
+    /// <summary>True if a unit of the given radius can NOT stand at pos:
+    /// overlaps an impassable tile (walls/deep water, probed at the movement
+    /// wall-collision radius = unitRadius*0.7, same as UpdateMovement) or a
+    /// static env collision circle. THE standability check for teleport/dodge
+    /// landings, spawn placement, and AI destination picks. Safe any time —
+    /// the grid and env index are event-rebuilt, not per-tick, so they are
+    /// never stale while paused.</summary>
+    public bool IsSpotBlocked(Vec2 pos, float unitRadius)
+    {
+        if (_sim.Grid.OverlapsImpassable(pos.X, pos.Y, unitRadius * 0.7f)) return true;
+        _envScratch.Clear();
+        _sim.EnvIndex.QueryRadius(pos, unitRadius, _envScratch);
+        foreach (var e in _envScratch)
+        {
+            float dx = pos.X - e.CX, dy = pos.Y - e.CY;
+            float combined = unitRadius + e.Radius;
+            if (dx * dx + dy * dy < combined * combined) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Walls/terrain only — any impassable tile in the circle's tile
+    /// footprint. No env circles: use <see cref="IsSpotBlocked"/> for "can a
+    /// unit stand here".</summary>
+    public bool IsWallBlocked(Vec2 pos, float radius)
+        => _sim.Grid.OverlapsImpassable(pos.X, pos.Y, radius);
+
     private static bool IsExcluded(Corpse c, CorpseExclude ex)
     {
         if ((ex & CorpseExclude.Dissolving) != 0 && c.Dissolving) return true;

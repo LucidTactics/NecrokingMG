@@ -79,6 +79,16 @@ CLAUDE.md → "Standard Patterns Reference".)
   linear scans (WorkerSystem finds, CorpseInteractionManager, SpellCasting/
   Projectile corpse scans, AI VillageThreat/BoarForageAI) should move here
   when touched.
+- **Blocking / standability — `_sim.Query.IsSpotBlocked(pos, radius)`**
+  (added 2026-07-07): walls + env collision circles, the one "can a unit
+  stand here" for teleport/dodge landings, spawn spots, AI destinations;
+  `IsWallBlocked` for walls/terrain only. NEVER hand-roll a
+  `GetCost(...) == 255` footprint loop (that's `TileGrid.OverlapsImpassable`)
+  or the env collision-circle math (that's
+  `EnvironmentSystem.GetCollisionCircle` — `es = def.Scale*obj.Scale`, offset
+  and radius both scale). Placement spacing = `EnvironmentSystem.
+  CanPlaceObject` (same circle + `PlacementRadius`). Full blocking map:
+  docs/locate-behavior/blocking.md.
 
 ## Data / registries
 

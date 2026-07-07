@@ -20,7 +20,7 @@ namespace Necroking.Scenario.Scenarios;
 /// the launched bodies chain-collide through the rest, so by the time the
 /// primary rolls its dodge, real gaps exist and it legally hops away. Walls
 /// can't be bowled aside, and the dodge validates wall tiles via
-/// Simulation.IsSpotBlocked.)
+/// WorldQuery.IsSpotBlocked.)
 ///
 /// Verifies:
 ///   - Boar's swing rolls a miss

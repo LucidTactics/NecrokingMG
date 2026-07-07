@@ -108,6 +108,24 @@ public class TileGrid
         return _costField[Index(x, y)];
     }
 
+    /// <summary>True if any tile in the AABB footprint of a circle (px,py,r) is
+    /// impassable in the walls-only base cost field (255: walls, deep water).
+    /// Out-of-bounds tiles count as WALKABLE — callers rely on the world-bounds
+    /// clamp instead. The one wall-footprint probe: Simulation movement collision
+    /// and AI walkability checks both delegate here; env objects are a separate
+    /// layer (EnvSpatialIndex / WorldQuery.IsSpotBlocked).</summary>
+    public bool OverlapsImpassable(float px, float py, float r)
+    {
+        int gx0 = (int)MathF.Floor(px - r);
+        int gy0 = (int)MathF.Floor(py - r);
+        int gx1 = (int)MathF.Floor(px + r);
+        int gy1 = (int)MathF.Floor(py + r);
+        for (int gy = gy0; gy <= gy1; gy++)
+            for (int gx = gx0; gx <= gx1; gx++)
+                if (InBounds(gx, gy) && _costField[Index(gx, gy)] == 255) return true;
+        return false;
+    }
+
     /// <summary>
     /// Per-tier pathfinding cost. Includes walls + env obstacles inflated by
     /// SizeTierRadius[tier] so a unit of the given size tier plans paths that

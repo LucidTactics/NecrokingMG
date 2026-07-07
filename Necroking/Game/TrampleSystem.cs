@@ -422,7 +422,7 @@ public static class TrampleSystem
             // units), so the landing spot must be validated here: walls and env
             // circles were never checked and a deer could dodge INTO a tree or
             // wall tile, then depend on stuck-escape to dig it back out.
-            if (sim.IsSpotBlocked(candidate, defR)) continue;
+            if (sim.Query.IsSpotBlocked(candidate, defR)) continue;
 
             // Find the nearest unit body to this candidate spot.
             float nearestOverlap = float.PositiveInfinity;

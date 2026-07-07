@@ -458,6 +458,16 @@ public struct PlacedObject
     public bool Persistent;
 }
 
+/// <summary>World-space collision circle of a placed env object. R &lt;= 0 = no collision.
+/// Produced only by <see cref="EnvironmentSystem.GetCollisionCircle(EnvironmentObjectDef, in PlacedObject)"/> —
+/// never recompute the centre/radius math inline.</summary>
+public readonly struct EnvCollisionCircle
+{
+    public readonly float CX, CY, R;
+    public EnvCollisionCircle(float cx, float cy, float r) { CX = cx; CY = cy; R = r; }
+    public bool HasCollision => R > 0f;
+}
+
 public enum TrapVisualState : byte { Hidden, Triggered, Deployed, FadingOut }
 
 public enum BerryState : byte { Berries, NoBerry, Poisoned }
@@ -557,12 +567,8 @@ public class EnvironmentSystem
     /// The object must still be present in _objects.</summary>
     private void FireCollisionsDirty(int objIdx)
     {
-        var obj = _objects[objIdx];
-        var def = _defs[obj.DefIndex];
-        float es = def.Scale * obj.Scale;
-        FireCollisionsDirty(obj.X + def.CollisionOffsetX * es,
-                            obj.Y + def.CollisionOffsetY * es,
-                            def.CollisionRadius * es);
+        var c = GetCollisionCircle(objIdx);
+        FireCollisionsDirty(c.CX, c.CY, c.R);
     }
 
     public void Init(float worldMaxY, GraphicsDevice? device = null) { _worldMaxY = worldMaxY; _device = device; }
@@ -573,6 +579,27 @@ public class EnvironmentSystem
     public int DefCount => _defs.Count;
     public EnvironmentObjectDef GetDef(int idx) => _defs[idx];
     public int FindDef(string id) { for (int i = 0; i < _defs.Count; i++) if (_defs[i].Id == id) return i; return -1; }
+
+    /// <summary>THE collision-circle formula: es = def.Scale * obj.Scale;
+    /// centre = (X,Y) + CollisionOffset*es; r = CollisionRadius*es. Single source
+    /// for grid stamping, EnvSpatialIndex, dirty-region fires, placement checks,
+    /// and debug draw — never inline this math.</summary>
+    public static EnvCollisionCircle GetCollisionCircle(EnvironmentObjectDef def, in PlacedObject obj)
+    {
+        float es = def.Scale * obj.Scale;
+        return new EnvCollisionCircle(
+            obj.X + def.CollisionOffsetX * es,
+            obj.Y + def.CollisionOffsetY * es,
+            def.CollisionRadius * es);
+    }
+
+    /// <summary>Collision circle of object <paramref name="objIdx"/>. Purely
+    /// geometric — no Alive/Collected gating (callers gate).</summary>
+    public EnvCollisionCircle GetCollisionCircle(int objIdx)
+    {
+        var obj = _objects[objIdx];
+        return GetCollisionCircle(_defs[obj.DefIndex], in obj);
+    }
 
     public int AddObject(ushort defIndex, float x, float y, float scale = 1f, float seed = -1f, bool persistent = false)
     {
@@ -623,17 +650,14 @@ public class EnvironmentSystem
         var remDef = _defs[remObj.DefIndex];
         bool hadCollision = remDef.CollisionRadius > 0;
         // Capture the circle BEFORE removal — the region fire below needs it.
-        float remES = remDef.Scale * remObj.Scale;
-        float remCX = remObj.X + remDef.CollisionOffsetX * remES;
-        float remCY = remObj.Y + remDef.CollisionOffsetY * remES;
-        float remCR = remDef.CollisionRadius * remES;
+        var remCircle = GetCollisionCircle(remDef, in remObj);
         _objects.RemoveAt(index);
         if (index < _objectRuntime.Count) _objectRuntime.RemoveAt(index);
         if (index < _processState.Count) _processState.RemoveAt(index);
         if (index < _tableState.Count) _tableState.RemoveAt(index);
 
         if (hadCollision)
-            FireCollisionsDirty(remCX, remCY, remCR);
+            FireCollisionsDirty(remCircle.CX, remCircle.CY, remCircle.R);
     }
 
     /// <summary>Mark an object as destroyed (Alive=false). Clears collision and hides it.
@@ -1159,10 +1183,13 @@ public class EnvironmentSystem
     {
         if (defIndex < 0 || defIndex >= _defs.Count) return false;
         var newDef = _defs[defIndex];
-        // Placement check radius = collisionRadius + placementRadius (additive spacing)
-        float newRadius = newDef.CollisionRadius * scale + newDef.PlacementRadius;
-        float newCX = x + newDef.CollisionOffsetX;
-        float newCY = y + newDef.CollisionOffsetY;
+        // Placement check radius = collision circle + placementRadius (additive
+        // spacing), using the same canonical circle that blocks movement and
+        // pathfinding (GetCollisionCircle) so placement spacing matches what
+        // actually collides.
+        var cand = new PlacedObject { DefIndex = (ushort)defIndex, X = x, Y = y, Scale = scale };
+        var candCircle = GetCollisionCircle(newDef, in cand);
+        float newRadius = candCircle.R + newDef.PlacementRadius;
 
         // If both collision and placement radius are zero, always allow
         if (newRadius <= 0f) return true;
@@ -1175,14 +1202,12 @@ public class EnvironmentSystem
 
             var obj = _objects[i];
             var existDef = _defs[obj.DefIndex];
-            float existRadius = existDef.CollisionRadius * obj.Scale + existDef.PlacementRadius;
+            var c = GetCollisionCircle(existDef, in obj);
+            float existRadius = c.R + existDef.PlacementRadius;
             if (existRadius <= 0f) continue;
 
-            float existCX = obj.X + existDef.CollisionOffsetX;
-            float existCY = obj.Y + existDef.CollisionOffsetY;
-
-            float dx = newCX - existCX;
-            float dy = newCY - existCY;
+            float dx = candCircle.CX - c.CX;
+            float dy = candCircle.CY - c.CY;
             float minDist = newRadius + existRadius;
             if (dx * dx + dy * dy < minDist * minDist)
                 return false;
@@ -1227,13 +1252,11 @@ public class EnvironmentSystem
             var obj = _objects[i];
             var def = _defs[obj.DefIndex];
             if (def.CollisionRadius <= 0) continue;
-            float es = def.Scale * obj.Scale;
-            float cx = obj.X + def.CollisionOffsetX * es;
-            float cy = obj.Y + def.CollisionOffsetY * es;
-            float cr = def.CollisionRadius * es + maxInflate;
+            var c = GetCollisionCircle(def, in obj);
+            float cr = c.R + maxInflate;
             // Tile-space AABB overlap test (tile t covers [t, t+1)).
-            if (cx + cr < minTX || cx - cr > maxTX + 1 ||
-                cy + cr < minTY || cy - cr > maxTY + 1) continue;
+            if (c.CX + cr < minTX || c.CX - cr > maxTX + 1 ||
+                c.CY + cr < minTY || c.CY - cr > maxTY + 1) continue;
             StampObjectCollisionInto(grid, i); // skips Collected / !Alive internally
         }
     }
@@ -1264,13 +1287,9 @@ public class EnvironmentSystem
         var def = _defs[obj.DefIndex];
         if (def.CollisionRadius <= 0) return;
 
-        float es = def.Scale * obj.Scale;
-        float cx = obj.X + def.CollisionOffsetX * es;
-        float cy = obj.Y + def.CollisionOffsetY * es;
-        float cr = def.CollisionRadius * es;
-
+        var c = GetCollisionCircle(def, in obj);
         for (int tier = 0; tier < TerrainCosts.NumSizeTiers; tier++)
-            grid.StampImpassableCircleTier(tier, cx, cy, cr + TerrainCosts.SizeTierRadius[tier]);
+            grid.StampImpassableCircleTier(tier, c.CX, c.CY, c.R + TerrainCosts.SizeTierRadius[tier]);
     }
 
     public IReadOnlyList<EnvironmentObjectDef> Defs => _defs;

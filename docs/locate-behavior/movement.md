@@ -91,6 +91,9 @@ The whole pathfinder (~2300 lines, one class `Pathfinder`). Map is split into 64
 `TerrainType`, `TerrainCosts` (`GetCost`, `GetSpeedMultiplier`, `SizeToTier`,
 `SizeTierRadius`), `TileGrid` with base `_costField` plus per-size-tier inflated
 `_costFieldTier` (rebuilt by `RebuildCostField`/`RebuildTieredCostFields`). 255 = impassable.
+`OverlapsImpassable(px,py,r)` = the one wall-footprint probe (AABB of tiles vs base
+cost 255; out-of-bounds = walkable) — `Simulation.IsBlocked` and
+`SubroutineSteps.IsPointWalkable` both delegate here. See [blocking.md](blocking.md).
 **Look/edit here when…** terrain passability/cost/speed, size-tier inflation.
 
 ### `Necroking/World/FlowField.cs` — LEGACY whole-map flow fields
@@ -137,7 +140,10 @@ The per-frame consumer of everything above.
   MaxSpeed×3 capped at 1 tile/frame); **stuck-inside-env-object escape** (penetration
   push); **sub-stepped wall collision** (≤ half-tile probes vs tunneling, axis-independent
   X/Y with ±0.1..0.3 gap probes, wall-normal sliding, `r = Radius*0.7`), world-bounds clamp.
-- `IsBlocked(px, py, r)` — AABB-of-tiles impassability probe (base cost field only).
+- `IsBlocked(px, py, r)` — thin delegate to `TileGrid.OverlapsImpassable` (base cost
+  field only). The public standability check (walls + env circles, formerly
+  `Simulation.IsSpotBlocked`) lives on the facade: `_sim.Query.IsSpotBlocked` — see
+  [blocking.md](blocking.md).
 - Steering helpers: `MoveTowardPosition`/`MoveTowardUnit` (dist>3 → `GetDirection`,
   else beeline), used by the legacy `AIBehavior` switch (`MoveToPoint`, wolf AI, etc.).
 - **Player (necromancer) movement is computed in `UpdateAI` → `AIBehavior.PlayerControlled`
@@ -179,7 +185,10 @@ pathfinder load (slot moves = new flow keys).
 ### `Necroking/Spatial/Quadtree.cs` + `Necroking/World/EnvSpatialIndex.cs`
 `Quadtree` — units only, rebuilt from scratch every tick (`RebuildQuadtree`), queried by
 ORCA gather, combat, projectiles. `EnvSpatialIndex` — static env-object circles (trees,
-rocks) for ORCA statics and player clipping; rebuilt inside `RebuildPathfinder`.
+rocks) for ORCA statics and player clipping; rebuilt inside `RebuildPathfinder`; entries
+come from `EnvironmentSystem.GetCollisionCircle` (the single-source circle math).
+Exposed low-level as `Simulation.EnvIndex` — external callers use
+`_sim.Query.IsSpotBlocked` instead ([blocking.md](blocking.md)).
 **Look/edit here when…** neighbor query radius/perf, env obstacle radii.
 
 ### Scripted-movement owners (bypass ORCA/pathfinding while active)

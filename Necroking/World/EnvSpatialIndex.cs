@@ -51,21 +51,15 @@ public class EnvSpatialIndex
             var rt = env.GetObjectRuntime(i);
             if (rt.Collected || !rt.Alive) continue;
 
-            var obj = env.GetObject(i);
-            var def = env.GetDef(obj.DefIndex);
-            if (def.CollisionRadius <= 0f) continue;
-
-            float es = def.Scale * obj.Scale;
-            float cx = obj.X + def.CollisionOffsetX * es;
-            float cy = obj.Y + def.CollisionOffsetY * es;
-            float cr = def.CollisionRadius * es;
+            var c = env.GetCollisionCircle(i);
+            if (!c.HasCollision) continue;
 
             int entryIdx = _entries.Count;
-            _entries.Add(new Entry(i, cx, cy, cr));
-            if (cr > MaxObjRadius) MaxObjRadius = cr;
+            _entries.Add(new Entry(i, c.CX, c.CY, c.R));
+            if (c.R > MaxObjRadius) MaxObjRadius = c.R;
 
-            int bx = (int)(cx / CellSize);
-            int by = (int)(cy / CellSize);
+            int bx = (int)(c.CX / CellSize);
+            int by = (int)(c.CY / CellSize);
             if (bx < 0 || bx >= _w || by < 0 || by >= _h) continue;
             _buckets[by * _w + bx].Add(entryIdx);
         }

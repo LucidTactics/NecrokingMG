@@ -185,20 +185,11 @@ public static class SubroutineSteps
 
     /// <summary>
     /// True if a unit of the given radius can stand at worldPos without any blocked
-    /// tile in its footprint. Mirrors Simulation.IsBlocked so AI-picked destinations
-    /// match what the movement system will actually accept.
+    /// tile in its footprint. Delegates to the shared TileGrid probe so AI-picked
+    /// destinations match what the movement system will actually accept.
     /// </summary>
     public static bool IsPointWalkable(World.TileGrid grid, Vec2 pos, float radius)
-    {
-        int gx0 = (int)MathF.Floor(pos.X - radius);
-        int gy0 = (int)MathF.Floor(pos.Y - radius);
-        int gx1 = (int)MathF.Floor(pos.X + radius);
-        int gy1 = (int)MathF.Floor(pos.Y + radius);
-        for (int gy = gy0; gy <= gy1; gy++)
-            for (int gx = gx0; gx <= gx1; gx++)
-                if (grid.InBounds(gx, gy) && grid.GetCost(gx, gy) == 255) return false;
-        return true;
-    }
+        => !grid.OverlapsImpassable(pos.X, pos.Y, radius);
 
     /// <summary>Random wander within radius of a center point.</summary>
     public static void Wander(ref AIContext ctx, Vec2 center, float radius, float speed)
