@@ -161,39 +161,59 @@ public partial class Game1
         return true;
     }
 
+    private enum CursorMeleeResult { NoTarget, OutOfReach, Ordered }
+
+    /// <summary>Single "order the necromancer to melee the enemy at the cursor"
+    /// implementation, shared by the world-click attack (TryAttackClick) and the
+    /// melee_gather built-in (TryMeleeOrGather). Pick = nearest enemy to the
+    /// cursor (WorldQuery); reach gate = MeleeRangeUtil.Compute (the SSOT melee
+    /// range formula the AI and sim use); on success stamps Target +
+    /// PendingAttack + the def-driven attack cooldown. Callers own their
+    /// pre-gates (busy / cooldown) and failure feedback. Pass
+    /// <paramref name="orderAllowed"/> = false to pick + reach-check without
+    /// stamping (busy caster whose click should still be consumed).</summary>
+    private CursorMeleeResult TryOrderMeleeAtCursor(int necroIdx, Vec2 mouseWorld,
+        float pickRadius, bool orderAllowed = true)
+    {
+        int enemyIdx = FindClosestEnemyToPoint(mouseWorld, pickRadius);
+        if (enemyIdx < 0) return CursorMeleeResult.NoTarget;
+        // Reach gate: only swing when the enemy is actually within melee range
+        // of the necromancer. The cursor pick above only checks proximity to
+        // the mouse, not to the caster — without this you could melee an enemy
+        // anywhere on screen.
+        float meleeRange = GameSystems.Combat.MeleeRangeUtil.Compute(
+            _sim.Units, necroIdx, enemyIdx, _gameData);
+        float dist = (_sim.Units[enemyIdx].Position - _sim.Units[necroIdx].Position).Length();
+        if (dist > meleeRange) return CursorMeleeResult.OutOfReach;
+
+        if (orderAllowed)
+        {
+            _sim.UnitsMut[necroIdx].Target = CombatTarget.Unit(_sim.Units[enemyIdx].Id);
+            _sim.UnitsMut[necroIdx].PendingAttack = CombatTarget.Unit(_sim.Units[enemyIdx].Id);
+            _sim.UnitsMut[necroIdx].AttackCooldown =
+                _gameData.Units.Get(_sim.Units[necroIdx].UnitDefID)?.AttackCooldown
+                ?? _gameData.Settings.Combat.AttackCooldown;
+        }
+        return CursorMeleeResult.Ordered;
+    }
+
     /// <summary>Click on an enemy: order the necromancer to melee the clicked
     /// unit. Uses the same target stamp as the old LMB melee fallback, but aims
     /// at the unit under the cursor rather than the nearest to the caster.</summary>
     private bool TryAttackClick(Vec2 mouseWorld, int necroIdx)
     {
         if (necroIdx < 0) return false;
-        int enemyIdx = FindClosestEnemyToPoint(
-            mouseWorld, _gameData.Settings.Tooltips.HoverPickRadius);
-        if (enemyIdx < 0) return false;
-        // Reach gate: only swing when the enemy is actually within melee range
-        // of the necromancer (same SSOT formula the AI and sim use). The cursor
-        // pick above only checks proximity to the mouse, not to the caster —
-        // without this you could melee an enemy anywhere on screen. Out of reach
-        // still counts as hitting the enemy under the cursor, so consume the
-        // click and report "Too Far" (mirrors the pile-gather feedback) rather
-        // than swinging at empty air or falling through to something else.
-        float meleeRange = GameSystems.Combat.MeleeRangeUtil.Compute(
-            _sim.Units, necroIdx, enemyIdx, _gameData);
-        float dist = (_sim.Units[enemyIdx].Position - _sim.Units[necroIdx].Position).Length();
-        if (dist > meleeRange)
-        {
+        // Busy mid-cast or mid-swing — the click still "hits" the enemy under
+        // the cursor, so it must be consumed, but no new order is stamped.
+        bool busy = _pendingCastAnim != null || !_sim.Units[necroIdx].PendingAttack.IsNone;
+        var result = TryOrderMeleeAtCursor(necroIdx, mouseWorld,
+            _gameData.Settings.Tooltips.HoverPickRadius, orderAllowed: !busy);
+        if (result == CursorMeleeResult.NoTarget) return false;
+        // Out of reach still counts as hitting the enemy under the cursor, so
+        // consume the click and report "Too Far" (mirrors the pile-gather
+        // feedback) rather than swinging at empty air or falling through.
+        if (result == CursorMeleeResult.OutOfReach)
             SpawnCastFailText(necroIdx, "Too Far");
-            _input.ConsumeMouse();
-            return true;
-        }
-        // Busy mid-cast or mid-swing — the click still "hit" the enemy, so
-        // consume it rather than let it fall through to anything else.
-        if (_pendingCastAnim == null && _sim.Units[necroIdx].PendingAttack.IsNone)
-        {
-            _sim.UnitsMut[necroIdx].Target = CombatTarget.Unit(_sim.Units[enemyIdx].Id);
-            _sim.UnitsMut[necroIdx].PendingAttack = CombatTarget.Unit(_sim.Units[enemyIdx].Id);
-            _sim.UnitsMut[necroIdx].AttackCooldown = 2f;
-        }
         _input.ConsumeMouse();
         return true;
     }

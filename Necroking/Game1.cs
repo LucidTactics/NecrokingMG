@@ -4025,47 +4025,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// </summary>
     private void TryMeleeOrGather(int necroIdx, Vec2 mouseWorld)
     {
-        var necroPos = _sim.Units[necroIdx].Position;
-
-        // Check melee cooldown
-        if (_sim.Units[necroIdx].AttackCooldown <= 0f && _sim.Units[necroIdx].PostAttackTimer <= 0f)
-        {
-            // Find closest enemy near the mouse that is within melee range of the necromancer
-            var stats = _sim.Units[necroIdx].Stats;
-            int weaponLen = stats.MeleeWeapons.Count > 0 ? stats.MeleeWeapons[0].Length : stats.Length;
-            float meleeRange = 1.0f + weaponLen * 0.15f; // base melee range + weapon reach
-
-            int bestEnemy = -1;
-            float bestDist = float.MaxValue;
-            for (int i = 0; i < _sim.Units.Count; i++)
-            {
-                if (i == necroIdx || !_sim.Units[i].Alive) continue;
-                if (_sim.Units[i].Faction == _sim.Units[necroIdx].Faction) continue; // skip friendlies
-
-                float distToMouse = (mouseWorld - _sim.Units[i].Position).Length();
-                float distToNecro = (necroPos - _sim.Units[i].Position).Length();
-
-                // Must be near the mouse click AND within melee range of necro
-                if (distToMouse < 3f && distToNecro <= meleeRange && distToMouse < bestDist)
-                {
-                    bestDist = distToMouse;
-                    bestEnemy = i;
-                }
-            }
-
-            if (bestEnemy >= 0)
-            {
-                // Initiate melee attack
-                _sim.UnitsMut[necroIdx].PendingAttack = CombatTarget.Unit(_sim.Units[bestEnemy].Id);
-                float cooldown = _gameData.Units.Get(_sim.Units[necroIdx].UnitDefID)?.AttackCooldown
-                    ?? _gameData.Settings.Combat.AttackCooldown;
-                _sim.UnitsMut[necroIdx].AttackCooldown = cooldown;
-                return;
-            }
-        }
+        // Melee first (shared cursor-melee order — see TryOrderMeleeAtCursor in
+        // Game1.WorldClicks.cs), gated by this ability's own cooldown check.
+        if (_sim.Units[necroIdx].AttackCooldown <= 0f && _sim.Units[necroIdx].PostAttackTimer <= 0f
+            && TryOrderMeleeAtCursor(necroIdx, mouseWorld,
+                _gameData.Settings.Tooltips.HoverPickRadius) == CursorMeleeResult.Ordered)
+            return;
 
         // No melee target — try foragable collection
-        int bestForage = FindNearestForagable(necroPos, 2f);
+        int bestForage = FindNearestForagable(_sim.Units[necroIdx].Position, 2f);
         if (bestForage >= 0)
             StartForagableCollection(bestForage);
     }
