@@ -2203,6 +2203,7 @@ public partial class Game1 {
              $"\"recoverTimer\":{u.Incap.RecoverTimer.ToString("F2", ci)}," +
              $"\"recoverAnim\":\"{u.Incap.RecoverAnim}\"," +
              $"\"archetype\":{u.Archetype}," +
+             $"\"alertState\":{u.AlertState},\"alertTarget\":{u.AlertTarget}," +
              $"\"routine\":{u.Routine},\"sub\":{u.Subroutine}," +
              $"\"panic\":{u.PanicTimer.ToString("F2", ci)}," +
              $"\"vel\":{u.Velocity.Length().ToString("F2", ci)}," +

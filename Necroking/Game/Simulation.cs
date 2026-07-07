@@ -1019,7 +1019,7 @@ public class Simulation
             isNight = dayFraction >= 0.5f;
         }
         PhaseStart();
-        AI.AwarenessSystem.Update(_units, _quadtree, dt, (int)_frameNumber, _amortizedAI, _aiUpdateInterval);
+        AI.AwarenessSystem.Update(this, dt, _amortizedAI, _aiUpdateInterval);
         PhaseEnd("ai_awareness");
 
         // Village coordination: recompute alert/posture from watchdog warnings & engaged

@@ -65,6 +65,31 @@ public readonly struct EnvByDefIndex : IEnvQueryFilter
     }
 }
 
+/// <summary>Per-target detection gate: sneaking targets are detectable at
+/// ×0.5 base range, running targets at ×1.5. Captures the observer position
+/// because acceptance depends on distance vs the TARGET's effective range —
+/// pass a query radius of RunMul × baseRange so runners beyond base range
+/// are found (see <see cref="WorldQuery.NearestThreatOf"/>).</summary>
+public readonly struct DetectableFrom : IUnitQueryFilter
+{
+    public const float SneakMul = 0.5f;
+    public const float RunMul   = 1.5f;
+
+    private readonly Vec2 _observerPos;
+    private readonly float _baseRange;
+    public DetectableFrom(Vec2 observerPos, float baseRange)
+    { _observerPos = observerPos; _baseRange = baseRange; }
+
+    public bool Match(Unit u, int idx)
+    {
+        float eff = _baseRange;
+        if (u.IsSneaking) eff *= SneakMul;
+        else if (u.Velocity.LengthSq() > u.MaxSpeed * u.MaxSpeed * 0.8f)
+            eff *= RunMul; // running = easier to detect
+        return (u.Position - _observerPos).LengthSq() <= eff * eff;
+    }
+}
+
 /// <summary>Built worker homes (Empty Graves): IsWorkerHome + Alive + fully built.
 /// No visibility gate — buildings are never "collected".</summary>
 public readonly struct EnvWorkerHomes : IEnvQueryFilter
@@ -157,6 +182,20 @@ public sealed class WorldQuery
             if (d < bestD) { bestD = d; best = idx; }
         }
         return best;
+    }
+
+    /// <summary>Nearest enemy detectable by unit <paramref name="unitIdx"/> given
+    /// its detection range, applying the sneak/run modifiers (see
+    /// <see cref="DetectableFrom"/>). The quadtree query is widened to
+    /// RunMul × range so running enemies beyond base range are found.
+    /// Quadtree-backed — sim-tick paths only (see class doc).</summary>
+    public int NearestThreatOf(int unitIdx, float detectionRange)
+    {
+        var units = _sim.Units;
+        Vec2 pos = units[unitIdx].Position;
+        return NearestUnit(pos, detectionRange * DetectableFrom.RunMul,
+            FactionMaskExt.AllExcept(units[unitIdx].Faction),
+            new DetectableFrom(pos, detectionRange), excludeIdx: unitIdx);
     }
 
     /// <summary>Nearest living unit to a point, faction-masked + custom filter.
