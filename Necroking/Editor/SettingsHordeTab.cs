@@ -19,7 +19,7 @@ public static class SettingsHordeTab
         int curY = y;
 
         // --- Formation ---
-        DrawSectionHeader(ui, "Formation", x, ref curY, w);
+        ui.DrawSectionHeader("Formation", x, ref curY, w);
 
         s.CircleOffset = ui.DrawFloatField("horde_circleOffset", "Circle Offset", s.CircleOffset, x, curY, w, 0.5f);
         curY += RowH;
@@ -35,7 +35,7 @@ public static class SettingsHordeTab
 
         // --- Drift ---
         curY += 4;
-        DrawSectionHeader(ui, "Drift", x, ref curY, w);
+        ui.DrawSectionHeader("Drift", x, ref curY, w);
 
         s.DriftHz = ui.DrawFloatField("horde_driftHz", "Drift Hz", s.DriftHz, x, curY, w, 0.05f);
         curY += RowH;
@@ -48,7 +48,7 @@ public static class SettingsHordeTab
 
         // --- Combat AI ---
         curY += 4;
-        DrawSectionHeader(ui, "Combat AI", x, ref curY, w);
+        ui.DrawSectionHeader("Combat AI", x, ref curY, w);
 
         // Orange (engagement) and red (leash) F7 circles are stacked offsets
         // on top of the green EffectiveRadius — so they scale with the horde
@@ -72,11 +72,4 @@ public static class SettingsHordeTab
         return curY - y;
     }
 
-    private static void DrawSectionHeader(EditorBase ui, string text, int x, ref int curY, int w)
-    {
-        ui.DrawRect(new Rectangle(x, curY, w, 1), new Color(60, 60, 80));
-        curY += 6;
-        ui.DrawText(text, new Vector2(x, curY), EditorBase.AccentColor);
-        curY += 22;
-    }
 }

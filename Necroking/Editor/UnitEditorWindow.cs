@@ -3567,11 +3567,7 @@ public class UnitEditorWindow
     // =========================================================================
 
     private void DrawSectionHeader(string text, int x, ref int y, int w)
-    {
-        _ui.DrawRect(new Rectangle(x, y, w, 22), EditorBase.PanelHeader);
-        _ui.DrawText(text, new Vector2(x + 6, y + 3), EditorBase.TextBright);
-        y += 24;
-    }
+        => _ui.DrawSectionHeader(text, x, ref y, w, EditorBase.SectionHeaderStyle.Bar);
 
     // =========================================================================
     //  HELPERS

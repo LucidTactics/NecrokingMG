@@ -39,7 +39,7 @@ public static class SettingsGeneralTab
 
         // --- Ground Rendering ---
         curY += 4;
-        DrawSectionHeader(ui, "Ground Rendering", x, ref curY, w);
+        ui.DrawSectionHeader("Ground Rendering", x, ref curY, w);
 
         s.GroundTypeWarp = ui.DrawFloatField("gen_groundTypeWarp", "Type Warp", s.GroundTypeWarp, x, curY, w, 0.1f);
         curY += RowH;
@@ -55,7 +55,7 @@ public static class SettingsGeneralTab
         // trample, spell, corpse). Realistic ≈ 10 (1 unit ≈ 1 metre); engine
         // default 50 is a snappy gamey value. Lower = floatier, longer arcs.
         curY += 4;
-        DrawSectionHeader(ui, "Physics", x, ref curY, w);
+        ui.DrawSectionHeader("Physics", x, ref curY, w);
 
         float newGravity = ui.DrawFloatField("gen_gravity", "Gravity (u/s²)", s.Gravity, x, curY, w, 1.0f);
         s.Gravity = MathF.Max(0.5f, newGravity);
@@ -63,7 +63,7 @@ public static class SettingsGeneralTab
 
         // --- Editor ---
         curY += 4;
-        DrawSectionHeader(ui, "Editor", x, ref curY, w);
+        ui.DrawSectionHeader("Editor", x, ref curY, w);
 
         s.EditorScrollSpeed = ui.DrawFloatField("gen_editorScrollSpeed", "Scroll Speed", s.EditorScrollSpeed, x, curY, w, 1.0f);
         curY += RowH;
@@ -76,7 +76,7 @@ public static class SettingsGeneralTab
 
         // --- Combat Log ---
         curY += 4;
-        DrawSectionHeader(ui, "Combat Log", x, ref curY, w);
+        ui.DrawSectionHeader("Combat Log", x, ref curY, w);
 
         s.CombatLogEnabled = ui.DrawCheckbox("Enabled", s.CombatLogEnabled, x, curY);
         curY += RowH;
@@ -92,7 +92,7 @@ public static class SettingsGeneralTab
 
         // --- Buildings ---
         curY += 4;
-        DrawSectionHeader(ui, "Buildings", x, ref curY, w);
+        ui.DrawSectionHeader("Buildings", x, ref curY, w);
 
         s.BuildingsDestructible = ui.DrawCheckbox("Destructible", s.BuildingsDestructible, x, curY);
         curY += RowH;
@@ -105,7 +105,7 @@ public static class SettingsGeneralTab
 
         // --- Damage Numbers ---
         curY += 4;
-        DrawSectionHeader(ui, "Damage Numbers", x, ref curY, w);
+        ui.DrawSectionHeader("Damage Numbers", x, ref curY, w);
 
         s.DamageNumbersEnabled = ui.DrawCheckbox("Enabled", s.DamageNumbersEnabled, x, curY);
         curY += RowH;
@@ -143,14 +143,14 @@ public static class SettingsGeneralTab
         s.DamageNumberSpeed = ui.DrawFloatField("gen_dmgNumSpeed", "Speed", s.DamageNumberSpeed, x, curY, w, 0.1f);
         curY += RowH + 8;
 
-        DrawSectionHeader(ui, "Pickup", x, ref curY, w);
+        ui.DrawSectionHeader("Pickup", x, ref curY, w);
         s.AutoPickupForagables = ui.DrawCheckbox("Auto-Pickup Foragables", s.AutoPickupForagables, x + 10, curY);
         curY += RowH;
 
         if (combat != null)
         {
             curY += 4;
-            DrawSectionHeader(ui, "Combat", x, ref curY, w);
+            ui.DrawSectionHeader("Combat", x, ref curY, w);
 
             float newRd = ui.DrawFloatField("gen_roundDuration", "Round Duration (s)", combat.RoundDuration, x, curY, w, 0.25f);
             if (System.Math.Abs(newRd - combat.RoundDuration) > 0.001f)
@@ -164,7 +164,7 @@ public static class SettingsGeneralTab
         if (perf != null)
         {
             curY += 4;
-            DrawSectionHeader(ui, "Performance (debug)", x, ref curY, w);
+            ui.DrawSectionHeader("Performance (debug)", x, ref curY, w);
 
             perf.BudgetedPathfinding = ui.DrawCheckbox("Budgeted Pathfinding", perf.BudgetedPathfinding, x + 10, curY);
             curY += RowH;
@@ -191,11 +191,4 @@ public static class SettingsGeneralTab
         return curY - y;
     }
 
-    private static void DrawSectionHeader(EditorBase ui, string text, int x, ref int curY, int w)
-    {
-        ui.DrawRect(new Rectangle(x, curY, w, 1), new Color(60, 60, 80));
-        curY += 6;
-        ui.DrawText(text, new Vector2(x, curY), EditorBase.AccentColor);
-        curY += 22;
-    }
 }

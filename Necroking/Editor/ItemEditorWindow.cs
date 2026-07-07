@@ -571,12 +571,7 @@ public class ItemEditorWindow
     }
 
     private void DrawSectionHeader(int x, ref int curY, int w, string text, Color color)
-    {
-        _ui.DrawRect(new Rectangle(x, curY, w, 1), new Color(60, 60, 80));
-        curY += 6;
-        _ui.DrawText(text, new Vector2(x, curY), color);
-        curY += 22;
-    }
+        => _ui.DrawSectionHeader(text, x, ref curY, w, EditorBase.SectionHeaderStyle.Rule, color);
 
     private static Color GetCategoryColor(string category)
     {

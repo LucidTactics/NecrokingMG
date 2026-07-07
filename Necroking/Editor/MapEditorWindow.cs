@@ -6232,51 +6232,37 @@ public class MapEditorWindow
     //  BRUSH SYSTEM (shared)
     // ====================================================================
 
-    private void DrawBrushSizeControl(int panelX, int y)
+    /// <summary>Shared "-  Label: N  +" integer stepper row. Draws the label + a
+    /// left minus / right plus button spanning the panel, applies a click (inert while
+    /// an overlay owns input so a dropdown drawn over the steppers doesn't nudge the
+    /// value), and returns the (clamped) new value. Callers own the value binding.</summary>
+    private int DrawStepperRow(string label, int value, int panelX, int y, int min = 0, int max = 20)
     {
         var mouse = _eb._input.Mouse;
 
-        DrawSmallText($"Brush: {BrushRadius}", panelX + Margin + 40, y + 3, TextColor);
+        DrawSmallText($"{label}: {value}", panelX + Margin + 40, y + 3, TextColor);
 
-        // - button
         var minusRect = new Rectangle(panelX + Margin, y, 30, ButtonHeight);
         Scope.Draw(_pixel, minusRect, IsInRect(mouse, minusRect) ? ButtonHoverColor : ButtonBg);
         DrawTextCentered("-", minusRect, TextColor);
 
-        // + button
         var plusRect = new Rectangle(panelX + PanelWidth - Margin - 30, y, 30, ButtonHeight);
         Scope.Draw(_pixel, plusRect, IsInRect(mouse, plusRect) ? ButtonHoverColor : ButtonBg);
         DrawTextCentered("+", plusRect, TextColor);
 
-        // Handle clicks (inert while an overlay owns input, so a click on a
-        // dropdown/picker drawn over these steppers doesn't also nudge the brush).
         if (!IsAnyPopupBlocking() && _eb._input.LeftPressed)
         {
-            if (IsInRect(mouse, minusRect)) BrushRadius = Math.Max(0, BrushRadius - 1);
-            if (IsInRect(mouse, plusRect)) BrushRadius = Math.Min(20, BrushRadius + 1);
+            if (IsInRect(mouse, minusRect)) value = Math.Max(min, value - 1);
+            if (IsInRect(mouse, plusRect)) value = Math.Min(max, value + 1);
         }
+        return value;
     }
+
+    private void DrawBrushSizeControl(int panelX, int y)
+        => BrushRadius = DrawStepperRow("Brush", BrushRadius, panelX, y);
 
     private void DrawAutoGroundSizeControl(AutoGroundSettings s, int panelX, int y)
-    {
-        var mouse = _eb._input.Mouse;
-
-        DrawSmallText($"Size: {s.Size}", panelX + Margin + 40, y + 3, TextColor);
-
-        var minusRect = new Rectangle(panelX + Margin, y, 30, ButtonHeight);
-        Scope.Draw(_pixel, minusRect, IsInRect(mouse, minusRect) ? ButtonHoverColor : ButtonBg);
-        DrawTextCentered("-", minusRect, TextColor);
-
-        var plusRect = new Rectangle(panelX + PanelWidth - Margin - 30, y, 30, ButtonHeight);
-        Scope.Draw(_pixel, plusRect, IsInRect(mouse, plusRect) ? ButtonHoverColor : ButtonBg);
-        DrawTextCentered("+", plusRect, TextColor);
-
-        if (!IsAnyPopupBlocking() && _eb._input.LeftPressed)
-        {
-            if (IsInRect(mouse, minusRect)) s.Size = Math.Max(0, s.Size - 1);
-            if (IsInRect(mouse, plusRect)) s.Size = Math.Min(20, s.Size + 1);
-        }
-    }
+        => s.Size = DrawStepperRow("Size", s.Size, panelX, y);
 
     /// <summary>
     /// Shared Auto-Ground controls block: an "Auto Ground" checkbox that, when on,
@@ -6558,20 +6544,11 @@ public class MapEditorWindow
 
     private List<string> GetEnvCategories()
     {
-        var cats = new HashSet<string>();
-        bool hasGroups = false;
-        for (int i = 0; i < _envSystem.DefCount; i++)
-        {
-            cats.Add(_envSystem.GetDef(i).Category);
-            if (!string.IsNullOrEmpty(_envSystem.GetDef(i).Group))
-                hasGroups = true;
-        }
-
         var list = new List<string> { "All" };
-        foreach (var c in cats)
+        foreach (var c in _envSystem.DistinctCategories())
             if (c != "All") list.Add(c);
         // M17: Add "Groups" option if any defs have a group
-        if (hasGroups)
+        if (_envSystem.DistinctGroups().Count > 0)
             list.Add("Groups");
         return list;
     }
@@ -6591,18 +6568,7 @@ public class MapEditorWindow
     /// <summary>
     /// M17: Get distinct group names from environment object defs.
     /// </summary>
-    private List<string> GetEnvGroups()
-    {
-        var groups = new List<string>();
-        var seen = new HashSet<string>();
-        for (int i = 0; i < _envSystem.DefCount; i++)
-        {
-            var def = _envSystem.GetDef(i);
-            if (!string.IsNullOrEmpty(def.Group) && seen.Add(def.Group))
-                groups.Add(def.Group);
-        }
-        return groups;
-    }
+    private List<string> GetEnvGroups() => _envSystem.DistinctGroups();
 
 
     /// <summary>

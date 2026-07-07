@@ -483,6 +483,37 @@ public class EnvironmentSystem
     public EnvironmentObjectDef GetDef(int idx) => _defs[idx];
     public int FindDef(string id) { for (int i = 0; i < _defs.Count; i++) if (_defs[i].Id == id) return i; return -1; }
 
+    /// <summary>Distinct env-def Category values in first-seen order (includes the
+    /// empty category if any def has one). Callers add their own "All"/"Groups"/"Misc"
+    /// sentinels, empty-filtering, and sorting. Consolidates the per-editor
+    /// distinct-category scans (MapEditorWindow / EnvObjectEditorWindow).</summary>
+    public List<string> DistinctCategories()
+    {
+        var list = new List<string>();
+        var seen = new HashSet<string>();
+        for (int i = 0; i < _defs.Count; i++)
+        {
+            string c = _defs[i].Category;
+            if (seen.Add(c)) list.Add(c);
+        }
+        return list;
+    }
+
+    /// <summary>Distinct non-empty env-def Group names in first-seen order. Callers
+    /// sort if they want alphabetical order. Consolidates the per-editor group
+    /// distinct-scans.</summary>
+    public List<string> DistinctGroups()
+    {
+        var list = new List<string>();
+        var seen = new HashSet<string>();
+        for (int i = 0; i < _defs.Count; i++)
+        {
+            string g = _defs[i].Group;
+            if (!string.IsNullOrEmpty(g) && seen.Add(g)) list.Add(g);
+        }
+        return list;
+    }
+
     /// <summary>THE collision-circle formula: es = def.Scale * obj.Scale;
     /// centre = (X,Y) + CollisionOffset*es; r = CollisionRadius*es. Single source
     /// for grid stamping, EnvSpatialIndex, dirty-region fires, placement checks,

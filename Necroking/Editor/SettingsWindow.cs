@@ -753,11 +753,7 @@ public class SettingsWindow
     }
 
     private void DrawSectionHeader(string label, int x, ref int y)
-    {
-        y += 4;
-        _ui.DrawText(label.ToUpperInvariant(), new Vector2(x, y), EditorBase.AccentColor);
-        y += 18;
-    }
+        => _ui.DrawSectionHeader(label, x, ref y, 0, EditorBase.SectionHeaderStyle.Label);
 
     // ----------------------------------------------------------------
     //  Stub tabs (placeholder for future implementation)

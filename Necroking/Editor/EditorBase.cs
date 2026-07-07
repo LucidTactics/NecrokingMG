@@ -937,6 +937,38 @@ public class EditorBase
         }
     }
 
+    public enum SectionHeaderStyle { Rule, Bar, Label }
+
+    /// <summary>Titled section divider that advances <paramref name="y"/>. Three visual
+    /// styles: <c>Rule</c> (1px divider + text), <c>Bar</c> (filled header bar + bright
+    /// text), <c>Label</c> (bare uppercase accent label, no rule). <paramref name="color"/>
+    /// overrides the Rule text color (default AccentColor); ignored by Bar/Label.
+    /// Consolidates the per-window DrawSectionHeader copies. (MapEditorWindow keeps its own
+    /// small-font/HeaderBg bar variant — a distinct look this generic form doesn't cover.)</summary>
+    public void DrawSectionHeader(string text, int x, ref int y, int w,
+        SectionHeaderStyle style = SectionHeaderStyle.Rule, Color? color = null)
+    {
+        switch (style)
+        {
+            case SectionHeaderStyle.Bar:
+                DrawRect(new Rectangle(x, y, w, 22), PanelHeader);
+                DrawText(text, new Vector2(x + 6, y + 3), TextBright);
+                y += 24;
+                break;
+            case SectionHeaderStyle.Label:
+                y += 4;
+                DrawText(text.ToUpperInvariant(), new Vector2(x, y), AccentColor);
+                y += 18;
+                break;
+            default: // Rule
+                DrawRect(new Rectangle(x, y, w, 1), new Color(60, 60, 80));
+                y += 6;
+                DrawText(text, new Vector2(x, y), color ?? AccentColor);
+                y += 22;
+                break;
+        }
+    }
+
     /// <summary>Common focus bookkeeping when a single-line field is clicked:
     /// select-all buffer init + cursor reset + text-field modal layer rect.</summary>
     private void FocusTextField(string fieldId, string value, Rectangle inputRect)
