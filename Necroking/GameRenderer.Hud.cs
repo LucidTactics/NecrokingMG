@@ -33,8 +33,8 @@ partial class GameRenderer
     }
 
     /// <summary>Catalogue the visible corner toasts into the central UI hit
-    /// registry (hover-blocking is derived from it; the click routing stays in
-    /// <see cref="UpdateSkillLearnToastInput"/>).</summary>
+    /// registry (hover-blocking is derived from it; click routing lives in
+    /// SkillToastLayer via <see cref="SkillToastIndexAt"/>/<see cref="ActivateSkillToast"/>).</summary>
     internal void AppendSkillToastHitRects(Necroking.UI.UIHitRegistry reg, int sw, int sh)
     {
         for (int i = 0; i < _g._skillLearnToasts.Count; i++)
@@ -610,7 +610,6 @@ partial class GameRenderer
         _g._hudRenderer.Draw(screenW, screenH, _g._sim, _g._gameData,
             _g._inventory, _g._inventoryUI.IsVisible,
             _g._spellBarState,
-            _g._spellDropdownSlot,
             _g._timeScale, _g._hoveredObjectIdx, _g._envSystem,
             DrawSpellCategoryIcon, BuildMenuOpenMask(), _g._paused, _g._hoveredCorpseIdx,
             _g._slotFlash, _g._hoveredBellyUnitId,

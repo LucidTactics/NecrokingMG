@@ -164,7 +164,6 @@ public partial class HUDRenderer
     public void Draw(int screenW, int screenH, Simulation sim, GameData gameData,
         Inventory inventory, bool inventoryVisible,
         SpellBarState bar,
-        int spellDropdownSlot,
         float timeScale, int hoveredObjectIdx, EnvironmentSystem envSystem,
         Action<string, int, int> drawSpellCategoryIcon, int menuOpenMask = 0, bool paused = false,
         int hoveredCorpseIdx = -1, float[]? slotFlash = null,
@@ -183,14 +182,8 @@ public partial class HUDRenderer
         DrawSpellBar(screenW, layout.barY, layout.slotW, layout.slotH, layout.centerOffset,
             SpellBarBindings.SlotLabels, bar, sim, gameData, inventory, drawSpellCategoryIcon, slotFlash);
 
-        // Dropdown after the bar so it renders on top
-        DrawSpellDropdown(screenW, layout.barY, layout.slotW, layout.centerOffset,
-            spellDropdownSlot, bar, gameData);
-
-        // Hover tooltip for the spell-bar slot under the cursor — suppressed while a
-        // slot-assign dropdown is open (the dropdown owns that interaction).
-        if (spellDropdownSlot < 0)
-            DrawSpellSlotTooltip(gameData, inventory, screenW, screenH);
+        // Hover tooltip for the spell-bar slot under the cursor.
+        DrawSpellSlotTooltip(gameData, inventory, screenW, screenH);
 
         DrawObjectTooltip(hoveredObjectIdx, envSystem, sim, gameData, screenW, screenH);
         DrawBellyTooltip(hoveredBellyUnitId, sim, gameData, screenW, screenH);
@@ -519,41 +512,6 @@ public partial class HUDRenderer
         _widgets.DrawWidgetFrameLayer(SpellSlotWidget, slot);
     }
 
-    private void DrawSpellDropdown(int screenW, int barY, int slotW, int centerOffset,
-        int openSlot, SpellBarState bar, GameData gameData)
-    {
-        if (openSlot < 0 || openSlot >= SpellBarBindings.SlotCount || _smallFont == null) return;
-
-        int slotX = screenW / 2 - centerOffset + openSlot * (slotW + SlotSpacing);
-        var allSpells = gameData.Spells.GetIDs();
-        int ddH = (allSpells.Count + 1) * DropdownItemH;
-        int ddY = barY - 10;
-
-        int ddLeft = slotX - 2;
-        Scope.Draw(_pixel, new Rectangle(ddLeft, ddY - ddH - 2, DropdownWidth, ddH + 4), DropdownBg);
-
-        int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
-        int hoverIdx = -1;
-        if (mx >= ddLeft && mx < ddLeft + DropdownWidth && my >= ddY - ddH && my < ddY)
-            hoverIdx = (ddY - my) / DropdownItemH;
-
-        // (None) item — index 0
-        if (hoverIdx == 0)
-            Scope.Draw(_pixel, new Rectangle(ddLeft, ddY - DropdownItemH, DropdownWidth, DropdownItemH), DropdownHoverBg);
-        Text(_smallFont, "(None)", new Vector2(slotX + 4, ddY - DropdownItemH), DropdownNoneColor);
-
-        for (int si = 0; si < allSpells.Count; si++)
-        {
-            var spDef = gameData.Spells.Get(allSpells[si]);
-            int itemY = ddY - (si + 2) * DropdownItemH;
-            if (hoverIdx == si + 1)
-                Scope.Draw(_pixel, new Rectangle(ddLeft, itemY, DropdownWidth, DropdownItemH), DropdownHoverBg);
-            string label = spDef != null ? $"{spDef.DisplayName} [{spDef.Category}]" : allSpells[si];
-            Color labelColor = bar.Slots[openSlot].SpellID == allSpells[si]
-                ? DropdownSelectedColor : DropdownNormalColor;
-            Text(_smallFont, label, new Vector2(slotX + 4, itemY), labelColor);
-        }
-    }
 
     // ═══════════════════════════════════════
     //  Hit Testing (shared layout with draw)
@@ -586,26 +544,6 @@ public partial class HUDRenderer
         return -1;
     }
 
-    /// <summary>
-    /// Hit-test a spell dropdown. Returns item index (0 = None, 1+ = spell index),
-    /// or -1 if click is outside the dropdown.
-    /// Uses the exact same layout as DrawSpellDropdown.
-    /// </summary>
-    public int HitTestSpellDropdown(int screenW, int barY, int slotW, int centerOffset,
-        int openSlot, int totalSpells, int mouseX, int mouseY)
-    {
-        if (openSlot < 0 || openSlot >= SpellBarBindings.SlotCount) return -1;
-
-        int slotX = screenW / 2 - centerOffset + openSlot * (slotW + SlotSpacing);
-        int ddH = (totalSpells + 1) * DropdownItemH;
-        int ddY = barY - 10; // Same offset as DrawSpellDropdown
-        int ddLeft = slotX - 2;
-
-        if (mouseX < ddLeft || mouseX >= ddLeft + DropdownWidth) return -1;
-        if (mouseY < ddY - ddH || mouseY >= ddY) return -1;
-
-        return (ddY - mouseY) / DropdownItemH;
-    }
 
     /// <summary>
     /// Hit-test time control buttons. Returns:

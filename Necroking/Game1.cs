@@ -651,7 +651,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     // Dev cursor override for headless hover testing (set via the `mousepos` dev command).
     private Microsoft.Xna.Framework.Vector2? _devMouseOverride;
-    internal int _spellDropdownSlot = -1;
     internal int _channelingSlot = -1;
     private readonly Dictionary<string, Texture2D?> _itemTextureCache = new();
     internal int _hoveredObjectIdx = -1;

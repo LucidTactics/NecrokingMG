@@ -913,11 +913,9 @@ public class MapEditorWindow
 
         // --- Scroll per-tab ---
         // Gate on popupBlocking so a sub-popup (texture file browser, color
-        // picker, dropdown) captures scroll first. PopupManager's
-        // preemptive consumption can't be used here because _mapEditorLayer
-        // is the top of the stack while the map editor is active — its own
-        // sidebar IS the legitimate consumer, but it reads raw mouse, so
-        // gating on InputState.IsScrollConsumed would bail spuriously.
+        // picker, dropdown) captures scroll first. InputState.IsScrollConsumed
+        // can't be used here because the sidebar reads raw mouse in this
+        // immediate-mode pass — gating on the shared flag would bail spuriously.
         int scrollDelta = mouse.ScrollWheelValue - _prevScrollValue;
         if (scrollDelta != 0 && overPanel && !popupBlocking)
         {

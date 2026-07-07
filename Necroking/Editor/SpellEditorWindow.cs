@@ -315,10 +315,10 @@ public class SpellEditorWindow : EditorWindow
             SetStatus("Pasted: " + newId);
         }
 
-        // ESC handled by PopupManager — dropdown, confirm dialog, buff
-        // manager, flipbook manager all push their own modal layers. The
-        // spell editor itself sits on the stack via Game1's
-        // _spellEditorLayer. RouteInput pops in LIFO order.
+        // ESC handled by the UI router — dropdown, confirm dialog, buff
+        // manager, flipbook manager all push their own modal layers onto
+        // Game1.Popups (ModalStackLayer, LIFO); the spell editor itself is
+        // covered by the EditorHostLayer seat.
     }
 
     // ===========================

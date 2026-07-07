@@ -202,9 +202,9 @@ public class ItemEditorWindow
             SetStatus("Pasted: " + newId);
         }
 
-        // ESC handled by PopupManager — dropdown + delete-confirm dialog
-        // both push their own modal layers; the item editor itself sits on
-        // the stack via Game1's _itemEditorLayer.
+        // ESC handled by the UI router — dropdown + delete-confirm dialog
+        // push their own modal layers onto Game1.Popups (ModalStackLayer);
+        // the item editor itself is covered by the EditorHostLayer seat.
     }
 
     // ===========================

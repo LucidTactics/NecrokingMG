@@ -143,8 +143,12 @@ public class UnitInfoPanel : IModalLayer
         var secAb = _renderer.GetChildRect(WidgetId, "sec_ab", _panelX, _panelY, InstanceId);
         if (secAb != Rectangle.Empty) DrawAbilitiesRow(secAb);
 
-        var ms = Microsoft.Xna.Framework.Input.Mouse.GetState();
-        int mx = DebugMouseOverride?.X ?? ms.X, my = DebugMouseOverride?.Y ?? ms.Y;
+        // Cursor from the frame InputState (NOT raw Mouse.GetState): respects
+        // the dev mousepos override and the router's hover masking — the panel's
+        // PanelLayer parks MousePos off-screen when another layer owns the
+        // cursor, so these tooltips can't pop through a covering panel.
+        var inPos = Game1.Instance._input.MousePos;
+        int mx = DebugMouseOverride?.X ?? (int)inPos.X, my = DebugMouseOverride?.Y ?? (int)inPos.Y;
         DrawStatTooltips(screenW, screenH, unit, mx, my);
         DrawAbilitiesTooltips(screenW, screenH, unit, sim, mx, my);
     }

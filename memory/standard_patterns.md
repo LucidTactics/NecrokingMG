@@ -109,3 +109,22 @@ CLAUDE.md → "Standard Patterns Reference".)
   premultiplied pixels re-darkens soft edges every cycle. Premultiply a copy
   for display only (see EnvObjectEditorWindow.PremultiplyCopy).
 - All file paths through `GamePaths.Resolve`; maps through `GamePaths.MapsDir`.
+
+## UI layers & click routing (UIRouter — 2026-07-07)
+
+- **Every clickable/drawable UI surface is a `UILayer`** in the single z-ordered
+  list owned by `Game1._uiRouter` (`UI/UIRouter.cs`, bands in `UI/UILayer.cs`:
+  World → Hud → Panels → Overlay → HudTop → Toast → Menu → Editor → Popup →
+  Tooltip). Input walks it top-down (`DispatchInput`, one call in Game1.Update);
+  drawing walks the SAME list bottom-up (`Draw`, called from DrawHudBlock) — so
+  "drawn on top ⇔ clicked first" is structural. Never add an ad-hoc
+  `_input.LeftPressed` check in Game1.Update or a positional draw call for UI.
+- **New panel** → give it a `PanelLayer` seat in the Game1 ctor (visibility
+  getter, update delegate, `.WithDraw(...)`, optional drag provider for mouse
+  capture). It gets masked input for free: press edges only when `InputGranted`,
+  cursor parked off-screen when `HoverStolen`.
+- **Hover/click sync**: a widget may only hover-highlight when its layer
+  `IsHovered` (the router's hover owner = the layer a click would land in).
+- `Game1.Popups` (`PopupManager`) is EDITOR-INTERNAL sub-popups only, seated via
+  `ModalStackLayer`. Game panels must not push to it.
+- Headless verification: dev verbs `ui_click <x> <y>`, `ui_key escape`, `ui_rects`.

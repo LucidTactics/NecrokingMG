@@ -1,10 +1,47 @@
 # UI/ — overlays, panels & the selected-unit sheet
 
 Player-facing overlays and info panels. Most panels are built on the **runtime widget
-renderer** (`UI/RuntimeWidgetRenderer.cs`, driven by JSON widget defs) and register as
-modal layers on `Game1.Popups` (`UI/PopupManager.cs`). Each panel owns its own show/hide
-and hit-test; there is **no central "which panel for this entity" dispatcher** — the choice
-is distributed across `Game1.cs` input handlers and the HUD tooltip renderer (see below).
+renderer** (`UI/RuntimeWidgetRenderer.cs`, driven by JSON widget defs) and sit in the
+**UIRouter** (below). Each panel owns its own show/hide and hit-test; there is **no
+central "which panel for this entity" dispatcher** — the choice is distributed across
+`Game1.cs` input handlers and the HUD tooltip renderer (see below).
+
+## THE UIRouter — one z-ordered list for clicks, hover, and drawing
+
+**`UI/UIRouter.cs` + `UI/UILayer.cs` + `UI/Layers/*.cs`** — every clickable/drawable UI
+surface is a `UILayer` in one list, ordered by `UIBand` (World=0 → Hud → Panels → Overlay
+→ HudTop → Toast → Menu → Editor → Popup → Tooltip) + registration order within a band.
+Registered once in the **`Game1` ctor**; layers gate themselves with live `Visible`
+getters (no per-frame push/pop syncing).
+
+- **Input**: `_uiRouter.DispatchInput(_input, ctx)` — ONE call in `Game1.Update` (after
+  `RebuildUIHitRects` + `GateWorld`) walks layers **top-down**; nothing is pre-consumed —
+  each layer's standard template (`UILayer.HandleInput`) applies the old modal rules
+  (inside-click consume / LightDismiss / Blocking / CloseOnOutsideClick gated on
+  `!MouseOverUI`) at its own turn. ESC goes to the topmost visible `Closable` layer.
+  The router stamps per layer: `InputGranted` (input reached me un-consumed), `IsHovered`
+  (I own the cursor — the layer a click would land in), `HoverStolen` (someone else does).
+- **Hover/click sync guarantee**: a widget may only hover-highlight when its layer
+  `IsHovered` — `PanelLayer` masks press edges (`!InputGranted`) and parks `MousePos`
+  off-screen (`HoverStolen`) around the wrapped panel's Update AND Draw, so a covered
+  panel/button can neither light up nor act where a click wouldn't reach it.
+- **Drawing**: `DrawHudBlock` (`GameRenderer.Draw.cs`) calls `_uiRouter.Draw(ctx)` — the
+  same list bottom-up. "Move X above Y" = change its band, never a moved draw call.
+- **Adapters** (`UI/Layers/`): `PanelLayer` wraps any `IModalLayer` panel (+ optional
+  update/draw delegates, drag→mouse-capture provider); `HudLayers.cs` holds the HUD widget
+  layers (spell bar, time controls, aggression bar, `HudChromeLayer` draw-only chrome) and
+  the **HudTop** rows (`CoreMenuButtonsLayer`, `EditorLauncherLayer` — above panels AND the
+  blocking skill book, below toasts); `HostLayers.cs` holds `MenuHostLayer`
+  (pause/settings/multiplayer + game-over draw), `EditorHostLayer` (all five full-screen
+  editors as one opaque blocking seat), and `ModalStackLayer` (the editors' transient
+  sub-popup stack, still `Game1.Popups`/`PopupManager` — editor-internal only).
+- **Dev verbs**: `ui_click <sx> <sy> [right]` injects a click through the real dispatch
+  (reports registry hit id, hover-owner layer id, consumed); `ui_key escape` drives the
+  ESC chain; `ui_rects` dumps the hit registry.
+
+**Look/edit here when:** anything about click routing, consumption, hover gating, z-order,
+adding a new panel/overlay (give it a `PanelLayer` seat in the `Game1` ctor), or moving
+something above/below something else.
 
 ## The selected/inspected unit sheet (right-side "unit bar")
 
@@ -143,13 +180,12 @@ Belly contents are stored per unit id in **`Necroking/Game/Simulation.cs`**:
    right-side sheet, add a small widget-backed panel in `UI/` next to `UnitInfoPanel` (or a
    variant mode of it) — heavier.
 
-## Panel open/close toggling & dock sides (no central manager)
+## Panel open/close toggling & dock sides
 
-There is **no central panel manager and no side/dock concept in code** — each panel owns
-its own `IsVisible` + `Toggle()`/`Close()`/`Hide()` and pushes/pops itself on the
-`Game1.Popups` stack (`UI/PopupManager.cs` is input routing/ESC only, NOT exclusivity).
-The only mutual-exclusion that exists is the **building↔crafting mutual-close, duplicated
-in two places** (a consolidation target for any per-side exclusivity work).
+Each panel owns its own `IsVisible` + `Toggle()`/`Close()`/`Hide()`; its `PanelLayer`
+seat in the router reads that live (panels NO LONGER push/pop `Game1.Popups` — that
+stack is editor-internal now). Per-side exclusivity is `Game1.CloseSameSidePanels(side,
+opening)` with its panel→side table, called from all toggle entry points.
 
 **Toggle entry points (all three must route through any new exclusivity logic):**
 1. **Keyboard, `Necroking/Game1.cs` Update** (gated `_menuState == MenuState.None` +
@@ -175,10 +211,9 @@ in two places** (a consolidation target for any per-side exclusivity work).
   (`_x = (sw - _w)/2`), `GraveRosterUI` (centered), `MultiplayerWindow` (pause menu).
 
 **Close APIs are heterogeneous:** `Close()` on InventoryUI/CraftingMenuUI/BuildingMenuUI/
-JobBoardUI/GraveRosterUI, `Hide()` on GrimoireOverlay/UnitInfoPanel, **Toggle-only** on
-`CharacterStatsUI` (no Close; `Toggle()` pops when visible) and `SkillBookOverlay` has
-`Close()` via `Toggle()`. Always close via the panel's own method (they pop themselves off
-`Game1.Popups`); never touch the popup stack directly.
+JobBoardUI/GraveRosterUI/CharacterStatsUI/SkillBookOverlay, `Hide()` on
+GrimoireOverlay/UnitInfoPanel. Always close via the panel's own method — visibility is
+the panel's own flag; the router reads it live.
 
 **Look/edit here when:** adding per-side panel exclusivity ("one left + one right panel at
 a time"), changing which key opens what, or the menu-button click behavior. Natural shape:
@@ -214,34 +249,22 @@ assign mode when a spell-bar slot is clicked). `class GrimoireOverlay : IModalLa
 **Look/edit here when:** repositioning/anchoring the spell list panel, changing its size, or
 its scroll/tab/tile hit-testing.
 
-## MouseOverUI / UI hit-testing — who writes the flag (pre-registry map)
+## MouseOverUI / UI hit-testing — who writes the flag
 
 `InputState.MouseOverUI` (`Necroking/Core/InputState.cs`) is reset in `Capture()` at the
-top of `Game1.Update`, then written by several independent paths each frame (in order):
-1. **`PopupManager.RouteInput`** (`UI/PopupManager.cs`, called early in `Game1.Update`) —
-   scans the whole modal stack: any layer with `IsBlocking == true` OR whose
-   `ContainsMouse(mx,my)` hits sets the flag. A blocking layer (SkillBookOverlay, the map
-   editor's full-screen `ActionModalLayer` `_mapEditorLayer`, `EnvObjectEditorWindow`,
-   `WallEditorWindow`) therefore blankets the **whole screen** — this is why the scroll-zoom
-   gate and `Game1.HoverBlockedByUI` special-case the map editor via
-   `MapEditorWindow.IsMouseOverPanel(screenW,screenH)` instead of reading `MouseOverUI`.
-2. **The ad-hoc block in `Game1.cs` Update** (`// --- IsMouseOverUI: test UI element bounds ---`,
-   only when `_menuState == MenuState.None`): spellbar (`HUDRenderer.GetSpellBarLayout` +
-   `HitTestBarSlot`), spell dropdown open (`_spellDropdownSlot >= 0` = whole-screen blanket),
-   `InventoryUI` / `CharacterStatsUI` (5-arg) / `BuildingMenuUI` / `CraftingMenuUI` /
-   `GrimoireOverlay` / `SkillBookOverlay` `.ContainsMouse`, skill-learn toasts
-   (`GameRenderer.Hud.cs` `UpdateSkillLearnToastInput` — also handles the click), time
-   controls (`HitTestTimeControls`), core-menu buttons (`HitTestMenuButtons`), editor-launcher
-   row (`HitTestEditorButtons`), aggression bar (`GetAggressionBarLayout` + inflate, click
-   handled inline).
-3. **`InputState.ConsumeMouse()`** sets `MouseOverUI = true` — "consumed" and "over UI"
-   deliberately collapse into one check (see the header comment in `Game1.WorldClicks.cs`).
-4. **`SkillBookOverlay.Update`** sets it itself (whole screen while a tile drag is live,
-   else on `ContainsMouse`).
-5. **Editors:** `EditorBase` keeps its own `_mouseOverEditorUI` (set via `SetMouseOverUI()`
-   from widget draws and from `MapEditor/Spell/Settings/UnitEditorWindow`), propagated into
-   `_input.MouseOverUI` at the START of the NEXT frame's `EditorBase.Update` — **one frame
-   stale by design**. Also read directly as `_editorUi.IsMouseOverUI` (cursor swap in Game1).
+top of `Game1.Update`, then derived centrally in **`Game1.RebuildUIHitRects`**: the router
+walks its layers top-down calling each visible layer's `AppendHitRects` into the
+`UIHitRegistry` (`_uiHits`) — `ModalStackLayer` catalogues editor sub-popups, blocking
+seats (`EditorHostLayer`, `MenuHostLayer`, skill book) add full-screen blankets, panels
+add their `HitBounds`/`ContainsMouse` probe — plus the persistent HUD's fine-grained rects
+via `HUDRenderer.AppendHitRects` (+ toast/aggro extras). `MouseOverUI = _uiHits.Hit(mx,my)`.
+Remaining writers: **`InputState.ConsumeMouse()`** still sets it ("consumed" and "over UI"
+deliberately collapse — see `Game1.WorldClicks.cs` header), and **editors** propagate their
+one-frame-stale `_mouseOverEditorUI` (`EditorBase`, via `SetMouseOverUI()` from widget
+draws) into the flag at the start of the next frame's `EditorBase.Update`.
+Blocking blankets are why `Game1.HoverBlockedByUI` and the map-editor scroll-zoom gate
+special-case via `MapEditorWindow.IsMouseOverPanel` + `_popups.IsEmpty` instead of
+reading `MouseOverUI`.
 
 **Stale-rect pattern:** several hit-tests use rects cached during the previous `Draw`
 (`CharacterStatsUI._lastBoundsRect` for the 2-arg IModalLayer overload, SkillBook
@@ -258,16 +281,18 @@ auto-hover mode is deliberately NOT on the popup stack so it doesn't claim `Mous
 (the auto-hover block in `Game1.cs` checks its `ContainsMouse` explicitly instead).
 
 **Look/edit here when:** a world click leaks through a panel (or a panel eats world
-clicks), hover picks are wrongly suppressed, or you're centralizing UI hit rects — the
-block in (2) is the thing a central registry would replace.
+clicks), or hover picks are wrongly suppressed — start from the router walk
+(`UIRouter.DispatchInput`) and the layer's band/`ContainsMouse`.
 
 ## Other panels in UI/ (brief)
 - `UI/JobBoardUI.cs`, `UI/GraveRosterUI.cs` — worker economy (see [jobs-workers.md](jobs-workers.md)).
 - `UI/GrimoireOverlay.cs` / `GrimoirePanel.cs`, `UI/SkillBookOverlay.cs` — spellbook / skills (Grimoire positioning above).
 - `UI/RuntimeWidgetRenderer.cs` — JSON-widget layout/draw engine every panel uses.
-- `UI/PopupManager.cs` — modal-layer stack (`Game1.Popups`), ESC/click routing, MouseOverUI.
-- `UI/StatTooltips.cs`, `UI/ResourceTooltip.cs`, `UI/NineSlice.cs`, `UI/WidgetLayoutUtils.cs`,
-  `UI/PopupManager.cs` — shared tooltip/layout helpers.
+- `UI/PopupManager.cs` — the EDITOR-INTERNAL sub-popup stack (`Game1.Popups`), seated in
+  the router via `ModalStackLayer`. Game panels no longer use it.
+- `UI/UIRouter.cs`, `UI/UILayer.cs`, `UI/Layers/` — the unified layer system (top section).
+- `UI/StatTooltips.cs`, `UI/ResourceTooltip.cs`, `UI/NineSlice.cs`, `UI/WidgetLayoutUtils.cs`
+  — shared tooltip/layout helpers.
 - Inventory/crafting/building menus live under `Game/` (`InventoryUI`, `BuildingMenuUI`,
   `CraftingMenu`, `TableMenuUI`), not `UI/`.
 

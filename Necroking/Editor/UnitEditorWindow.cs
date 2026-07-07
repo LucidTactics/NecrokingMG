@@ -478,11 +478,11 @@ public class UnitEditorWindow
             }
         }
 
-        // ESC is fully owned by PopupManager — each sub-popup (confirm
+        // ESC is fully owned by the UI router — each sub-popup (confirm
         // dialogs, dropdown, pick-mode, sub-editor, group editor) has its
-        // own IModalLayer pushed via SyncOne above, and the unit editor
-        // itself sits on the stack via Game1's _unitEditorLayer. RouteInput
-        // pops them in LIFO order; this method no longer needs to mirror
+        // own IModalLayer pushed via SyncOne above onto Game1.Popups
+        // (ModalStackLayer, LIFO), and the unit editor itself is covered by
+        // the EditorHostLayer seat; this method no longer needs to mirror
         // the chain.
 
         // RU15: Right-click cancels pick mode
