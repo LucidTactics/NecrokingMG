@@ -1,6 +1,3 @@
-using System;
-using System.IO;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using Necroking.Data.Registries;
 using Necroking.Render;
@@ -23,55 +20,30 @@ internal class WadingDefaultsJson
 /// embedded literals in <see cref="WadingDefaults"/>.</summary>
 public static class WadingDefaultsFile
 {
-    private static readonly JsonSerializerOptions _opts = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
+    // All properties (here and on DirectionalFractions) carry explicit
+    // [JsonPropertyName] attributes, so the shared Indented preset produces
+    // the same on-disk shape the old private CamelCase options did.
 
     public static bool Load(string path)
     {
-        if (!File.Exists(path)) return false;
-        try
-        {
-            string text = File.ReadAllText(path);
-            var data = JsonSerializer.Deserialize<WadingDefaultsJson>(text, _opts);
-            if (data == null) return false;
-            // Ensure intercardinals are filled in legacy 4-direction files.
-            data.QuadrupedBottom?.EnsureDiagonalsBackfilled();
-            data.QuadrupedTop?.EnsureDiagonalsBackfilled();
-            WadingDefaults.Apply(data.QuadrupedBottom, data.QuadrupedTop);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Core.DebugLog.Log("startup", $"WadingDefaults.Load failed: {ex.Message}");
+        if (!Core.JsonFile.Load<WadingDefaultsJson>(path, Core.JsonDefaults.Indented, out var data) || data == null)
             return false;
-        }
+        // Ensure intercardinals are filled in legacy 4-direction files.
+        data.QuadrupedBottom?.EnsureDiagonalsBackfilled();
+        data.QuadrupedTop?.EnsureDiagonalsBackfilled();
+        WadingDefaults.Apply(data.QuadrupedBottom, data.QuadrupedTop);
+        return true;
     }
 
     /// <summary>Persist the current in-memory <see cref="WadingDefaults"/>
-    /// values to the JSON file. Called from the unit editor's
-    /// "Save as default" button.</summary>
+    /// values to the JSON file (atomic via <see cref="Core.JsonFile"/>).
+    /// Called from the unit editor's "Save as default" button.</summary>
     public static bool Save(string path)
-    {
-        try
+        => Core.JsonFile.Save(path, new WadingDefaultsJson
         {
-            var data = new WadingDefaultsJson
-            {
-                QuadrupedBottom = CloneFractions(WadingDefaults.QuadrupedBottom),
-                QuadrupedTop    = CloneFractions(WadingDefaults.QuadrupedTop),
-            };
-            string text = JsonSerializer.Serialize(data, _opts);
-            File.WriteAllText(path, text);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Core.DebugLog.Log("startup", $"WadingDefaults.Save failed: {ex.Message}");
-            return false;
-        }
-    }
+            QuadrupedBottom = CloneFractions(WadingDefaults.QuadrupedBottom),
+            QuadrupedTop    = CloneFractions(WadingDefaults.QuadrupedTop),
+        }, Core.JsonDefaults.Indented);
 
     private static DirectionalFractions CloneFractions(DirectionalFractions src)
     {
