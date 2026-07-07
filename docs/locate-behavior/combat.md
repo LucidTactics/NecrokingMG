@@ -112,9 +112,26 @@ per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, pr
   BEFORE damage** (so a killed unit's corpse inherits the arc) via
   `_physics.ApplyRadialImpulse` when `spellDef.KnockbackForce > 0` (radius =
   `KnockbackRadius` or `hit.AoeRadius`), then MR gate (`SpellPenetration`) and
-  `DealDamage` (plain arrows go through `ResolveArrowHit` instead). Note: ProjectileHit
-  does NOT carry the projectile's flight direction — a directional (non-radial) impulse
-  needs a new field populated at the `_hits.Add(...)` sites from `proj.Velocity`.
+  `DealDamage` (plain arrows go through `ResolveArrowHit` instead). `ProjectileHit` now
+  carries `FlightDir` (= `proj.Velocity`), `ImpactForce`, `ImpactUpward` at every
+  `_hits.Add(...)` site — the directional-impulse fields added with the `test_impact` spell
+  (`SpellDef.ImpactForce/ImpactUpward` set on the projectile in
+  `SpellEffectSystem.SpawnProjectile`).
+- **Projectile travel distance / expiry / detonation point — there is NO "range" on a
+  projectile.** `SpellDef.Range` is consumed ONLY at cast time (`SpellCasting.cs`
+  `dist > spell.Range → CastResult.OutOfRange` checks); once spawned, flight is pure
+  ballistics in `ProjectileManager.Update`: `Position += Velocity*dt; Height += VelocityZ*dt;
+  VelocityZ -= Gravity*dt` (Gravity=13.89, MagicSpeed=28.29, ArrowSpeed=23.58 consts at top
+  of `Projectile.cs`). A projectile dies by (a) in-flight unit collision, (b)
+  `DetonateAtTarget` overshoot check (set ONLY for `spell.Category == "Blight"` in
+  `SpawnProjectile`), (c) **ground impact** (`Height <= 0 && VelocityZ < 0` — detonates
+  wherever the arc lands), or (d) `MaxAge = 10s`. **Trap:** the non-Lob trajectories
+  (`Trajectory.DirectFire/Swirly/Homing/HomingSwirly` in `SpellEffectSystem.SpawnProjectile`)
+  all launch at a fixed 5° and still take full gravity, so their max flat-ground travel is
+  ≈ `speed²·sin(10°)/Gravity` + spawn-height bonus — ~19–20u at speed 28.3. Raising a
+  spell's `range` past that makes the cast legal but the projectile lands/detonates midway.
+  Only `Lob` (the `SpawnFireball` default) solves the launch angle from the actual distance
+  (`asin(dist·Gravity/speed²)`, silently clamped when `dist > speed²/Gravity`).
 - **Spell-projectile spawn/config chokepoint**: `SpellEffectSystem.SpawnProjectile(spell,
   projectiles, origin, target, ownerUid, spawnHeight, casterFaction)` — calls
   `SpawnFireball` then post-configures the last projectile from the `SpellDef` (SpellID
