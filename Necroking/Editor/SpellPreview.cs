@@ -989,9 +989,7 @@ public class SpellPreview
             {
                 float theta = ProjectileManager.DirectFireTheta;
                 p.Velocity = dir * speed * MathF.Cos(theta);
-                // preview uses half lob height for framing; game uses full sin(theta)
-                // — intent undecided, see consolidation review C13
-                p.VelocityZ = speed * MathF.Sin(theta) * 0.5f;
+                p.VelocityZ = speed * MathF.Sin(theta);
                 p.TargetPos = new Vector2(TargetX, 0);
                 p.HomingStrength = 5f;
                 break;
@@ -1010,9 +1008,7 @@ public class SpellPreview
             {
                 float theta = ProjectileManager.DirectFireTheta;
                 p.Velocity = dir * speed * MathF.Cos(theta);
-                // preview uses half lob height for framing; game uses full sin(theta)
-                // — intent undecided, see consolidation review C13
-                p.VelocityZ = speed * MathF.Sin(theta) * 0.5f;
+                p.VelocityZ = speed * MathF.Sin(theta);
                 p.TargetPos = new Vector2(TargetX, 0);
                 p.HomingStrength = 5f;
                 p.SwirlFreq = 3f + RandUnit() * 5f;
