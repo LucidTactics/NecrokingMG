@@ -600,7 +600,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// editor session need to fire once so gameplay resumes with current
     /// collision data.</summary>
     private MenuState _prevMenuState = MenuState.MainMenu;
-    private bool _gameWorldLoaded;
+    internal bool _gameWorldLoaded;
     /// <summary>True while anything holds the game paused (forwarder for
     /// <see cref="Core.GameClock.Paused"/>). Write via <c>_clock.Pause / Resume /
     /// TogglePause / ClearAllPauses</c> with a <see cref="Core.GameClock.PauseSource"/>.</summary>
@@ -717,6 +717,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// each Update; the single source for <c>_input.MouseOverUI</c>. Inspect live
     /// via the <c>ui_rects</c> dev command.</summary>
     internal readonly Necroking.UI.UIHitRegistry _uiHits = new();
+    /// <summary>The unified UI layer router — one z-ordered list that input
+    /// walks top-down (reverse render order) and drawing will walk bottom-up.
+    /// Layers are registered in the ctor; see <see cref="Necroking.UI.UIRouter"/>.</summary>
+    internal readonly Necroking.UI.UIRouter _uiRouter = new();
     /// <summary>Process-wide accessor — popups call <c>Game1.Popups.Push(this)</c>
     /// on open and <c>Pop</c> on close. Static because the alternative is
     /// threading the manager through 20+ existing UI constructors. Lifetime
@@ -892,6 +896,17 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         Popups = _popups;
         Instance = this;
         _gameRenderer = new GameRenderer(this);
+
+        // Unified UI layer list (see UI/UIRouter.cs): input dispatches through
+        // these top-down in reverse render order, so the topmost visible widget
+        // gets the click. Registration order is the within-band tiebreak.
+        _uiRouter.Register(new Necroking.UI.WorldInputLayer(this));
+        _uiRouter.Register(new Necroking.UI.SpellBarLayer(this));
+        _uiRouter.Register(new Necroking.UI.TimeControlsLayer(this));
+        _uiRouter.Register(new Necroking.UI.AggressionBarLayer(this));
+        _uiRouter.Register(new Necroking.UI.CoreMenuButtonsLayer(this));
+        _uiRouter.Register(new Necroking.UI.EditorLauncherLayer(this));
+        _uiRouter.Register(new Necroking.UI.SkillToastLayer(this));
 
         // Wire the top-level editor modal layers. Each layer's OnCancel
         // transitions _menuState back; ReconcileTopLevelEditorLayers (run
@@ -2660,16 +2675,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _popups.AppendHitRects(_uiHits, screenW, screenH);
 
         // The persistent gameplay HUD draws during normal play AND on top of the
-        // (full-screen) map editor — mirror the showUI gate in DrawHudBlock.
-        bool hudVisible = _gameWorldLoaded
-            && (_menuState == MenuState.None || _menuState == MenuState.MapEditor)
-            && (_activeScenario == null || _activeScenario.WantsUI);
-        if (hudVisible)
+        // (full-screen) map editor — HudVisible mirrors the showUI gate in DrawHudBlock.
+        if (HudVisible)
         {
             _hudRenderer.AppendHitRects(_uiHits, screenW, screenH,
                 _gameData.Settings.General.ShowTimeControls);
-            if (_spellDropdownSlot >= 0)
-                _uiHits.AddFullScreen("hud.spell_dropdown"); // open dropdown owns all clicks
             _gameRenderer.AppendSkillToastHitRects(_uiHits, screenW, screenH);
             if (_gameRenderer.GetAggressionBarLayout(screenW, screenH, out var aggroBar, out _))
             {
@@ -3051,37 +3061,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             else { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; }
         }
 
-        // --- Editor-launcher row click (top-right HUD row) — click mirror of
-        // F9-F12, so editors can be opened/switched without the keyboard. Works
-        // regardless of current MenuState, same as the F-keys above.
-        if (!anyTextInputActive && _input.LeftPressed && !_input.IsMouseConsumed)
-        {
-            int hudScreenW = GraphicsDevice.Viewport.Width;
-            int ebHit = _hudRenderer.HitTestEditorButtons(hudScreenW, (int)_input.MousePos.X, (int)_input.MousePos.Y);
-            if (ebHit >= 0)
-            {
-                switch (ebHit)
-                {
-                    case HUDRenderer.EditorUnit:
-                        _menuState = _menuState == MenuState.UnitEditor ? MenuState.None : MenuState.UnitEditor;
-                        _editorUi.ClearActiveField();
-                        break;
-                    case HUDRenderer.EditorSpell:
-                        _menuState = _menuState == MenuState.SpellEditor ? MenuState.None : MenuState.SpellEditor;
-                        _editorUi.ClearActiveField();
-                        break;
-                    case HUDRenderer.EditorMap:
-                        if (_menuState == MenuState.MapEditor) _menuState = MenuState.None;
-                        else { _menuState = MenuState.MapEditor; _mapEditor.SuppressClicksUntilRelease(); }
-                        break;
-                    case HUDRenderer.EditorUi:
-                        if (_menuState == MenuState.UIEditor) _menuState = MenuState.None;
-                        else { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; }
-                        break;
-                }
-                _input.ConsumeMouse();
-            }
-        }
+        // (Editor-launcher row clicks are handled by EditorLauncherLayer via the
+        // UI router dispatch below — see UI/Layers/HudLayers.cs.)
 
         // 'I' key toggles inventory (lazy-inits the UI family on first open)
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.I) && _menuState == MenuState.None)
@@ -3349,50 +3330,23 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 _camera.Position += camMove.Normalized() * camSpeed * rawDt;
         }
 
-        // --- UI click routing for non-popup HUD elements ---
-        // (MouseOverUI itself is no longer hit-tested here — every UI rect lives
-        // in the central UIHitRegistry, rebuilt in RebuildUIHitRects above.)
-        if (_menuState == MenuState.None)
-        {
-            int mx = mouse.X, my = mouse.Y;
+        // (Skill-toast clicks, the aggression bar, and gameplay scroll-zoom are
+        // handled by their router layers in the dispatch below.)
 
-            // Skill-learn corner toasts (clickable to jump to the relevant tab)
-            _gameRenderer.UpdateSkillLearnToastInput(screenW, screenH);
-
-            // Aggression bar — a left click snaps the level to the nearest node
-            // (same control as Shift+Q / Shift+E). Hover-blocking comes from the
-            // registry ("hud.aggression_bar").
-            if (_input.LeftPressed
-                && _gameRenderer.GetAggressionBarLayout(screenW, screenH, out var aggroBar, out var aggroNodes))
-            {
-                var aggroHover = aggroBar;
-                aggroHover.Inflate(0, 8);
-                if (aggroHover.Contains(mx, my))
-                {
-                    _sim.Horde.AggressionLevel = GameRenderer.NearestAggroNode(aggroNodes, mx);
-                    _input.ConsumeMouse();
-                }
-            }
-        }
-
-        // Scroll zoom.
-        //   Gameplay: zoom when cursor isn't over any UI element.
-        //   Map editor: zoom when cursor is over the world area (not the
-        //     sidebar) AND only when the map editor itself is the top of the
-        //     popup stack — any sub-popup (texture file browser, color picker,
-        //     env editor, etc.) sits above and should own the scroll instead.
-        //     We can't gate on _input.MouseOverUI here because PopupManager
-        //     sets it whenever _mapEditorLayer is on the stack (full-screen
-        //     ContainsMouse), which would block zoom even in the world area.
+        // Scroll zoom, map editor only (gameplay zoom lives in WorldLayer):
+        //   zoom when cursor is over the world area (not the sidebar) AND only
+        //   when the map editor itself is the top of the popup stack — any
+        //   sub-popup (texture file browser, color picker, env editor, etc.)
+        //   sits above and should own the scroll instead. We can't gate on
+        //   _input.MouseOverUI here because PopupManager sets it whenever
+        //   _mapEditorLayer is on the stack (full-screen ContainsMouse), which
+        //   would block zoom even in the world area.
         if (_input.ScrollDelta != 0)
         {
-            bool canZoomGameplay = _menuState == MenuState.None
-                && !_input.MouseOverUI
-                && !_input.IsScrollConsumed;
             bool canZoomMapEditor = _menuState == MenuState.MapEditor
                 && _popups.Top == _mapEditorLayer
                 && !_mapEditor.IsMouseOverPanel(screenW, screenH);
-            if (canZoomGameplay || canZoomMapEditor)
+            if (canZoomMapEditor)
                 _camera.ZoomBy(_input.ScrollDelta / 120f);
         }
 
@@ -3409,6 +3363,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // tooltips; UpdateHoverPicks handles the editor-specific "over UI" rules.
         if (_menuState == MenuState.MapEditor)
             UpdateHoverPicks(screenW, screenH);
+
+        // --- Unified UI input dispatch: every clickable UI surface (HUD
+        // widgets, toasts, the world floor) as router layers, walked top-down
+        // in reverse render order. Replaces the old per-widget click blocks
+        // that were scattered through this method in execution order.
+        // (Panels/overlays still route via _popups.RouteInput above; they fold
+        // into this dispatch in the next migration step.)
+        _uiRouter.DispatchInput(_input,
+            new Necroking.UI.UICtx(screenW, screenH, gameTime.TotalGameTime.TotalSeconds));
 
         if (_clock.WorldRunning)
         {
@@ -3493,46 +3456,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 _channelingSlot = -1;
             }
 
-            // --- Spell bar click interaction ---
-            if (_input.LeftPressed)
-            {
-                var barLayout = _hudRenderer.GetSpellBarLayout(screenH);
-                if (_spellDropdownSlot >= 0)
-                {
-                    var spellIDs = _gameData.Spells.GetIDs();
-                    int itemIdx = _hudRenderer.HitTestSpellDropdown(screenW,
-                        barLayout.barY, barLayout.slotW, barLayout.centerOffset,
-                        _spellDropdownSlot, spellIDs.Count, mouse.X, mouse.Y);
-                    if (itemIdx >= 0)
-                    {
-                        if (itemIdx == 0)
-                            _spellBarState.Slots[_spellDropdownSlot].SpellID = "";
-                        else if (itemIdx - 1 < spellIDs.Count)
-                            _spellBarState.Slots[_spellDropdownSlot].SpellID = spellIDs[itemIdx - 1];
-                        SaveSpellBars();
-                        _input.ConsumeMouse();
-                    }
-                    _spellDropdownSlot = -1;
-                }
-                else
-                {
-                    int s = _hudRenderer.HitTestBarSlot(screenW,
-                        barLayout.barY, barLayout.slotW, barLayout.slotH, barLayout.centerOffset,
-                        mouse.X, mouse.Y);
-                    if (s >= 0)
-                    {
-                        // Clicking a slot opens the grimoire to pick a spell for it.
-                        int slot = s;
-                        EnsureInventoryUIsInitialized();
-                        _grimoireOverlay.OpenForAssign(id =>
-                        {
-                            _spellBarState.Slots[slot].SpellID = id;
-                            SaveSpellBars();
-                        });
-                        _input.ConsumeMouse();
-                    }
-                }
-            }
+            // (Spell-bar slot clicks are handled by SpellBarLayer in the router
+            // dispatch above; slot assignment opens the grimoire assign flow.)
 
             // --- Aggression bar: Shift+E raises, Shift+Q lowers. The shift guard
             // in the cast loop stops Q/E from also casting slots 0/1 while adjusting. ---
@@ -3669,9 +3594,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 _craftingMenu.Toggle(screenW, screenH);
             }
 
-            // --- World mouse clicks (placement, building panels, pile gather,
-            // foraging) — the dispatch lives in Game1.WorldClicks.cs ---
-            HandleWorldClicks(screenW, screenH, mouse.X, mouse.Y, mouseWorld, necroIdx);
+            // (World mouse clicks — placement, building panels, pile gather,
+            // foraging — are handled by WorldLayer in the router dispatch above;
+            // the dispatch table lives in Game1.WorldClicks.cs.)
 
             // --- Auto-pickup foragables ---
             _foragables.TickAutoPickup(_clock.WorldDt, _gameData.Settings.General.AutoPickupForagables);
@@ -3684,29 +3609,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (_input.WasKeyPressed(Keys.D0))
                 _timeScale = 1f;
 
-            // --- Time controls (mouse click on buttons) ---
-            if (_gameData.Settings.General.ShowTimeControls && _input.LeftPressed)
-            {
-                int tcHit = _hudRenderer.HitTestTimeControls(screenW, screenH, mouse.X, mouse.Y);
-                if (tcHit == -2)
-                    _clock.TogglePause(GameClock.PauseSource.User);
-                else if (tcHit >= 0)
-                {
-                    _timeScale = HUDRenderer.TimeControlSpeeds[tcHit];
-                    _clock.ClearAllPauses();
-                }
-            }
-
-            // --- Core-menu buttons (top-right) click ---
-            if (_input.LeftPressed && !_input.IsMouseConsumed)
-            {
-                int mbHit = _hudRenderer.HitTestMenuButtons(screenW, mouse.X, mouse.Y);
-                if (mbHit >= 0)
-                {
-                    _gameRenderer.ToggleCoreMenu(mbHit, screenW, screenH);
-                    _input.ConsumeMouse();
-                }
-            }
+            // (Time-control and core-menu button clicks are handled by
+            // TimeControlsLayer / CoreMenuButtonsLayer in the router dispatch
+            // above — notably the time controls now also work while paused,
+            // fixing the one-way mouse pause button.)
 
             // --- Tick pending projectiles ---
             // Gameplay consumes the WORLD domain (== dt inside this gate, but explicit
@@ -4343,7 +4249,57 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private int FindClosestEnemyToPoint(Vec2 worldPos, float maxRange)
         => _sim.Query.NearestEnemyToPoint(worldPos, maxRange, Faction.Undead);
 
-    private int FindNecromancer() => _sim.Units.FindAliveNecromancerIndex();
+    internal int FindNecromancer() => _sim.Units.FindAliveNecromancerIndex();
+
+    /// <summary>The persistent gameplay HUD is on screen — during normal play
+    /// and on top of the (full-screen) map editor. Mirrors the showUI gate in
+    /// DrawHudBlock; the single visibility source for the HUD's router layers
+    /// and RebuildUIHitRects.</summary>
+    internal bool HudVisible => _gameWorldLoaded
+        && (_menuState == MenuState.None || _menuState == MenuState.MapEditor)
+        && (_activeScenario == null || _activeScenario.WantsUI);
+
+    /// <summary>A text-input field currently owns the keyboard (editor UI or
+    /// UI-editor field) — hotkey-ish handlers must stand down.</summary>
+    internal bool AnyTextInputActive => (_editorUi != null && _editorUi.IsTextInputActive)
+        || (_menuState == MenuState.UIEditor && _uiEditor.IsTextInputActive);
+
+    /// <summary>Toggle an editor window by HUDRenderer.Editor* index — the
+    /// click-side mirror of F9-F12, shared by the editor-launcher layer.</summary>
+    internal void ToggleEditorWindow(int idx)
+    {
+        switch (idx)
+        {
+            case HUDRenderer.EditorUnit:
+                _menuState = _menuState == MenuState.UnitEditor ? MenuState.None : MenuState.UnitEditor;
+                _editorUi.ClearActiveField();
+                break;
+            case HUDRenderer.EditorSpell:
+                _menuState = _menuState == MenuState.SpellEditor ? MenuState.None : MenuState.SpellEditor;
+                _editorUi.ClearActiveField();
+                break;
+            case HUDRenderer.EditorMap:
+                if (_menuState == MenuState.MapEditor) _menuState = MenuState.None;
+                else { _menuState = MenuState.MapEditor; _mapEditor.SuppressClicksUntilRelease(); }
+                break;
+            case HUDRenderer.EditorUi:
+                if (_menuState == MenuState.UIEditor) _menuState = MenuState.None;
+                else { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; }
+                break;
+        }
+    }
+
+    /// <summary>Clicking a spell-bar slot opens the grimoire in assign mode for
+    /// that slot; picking a spell writes it to the bar and saves.</summary>
+    internal void OpenSpellAssignForSlot(int slot)
+    {
+        EnsureInventoryUIsInitialized();
+        _grimoireOverlay.OpenForAssign(id =>
+        {
+            _spellBarState.Slots[slot].SpellID = id;
+            SaveSpellBars();
+        });
+    }
 
     // "CastingEffect Green" buff — visual glow shown on the necromancer while it
     // channels a reanimation at the necro table.

@@ -1667,6 +1667,45 @@ public partial class Game1 {
                break;
             }
 
+            // Inject a SCREEN-space click through the real UI routing pipeline
+            // (PopupManager.RouteInput + UIRouter.DispatchInput) with a synthetic
+            // InputState — verifies z-order and consumption exactly as a real
+            // mouse press would, headless-safe. Reports which registry region was
+            // under the point and who consumed the click. Note: panels that act
+            // on the SHARED _input in their own Update (inventory slots, etc.)
+            // won't see a synthetic click — this drives the router layers.
+            case "ui_click": {
+               if (c.Args.Length < 2) {
+                  c.Complete(Necroking.Dev.DevServer.Error("ui_click needs: <sx> <sy> [right]"));
+                  break;
+               }
+               int sx = (int)DevFloat(c.Args[0]), sy = (int)DevFloat(c.Args[1]);
+               bool uiRight = c.Args.Length >= 3
+                  && c.Args[2].Equals("right", StringComparison.OrdinalIgnoreCase);
+               int usw = GraphicsDevice.Viewport.Width, ush = GraphicsDevice.Viewport.Height;
+               var btnUp = Microsoft.Xna.Framework.Input.ButtonState.Released;
+               var btnDown = Microsoft.Xna.Framework.Input.ButtonState.Pressed;
+               var upPrev = new Microsoft.Xna.Framework.Input.MouseState(sx, sy, 0,
+                  btnUp, btnUp, btnUp, btnUp, btnUp);
+               var downNow = new Microsoft.Xna.Framework.Input.MouseState(sx, sy, 0,
+                  uiRight ? btnUp : btnDown, btnUp, uiRight ? btnDown : btnUp,
+                  btnUp, btnUp);
+               var kbNow = Microsoft.Xna.Framework.Input.Keyboard.GetState();
+               var syn = new Necroking.Core.InputState();
+               syn.Capture(downNow, upPrev, kbNow, kbNow);
+               syn.MouseOverUI = _uiHits.Hit(sx, sy);
+               string? uiHitId = _uiHits.HitId(sx, sy);
+               _popups.RouteInput(syn);
+               bool popupConsumed = syn.IsMouseConsumed;
+               _uiRouter.DispatchInput(syn,
+                  new Necroking.UI.UICtx(usw, ush, _clock.VisualTime));
+               c.Complete(Necroking.Dev.DevServer.OkRaw(
+                  $"{{\"hit\":\"{uiHitId ?? "none"}\"," +
+                  $"\"popupConsumed\":{(popupConsumed ? "true" : "false")}," +
+                  $"\"consumed\":{(syn.IsMouseConsumed ? "true" : "false")}}}"));
+               break;
+            }
+
             // Spawn a fireball projectile directly (deterministic, no mana/anim
             // gating). From the necromancer if present, else from offset of target.
             case "fireball": {

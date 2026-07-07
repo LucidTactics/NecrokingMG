@@ -73,7 +73,7 @@ public partial class Game1
     /// popup layers have had their shot at the mouse. LMB selects/interacts
     /// (open a building's panel, gather from a pile, attack a clicked enemy);
     /// RMB is the context action (forage → pile gather → attack).</summary>
-    private void HandleWorldClicks(int screenW, int screenH, int mouseX, int mouseY,
+    internal void HandleWorldClicks(int screenW, int screenH, int mouseX, int mouseY,
         Vec2 mouseWorld, int necroIdx)
     {
         if (_input.LeftPressed && !_input.MouseOverUI)

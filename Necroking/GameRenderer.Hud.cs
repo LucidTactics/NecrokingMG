@@ -41,36 +41,30 @@ partial class GameRenderer
             reg.Add($"toast.skill_learn.{i}", GetSkillLearnToastRect(sw, sh, i));
     }
 
-    /// <summary>Hit-test corner toasts and route a left-click to opening the skill
-    /// book on the relevant tab. Called from the UI input pass. (MouseOverUI is
-    /// NOT set here — the toast rects are in the central UIHitRegistry.)</summary>
-    internal void UpdateSkillLearnToastInput(int sw, int sh)
+    /// <summary>List index of the corner toast under the cursor, or -1. Toasts
+    /// are drawn from the most recent (last-added) up the stack: slot 0 = newest
+    /// = bottom rect. Hit-test half of the SkillToastLayer routing.</summary>
+    internal int SkillToastIndexAt(int sw, int sh, int mx, int my)
     {
-        if (_g._skillLearnToasts.Count == 0) return;
-        int mx = (int)_g._input.MousePos.X;
-        int my = (int)_g._input.MousePos.Y;
-        // Iterate top of stack downward to mirror draw order — most recent toast
-        // is the bottom slot (stackIndex 0).
         for (int i = 0; i < _g._skillLearnToasts.Count; i++)
         {
-            // Toasts are drawn from the most recent (last-added) up the stack.
-            // Slot 0 = newest = bottom rect.
             int stackSlot = _g._skillLearnToasts.Count - 1 - i;
-            var rect = GetSkillLearnToastRect(sw, sh, stackSlot);
-            if (rect.Contains(mx, my))
-            {
-                if (_g._input.LeftPressed && !_g._input.IsMouseConsumed)
-                {
-                    var t = _g._skillLearnToasts[i];
-                    int tabIdx = SkillBookDefs.FindTabIndexFor(t.SkillId);
-                    _g._skillBookOverlay.Open();
-                    if (tabIdx >= 0) _g._skillBookOverlay.SetActiveTab(tabIdx);
-                    _g._skillLearnToasts.RemoveAt(i);
-                    _g._input.ConsumeMouse();
-                }
-                return;
-            }
+            if (GetSkillLearnToastRect(sw, sh, stackSlot).Contains(mx, my))
+                return i;
         }
+        return -1;
+    }
+
+    /// <summary>Clicked toast action: open the skill book on the toast's tab and
+    /// dismiss the toast. Action half of the SkillToastLayer routing.</summary>
+    internal void ActivateSkillToast(int listIdx)
+    {
+        if (listIdx < 0 || listIdx >= _g._skillLearnToasts.Count) return;
+        var t = _g._skillLearnToasts[listIdx];
+        int tabIdx = SkillBookDefs.FindTabIndexFor(t.SkillId);
+        _g._skillBookOverlay.Open();
+        if (tabIdx >= 0) _g._skillBookOverlay.SetActiveTab(tabIdx);
+        _g._skillLearnToasts.RemoveAt(listIdx);
     }
 
     internal void UpdateSkillLearnToasts(float dt)
