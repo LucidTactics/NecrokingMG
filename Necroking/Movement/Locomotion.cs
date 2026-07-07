@@ -548,12 +548,7 @@ public static class FacingUtil
     /// <summary>Signed short-way angle from <paramref name="current"/> to
     /// <paramref name="target"/>, in the range (-180, 180] degrees.</summary>
     public static float AngleDiff(float target, float current)
-    {
-        float diff = target - current;
-        while (diff > 180f) diff -= 360f;
-        while (diff < -180f) diff += 360f;
-        return diff;
-    }
+        => MathUtil.AngleDeltaDeg(current, target);
 
     /// <summary>
     /// Rotate <paramref name="unit"/>'s facing toward <paramref name="targetAngle"/>

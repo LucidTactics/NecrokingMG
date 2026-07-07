@@ -76,4 +76,44 @@ public static class MathUtil
 {
     public static float Lerp(float a, float b, float t) => a + (b - a) * t;
     public static float Clamp(float v, float lo, float hi) => v < lo ? lo : (v > hi ? hi : v);
+
+    // --- Signed shortest angular delta / angle lerp -------------------------
+    // Single home for the "wrap a difference to the short way around" idiom that
+    // was reimplemented in FacingUtil.AngleDiff, AnimController.SignedAngleDelta,
+    // and HordeSystem.LerpAngle (the last was bug-fixed in place — this preserves
+    // its corrected branch form exactly). Net/RemotePlayer keeps its own copy by
+    // design (Net/ must not reference game code).
+    //
+    // C#'s % keeps the dividend's sign, so a single mod can return the long-way
+    // delta when (to - from) < -period/2; the explicit branch corrects that.
+
+    /// <summary>Shortest signed delta from <paramref name="from"/> to
+    /// <paramref name="to"/>, degrees, in (-180, 180].</summary>
+    public static float AngleDeltaDeg(float from, float to)
+    {
+        float d = (to - from) % 360f;
+        if (d > 180f) d -= 360f;
+        else if (d <= -180f) d += 360f;
+        return d;
+    }
+
+    /// <summary>Lerp <paramref name="from"/> toward <paramref name="to"/> the short
+    /// way around, degrees.</summary>
+    public static float LerpAngleDeg(float from, float to, float t)
+        => from + AngleDeltaDeg(from, to) * t;
+
+    /// <summary>Shortest signed delta from <paramref name="from"/> to
+    /// <paramref name="to"/>, radians, in (-pi, pi].</summary>
+    public static float AngleDeltaRad(float from, float to)
+    {
+        float d = (to - from) % (2f * MathF.PI);
+        if (d > MathF.PI) d -= 2f * MathF.PI;
+        else if (d < -MathF.PI) d += 2f * MathF.PI;
+        return d;
+    }
+
+    /// <summary>Lerp <paramref name="from"/> toward <paramref name="to"/> the short
+    /// way around, radians.</summary>
+    public static float LerpAngleRad(float from, float to, float t)
+        => from + AngleDeltaRad(from, to) * t;
 }

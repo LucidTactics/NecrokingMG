@@ -896,12 +896,7 @@ public class AnimController
 
     /// <summary>Shortest signed angular distance a → b in (-180, 180].</summary>
     private static float SignedAngleDelta(float a, float b)
-    {
-        float d = (a - b) % 360f;
-        if (d > 180f) d -= 360f;
-        if (d <= -180f) d += 360f;
-        return d;
-    }
+        => MathUtil.AngleDeltaDeg(b, a);
 
     /// <summary>
     /// Resolve a world facing angle to (sprite angle, flipX) for an animation

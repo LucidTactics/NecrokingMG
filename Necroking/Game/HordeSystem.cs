@@ -293,7 +293,7 @@ public class HordeSystem
 
         // Smoothly lerp circle rotation toward movement angle
         float rotAlpha = 1f - MathF.Exp(-_settings.RotationLerp * dt);
-        _circleFacing = LerpAngle(_circleFacing, _movementAngle, rotAlpha);
+        _circleFacing = MathUtil.LerpAngleRad(_circleFacing, _movementAngle, rotAlpha);
 
         // Discrete per-unit slot shift. Each unit rolls its own next-shift time on
         // spawn so the horde as a whole doesn't "breathe" in sync — shifts happen
@@ -583,17 +583,6 @@ public class HordeSystem
         float r = SlotSpacing * MathF.Sqrt(slotIndex + 0.5f);
         float slotAngle = _circleFacing + slotIndex * GoldenAngle;
         return _circleCenter + new Vec2(MathF.Cos(slotAngle) * r, MathF.Sin(slotAngle) * r);
-    }
-
-    private static float LerpAngle(float from, float to, float t)
-    {
-        // C#'s % keeps the dividend's sign, so normalize to [-pi, pi] explicitly —
-        // the old single-mod form returned the long-way-around diff whenever
-        // to - from < -pi (facing crossing west in one turn direction).
-        float diff = (to - from) % (2f * MathF.PI);
-        if (diff > MathF.PI) diff -= 2f * MathF.PI;
-        else if (diff < -MathF.PI) diff += 2f * MathF.PI;
-        return from + diff * t;
     }
 
     private int FindUnit(uint id)
