@@ -130,6 +130,7 @@ public static class ScenarioRegistry
         Register("seen_item", () => new Scenarios.SeenItemScenario());
         Register("corpses_eaten", () => new Scenarios.CorpsesEatenScenario());
         Register("sidecar_roundtrip", () => new Scenarios.SidecarRoundtripScenario());
+        Register("atomic_stream", () => new Scenarios.AtomicStreamScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)

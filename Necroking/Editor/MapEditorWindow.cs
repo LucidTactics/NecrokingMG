@@ -6028,7 +6028,9 @@ public class MapEditorWindow
             Directory.CreateDirectory(mapsDir);
             string path = Path.Combine(mapsDir, _mapFilename + ".json");
 
-            using var stream = File.Create(path);
+            // Atomic: stream to .tmp, rename over the map on Commit — a crash
+            // mid-save must not destroy the 55 MB default.json.
+            using var stream = Core.AtomicFile.CreateStream(path);
             using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
 
             writer.WriteStartObject();
@@ -6185,6 +6187,7 @@ public class MapEditorWindow
 
             writer.WriteEndObject();
             writer.Flush();
+            stream.Commit(); // payload complete — dispose will swap it in atomically
 
             // Sidecars (triggers / roads / zones) — one reader+writer in MapSidecars
             MapSidecars.SaveTriggers(Path.Combine(mapsDir, _mapFilename + "_triggers.json"), _triggerSystem);

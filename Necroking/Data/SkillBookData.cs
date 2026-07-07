@@ -99,7 +99,8 @@ public static class SkillBookDefs
                         sn!["y"] = def.Y;
                     }
                 }
-                File.WriteAllText(path, root!.ToJsonString(Necroking.Core.JsonDefaults.Indented));
+                if (!Necroking.Core.AtomicFile.WriteAllText(path, root!.ToJsonString(Necroking.Core.JsonDefaults.Indented)))
+                    ok = false;
                 DebugLog.Log("startup", $"SkillBook: saved layout -> {path}");
             }
             catch (Exception ex)
