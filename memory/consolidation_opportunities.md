@@ -5,14 +5,14 @@ Reconciled after the 2026-07-07 implementation pass: **41 consolidation commits 
 history: [docs/consolidation-review/](../docs/consolidation-review/README.md). Canonical
 homes now recorded in [standard_patterns.md](standard_patterns.md).
 
+Follow-ups landed 2026-07-07 evening: C8 (paralysis stun = Incapacitating buff, c433fb7 —
+also fixed a latent stuck-Stunned bug on the archetype anim path), C13 (preview arcs match
+the game, 302c310), B7 (editor headers unified on Bar style, 1c0acb9), and the dup-review
+tooling (`tools/label_store.py`, extractor BodyHash, `/dup-review` skill — user-invoked
+only; locate-behavior integration explicitly declined).
+
 ## Remaining (deferred with reasons — awaiting user decision or future need)
 
-- **C8 paralysis → Incapacitating buff** (S once unblocked): needs a `buff_paralysis_stun`
-  entry in data/buffs.json (edit-game-data) + an "IncapRecoverTime ≤ 0 ⇒ instant recovery"
-  case in BuffSystem. Batch-1 agent's proposal; user approval pending.
-- **C13 preview trajectory intent**: SpellPreview Homing/HomingSwirly use half lob height
-  (`*0.5f`) vs the game's full sin(theta). Comment markers in place at both sites; needs a
-  design call (match game vs keep preview framing).
 - **C1 (second half)**: spell-editor buff/flipbook manager POPUPS stay off RegistryCrudPanel —
   structural variance (modal chrome, apply-on-close vs immediate save). Only revisit as a
   `RegistryManagerPopup` if editors grow.
