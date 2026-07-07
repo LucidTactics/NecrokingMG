@@ -287,12 +287,6 @@ public class SkillBookOverlay : IModalLayer
         // Bind the chrome (title + tab labels/highlights) then draw the window.
         BindChrome();
         
-        // WIP
-        {
-           Game1.Instance._hudRenderer.
-              DrawMenuButtons(sw, Game1.Instance._gameRenderer.BuildMenuOpenMask(), (int)Game1.Instance._input.MousePos.X, (int)Game1.Instance._input.MousePos.Y);
-        }
-        
         _renderer.DrawWidget(WindowId, _x, _y, Instance);
 
         // Tree: connectors first (under the tiles), then the stamped tiles.
@@ -307,6 +301,13 @@ public class SkillBookOverlay : IModalLayer
 
         if (_editLayout) DrawEditOverlay();
         if (EnableLayoutEditor) DrawLayoutToolbar();
+        
+        // WIP
+        {
+           Game1.Instance._hudRenderer.
+              DrawMenuButtons(sw, Game1.Instance._gameRenderer.BuildMenuOpenMask(), (int)Game1.Instance._input.MousePos.X, (int)Game1.Instance._input.MousePos.Y);
+        }
+        
         if (_toast != null) DrawToast();
         if (_hoverId != null) DrawHoverTooltip(sw, sh);
     }
