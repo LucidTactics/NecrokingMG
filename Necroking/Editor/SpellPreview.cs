@@ -1147,80 +1147,43 @@ public class SpellPreview
             if (!_strikes[i].Alive) _strikes.RemoveAt(i);
     }
 
-    private void UpdateZaps(float dt)
+    /// <summary>Age a list of timed preview elements by <paramref name="dt"/>: drop any
+    /// already-dead entry, advance the rest via <paramref name="step"/> (which bumps the
+    /// element's timer and clears Alive when it reaches its duration), and drop those that
+    /// just expired. Replaces the five near-identical UpdateZaps/Beams/Drains/Effects/
+    /// HitEffects loops, whose separate second removal pass was redundant. Works for
+    /// struct elements (write-back via <c>list[i] = e</c>).</summary>
+    private static void AgeAndExpire<T>(List<T> list, float dt, Func<T, float, T> step, Func<T, bool> alive)
     {
-        for (int i = _zaps.Count - 1; i >= 0; i--)
+        for (int i = list.Count - 1; i >= 0; i--)
         {
-            var z = _zaps[i];
-            if (!z.Alive) { _zaps.RemoveAt(i); continue; }
-            z.Timer += dt;
-            if (z.Timer >= z.Duration)
-                z.Alive = false;
-            _zaps[i] = z;
+            var e = list[i];
+            if (!alive(e)) { list.RemoveAt(i); continue; }
+            e = step(e, dt);
+            list[i] = e;
+            if (!alive(e)) list.RemoveAt(i);
         }
-        for (int i = _zaps.Count - 1; i >= 0; i--)
-            if (!_zaps[i].Alive) _zaps.RemoveAt(i);
     }
 
-    private void UpdateBeams(float dt)
-    {
-        for (int i = _beams.Count - 1; i >= 0; i--)
-        {
-            var b = _beams[i];
-            if (!b.Alive) { _beams.RemoveAt(i); continue; }
-            b.Elapsed += dt;
-            if (b.Elapsed >= b.MaxDuration)
-                b.Alive = false;
-            _beams[i] = b;
-        }
-        for (int i = _beams.Count - 1; i >= 0; i--)
-            if (!_beams[i].Alive) _beams.RemoveAt(i);
-    }
+    private void UpdateZaps(float dt) => AgeAndExpire(_zaps, dt,
+        (z, d) => { z.Timer += d; if (z.Timer >= z.Duration) z.Alive = false; return z; },
+        z => z.Alive);
 
-    private void UpdateDrains(float dt)
-    {
-        for (int i = _drains.Count - 1; i >= 0; i--)
-        {
-            var d = _drains[i];
-            if (!d.Alive) { _drains.RemoveAt(i); continue; }
-            d.Elapsed += dt;
-            if (d.Elapsed >= d.MaxDuration)
-                d.Alive = false;
-            _drains[i] = d;
-        }
-        for (int i = _drains.Count - 1; i >= 0; i--)
-            if (!_drains[i].Alive) _drains.RemoveAt(i);
-    }
+    private void UpdateBeams(float dt) => AgeAndExpire(_beams, dt,
+        (b, d) => { b.Elapsed += d; if (b.Elapsed >= b.MaxDuration) b.Alive = false; return b; },
+        b => b.Alive);
 
-    private void UpdateEffects(float dt)
-    {
-        for (int i = _effects.Count - 1; i >= 0; i--)
-        {
-            var e = _effects[i];
-            if (!e.Alive) { _effects.RemoveAt(i); continue; }
-            e.Timer += dt;
-            if (e.Timer >= e.Duration)
-                e.Alive = false;
-            _effects[i] = e;
-        }
-        for (int i = _effects.Count - 1; i >= 0; i--)
-            if (!_effects[i].Alive) _effects.RemoveAt(i);
-    }
+    private void UpdateDrains(float dt) => AgeAndExpire(_drains, dt,
+        (dr, d) => { dr.Elapsed += d; if (dr.Elapsed >= dr.MaxDuration) dr.Alive = false; return dr; },
+        dr => dr.Alive);
 
-    private void UpdateHitEffects(float dt)
-    {
-        for (int i = _hitEffects.Count - 1; i >= 0; i--)
-        {
-            var h = _hitEffects[i];
-            if (!h.Alive) { _hitEffects.RemoveAt(i); continue; }
-            h.Timer += dt;
-            if (h.Timer >= h.Duration)
-                h.Alive = false;
-            _hitEffects[i] = h;
-        }
-        for (int i = _hitEffects.Count - 1; i >= 0; i--)
-            if (!_hitEffects[i].Alive) _hitEffects.RemoveAt(i);
-    }
+    private void UpdateEffects(float dt) => AgeAndExpire(_effects, dt,
+        (e, d) => { e.Timer += d; if (e.Timer >= e.Duration) e.Alive = false; return e; },
+        e => e.Alive);
+
+    private void UpdateHitEffects(float dt) => AgeAndExpire(_hitEffects, dt,
+        (h, d) => { h.Timer += d; if (h.Timer >= h.Duration) h.Alive = false; return h; },
+        h => h.Alive);
 
     // ========================================
     // Scene state

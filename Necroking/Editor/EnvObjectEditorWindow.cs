@@ -864,36 +864,42 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
     }
 
     /// <summary>Handle click-to-set pivot by clicking in the preview area.</summary>
-    private void HandlePivotDrag(EnvironmentObjectDef def, int drawX, int drawY, int drawW, int drawH)
+    /// <summary>Shared right-click pivot-drag mechanics over the sprite area (uses the
+    /// <see cref="_draggingPivot"/> field). Right-click inside the rect begins the drag;
+    /// right-release ends it. Returns true on frames where the pivot should be written,
+    /// with <paramref name="nx"/>/<paramref name="ny"/> normalized 0..1 in top-left-origin
+    /// screen space. Callers apply their own Y-flip and write target.</summary>
+    private bool TrackPivotDrag(int drawX, int drawY, int drawW, int drawH, out float nx, out float ny)
     {
+        nx = 0f; ny = 0f;
         var mouse = _ui._input.Mouse;
         var prevMouse = _ui._prevMouse;
-
-        // Right-click to set pivot position (left-click is for collision)
         bool rightClick = mouse.RightButton == ButtonState.Pressed && prevMouse.RightButton == ButtonState.Released;
         bool rightDown = mouse.RightButton == ButtonState.Pressed;
         bool rightUp = mouse.RightButton == ButtonState.Released && prevMouse.RightButton == ButtonState.Pressed;
 
-        if (rightClick)
-        {
-            // Check if click is within the sprite area
-            if (mouse.X >= drawX && mouse.X <= drawX + drawW &&
-                mouse.Y >= drawY && mouse.Y <= drawY + drawH)
-            {
-                _draggingPivot = true;
-            }
-        }
-
+        if (rightClick && mouse.X >= drawX && mouse.X <= drawX + drawW &&
+                          mouse.Y >= drawY && mouse.Y <= drawY + drawH)
+            _draggingPivot = true;
         if (rightUp)
             _draggingPivot = false;
 
         if (_draggingPivot && rightDown && drawW > 0 && drawH > 0)
         {
-            // Convert screen position to normalized pivot (0..1)
-            float newPivX = (float)(mouse.X - drawX) / drawW;
-            float newPivY = (float)(mouse.Y - drawY) / drawH;
-            def.PivotX = MathHelper.Clamp(newPivX, 0f, 1f);
-            def.PivotY = MathHelper.Clamp(newPivY, 0f, 1f);
+            nx = MathHelper.Clamp((float)(mouse.X - drawX) / drawW, 0f, 1f);
+            ny = MathHelper.Clamp((float)(mouse.Y - drawY) / drawH, 0f, 1f);
+            return true;
+        }
+        return false;
+    }
+
+    private void HandlePivotDrag(EnvironmentObjectDef def, int drawX, int drawY, int drawW, int drawH)
+    {
+        // Top-left-origin pivot, written directly.
+        if (TrackPivotDrag(drawX, drawY, drawW, drawH, out float nx, out float ny))
+        {
+            def.PivotX = nx;
+            def.PivotY = ny;
         }
     }
 
@@ -2013,12 +2019,8 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
     /// <summary>Get list starting with "All" for the filter dropdown.</summary>
     private List<string> GetCategories()
     {
-        var cats = new HashSet<string>();
-        for (int i = 0; i < _env.DefCount; i++)
-            cats.Add(_env.GetDef(i).Category);
-
         var list = new List<string> { "All" };
-        foreach (var c in cats)
+        foreach (var c in _env.DistinctCategories())
             if (c != "All") list.Add(c);
         return list;
     }
@@ -2026,15 +2028,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
     /// <summary>Get existing group names from all defs (for the group dropdown).</summary>
     private List<string> GetExistingGroups()
     {
-        var groups = new HashSet<string>();
-        for (int i = 0; i < _env.DefCount; i++)
-        {
-            string g = _env.GetDef(i).Group;
-            if (!string.IsNullOrEmpty(g))
-                groups.Add(g);
-        }
-
-        var list = new List<string>(groups);
+        var list = _env.DistinctGroups();
         list.Sort();
         return list;
     }
@@ -2042,15 +2036,9 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
     /// <summary>Get existing categories only (no "All", used for the property dropdown).</summary>
     private List<string> GetExistingCategories()
     {
-        var cats = new HashSet<string>();
-        for (int i = 0; i < _env.DefCount; i++)
-        {
-            string cat = _env.GetDef(i).Category;
-            if (!string.IsNullOrEmpty(cat))
-                cats.Add(cat);
-        }
-
-        var list = new List<string>(cats);
+        var list = new List<string>();
+        foreach (var c in _env.DistinctCategories())
+            if (!string.IsNullOrEmpty(c)) list.Add(c);
         list.Sort();
         if (list.Count == 0) list.Add("Misc");
         return list;
@@ -2558,24 +2546,9 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
     private void HandleCorpsePivotDrag(Render.SpriteFrame frame, List<Render.Keyframe> kfs,
         int drawX, int drawY, int drawW, int drawH, int angle)
     {
-        var mouse = _ui._input.Mouse;
-        var prevMouse = _ui._prevMouse;
-        bool rightClick = mouse.RightButton == ButtonState.Pressed && prevMouse.RightButton == ButtonState.Released;
-        bool rightDown = mouse.RightButton == ButtonState.Pressed;
-        bool rightUp = mouse.RightButton == ButtonState.Released && prevMouse.RightButton == ButtonState.Pressed;
-
-        if (rightClick && mouse.X >= drawX && mouse.X <= drawX + drawW &&
-                          mouse.Y >= drawY && mouse.Y <= drawY + drawH)
-            _draggingPivot = true;
-        if (rightUp) _draggingPivot = false;
-
-        if (_draggingPivot && rightDown && drawW > 0 && drawH > 0)
-        {
-            float nx = MathHelper.Clamp((float)(mouse.X - drawX) / drawW, 0f, 1f);
-            // Screen-space Y → bottom-left-origin pivot Y
-            float ny = MathHelper.Clamp(1f - (float)(mouse.Y - drawY) / drawH, 0f, 1f);
-            SetCorpsePivot(angle, nx, ny, kfs);
-        }
+        // Corpse pivot uses bottom-left origin → flip the screen-space Y.
+        if (TrackPivotDrag(drawX, drawY, drawW, drawH, out float nx, out float ny))
+            SetCorpsePivot(angle, nx, 1f - ny, kfs);
     }
 
     private void DrawCorpsePropertiesPanel(int x, int y, int w, int h)
