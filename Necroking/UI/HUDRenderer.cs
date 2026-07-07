@@ -744,7 +744,7 @@ public partial class HUDRenderer
 
     /// <summary>Floating cursor tooltip for a hovered forager (zombie boar): its name
     /// plus a corpse-pile-style list of the mushrooms in its belly. Replaces the normal
-    /// right-side unit stat sheet (suppressed for foragers in Game1's hover/'O' paths).</summary>
+    /// right-side unit stat sheet (suppressed for foragers in Game1's hover/'L' paths).</summary>
     private void DrawBellyTooltip(uint unitId, Simulation sim, GameData gameData,
         int screenW, int screenH)
     {

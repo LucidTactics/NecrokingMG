@@ -298,23 +298,23 @@ public class CorruptionSettings
 /// <summary>How the unit stat sheet (the "character sheet" UnitInfoPanel) is
 /// surfaced for non-player units, plus tuning knobs we expect to iterate on.
 /// <para>Two modes:</para>
-/// • <b>Press-to-inspect</b> (default): press 'O' over a unit to pin its sheet
-///   (optionally pausing). Press 'O' again to close.<br/>
+/// • <b>Press-to-inspect</b> (default): press 'L' over a unit to pin its sheet
+///   (optionally pausing). Press 'L' again to close.<br/>
 /// • <b>Auto-show on hover</b> (Factorio-style): the sheet follows the cursor —
 ///   hover any unit to see its stats, move off to dismiss. No click, no pause.
 /// </summary>
 public class TooltipsSettings
 {
     /// <summary>True = Factorio-style: hovering a unit auto-opens its stat sheet
-    /// (no pause). False = press 'O' to inspect the unit under the cursor.</summary>
+    /// (no pause). False = press 'L' to inspect the unit under the cursor.</summary>
     [JsonPropertyName("autoShowUnitStats")] public bool AutoShowUnitStats { get; set; }
 
     /// <summary>Cursor pick radius (world units) for selecting which unit the
-    /// hover / 'O' inspect targets. Larger = more forgiving, easier to grab a
+    /// hover / 'L' inspect targets. Larger = more forgiving, easier to grab a
     /// unit in a crowd; smaller = must be near-center.</summary>
     [JsonPropertyName("hoverPickRadius")] public float HoverPickRadius { get; set; } = 1.5f;
 
-    /// <summary>Only affects press-to-inspect mode: whether pressing 'O' to open
+    /// <summary>Only affects press-to-inspect mode: whether pressing 'L' to open
     /// a unit sheet also pauses the game. Auto-show-on-hover never pauses.</summary>
     [JsonPropertyName("pauseOnManualInspect")] public bool PauseOnManualInspect { get; set; } = true;
 

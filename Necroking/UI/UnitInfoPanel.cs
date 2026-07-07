@@ -11,7 +11,7 @@ namespace Necroking.UI;
 /// The unit/character sheet, on the auto-size UnitSheetDyn widget: equipment
 /// and attack rows are bound sequentially and collapse when absent (min one
 /// row per section), with zebra striping re-applied by visible index.
-/// 'U' = player necromancer (current form), 'O' = inspect under cursor.
+/// 'U' = player necromancer (current form), 'L' = inspect under cursor.
 /// (The original flat UnitTooltipWindow import was archived to defunct/ui once
 /// UnitSheetDyn superseded it — see todos/ui_best_practices_audit.md.)
 /// </summary>
@@ -51,7 +51,7 @@ public class UnitInfoPanel : IModalLayer
     /// swap-and-pop reindexing that a raw array index would not.</summary>
     public uint UnitId => _unitId;
     /// <summary>True when the panel is a cursor-driven auto-hover view (not pinned
-    /// via 'U'/'O'). Transient views are NOT pushed onto the popup stack, so they
+    /// via 'U'/'L'). Transient views are NOT pushed onto the popup stack, so they
     /// don't claim MouseOverUI — otherwise the hover logic that owns them could
     /// never re-pick a new unit or dismiss when the cursor leaves.</summary>
     public bool IsTransient { get; private set; }
@@ -65,7 +65,7 @@ public class UnitInfoPanel : IModalLayer
         _gameData = gameData;
     }
 
-    /// <summary>Pin a unit's sheet (manual 'U'/'O' inspect). Registered as a popup
+    /// <summary>Pin a unit's sheet (manual 'U'/'L' inspect). Registered as a popup
     /// so ESC/click routing and MouseOverUI behave like other panels.</summary>
     public void ShowForUnit(uint unitId)
     {

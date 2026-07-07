@@ -51,7 +51,7 @@ public sealed class GameClock
     public const float MaxUserTimeScale = 8f;
 
     /// <summary>Who is holding the game paused. Flags: several sources can hold a pause
-    /// at once and each releases only its own — e.g. the press-O inspect pause survives
+    /// at once and each releases only its own — e.g. the press-L inspect pause survives
     /// the player also opening and closing the pause menu... unless a "force resume"
     /// path calls <see cref="ClearAllPauses"/> (menu buttons do; that matches the old
     /// unconditional <c>_paused = false</c> writes).</summary>
@@ -61,7 +61,7 @@ public sealed class GameClock
         None = 0,
         /// <summary>Player-initiated: ESC pause menu, Space/P toggle, HUD pause button.</summary>
         User = 1,
-        /// <summary>Press-O unit inspect with the PauseOnManualInspect setting on;
+        /// <summary>Press-L unit inspect with the PauseOnManualInspect setting on;
         /// released when the unit info panel closes.</summary>
         Inspect = 2,
         /// <summary>Dev-server 'pause' command.</summary>

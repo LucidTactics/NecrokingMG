@@ -133,6 +133,8 @@ public class CraftingMenuUI : IModalLayer
     {
         _visible = false;
         _crafting = false;
+        _craftProgress = 0f;
+        _craftingIndex = -1;
         _selectedIndex = -1;
         Necroking.Game1.Popups.Pop(this);
     }

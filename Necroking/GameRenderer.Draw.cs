@@ -271,7 +271,7 @@ partial class GameRenderer
         if (showUI)
             _g._characterStatsUI.Draw(screenW, screenH, _g._sim, _g._gameData.Buffs, ref _g._spellBarState, _g._input, _g._gameData, _g._skillBookState);
 
-        // Unit info sheet (U = player character, O = inspect under cursor)
+        // Unit info sheet (U = player character, L = inspect under cursor)
         if (showUI)
             _g._unitInfoPanel.Draw(screenW, screenH, _g._sim);
 

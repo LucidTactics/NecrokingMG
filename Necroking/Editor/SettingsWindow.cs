@@ -641,7 +641,7 @@ public class SettingsWindow
 
         DrawSectionHeader("Unit Stat Sheet", x, ref y);
 
-        // Main toggle: hover-to-show vs press-O-to-inspect.
+        // Main toggle: hover-to-show vs press-L-to-inspect.
         bool autoShow = _ui.DrawCheckbox("Auto-show on hover (Factorio-style)", t.AutoShowUnitStats, x, y);
         if (autoShow != t.AutoShowUnitStats) { t.AutoShowUnitStats = autoShow; MarkDirty(); }
         y += rowH;
@@ -651,10 +651,10 @@ public class SettingsWindow
         if (MathF.Abs(pick - t.HoverPickRadius) > 0.0001f) { t.HoverPickRadius = pick; MarkDirty(); }
         y += rowH;
 
-        // Pause-on-inspect only matters in press-O mode (auto-show never pauses).
+        // Pause-on-inspect only matters in press-L mode (auto-show never pauses).
         if (!t.AutoShowUnitStats)
         {
-            bool pause = _ui.DrawCheckbox("Pause game when inspecting (O)", t.PauseOnManualInspect, x, y);
+            bool pause = _ui.DrawCheckbox("Pause game when inspecting (L)", t.PauseOnManualInspect, x, y);
             if (pause != t.PauseOnManualInspect) { t.PauseOnManualInspect = pause; MarkDirty(); }
             y += rowH;
         }
@@ -741,9 +741,9 @@ public class SettingsWindow
         }
         else
         {
-            _ui.DrawText("Press 'O' over a unit to pin its stat sheet.", new Vector2(x, y), EditorBase.TextDim);
+            _ui.DrawText("Press 'L' over a unit to pin its stat sheet.", new Vector2(x, y), EditorBase.TextDim);
             y += 16;
-            _ui.DrawText("Press 'O' again to close.", new Vector2(x, y), EditorBase.TextDim);
+            _ui.DrawText("Press 'L' again to close.", new Vector2(x, y), EditorBase.TextDim);
             y += 16;
         }
         _ui.DrawText("'U' always opens the necromancer's sheet.", new Vector2(x, y), EditorBase.TextDim);

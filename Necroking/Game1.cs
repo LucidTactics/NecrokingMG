@@ -3060,8 +3060,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _inventoryUI.Toggle(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
         }
 
-        // 'O' key toggles the job board (wOrk/jObs)
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.O) && _menuState == MenuState.None)
+        // 'O' key toggles the job board (wOrk/jObs). Shift+O is the skill-point
+        // cheat below — don't also flip the board on it.
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.O) && _menuState == MenuState.None
+            && !_input.IsKeyDown(Keys.LeftShift) && !_input.IsKeyDown(Keys.RightShift))
         {
             EnsureInventoryUIsInitialized();
             _jobBoardUI.Toggle(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
@@ -3108,13 +3110,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _depthFogToastTimer = 2.25f;   // flash the new state on screen
         }
 
-        // 'O' = inspect the unit under the cursor (press-to-inspect mode; may
-        // auto-pause while open, closing restores only the pause WE set).
+        // 'L' = inspect ("Look at") the unit under the cursor (press-to-inspect
+        // mode; may auto-pause while open, closing restores only the pause WE set).
         // Disabled when auto-show-on-hover is on — the hover logic below owns
         // the panel in that mode. Both modes share the configurable pick radius.
         var tipCfg = _gameData.Settings.Tooltips;
         if (!tipCfg.AutoShowUnitStats
-            && !anyTextInputActive && _input.WasKeyPressed(Keys.O) && _menuState == MenuState.None)
+            && !anyTextInputActive && _input.WasKeyPressed(Keys.L) && _menuState == MenuState.None)
         {
             EnsureInventoryUIsInitialized();
             if (_unitInfoPanel.IsVisible)
@@ -3570,7 +3572,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // to dismiss. Never pauses. The auto-shown panel is transient (not a
             // popup) so MouseOverUI stays clean — letting us re-pick and hide as the
             // cursor moves. We only ever touch the panel when it's our transient view
-            // (or nothing's shown), so a pinned 'U'/'O' sheet is left alone.
+            // (or nothing's shown), so a pinned 'U'/'L' sheet is left alone.
             if (_gameData.Settings.Tooltips.AutoShowUnitStats)
             {
                 EnsureInventoryUIsInitialized();
