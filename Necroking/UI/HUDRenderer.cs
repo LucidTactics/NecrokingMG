@@ -157,7 +157,10 @@ public partial class HUDRenderer
     /// <summary>Set the input state reference for hover detection in draw calls.</summary>
     public void SetInput(InputState input) => _input = input;
 
-    /// <summary>Draw the complete HUD.</summary>
+    /// <summary>Draw the HUD. <paramref name="drawTopRows"/> excludes the
+    /// top-right core-menu/editor-launcher rows — those are drawn by their own
+    /// router layers (HudTop band, ABOVE panels and blocking overlays), so
+    /// their draw position matches their input position.</summary>
     public void Draw(int screenW, int screenH, Simulation sim, GameData gameData,
         Inventory inventory, bool inventoryVisible,
         SpellBarState bar,
@@ -166,7 +169,7 @@ public partial class HUDRenderer
         Action<string, int, int> drawSpellCategoryIcon, int menuOpenMask = 0, bool paused = false,
         int hoveredCorpseIdx = -1, float[]? slotFlash = null,
         uint hoveredBellyUnitId = uint.MaxValue, int hoveredUnitIdx = -1, bool editorInspect = false,
-        int editorOpenMask = 0)
+        int editorOpenMask = 0, bool drawTopRows = true)
     {
         int necroIdx = FindNecromancer(sim);
 
@@ -196,8 +199,11 @@ public partial class HUDRenderer
         // Controls hint intentionally omitted — overlapped the FPS/zoom bottom-
         // left readout. Re-enable if we add a menu page for it.
         DrawTimeControls(screenW, screenH, timeScale, gameData, paused);
-        DrawMenuButtons(screenW, menuOpenMask, (int)_input.MousePos.X, (int)_input.MousePos.Y);
-        DrawEditorButtons(screenW, editorOpenMask, (int)_input.MousePos.X, (int)_input.MousePos.Y);
+        if (drawTopRows)
+        {
+            DrawMenuButtons(screenW, menuOpenMask, (int)_input.MousePos.X, (int)_input.MousePos.Y);
+            DrawEditorButtons(screenW, editorOpenMask, (int)_input.MousePos.X, (int)_input.MousePos.Y);
+        }
         DrawHordeCaps(screenW, sim, gameData);
         DrawCombatLog(screenW, screenH, sim, gameData);
     }
@@ -336,7 +342,7 @@ public partial class HUDRenderer
 
     /// <summary>Draw the editor-launcher row. <paramref name="editorOpenMask"/> has
     /// bit i set when editor i is the one currently open (highlighted).</summary>
-    private void DrawEditorButtons(int screenW, int editorOpenMask, int mx, int my)
+    internal void DrawEditorButtons(int screenW, int editorOpenMask, int mx, int my)
     {
         if (!LayoutEditorButtons(screenW)) return;
         for (int i = 0; i < EditorBtnCount; i++)

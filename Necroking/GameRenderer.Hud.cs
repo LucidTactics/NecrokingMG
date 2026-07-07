@@ -80,7 +80,7 @@ partial class GameRenderer
 
     /// <summary>Bottom-right stack of "Recipe Learned" / "Skill Unlocked" toasts.
     /// Each toast slides in (first 0.25s), holds, then fades out (last 0.6s).</summary>
-    private void DrawSkillLearnToasts(int sw, int sh)
+    internal void DrawSkillLearnToasts(int sw, int sh)
     {
         if (_g._skillLearnToasts.Count == 0 || _g._font == null) return;
         var f = _g._font!;
@@ -546,7 +546,7 @@ partial class GameRenderer
     /// First/foremost line is the death-fog density at that position. Add more
     /// lines here as more per-position data becomes worth surfacing. Drawn into
     /// the HUD's already-open SpriteBatch (no Begin/End of its own).</summary>
-    private void DrawWorldHoverInfo(int screenW, int screenH)
+    internal void DrawWorldHoverInfo(int screenW, int screenH)
     {
         if (!_g._gameData.Settings.Tooltips.ShowWorldHoverDebug) return;
         if (_g._smallFont == null) return;
@@ -605,7 +605,7 @@ partial class GameRenderer
         }
     }
 
-    private void DrawHUD(int screenW, int screenH)
+    internal void DrawHUD(int screenW, int screenH)
     {
         _g._hudRenderer.Draw(screenW, screenH, _g._sim, _g._gameData,
             _g._inventory, _g._inventoryUI.IsVisible,
@@ -614,8 +614,22 @@ partial class GameRenderer
             _g._timeScale, _g._hoveredObjectIdx, _g._envSystem,
             DrawSpellCategoryIcon, BuildMenuOpenMask(), _g._paused, _g._hoveredCorpseIdx,
             _g._slotFlash, _g._hoveredBellyUnitId,
-            _g._hoveredUnitIdx, _g._menuState == MenuState.MapEditor, BuildEditorOpenMask());
+            _g._hoveredUnitIdx, _g._menuState == MenuState.MapEditor, BuildEditorOpenMask(),
+            // Top-right button rows are drawn by their own HudTop-band router
+            // layers so they sit ABOVE panels/overlays, matching where they
+            // take input.
+            drawTopRows: false);
     }
+
+    /// <summary>Draw the core-menu button row at its z-position (HudTop band).
+    /// Pass a parked-off-screen cursor to suppress the hover highlight when the
+    /// row isn't the hover owner.</summary>
+    internal void DrawMenuButtonsRow(int screenW, int mx, int my)
+        => _g._hudRenderer.DrawMenuButtons(screenW, BuildMenuOpenMask(), mx, my);
+
+    /// <summary>Editor-launcher row, same contract as <see cref="DrawMenuButtonsRow"/>.</summary>
+    internal void DrawEditorButtonsRow(int screenW, int mx, int my)
+        => _g._hudRenderer.DrawEditorButtons(screenW, BuildEditorOpenMask(), mx, my);
 
     /// <summary>Bitmask of which editor is open, by HUDRenderer.Editor* index, for
     /// highlighting the editor-launcher row.</summary>
@@ -685,7 +699,7 @@ partial class GameRenderer
     /// the open HUD batch: DrawWidget draws into it, and UIShaders.DrawCircle End()s
     /// it, draws its own Immediate quad, then re-Begin()s it — so the batch MUST be
     /// open when this is called (DrawCircle throws on a closed batch).</summary>
-    private void DrawAggressionBar(int screenW, int screenH)
+    internal void DrawAggressionBar(int screenW, int screenH)
     {
         if (!GetAggressionBarLayout(screenW, screenH, out var bar, out var nodes)) return;
 
@@ -782,7 +796,7 @@ partial class GameRenderer
         DrawText(_g._smallFont, hint, new Vector2(tx + pad, cy), new Color(140, 130, 115));
     }
 
-    private void DrawPauseMenu(int screenW, int screenH)
+    internal void DrawPauseMenu(int screenW, int screenH)
     {
         if (_g._gameData.Settings.General.PauseDimBackground)
             _g.Scope.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
@@ -970,7 +984,7 @@ partial class GameRenderer
         y += h + gap;
     }
 
-    private void DrawGameOver(int screenW, int screenH)
+    internal void DrawGameOver(int screenW, int screenH)
     {
         _g.Scope.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 160));
         if (_g._largeFont != null)

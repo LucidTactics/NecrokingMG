@@ -59,6 +59,51 @@ public sealed class EditorHostLayer : UILayer
         else _g._editorUi?.ResetAllState();
         _g._menuState = MenuState.None;
     }
+
+    public override void Draw(in UICtx ctx)
+    {
+        var gt = ctx.GameTime;
+        switch (_g._menuState)
+        {
+            case MenuState.UnitEditor:
+                if (gt == null) break;
+                _g._unitEditor.Draw(ctx.ScreenW, ctx.ScreenH, gt);
+                // Close request from the editor's [X] button.
+                if (_g._unitEditor.WantsClose)
+                {
+                    _g._unitEditor.WantsClose = false;
+                    _g._editorUi.ResetAllState();
+                    _g._menuState = MenuState.None;
+                }
+                break;
+            case MenuState.SpellEditor:
+                if (gt == null) break;
+                _g._spellEditor.Draw(ctx.ScreenW, ctx.ScreenH, gt);
+                if (_g._spellEditor.WantsClose)
+                {
+                    _g._spellEditor.WantsClose = false;
+                    _g._editorUi.ResetAllState();
+                    _g._menuState = MenuState.None;
+                }
+                break;
+            case MenuState.MapEditor:
+                _g._mapEditor.Draw(ctx.ScreenW, ctx.ScreenH);
+                break;
+            case MenuState.UIEditor:
+                _g._uiEditor.Draw(ctx.ScreenW, ctx.ScreenH);
+                break;
+            case MenuState.ItemEditor:
+                if (gt == null) break;
+                _g._itemEditor.Draw(ctx.ScreenW, ctx.ScreenH, gt);
+                if (_g._itemEditor.WantsClose)
+                {
+                    _g._itemEditor.WantsClose = false;
+                    _g._editorUi.ResetAllState();
+                    _g._menuState = MenuState.None;
+                }
+                break;
+        }
+    }
 }
 
 /// <summary>
@@ -93,6 +138,32 @@ public sealed class MenuHostLayer : UILayer
             case MenuState.PauseMenu:
                 _g._menuState = MenuState.None;
                 _g._clock.ClearAllPauses();
+                break;
+        }
+    }
+
+    // The game-over overlay draws from this seat too (same screen position in
+    // the old DrawHudBlock order); it never takes router input — its only
+    // control is the R-restart key handled in Game1.Update.
+    public override bool VisibleForDraw => Visible || (_g._gameOver && _g.ShowUIForDraw);
+
+    public override void Draw(in UICtx ctx)
+    {
+        if (_g._gameOver && _g.ShowUIForDraw)
+        {
+            _g._gameRenderer.DrawGameOver(ctx.ScreenW, ctx.ScreenH);
+            return;
+        }
+        switch (_g._menuState)
+        {
+            case MenuState.PauseMenu:
+                _g._gameRenderer.DrawPauseMenu(ctx.ScreenW, ctx.ScreenH);
+                break;
+            case MenuState.Settings:
+                _g._settingsWindow.Draw(ctx.ScreenW, ctx.ScreenH);
+                break;
+            case MenuState.Multiplayer:
+                _g._multiplayerWindow.Draw(ctx.ScreenW, ctx.ScreenH);
                 break;
         }
     }

@@ -24,6 +24,7 @@ namespace Necroking.UI;
 public sealed class PanelLayer : UILayer
 {
     public delegate void PanelUpdate(InputState input, in UICtx ctx);
+    public delegate void PanelDraw(in UICtx ctx);
 
     private readonly UIRouter _router;
     private readonly IModalLayer _panel;
@@ -31,6 +32,8 @@ public sealed class PanelLayer : UILayer
     private readonly Func<bool> _visible;
     private readonly PanelUpdate? _update;
     private readonly Func<bool>? _dragging;
+    private PanelDraw? _draw;
+    private Func<bool>? _visibleForDraw;
 
     public PanelLayer(UIRouter router, IModalLayer panel, UIBand band, string id,
         Func<bool> visible, PanelUpdate? update = null, Func<bool>? dragging = null)
@@ -44,8 +47,20 @@ public sealed class PanelLayer : UILayer
         Band = band;
     }
 
+    /// <summary>Attach the layer's draw call (used by the router draw pass).
+    /// <paramref name="visibleForDraw"/> overrides draw-pass visibility when it
+    /// diverges from input visibility (e.g. the transient unit sheet draws but
+    /// takes no input; most panels' Draw also self-guards on IsVisible).</summary>
+    public PanelLayer WithDraw(PanelDraw draw, Func<bool>? visibleForDraw = null)
+    {
+        _draw = draw;
+        _visibleForDraw = visibleForDraw;
+        return this;
+    }
+
     public override string Id => _id;
     public override bool Visible => _visible();
+    public override bool VisibleForDraw => _visibleForDraw?.Invoke() ?? Visible;
     public override bool Blocking => _panel.IsBlocking;
     public override bool LightDismiss => _panel.LightDismiss;
     public override bool CloseOnOutsideClick => _panel.CloseOnOutsideClick;
@@ -82,6 +97,25 @@ public sealed class PanelLayer : UILayer
         if (maskPress) { input.LeftPressed = false; input.RightPressed = false; }
         if (maskPos) input.MousePos = new Vector2(-10000, -10000);
         _update(input, in ctx);
+        if (maskPress) { input.LeftPressed = lp; input.RightPressed = rp; }
+        if (maskPos) input.MousePos = pos;
+    }
+
+    /// <summary>Draw with the same masking contract as OnFrame — panels that
+    /// process input DURING Draw (character stats, unit sheet) get press edges
+    /// and hover position exactly as granted by the walk, so a covered panel
+    /// can neither hover-light nor act on a stolen click from its draw code.</summary>
+    public override void Draw(in UICtx ctx)
+    {
+        if (_draw == null) return;
+        var input = Game1.Instance._input;
+        bool maskPress = !InputGranted;
+        bool maskPos = HoverStolen;
+        bool lp = input.LeftPressed, rp = input.RightPressed;
+        var pos = input.MousePos;
+        if (maskPress) { input.LeftPressed = false; input.RightPressed = false; }
+        if (maskPos) input.MousePos = new Vector2(-10000, -10000);
+        _draw(in ctx);
         if (maskPress) { input.LeftPressed = lp; input.RightPressed = rp; }
         if (maskPos) input.MousePos = pos;
     }

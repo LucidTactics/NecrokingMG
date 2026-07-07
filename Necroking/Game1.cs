@@ -894,60 +894,93 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // within-band tiebreak (later = on top), mirroring the historical
         // DrawHudBlock order within the Panels band.
         _uiRouter.Register(new Necroking.UI.WorldInputLayer(this));
+        _uiRouter.Register(new Necroking.UI.HudChromeLayer(this)); // draw-only HUD chrome, bottom of the Hud band
         _uiRouter.Register(new Necroking.UI.SpellBarLayer(this));
         _uiRouter.Register(new Necroking.UI.TimeControlsLayer(this));
         _uiRouter.Register(new Necroking.UI.AggressionBarLayer(this));
 
         // In-game panels (Panels band). Ids keep the "popup.<Type>" convention
         // the hit registry has always used. Update delegates own each panel's
-        // per-frame input logic; drag providers get router mouse capture.
+        // per-frame input logic; drag providers get router mouse capture; the
+        // WithDraw delegate is the panel's slot in the unified draw pass (the
+        // ShowUIForDraw gate replaces DrawHudBlock's old inline showUI checks).
         _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _inventoryUI,
             Necroking.UI.UIBand.Panels, "popup.InventoryUI",
             () => _inventoryUI.IsVisible,
             (InputState inp, in Necroking.UI.UICtx c) => _inventoryUI.Update(inp),
-            () => _inventoryUI.IsDragging));
+            () => _inventoryUI.IsDragging)
+            .WithDraw((in Necroking.UI.UICtx c) => _inventoryUI.Draw(c.ScreenW, c.ScreenH),
+                () => ShowUIForDraw && _inventoryUI.IsVisible));
         _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _tableMenuUI,
             Necroking.UI.UIBand.Panels, "popup.TableCraftMenuUI",
             () => _tableMenuUI.IsVisible,
-            (InputState inp, in Necroking.UI.UICtx c) => _tableMenuUI.Update(inp)));
+            (InputState inp, in Necroking.UI.UICtx c) => _tableMenuUI.Update(inp))
+            .WithDraw((in Necroking.UI.UICtx c) => _tableMenuUI.Draw(),
+                () => ShowUIForDraw && _tableMenuUI.IsVisible));
         _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _graveRosterUI,
             Necroking.UI.UIBand.Panels, "popup.GraveRosterUI",
             () => _graveRosterUI.IsVisible,
-            (InputState inp, in Necroking.UI.UICtx c) => _graveRosterUI.Update(inp)));
+            (InputState inp, in Necroking.UI.UICtx c) => _graveRosterUI.Update(inp))
+            .WithDraw((in Necroking.UI.UICtx c) => _graveRosterUI.Draw(),
+                () => ShowUIForDraw && _graveRosterUI.IsVisible));
         _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _jobBoardUI,
             Necroking.UI.UIBand.Panels, "popup.JobBoardUI",
             () => _jobBoardUI.IsVisible,
             (InputState inp, in Necroking.UI.UICtx c) => _jobBoardUI.Update(inp),
-            () => _jobBoardUI.IsDragging));
+            () => _jobBoardUI.IsDragging)
+            .WithDraw((in Necroking.UI.UICtx c) => _jobBoardUI.Draw(),
+                () => ShowUIForDraw && _jobBoardUI.IsVisible));
         _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _characterStatsUI,
             Necroking.UI.UIBand.Panels, "popup.CharacterStatsUI",
-            () => _characterStatsUI.IsVisible)); // input-in-Draw panel: no Update
+            () => _characterStatsUI.IsVisible) // input-in-Draw panel: no Update, masked in Draw
+            .WithDraw((in Necroking.UI.UICtx c) => _characterStatsUI.Draw(c.ScreenW, c.ScreenH,
+                    _sim, _gameData.Buffs, ref _spellBarState, _input, _gameData, _skillBookState),
+                () => ShowUIForDraw && _characterStatsUI.IsVisible));
         _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _unitInfoPanel,
             Necroking.UI.UIBand.Panels, "popup.UnitInfoPanel",
             // Transient (auto-hover) views must not claim hits/ESC — only a
-            // pinned sheet is a real layer.
-            () => _unitInfoPanel.IsVisible && !_unitInfoPanel.IsTransient));
+            // pinned sheet is a real layer. Drawing includes the transient view.
+            () => _unitInfoPanel.IsVisible && !_unitInfoPanel.IsTransient)
+            .WithDraw((in Necroking.UI.UICtx c) => _unitInfoPanel.Draw(c.ScreenW, c.ScreenH, _sim),
+                () => ShowUIForDraw && _unitInfoPanel.IsVisible));
         _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _grimoireOverlay,
             Necroking.UI.UIBand.Panels, "popup.GrimoireOverlay",
             () => _grimoireOverlay.IsVisible,
-            (InputState inp, in Necroking.UI.UICtx c) => _grimoireOverlay.Update(inp, c.ScreenW, c.ScreenH)));
+            (InputState inp, in Necroking.UI.UICtx c) => _grimoireOverlay.Update(inp, c.ScreenW, c.ScreenH))
+            .WithDraw((in Necroking.UI.UICtx c) => _grimoireOverlay.Draw(c.ScreenW, c.ScreenH),
+                () => ShowUIForDraw && _grimoireOverlay.IsVisible));
         _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _buildingMenuUI,
             Necroking.UI.UIBand.Panels, "popup.BuildingMenuUI",
             () => _buildingMenuUI.IsVisible,
-            (InputState inp, in Necroking.UI.UICtx c) => _buildingMenuUI.Update(inp, c.ScreenW, c.ScreenH)));
+            (InputState inp, in Necroking.UI.UICtx c) => _buildingMenuUI.Update(inp, c.ScreenW, c.ScreenH))
+            .WithDraw((in Necroking.UI.UICtx c) =>
+            {
+                _buildingMenuUI.DrawMenu();
+                // Ghost preview for building placement rides with the menu.
+                if (_buildingMenuUI.IsPlacementActive)
+                {
+                    Vec2 mw = _camera.ScreenToWorld(_input.MousePos, c.ScreenW, c.ScreenH);
+                    var sp = _renderer.WorldToScreen(mw, 0f, _camera);
+                    _buildingMenuUI.DrawGhostPreview(_spriteBatch, _pixel, mw, sp, _camera, _renderer);
+                }
+            }, () => ShowUIForDraw && _buildingMenuUI.IsVisible));
         _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _craftingMenu,
             Necroking.UI.UIBand.Panels, "popup.CraftingMenuUI",
             () => _craftingMenu.IsVisible,
-            (InputState inp, in Necroking.UI.UICtx c) => _craftingMenu.Update(inp, c.ScreenW, c.ScreenH, _clock.VisualDt)));
+            (InputState inp, in Necroking.UI.UICtx c) => _craftingMenu.Update(inp, c.ScreenW, c.ScreenH, _clock.VisualDt))
+            .WithDraw((in Necroking.UI.UICtx c) => _craftingMenu.Draw(),
+                () => ShowUIForDraw && _craftingMenu.IsVisible));
 
         // Blocking full overlay (Overlay band), then the HUD rows that sit
         // ABOVE it (HudTop band) — the declarative form of "menu buttons work
-        // over the open skill book".
+        // over the open skill book", for clicks AND drawing alike.
         _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _skillBookOverlay,
             Necroking.UI.UIBand.Overlay, "popup.SkillBookOverlay",
             () => _skillBookOverlay.IsVisible,
             (InputState inp, in Necroking.UI.UICtx c) => _skillBookOverlay.Update(inp, c.ScreenW, c.ScreenH, c.TimeSec),
-            () => _skillBookOverlay.IsDragging));
+            () => _skillBookOverlay.IsDragging)
+            .WithDraw((in Necroking.UI.UICtx c) => _skillBookOverlay.Draw(c.ScreenW, c.ScreenH),
+                () => ShowUIForDraw && _skillBookOverlay.IsVisible));
         _uiRouter.Register(new Necroking.UI.CoreMenuButtonsLayer(this));
         _uiRouter.Register(new Necroking.UI.EditorLauncherLayer(this));
         _uiRouter.Register(new Necroking.UI.SkillToastLayer(this));
@@ -3392,7 +3425,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // HoverStolen), so a widget only hover-lights when a click would
         // actually reach it.
         _uiRouter.DispatchInput(_input,
-            new Necroking.UI.UICtx(screenW, screenH, gameTime.TotalGameTime.TotalSeconds));
+            new Necroking.UI.UICtx(screenW, screenH, gameTime.TotalGameTime.TotalSeconds, gameTime));
 
         // ESC fallback: nothing above wanted the key (no popup, panel, editor,
         // or menu consumed it) → open the pause menu.
@@ -4282,6 +4315,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal bool HudVisible => _gameWorldLoaded
         && (_menuState == MenuState.None || _menuState == MenuState.MapEditor)
         && (_activeScenario == null || _activeScenario.WantsUI);
+
+    /// <summary>The DrawHudBlock "showUI" gate: scenario wants UI and no no-UI
+    /// dev screenshot is in flight. Router layers use it as their draw gate.</summary>
+    internal bool ShowUIForDraw => (_activeScenario == null || _activeScenario.WantsUI) && !_devShotNoUi;
 
     /// <summary>A text-input field currently owns the keyboard (editor UI or
     /// UI-editor field) — hotkey-ish handlers must stand down.</summary>

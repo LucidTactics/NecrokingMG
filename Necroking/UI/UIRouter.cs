@@ -171,15 +171,16 @@ public sealed class UIRouter
         }
     }
 
-    /// <summary>Draw all visible layers bottom-up — the same list input walks
-    /// top-down. Used once the draw pass is unified onto the router.</summary>
+    /// <summary>Draw all visible layers bottom-up — the SAME list input walks
+    /// top-down, which is what makes "drawn on top ⇔ clicked first" structural
+    /// rather than a coincidence of call ordering.</summary>
     public void Draw(in UICtx ctx)
     {
         EnsureSorted();
         for (int i = 0; i < _layers.Count; i++)
         {
             var layer = _layers[i];
-            if (!layer.Visible) continue;
+            if (!layer.VisibleForDraw) continue;
             layer.Draw(in ctx);
         }
     }

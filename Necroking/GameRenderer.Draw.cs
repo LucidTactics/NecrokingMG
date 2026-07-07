@@ -243,118 +243,26 @@ partial class GameRenderer
         _g._spriteBatch.End();
     }
 
-    /// <summary>The HUD/UI block: hover info, HUD, panels, editors, perf readout.
-    /// Runs inside the Hud phase's open batch (EffectBatch.BeginHudPass state).
-    /// Body moved verbatim out of Draw() (step 0).</summary>
+    /// <summary>The HUD/UI block. Runs inside the Hud phase's open batch
+    /// (EffectBatch.BeginHudPass state). Everything layered — HUD chrome,
+    /// panels, overlays, button rows, toasts, menus, editors — draws through
+    /// <see cref="Necroking.UI.UIRouter.Draw"/>: ONE bottom-up walk of the same
+    /// z-ordered list input walks top-down, so draw order and click order can
+    /// never disagree. Only the non-layered bits (hover highlights under the
+    /// HUD, scenario hook, color picker, EndDrawFrame, debug readouts) remain
+    /// inline here.</summary>
     private void DrawHudBlock(int screenW, int screenH, GameTime gameTime)
     {
-        bool showUI = (_g._activeScenario == null || _g._activeScenario.WantsUI) && !_g._devShotNoUi;
+        bool showUI = _g.ShowUIForDraw;
         if (showUI)
             DrawHoverHighlights();
-        if (showUI)
-            DrawHUD(screenW, screenH);
-        if (showUI)
-            DrawWorldHoverInfo(screenW, screenH);
-        if (showUI)
-            DrawAggressionBar(screenW, screenH);
 
-        // Inventory UI (widget-based, drawn over HUD)
-        if (showUI)
-        {
-            _g._inventoryUI.Draw(screenW, screenH);
-            _g._tableMenuUI.Draw();
-            _g._graveRosterUI.Draw();
-            _g._jobBoardUI.Draw();
-        }
-
-        // Character stats panel (Tab)
-        if (showUI)
-            _g._characterStatsUI.Draw(screenW, screenH, _g._sim, _g._gameData.Buffs, ref _g._spellBarState, _g._input, _g._gameData, _g._skillBookState);
-
-        // Unit info sheet (U = player character, L = inspect under cursor)
-        if (showUI)
-            _g._unitInfoPanel.Draw(screenW, screenH, _g._sim);
-
-        // Spell grimoire (J)
-        if (showUI)
-            _g._grimoireOverlay.Draw(screenW, screenH);
-
-        // Skill book panel (K) — tabbed Potions/Necromancy/Magic/Metamorphosis trees.
-        if (showUI)
-            _g._skillBookOverlay.Draw(screenW, screenH);
-
-        // Bottom-right "Recipe Learned" toasts — drawn even when the panel is closed.
-        if (showUI)
-            DrawSkillLearnToasts(screenW, screenH);
+        _g._uiRouter.Draw(new Necroking.UI.UICtx(screenW, screenH, _g._clock.VisualTime, gameTime));
 
         // Scenario custom UI hook — for shader-test scenarios that draw raw
         // geometry without a real panel.
         if (_g._activeScenario?.CustomUIDraw != null)
             _g._activeScenario.CustomUIDraw(_g._spriteBatch, screenW, screenH);
-
-        // Building menu UI (widget-based)
-        if (showUI)
-        {
-            _g._buildingMenuUI.DrawMenu();
-            _g._craftingMenu.Draw();
-
-            // Ghost preview for building placement
-            if (_g._buildingMenuUI.IsPlacementActive)
-            {
-                Vec2 mw = _g._camera.ScreenToWorld(_g._input.MousePos, screenW, screenH);
-                var sp = _g._renderer.WorldToScreen(mw, 0f, _g._camera);
-                _g._buildingMenuUI.DrawGhostPreview(_g._spriteBatch, _g._pixel, mw, sp, _g._camera, _g._renderer);
-            }
-
-        }
-
-        if (_g._gameOver && showUI)
-            DrawGameOver(screenW, screenH);
-        else if (_g._menuState == MenuState.PauseMenu)
-            DrawPauseMenu(screenW, screenH);
-        else if (_g._menuState == MenuState.Settings)
-            _g._settingsWindow.Draw(screenW, screenH);
-        else if (_g._menuState == MenuState.Multiplayer)
-            _g._multiplayerWindow.Draw(screenW, screenH);
-        if (_g._menuState == MenuState.UnitEditor)
-        {
-            _g._unitEditor.Draw(screenW, screenH, gameTime);
-            // U23: Handle close request from the editor's [X] button
-            if (_g._unitEditor.WantsClose)
-            {
-                _g._unitEditor.WantsClose = false;
-                _g._editorUi.ResetAllState();
-                _g._menuState = MenuState.None;
-            }
-        }
-        else if (_g._menuState == MenuState.SpellEditor)
-        {
-            _g._spellEditor.Draw(screenW, screenH, gameTime);
-            if (_g._spellEditor.WantsClose)
-            {
-                _g._spellEditor.WantsClose = false;
-                _g._editorUi.ResetAllState();
-                _g._menuState = MenuState.None;
-            }
-        }
-        else if (_g._menuState == MenuState.MapEditor)
-        {
-            _g._mapEditor.Draw(screenW, screenH);
-        }
-        else if (_g._menuState == MenuState.UIEditor)
-        {
-            _g._uiEditor.Draw(screenW, screenH);
-        }
-        else if (_g._menuState == MenuState.ItemEditor)
-        {
-            _g._itemEditor.Draw(screenW, screenH, gameTime);
-            if (_g._itemEditor.WantsClose)
-            {
-                _g._itemEditor.WantsClose = false;
-                _g._editorUi.ResetAllState();
-                _g._menuState = MenuState.None;
-            }
-        }
 
         // Draw color picker popup overlay (must be after all editor drawing, on top)
         if (_g._menuState == MenuState.UnitEditor || _g._menuState == MenuState.SpellEditor)

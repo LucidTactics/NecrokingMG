@@ -33,12 +33,17 @@ public readonly struct UICtx
     public readonly int ScreenW;
     public readonly int ScreenH;
     public readonly double TimeSec;
+    /// <summary>Frame GameTime — populated for the draw pass (editor Draw calls
+    /// need it); may be null on input-only or hit-rect dispatches.</summary>
+    public readonly Microsoft.Xna.Framework.GameTime? GameTime;
 
-    public UICtx(int screenW, int screenH, double timeSec)
+    public UICtx(int screenW, int screenH, double timeSec,
+        Microsoft.Xna.Framework.GameTime? gameTime = null)
     {
         ScreenW = screenW;
         ScreenH = screenH;
         TimeSec = timeSec;
+        GameTime = gameTime;
     }
 }
 
@@ -75,6 +80,11 @@ public abstract class UILayer
     /// <summary>Live visibility — forwards to the wrapped widget's existing
     /// IsVisible / menu-state check. Invisible layers are skipped entirely.</summary>
     public abstract bool Visible { get; }
+
+    /// <summary>Visibility for the DRAW pass. Defaults to <see cref="Visible"/>;
+    /// override when drawing and input diverge (draw-only chrome that takes no
+    /// input, or the transient unit sheet that draws without claiming hits).</summary>
+    public virtual bool VisibleForDraw => Visible;
 
     /// <summary>Stamped by the router each dispatch: true when input reached
     /// this layer un-consumed (no higher layer claimed the mouse). Layers that

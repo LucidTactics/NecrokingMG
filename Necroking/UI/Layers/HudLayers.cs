@@ -54,6 +54,37 @@ public sealed class WorldInputLayer : UILayer
     }
 }
 
+/// <summary>Draw-only seat for the persistent HUD chrome (status bars, spell
+/// bar, time controls, cursor tooltips, horde caps, combat log, world hover
+/// info) at the bottom of the Hud band. Takes no input — the interactive HUD
+/// widgets have their own layers. While a layer above the Hud band owns the
+/// cursor, the shared cursor position is parked off-screen for the duration of
+/// the draw so HUD-internal hover effects (spell-slot tooltip, hover-anchored
+/// tooltips) can't light up under a covering panel.</summary>
+public sealed class HudChromeLayer : UILayer
+{
+    private readonly Game1 _g;
+    public HudChromeLayer(Game1 g) { _g = g; Band = UIBand.Hud; }
+
+    public override string Id => "hud.chrome";
+    public override bool Visible => false;                    // draw-only
+    public override bool VisibleForDraw => _g.ShowUIForDraw;  // same gate the old inline DrawHUD call had
+    public override bool ContainsMouse(int mx, int my, in UICtx ctx) => false;
+    public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { }
+
+    public override void Draw(in UICtx ctx)
+    {
+        var hover = _g._uiRouter.HoverLayer;
+        bool hudOwnsCursor = hover == null || hover.Band <= UIBand.Hud;
+        var input = _g._input;
+        var pos = input.MousePos;
+        if (!hudOwnsCursor) input.MousePos = new Microsoft.Xna.Framework.Vector2(-10000, -10000);
+        _g._gameRenderer.DrawHUD(ctx.ScreenW, ctx.ScreenH);
+        _g._gameRenderer.DrawWorldHoverInfo(ctx.ScreenW, ctx.ScreenH);
+        if (!hudOwnsCursor) input.MousePos = pos;
+    }
+}
+
 /// <summary>Spell-bar slots: clicking a slot opens the grimoire in assign mode
 /// for it. (Casting itself is keyboard-only — see SpellBarBindings.)</summary>
 public sealed class SpellBarLayer : UILayer
@@ -144,6 +175,20 @@ public sealed class AggressionBarLayer : UILayer
             return;
         _g._sim.Horde.AggressionLevel = GameRenderer.NearestAggroNode(nodes, (int)input.MousePos.X);
     }
+
+    public override bool VisibleForDraw => _g.ShowUIForDraw; // DrawAggressionBar self-gates on MenuState
+
+    public override void Draw(in UICtx ctx)
+    {
+        // Hover tooltip inside DrawAggressionBar reads the shared cursor — park
+        // it off-screen unless this layer owns the hover, so the tooltip can't
+        // appear under a covering panel.
+        var input = _g._input;
+        var pos = input.MousePos;
+        if (!IsHovered) input.MousePos = new Microsoft.Xna.Framework.Vector2(-10000, -10000);
+        _g._gameRenderer.DrawAggressionBar(ctx.ScreenW, ctx.ScreenH);
+        if (!IsHovered) input.MousePos = pos;
+    }
 }
 
 /// <summary>Top-right core-menu button row (inventory/crafting/building/
@@ -170,6 +215,17 @@ public sealed class CoreMenuButtonsLayer : UILayer
             (int)input.MousePos.X, (int)input.MousePos.Y);
         if (hit >= 0) _g._gameRenderer.ToggleCoreMenu(hit, ctx.ScreenW, ctx.ScreenH);
     }
+
+    public override bool VisibleForDraw => _g.ShowUIForDraw;
+
+    public override void Draw(in UICtx ctx)
+    {
+        // Hover highlight only when this row owns the cursor — a button never
+        // lights up when a click would land in a layer covering it.
+        int mx = IsHovered ? (int)_g._input.MousePos.X : -10000;
+        int my = IsHovered ? (int)_g._input.MousePos.Y : -10000;
+        _g._gameRenderer.DrawMenuButtonsRow(ctx.ScreenW, mx, my);
+    }
 }
 
 /// <summary>Top-right editor-launcher row — the click mirror of F9-F12.</summary>
@@ -191,6 +247,15 @@ public sealed class EditorLauncherLayer : UILayer
         int hit = _g._hudRenderer.HitTestEditorButtons(ctx.ScreenW,
             (int)input.MousePos.X, (int)input.MousePos.Y);
         if (hit >= 0) _g.ToggleEditorWindow(hit);
+    }
+
+    public override bool VisibleForDraw => _g.ShowUIForDraw;
+
+    public override void Draw(in UICtx ctx)
+    {
+        int mx = IsHovered ? (int)_g._input.MousePos.X : -10000;
+        int my = IsHovered ? (int)_g._input.MousePos.Y : -10000;
+        _g._gameRenderer.DrawEditorButtonsRow(ctx.ScreenW, mx, my);
     }
 }
 
@@ -217,4 +282,9 @@ public sealed class SkillToastLayer : UILayer
             (int)input.MousePos.X, (int)input.MousePos.Y);
         if (idx >= 0) _g._gameRenderer.ActivateSkillToast(idx);
     }
+
+    public override bool VisibleForDraw => _g.ShowUIForDraw; // DrawSkillLearnToasts self-guards on count
+
+    public override void Draw(in UICtx ctx)
+        => _g._gameRenderer.DrawSkillLearnToasts(ctx.ScreenW, ctx.ScreenH);
 }
