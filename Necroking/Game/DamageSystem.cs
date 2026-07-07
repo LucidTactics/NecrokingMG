@@ -158,12 +158,7 @@ public static class DamageSystem
                 // unconditionally so AI flee/retarget reactions still fire.
                 ApplyHitReactAnim(units, targetIdx);
                 if (units[targetIdx].Stats.HP <= 0)
-                {
-                    units[targetIdx].Stats.HP = 0;
-                    units[targetIdx].Alive = false;
-                    Render.AnimResolver.SetOverride(units[targetIdx], Render.AnimRequest.Forced(Render.AnimState.Death));
-                    MarkDeathFromProne(units, targetIdx);
-                }
+                    Kill(units, targetIdx);
                 break;
 
             case DamageType.Poison:
@@ -185,22 +180,7 @@ public static class DamageSystem
         }
 
         // Set attacker for AI aggro/flee
-        if (attackerIdx >= 0 && attackerIdx < units.Count)
-        {
-            units[targetIdx].LastAttackerID = units[attackerIdx].Id;
-
-            if (units[targetIdx].EngagedTarget.IsNone
-                && units[targetIdx].Archetype != AI.ArchetypeRegistry.DeerHerd
-                && units[targetIdx].AI != AIBehavior.PlayerControlled)
-            {
-                // Auto-engage the victim onto its attacker so the melee queue runs.
-                // DeerHerd prey is exempt (was AIBehavior.FleeWhenHit): the handler
-                // owns its flee/fight-back reaction and a stamped EngagedTarget
-                // would drag a fleeing deer into the melee queue.
-                units[targetIdx].EngagedTarget = CombatTarget.Unit(units[attackerIdx].Id);
-                units[targetIdx].Target = units[targetIdx].EngagedTarget;
-            }
-        }
+        StampAttacker(units, targetIdx, attackerIdx);
 
         // Visual damage number — physical and fatigue both surface a number (fatigue
         // shows in blue so the player can tell stamina drain from HP loss). Poison
@@ -229,28 +209,51 @@ public static class DamageSystem
 
         units[targetIdx].Stats.HP -= netDamage;
 
-        if (attackerIdx >= 0 && attackerIdx < units.Count)
-        {
-            units[targetIdx].LastAttackerID = units[attackerIdx].Id;
-
-            if (units[targetIdx].EngagedTarget.IsNone
-                && units[targetIdx].Archetype != AI.ArchetypeRegistry.DeerHerd
-                && units[targetIdx].AI != AIBehavior.PlayerControlled)
-            {
-                // Same DeerHerd prey exemption as Apply — see comment there.
-                units[targetIdx].EngagedTarget = CombatTarget.Unit(units[attackerIdx].Id);
-                units[targetIdx].Target = units[targetIdx].EngagedTarget;
-            }
-        }
+        StampAttacker(units, targetIdx, attackerIdx);
 
         damageEvents.Add(DamageEvent.Create(units[targetIdx].RenderPos, netDamage));
 
         if (units[targetIdx].Stats.HP <= 0)
+            Kill(units, targetIdx);
+    }
+
+    /// <summary>
+    /// Finalize a unit's death: zero HP, clear Alive, force the Death anim, and
+    /// snap-to-final-frame if the unit dies prone (MarkDeathFromProne). The ONLY
+    /// sanctioned way to flip Alive=false — corpse creation, kill tallies, and
+    /// attribution stay centralized in Simulation.RemoveDeadUnits, which keys off
+    /// Alive == false + LastAttackerID.
+    /// </summary>
+    public static void Kill(UnitArrays units, int idx)
+    {
+        if (idx < 0 || idx >= units.Count) return;
+        units[idx].Stats.HP = 0;
+        units[idx].Alive = false;
+        Render.AnimResolver.SetOverride(units[idx], Render.AnimRequest.Forced(Render.AnimState.Death));
+        MarkDeathFromProne(units, idx);
+    }
+
+    /// <summary>
+    /// Stamp attribution (LastAttackerID) and auto-engage the victim onto its
+    /// attacker so the melee queue runs. Shared tail of Apply and ApplyDirect.
+    /// DeerHerd prey is exempt from auto-engage (was AIBehavior.FleeWhenHit): the
+    /// handler owns its flee/fight-back reaction and a stamped EngagedTarget would
+    /// drag a fleeing deer into the melee queue. Deliberately does NOT flinch —
+    /// Apply's Physical branch flinches via ApplyHitReactAnim; ApplyDirect's melee
+    /// callers flinch themselves.
+    /// </summary>
+    private static void StampAttacker(UnitArrays units, int targetIdx, int attackerIdx)
+    {
+        if (attackerIdx < 0 || attackerIdx >= units.Count) return;
+
+        units[targetIdx].LastAttackerID = units[attackerIdx].Id;
+
+        if (units[targetIdx].EngagedTarget.IsNone
+            && units[targetIdx].Archetype != AI.ArchetypeRegistry.DeerHerd
+            && units[targetIdx].AI != AIBehavior.PlayerControlled)
         {
-            units[targetIdx].Alive = false;
-            units[targetIdx].Stats.HP = 0;
-            Render.AnimResolver.SetOverride(units[targetIdx], Render.AnimRequest.Forced(Render.AnimState.Death));
-            MarkDeathFromProne(units, targetIdx);
+            units[targetIdx].EngagedTarget = CombatTarget.Unit(units[attackerIdx].Id);
+            units[targetIdx].Target = units[targetIdx].EngagedTarget;
         }
     }
 

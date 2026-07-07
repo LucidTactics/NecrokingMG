@@ -341,11 +341,10 @@ public static class PotionSystem
                     {
                         units[i].Stats.HP -= dmg;
                         damageEvents.Add(DamageEvent.Create(units[i].RenderPos, dmg, isPoison: true));
+                        // Death finalization through the one sanctioned path (plays
+                        // the Death anim + prone-snap, which the old inline block missed).
                         if (units[i].Stats.HP <= 0)
-                        {
-                            units[i].Stats.HP = 0;
-                            units[i].Alive = false;
-                        }
+                            DamageSystem.Kill(units, i);
                     }
 
                     if (units[i].PoisonStacks > 0)

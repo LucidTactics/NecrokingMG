@@ -2969,10 +2969,10 @@ public class Simulation
         switch (loc)
         {
             case HitLocation.Head:
-                // Decapitation — lethal.
-                _units[defenderIdx].Stats.HP = 0;
-                _units[defenderIdx].Alive = false;
-                Render.AnimResolver.SetOverride(_units[defenderIdx], Render.AnimRequest.Forced(Render.AnimState.Death));
+                // Decapitation — lethal. Kill handles HP=0/Alive/Death anim +
+                // prone-snap (a knocked-down unit is easier to hit, so prone
+                // decapitation is a live case).
+                DamageSystem.Kill(_units, defenderIdx);
                 DebugLog.Log("combat", $"[Decapitate] unit#{defenderIdx} ({_units[defenderIdx].UnitDefID}) beheaded by " +
                     $"unit#{attackerIdx} ({_units[attackerIdx].UnitDefID}) — netDmg={netDmg} >= {threshold}");
                 break;

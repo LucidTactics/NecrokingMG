@@ -236,7 +236,9 @@ public class TriggerSystem
                             if (kill.MaxKills > 0 && killed >= kill.MaxKills) break;
                             if (region.ContainsPoint(sim.Units[j].Position))
                             {
-                                sim.UnitsMut[j].Alive = false;
+                                // Scripted kill through the one sanctioned death path
+                                // (HP=0 + Death anim, which the old raw Alive=false missed).
+                                DamageSystem.Kill(sim.UnitsMut, j);
                                 killed++;
                             }
                         }
