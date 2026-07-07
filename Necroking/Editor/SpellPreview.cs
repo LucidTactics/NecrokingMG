@@ -19,10 +19,11 @@ public class SpellPreview
     private int _previewHeight = 250;
     private const float ReplayDelay = 1.5f;
     private const float MaxProjectileAge = 10.0f;
-    private const float ProjGravity = 13.89f;
-    private const float DefaultSpeed = 28.29f;
+    // Physics constants are the game's single source of truth — reference the shared
+    // ProjectileManager values so a retune can't leave the editor preview lying.
+    private const float ProjGravity = ProjectileManager.Gravity;
+    private const float DefaultSpeed = ProjectileManager.MagicSpeed;
     private const float PI = MathF.PI;
-    private const float Deg2Rad = PI / 180.0f;
 
     // Scene layout (world units)
     private const float CasterX = -3.0f;
@@ -980,26 +981,29 @@ public class SpellPreview
 
         switch (spell.Trajectory)
         {
+            // Trajectory theta comes from the shared ProjectileManager solver; the
+            // velocity split stays local because the preview uses XNA Vector2 while the
+            // shared BallisticVelocity works in Vec2.
             case "Lob":
             {
-                float sinTwoTheta = dist * ProjGravity / (speed * speed);
-                sinTwoTheta = Math.Min(sinTwoTheta, 1f);
-                float theta = 0.5f * MathF.Asin(sinTwoTheta);
+                float theta = ProjectileManager.SolveLobTheta(dist, speed);
                 p.Velocity = dir * speed * MathF.Cos(theta);
                 p.VelocityZ = speed * MathF.Sin(theta);
                 break;
             }
             case "DirectFire":
             {
-                float theta = 5f * Deg2Rad;
+                float theta = ProjectileManager.DirectFireTheta;
                 p.Velocity = dir * speed * MathF.Cos(theta);
                 p.VelocityZ = speed * MathF.Sin(theta);
                 break;
             }
             case "Homing":
             {
-                float theta = 5f * Deg2Rad;
+                float theta = ProjectileManager.DirectFireTheta;
                 p.Velocity = dir * speed * MathF.Cos(theta);
+                // preview uses half lob height for framing; game uses full sin(theta)
+                // — intent undecided, see consolidation review C13
                 p.VelocityZ = speed * MathF.Sin(theta) * 0.5f;
                 p.TargetPos = new Vector2(TargetX, 0);
                 p.HomingStrength = 5f;
@@ -1007,7 +1011,7 @@ public class SpellPreview
             }
             case "Swirly":
             {
-                float theta = 5f * Deg2Rad;
+                float theta = ProjectileManager.DirectFireTheta;
                 p.Velocity = dir * speed * MathF.Cos(theta);
                 p.VelocityZ = speed * MathF.Sin(theta);
                 p.SwirlFreq = 3f + RandUnit() * 5f;
@@ -1017,8 +1021,10 @@ public class SpellPreview
             }
             case "HomingSwirly":
             {
-                float theta = 5f * Deg2Rad;
+                float theta = ProjectileManager.DirectFireTheta;
                 p.Velocity = dir * speed * MathF.Cos(theta);
+                // preview uses half lob height for framing; game uses full sin(theta)
+                // — intent undecided, see consolidation review C13
                 p.VelocityZ = speed * MathF.Sin(theta) * 0.5f;
                 p.TargetPos = new Vector2(TargetX, 0);
                 p.HomingStrength = 5f;
