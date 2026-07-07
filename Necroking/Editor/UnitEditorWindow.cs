@@ -444,7 +444,7 @@ public class UnitEditorWindow
                     _gameData.Units.AddAfter(newDef, allIdsPaste[_selectedIdx]);
                 else
                     _gameData.Units.Add(newDef);
-                _selectedIdx = IndexOf(_gameData.Units.GetIDs(), newId);
+                _selectedIdx = EditorBase.IndexOf(_gameData.Units.GetIDs(), newId);
                 _unsavedChanges = true;
                 SyncPreviewToSelected();
                 SetStatus("Pasted: " + newId);
@@ -689,7 +689,7 @@ public class UnitEditorWindow
         if (clicked >= 0 && clicked < _filteredIds.Count)
         {
             string clickedId = _filteredIds[clicked];
-            _selectedIdx = IndexOf(allIds, clickedId);
+            _selectedIdx = EditorBase.IndexOf(allIds, clickedId);
             _propScrollOffset = 0;
             SyncPreviewToSelected();
         }
@@ -737,7 +737,7 @@ public class UnitEditorWindow
                 _gameData.Units.AddAfter(newDef, allIds[_selectedIdx]);
             else
                 _gameData.Units.Add(newDef);
-            _selectedIdx = IndexOf(_gameData.Units.GetIDs(), newId);
+            _selectedIdx = EditorBase.IndexOf(_gameData.Units.GetIDs(), newId);
             _unsavedChanges = true;
             SyncPreviewToSelected();
             SetStatus("Added: " + newId);
@@ -760,7 +760,7 @@ public class UnitEditorWindow
                     newDef.DisplayName = srcDef.DisplayName + " (Copy)";
                     newDef.UnitType = "Dynamic"; // RU28: copied units are always Dynamic
                     _gameData.Units.AddAfter(newDef, srcDef.Id);
-                    _selectedIdx = IndexOf(_gameData.Units.GetIDs(), newId);
+                    _selectedIdx = EditorBase.IndexOf(_gameData.Units.GetIDs(), newId);
                     _unsavedChanges = true;
                     SyncPreviewToSelected();
                     SetStatus("Duplicated: " + newId);
@@ -2633,7 +2633,7 @@ public class UnitEditorWindow
             string newId = "group_" + DateTime.Now.ToString("HHmmss");
             var newDef = new UnitGroupDef { Id = newId, DisplayName = "New Group" };
             _gameData.UnitGroups.Add(newDef);
-            _groupSelectedIdx = IndexOf(_gameData.UnitGroups.GetIDs(), newId);
+            _groupSelectedIdx = EditorBase.IndexOf(_gameData.UnitGroups.GetIDs(), newId);
             _unsavedChanges = true;
             SetStatus("Added group: " + newId);
         }
@@ -2660,7 +2660,7 @@ public class UnitEditorWindow
                     foreach (var entry in srcGroup.Entries)
                         newDef.Entries.Add(new UnitGroupEntry { UnitDefID = entry.UnitDefID, Weight = entry.Weight });
                     _gameData.UnitGroups.AddAfter(newDef, srcGroup.Id);
-                    _groupSelectedIdx = IndexOf(_gameData.UnitGroups.GetIDs(), newId);
+                    _groupSelectedIdx = EditorBase.IndexOf(_gameData.UnitGroups.GetIDs(), newId);
                     _unsavedChanges = true;
                     SetStatus("Copied group: " + newId);
                 }
@@ -3379,10 +3379,4 @@ public class UnitEditorWindow
     private UnitDef CloneUnit(UnitDef src, string newId)
         => _gameData.Units.CloneDef(src, newId) ?? new UnitDef { Id = newId, DisplayName = src.DisplayName };
 
-    private static int IndexOf(IReadOnlyList<string> list, string value)
-    {
-        for (int i = 0; i < list.Count; i++)
-            if (list[i] == value) return i;
-        return -1;
-    }
 }

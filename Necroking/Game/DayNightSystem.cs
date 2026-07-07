@@ -1,4 +1,5 @@
 using System;
+using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
 
@@ -98,18 +99,18 @@ public class DayNightSystem
         if (src != null && t < 1f)
         {
             // Lerp color grading fields into runtime effects
-            fx.Brightness = Lerp(src.Brightness, dst.Brightness, t);
-            fx.Contrast = Lerp(src.Contrast, dst.Contrast, t);
-            fx.Saturation = Lerp(src.Saturation, dst.Saturation, t);
-            fx.TintR = Lerp(src.TintR, dst.TintR, t);
-            fx.TintG = Lerp(src.TintG, dst.TintG, t);
-            fx.TintB = Lerp(src.TintB, dst.TintB, t);
-            fx.TintStrength = Lerp(src.TintStrength, dst.TintStrength, t);
-            fx.AmbientR = Lerp(src.AmbientR, dst.AmbientR, t);
-            fx.AmbientG = Lerp(src.AmbientG, dst.AmbientG, t);
-            fx.AmbientB = Lerp(src.AmbientB, dst.AmbientB, t);
-            fx.VignetteStrength = Lerp(src.VignetteStrength, dst.VignetteStrength, t);
-            fx.VignetteRadius = Lerp(src.VignetteRadius, dst.VignetteRadius, t);
+            fx.Brightness = MathUtil.Lerp(src.Brightness, dst.Brightness, t);
+            fx.Contrast = MathUtil.Lerp(src.Contrast, dst.Contrast, t);
+            fx.Saturation = MathUtil.Lerp(src.Saturation, dst.Saturation, t);
+            fx.TintR = MathUtil.Lerp(src.TintR, dst.TintR, t);
+            fx.TintG = MathUtil.Lerp(src.TintG, dst.TintG, t);
+            fx.TintB = MathUtil.Lerp(src.TintB, dst.TintB, t);
+            fx.TintStrength = MathUtil.Lerp(src.TintStrength, dst.TintStrength, t);
+            fx.AmbientR = MathUtil.Lerp(src.AmbientR, dst.AmbientR, t);
+            fx.AmbientG = MathUtil.Lerp(src.AmbientG, dst.AmbientG, t);
+            fx.AmbientB = MathUtil.Lerp(src.AmbientB, dst.AmbientB, t);
+            fx.VignetteStrength = MathUtil.Lerp(src.VignetteStrength, dst.VignetteStrength, t);
+            fx.VignetteRadius = MathUtil.Lerp(src.VignetteRadius, dst.VignetteRadius, t);
         }
         else
         {
@@ -212,6 +213,4 @@ public class DayNightSystem
             _ => DayNightPhase.Night
         };
     }
-
-    private static float Lerp(float a, float b, float t) => a + (b - a) * t;
 }

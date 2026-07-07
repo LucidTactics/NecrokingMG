@@ -197,7 +197,7 @@ public class ItemEditorWindow
                 _gameData.Items.AddAfter(newDef, allIds[_selectedIdx]);
             else
                 _gameData.Items.Add(newDef);
-            _selectedIdx = IndexOf(_gameData.Items.GetIDs(), newId);
+            _selectedIdx = EditorBase.IndexOf(_gameData.Items.GetIDs(), newId);
             MarkDirty();
             SetStatus("Pasted: " + newId);
         }
@@ -305,7 +305,7 @@ public class ItemEditorWindow
         {
             string clickedId = _filteredIds[clicked];
             var allIds = _gameData.Items.GetIDs();
-            _selectedIdx = IndexOf(allIds, clickedId);
+            _selectedIdx = EditorBase.IndexOf(allIds, clickedId);
             _detailScroll = 0;
         }
 
@@ -322,7 +322,7 @@ public class ItemEditorWindow
                 _gameData.Items.AddAfter(newDef, allIds[_selectedIdx]);
             else
                 _gameData.Items.Add(newDef);
-            _selectedIdx = IndexOf(_gameData.Items.GetIDs(), newId);
+            _selectedIdx = EditorBase.IndexOf(_gameData.Items.GetIDs(), newId);
             MarkDirty();
             SetStatus("Added: " + newId);
         }
@@ -358,7 +358,7 @@ public class ItemEditorWindow
                             _gameData.Potions.Add(potClone);
                         }
                     }
-                    _selectedIdx = IndexOf(_gameData.Items.GetIDs(), newId);
+                    _selectedIdx = EditorBase.IndexOf(_gameData.Items.GetIDs(), newId);
                     MarkDirty();
                     SetStatus("Copied: " + newId);
                 }
@@ -604,12 +604,5 @@ public class ItemEditorWindow
             if (pw > 0)
                 _ui.DrawRect(new Rectangle(px, cy + dy, pw, 1), color);
         }
-    }
-
-    private static int IndexOf(IReadOnlyList<string> list, string value)
-    {
-        for (int i = 0; i < list.Count; i++)
-            if (list[i] == value) return i;
-        return -1;
     }
 }

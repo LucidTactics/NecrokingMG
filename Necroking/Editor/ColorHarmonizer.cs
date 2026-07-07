@@ -41,8 +41,6 @@ public class ColorHarmonizer
 
     // === HSV Color Space Helpers ===
 
-    private static float Lerp(float a, float b, float t) => a + (b - a) * t;
-
     private static float LerpHue(float from, float to, float t)
     {
         float diff = to - from;
@@ -61,8 +59,8 @@ public class ColorHarmonizer
         var (targH, targS, targV) = ColorPickerPopup.RgbToHsv(target.R, target.G, target.B);
 
         float newH = LerpHue(origH, targH, hStr);
-        float newS = Lerp(origS, targS, sStr);
-        float newV = Lerp(origV, targV, vStr);
+        float newS = MathUtil.Lerp(origS, targS, sStr);
+        float newV = MathUtil.Lerp(origV, targV, vStr);
 
         var (r, g, b) = ColorPickerPopup.HsvToRgb(newH, newS, newV);
         return new Color(r, g, b, original.A);
@@ -158,8 +156,8 @@ public class ColorHarmonizer
         var (targH, targC, targLum) = LabToHcl(targL, targA, targB);
 
         float newH = LerpHue(origH, targH, hStr);
-        float newC = Lerp(origC, targC, cStr);
-        float newL = Lerp(origLum, targLum, lStr);
+        float newC = MathUtil.Lerp(origC, targC, cStr);
+        float newL = MathUtil.Lerp(origLum, targLum, lStr);
 
         var (labL, labA, labB) = HclToLab(newH, newC, newL);
         var (r, g, b) = LabToRgb(labL, labA, labB);

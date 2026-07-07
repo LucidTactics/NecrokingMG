@@ -68,6 +68,21 @@ public static class TextureUtil
         return (pixels, w, h);
     }
 
+    /// <summary>Premultiply one straight-alpha RGBA pixel: RGB *= A/255. Single source
+    /// of truth for the premultiply math shared by the Stb decode paths and
+    /// <see cref="PremultiplyAlpha"/>.</summary>
+    private static Color PremultiplyPixel(byte r, byte g, byte b, byte a)
+    {
+        if (a < 255)
+        {
+            float af = a / 255f;
+            r = (byte)(r * af);
+            g = (byte)(g * af);
+            b = (byte)(b * af);
+        }
+        return new Color(r, g, b, a);
+    }
+
     /// <summary>Managed PNG decode via StbImageSharp. Slower fallback path.</summary>
     public static (Color[] pixels, int width, int height) DecodePngPremultipliedStb(byte[] pngBytes)
     {
@@ -78,15 +93,7 @@ public static class TextureUtil
         for (int i = 0; i < pixels.Length; i++)
         {
             int j = i * 4;
-            byte r = img.Data[j], g = img.Data[j + 1], b = img.Data[j + 2], a = img.Data[j + 3];
-            if (a < 255)
-            {
-                float af = a / 255f;
-                r = (byte)(r * af);
-                g = (byte)(g * af);
-                b = (byte)(b * af);
-            }
-            pixels[i] = new Color(r, g, b, a);
+            pixels[i] = PremultiplyPixel(img.Data[j], img.Data[j + 1], img.Data[j + 2], img.Data[j + 3]);
         }
         return (pixels, w, h);
     }
@@ -117,15 +124,7 @@ public static class TextureUtil
             for (int i = 0; i < pixels.Length; i++)
             {
                 int j = i * 4;
-                byte r = img.Data[j], g = img.Data[j + 1], b = img.Data[j + 2], a = img.Data[j + 3];
-                if (a < 255)
-                {
-                    float af = a / 255f;
-                    r = (byte)(r * af);
-                    g = (byte)(g * af);
-                    b = (byte)(b * af);
-                }
-                pixels[i] = new Color(r, g, b, a);
+                pixels[i] = PremultiplyPixel(img.Data[j], img.Data[j + 1], img.Data[j + 2], img.Data[j + 3]);
             }
             long pmaT = sw.ElapsedTicks - pmaStart;
             return (pixels, w, h, decodeT, pmaT, false);
@@ -207,15 +206,7 @@ public static class TextureUtil
         for (int i = 0; i < data.Length; i++)
         {
             var c = data[i];
-            if (c.A < 255)
-            {
-                float a = c.A / 255f;
-                data[i] = new Color(
-                    (byte)(c.R * a),
-                    (byte)(c.G * a),
-                    (byte)(c.B * a),
-                    c.A);
-            }
+            data[i] = PremultiplyPixel(c.R, c.G, c.B, c.A);
         }
 
         texture.SetData(data);

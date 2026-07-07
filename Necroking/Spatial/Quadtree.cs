@@ -88,45 +88,13 @@ public class Quadtree
         Subdivide(0, 0);
     }
 
+    /// <summary>Unfiltered circle query. Delegates to <see cref="QueryRadiusByFaction"/>
+    /// with <see cref="FactionMask.All"/> — the only Build overload always populates
+    /// FactionBit, and every Faction value (Undead/Human/Animal) is covered by
+    /// FactionMask.All, so this returns exactly the same set as a hand-written unfiltered
+    /// traversal while keeping a single traversal implementation.</summary>
     public int QueryRadius(Vec2 center, float radius, List<uint> results)
-    {
-        if (_nodes.Count == 0) return 0;
-
-        int found = 0;
-        float r2 = radius * radius;
-        Span<int> stack = stackalloc int[64];
-        int stackSize = 0;
-        stack[stackSize++] = 0;
-
-        while (stackSize > 0)
-        {
-            int ni = stack[--stackSize];
-            var node = _nodes[ni];
-
-            if (!node.Bounds.IntersectsCircle(center, radius)) continue;
-
-            if (node.FirstChild == -1)
-            {
-                for (int i = 0; i < node.EntryCount; i++)
-                {
-                    var e = _entries[node.EntryStart + i];
-                    var diff = e.Pos - center;
-                    if (diff.LengthSq() <= r2)
-                    {
-                        results.Add(e.Id);
-                        found++;
-                    }
-                }
-            }
-            else
-            {
-                for (int c = 0; c < 4 && stackSize < 64; c++)
-                    stack[stackSize++] = node.FirstChild + c;
-            }
-        }
-
-        return found;
-    }
+        => QueryRadiusByFaction(center, radius, FactionMask.All, results);
 
     /// <summary>
     /// Query circle but only include units whose faction is set in <paramref name="mask"/>.

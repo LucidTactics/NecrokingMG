@@ -102,7 +102,6 @@ public class HordeSystem
     /// <summary>Aggression as 0..1 (0.5 = center).</summary>
     private float AggressionT => _aggression / (float)AggressionMax;
 
-    private static float Lerp(float a, float b, float t) => a + (b - a) * t;
 
     /// <summary>
     /// Radius used for the horde-level aggro scan and the "target left the zone,
@@ -121,8 +120,8 @@ public class HordeSystem
             float eff = EffectiveRadius;
             float mid = eff + _settings.EngagementOffset;
             float t = AggressionT;
-            return t <= 0.5f ? Lerp(eff, mid, t / 0.5f)
-                             : Lerp(mid, 2f * mid, (t - 0.5f) / 0.5f);
+            return t <= 0.5f ? MathUtil.Lerp(eff, mid, t / 0.5f)
+                             : MathUtil.Lerp(mid, 2f * mid, (t - 0.5f) / 0.5f);
         }
     }
 
@@ -135,8 +134,8 @@ public class HordeSystem
             float eff = EffectiveRadius;
             float midLeash = eff + _settings.EngagementOffset + _settings.LeashOffset;
             float t = AggressionT;
-            return t <= 0.5f ? Lerp(eff + _settings.LeashOffset, midLeash, t / 0.5f)
-                             : Lerp(midLeash, 2f * midLeash, (t - 0.5f) / 0.5f);
+            return t <= 0.5f ? MathUtil.Lerp(eff + _settings.LeashOffset, midLeash, t / 0.5f)
+                             : MathUtil.Lerp(midLeash, 2f * midLeash, (t - 0.5f) / 0.5f);
         }
     }
 

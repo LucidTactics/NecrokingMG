@@ -57,16 +57,14 @@ public class AggressionRadiusScenario : ScenarioBase
         DebugLog.Log(ScenarioLog,
             $"eff={eff:F2} engOff={engOff:F1} leashOff={leashOff:F1} mid={mid:F2} midLeash={midLeash:F2}");
 
-        static float Lerp(float a, float b, float t) => a + (b - a) * t;
-
         for (int level = 0; level <= HordeSystem.AggressionMax; level++)
         {
             sim.Horde.AggressionLevel = level;
             float t = level / (float)HordeSystem.AggressionMax;
-            float expAggro = t <= 0.5f ? Lerp(eff, mid, t / 0.5f)
-                                       : Lerp(mid, 2f * mid, (t - 0.5f) / 0.5f);
-            float expLeash = t <= 0.5f ? Lerp(eff + leashOff, midLeash, t / 0.5f)
-                                       : Lerp(midLeash, 2f * midLeash, (t - 0.5f) / 0.5f);
+            float expAggro = t <= 0.5f ? MathUtil.Lerp(eff, mid, t / 0.5f)
+                                       : MathUtil.Lerp(mid, 2f * mid, (t - 0.5f) / 0.5f);
+            float expLeash = t <= 0.5f ? MathUtil.Lerp(eff + leashOff, midLeash, t / 0.5f)
+                                       : MathUtil.Lerp(midLeash, 2f * midLeash, (t - 0.5f) / 0.5f);
             float gotAggro = sim.Horde.AggroRadius;
             float gotLeash = sim.Horde.LeashRadius;
             bool ok = MathF.Abs(gotAggro - expAggro) < 0.05f && MathF.Abs(gotLeash - expLeash) < 0.05f;

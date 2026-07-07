@@ -29,11 +29,7 @@ public class WeatherRenderer
     private GraphicsDevice _graphicsDevice = null!;
     private DayNightSystem? _dayNight;
 
-    public void Init(int screenW, int screenH)
-    {
-        _screenW = screenW;
-        _screenH = screenH;
-    }
+    public void Init(int screenW, int screenH) => Resize(screenW, screenH);
 
     public void Resize(int screenW, int screenH)
     {

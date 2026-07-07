@@ -119,7 +119,7 @@ public sealed class RegistryCrudPanel<TDef> : IRegistryCrudPanel where TDef : cl
             leftX, listY, listW, listH, null);
         if (clicked >= 0 && clicked < filteredIds.Count)
         {
-            SelectedIdx = IndexOf(ids, filteredIds[clicked]);
+            SelectedIdx = EditorBase.IndexOf(ids, filteredIds[clicked]);
             onSelectionChanged?.Invoke();
         }
 
@@ -151,7 +151,7 @@ public sealed class RegistryCrudPanel<TDef> : IRegistryCrudPanel where TDef : cl
             string newId = _idPrefix + DateTime.Now.ToString("HHmmss");
             var newDef = new TDef { Id = newId, DisplayName = _newDisplayName };
             _registry.Add(newDef);
-            SelectedIdx = IndexOf(_registry.GetIDs(), newId);
+            SelectedIdx = EditorBase.IndexOf(_registry.GetIDs(), newId);
             _markUnsaved();
             _setStatus($"Added {_noun}: {newId}");
         }
@@ -170,7 +170,7 @@ public sealed class RegistryCrudPanel<TDef> : IRegistryCrudPanel where TDef : cl
                     var newDef = Clone(src, newId);
                     newDef.DisplayName = src.DisplayName + " (Copy)";
                     _registry.AddAfter(newDef, src.Id);
-                    SelectedIdx = IndexOf(_registry.GetIDs(), newId);
+                    SelectedIdx = EditorBase.IndexOf(_registry.GetIDs(), newId);
                     _markUnsaved();
                     _setStatus($"Copied {_noun}: {newId}");
                 }
@@ -220,7 +220,7 @@ public sealed class RegistryCrudPanel<TDef> : IRegistryCrudPanel where TDef : cl
         var newDef = Clone(_clipboard, newId);
         newDef.DisplayName = _clipboard.DisplayName + " (Paste)";
         _registry.Add(newDef);
-        SelectedIdx = IndexOf(_registry.GetIDs(), newId);
+        SelectedIdx = EditorBase.IndexOf(_registry.GetIDs(), newId);
         _markUnsaved();
         _setStatus($"Pasted {_noun}: {newId}");
     }
@@ -248,12 +248,5 @@ public sealed class RegistryCrudPanel<TDef> : IRegistryCrudPanel where TDef : cl
         while (_registry.Get(newId) != null)
             newId = baseId + suffix + (++n);
         return newId;
-    }
-
-    private static int IndexOf(IReadOnlyList<string> list, string value)
-    {
-        for (int i = 0; i < list.Count; i++)
-            if (list[i] == value) return i;
-        return -1;
     }
 }

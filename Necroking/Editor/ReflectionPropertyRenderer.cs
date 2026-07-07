@@ -319,7 +319,7 @@ public class ReflectionPropertyRenderer
         string currentDisplay = "";
         if (!string.IsNullOrEmpty(currentId))
         {
-            int idx = IndexOfId(ids, currentId);
+            int idx = EditorBase.IndexOf(ids, currentId);
             if (idx >= 0) currentDisplay = options[idx];
             else currentDisplay = currentId; // fallback to raw ID
         }
@@ -562,12 +562,6 @@ public class ReflectionPropertyRenderer
         return layout;
     }
 
-    private static int IndexOfId(IReadOnlyList<string> list, string value)
-    {
-        for (int i = 0; i < list.Count; i++)
-            if (list[i] == value) return i;
-        return -1;
-    }
 
     // ===========================
     //  Internal types

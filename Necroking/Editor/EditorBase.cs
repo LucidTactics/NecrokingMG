@@ -37,6 +37,17 @@ public class EditorBase
         };
     }
 
+    /// <summary>Linear index-of over an IReadOnlyList&lt;string&gt; (which lacks
+    /// List.IndexOf), -1 on miss. Shared by the editor windows' option-list lookups.
+    /// Public rather than protected because the callers compose EditorBase, not derive
+    /// from it.</summary>
+    public static int IndexOf(IReadOnlyList<string> list, string value)
+    {
+        for (int i = 0; i < list.Count; i++)
+            if (list[i] == value) return i;
+        return -1;
+    }
+
     // Colors
     public static readonly Color PanelBg = new(25, 25, 40, 240);
     public static readonly Color PanelHeader = new(40, 40, 65, 250);

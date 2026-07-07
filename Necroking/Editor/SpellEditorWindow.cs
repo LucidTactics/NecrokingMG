@@ -310,7 +310,7 @@ public class SpellEditorWindow : EditorWindow
                 _gameData.Spells.AddAfter(newDef, allIds[_selectedIdx]);
             else
                 _gameData.Spells.Add(newDef);
-            _selectedIdx = IndexOf(_gameData.Spells.GetIDs(), newId);
+            _selectedIdx = EditorBase.IndexOf(_gameData.Spells.GetIDs(), newId);
             MarkDirty();
             SetStatus("Pasted: " + newId);
         }
@@ -427,7 +427,7 @@ public class SpellEditorWindow : EditorWindow
         {
             string clickedId = _filteredIds[clicked];
             var allIds = _gameData.Spells.GetIDs();
-            _selectedIdx = IndexOf(allIds, clickedId);
+            _selectedIdx = EditorBase.IndexOf(allIds, clickedId);
             _detailScroll = 0;
         }
 
@@ -444,7 +444,7 @@ public class SpellEditorWindow : EditorWindow
                 _gameData.Spells.AddAfter(newDef, allIds[_selectedIdx]);
             else
                 _gameData.Spells.Add(newDef);
-            _selectedIdx = IndexOf(_gameData.Spells.GetIDs(), newId);
+            _selectedIdx = EditorBase.IndexOf(_gameData.Spells.GetIDs(), newId);
             MarkDirty();
             SetStatus("Added: " + newId);
         }
@@ -463,7 +463,7 @@ public class SpellEditorWindow : EditorWindow
                         newId = srcDef.Id + "_copy" + (++suffix);
                     var newDef = CloneSpell(srcDef, newId);
                     _gameData.Spells.AddAfter(newDef, srcDef.Id);
-                    _selectedIdx = IndexOf(_gameData.Spells.GetIDs(), newId);
+                    _selectedIdx = EditorBase.IndexOf(_gameData.Spells.GetIDs(), newId);
                     MarkDirty();
                     SetStatus("Copied: " + newId);
                 }
@@ -1495,7 +1495,7 @@ public class SpellEditorWindow : EditorWindow
             case "spell":
             {
                 var allIds = _gameData.Spells.GetIDs();
-                if (IndexOf(allIds, _deleteConfirmId) >= 0)
+                if (EditorBase.IndexOf(allIds, _deleteConfirmId) >= 0)
                 {
                     _gameData.Spells.Remove(_deleteConfirmId);
                     _selectedIdx = Math.Min(_selectedIdx, _gameData.Spells.Count - 1);
@@ -1507,7 +1507,7 @@ public class SpellEditorWindow : EditorWindow
             case "flipbook":
             {
                 var fbIds = _gameData.Flipbooks.GetIDs();
-                if (IndexOf(fbIds, _deleteConfirmId) >= 0)
+                if (EditorBase.IndexOf(fbIds, _deleteConfirmId) >= 0)
                 {
                     _gameData.Flipbooks.Remove(_deleteConfirmId);
                     if (_fbSelectedIdx >= _gameData.Flipbooks.Count)
@@ -1520,7 +1520,7 @@ public class SpellEditorWindow : EditorWindow
             case "buff":
             {
                 var buffIds = _gameData.Buffs.GetIDs();
-                if (IndexOf(buffIds, _deleteConfirmId) >= 0)
+                if (EditorBase.IndexOf(buffIds, _deleteConfirmId) >= 0)
                 {
                     _gameData.Buffs.Remove(_deleteConfirmId);
                     if (_buffSelectedIdx >= _gameData.Buffs.Count)
@@ -1755,10 +1755,4 @@ public class SpellEditorWindow : EditorWindow
         }
     }
 
-    private static int IndexOf(IReadOnlyList<string> list, string value)
-    {
-        for (int i = 0; i < list.Count; i++)
-            if (list[i] == value) return i;
-        return -1;
-    }
 }
