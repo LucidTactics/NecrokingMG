@@ -413,6 +413,8 @@ public static class SpellEffectSystem
 
             // Tag projectile with spell ID for physics knockback lookup on impact
             lastProj.SpellID = spell.Id;
+            lastProj.ImpactForce = spell.ImpactForce;
+            lastProj.ImpactUpward = spell.ImpactUpward;
 
             // Blight bombs must burst exactly where the player clicked, not wherever
             // the ballistic arc happens to land. Forward the aimed point and flag the

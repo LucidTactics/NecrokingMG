@@ -1666,6 +1666,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         {
             // OutOfRange/NotEnoughMana/OnCooldown test projectile on Q (slot 0).
             _spellBarState.Slots[0] = new SpellBarSlot { SpellID = "test_projectile" };
+            // Zero-damage directional-impact projectile (physics shove) on slot 1.
+            _spellBarState.Slots[1] = new SpellBarSlot { SpellID = "test_impact" };
             // The canonical reanimation spell on slot 2 (the "1" key) so it can be
             // cast on a corpse. The debug necromancer has every path/mana.
             _spellBarState.Slots[2] = new SpellBarSlot { SpellID = "reanimate_corpse" };

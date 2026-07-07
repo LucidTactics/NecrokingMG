@@ -48,6 +48,10 @@ public class Projectile
     public string IconTexturePath = "";
     public bool HitsCorpses;
     public string PotionTargetType = "Any"; // "Friendly", "Enemy", "Any"
+    /// <summary>Directional physics shove applied to each unit this projectile hits,
+    /// along the flight direction at impact. 0 = none.</summary>
+    public float ImpactForce;
+    public float ImpactUpward;
 }
 
 public class ImpactEvent
@@ -81,6 +85,11 @@ public class ProjectileHit
     public int CorpseHitIdx = -1;
     public string SpellID = "";
     public float AoeRadius;
+    /// <summary>Projectile's horizontal velocity at the moment of impact (unnormalized
+    /// — PhysicsSystem.ApplyImpulse normalizes). Direction for <see cref="ImpactForce"/>.</summary>
+    public Vec2 FlightDir;
+    public float ImpactForce;
+    public float ImpactUpward;
 }
 
 public class ProjectileManager
@@ -303,7 +312,7 @@ public class ProjectileManager
                         if (nid == proj.OwnerID) continue;
                         int hitIdx = UnitUtil.ResolveUnitIndex(units, nid);
                         if (hitIdx < 0) continue;
-                        _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, WeaponName = proj.WeaponName, ProjectileType = proj.Type, SpellID = proj.SpellID, AoeRadius = proj.AoeRadius, ImpactPos = proj.Position });
+                        _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, WeaponName = proj.WeaponName, ProjectileType = proj.Type, SpellID = proj.SpellID, AoeRadius = proj.AoeRadius, ImpactPos = proj.Position, FlightDir = proj.Velocity, ImpactForce = proj.ImpactForce, ImpactUpward = proj.ImpactUpward });
                     }
                     _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = proj.AoeRadius, SpellID = proj.SpellID, HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale, HitEffectBlendMode = proj.HitEffectBlendMode, HitEffectAlignment = proj.HitEffectAlignment });
                     proj.Alive = false;
@@ -324,7 +333,7 @@ public class ProjectileManager
                     if (nid == proj.OwnerID) continue;
                     int hitIdx = UnitUtil.ResolveUnitIndex(units, nid);
                     if (hitIdx < 0) continue;
-                    _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type, HitLocation = RollArrowHitLocation(proj.IsLob) });
+                    _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type, HitLocation = RollArrowHitLocation(proj.IsLob), FlightDir = proj.Velocity, ImpactForce = proj.ImpactForce, ImpactUpward = proj.ImpactUpward });
                     _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type });
                     proj.Alive = false;
                     break;
@@ -423,7 +432,7 @@ public class ProjectileManager
                         if (nid == proj.OwnerID) continue;
                         int hitIdx = UnitUtil.ResolveUnitIndex(units, nid);
                         if (hitIdx < 0) continue;
-                        _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type, SpellID = proj.SpellID, AoeRadius = proj.AoeRadius, ImpactPos = proj.Position });
+                        _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type, SpellID = proj.SpellID, AoeRadius = proj.AoeRadius, ImpactPos = proj.Position, FlightDir = proj.Velocity, ImpactForce = proj.ImpactForce, ImpactUpward = proj.ImpactUpward });
                     }
                 }
                 else
@@ -445,7 +454,7 @@ public class ProjectileManager
                         if (d < bestDist) { bestDist = d; bestIdx = idx; }
                     }
                     if (bestIdx >= 0)
-                        _hits.Add(new ProjectileHit { UnitIdx = bestIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type, SpellID = proj.SpellID, ImpactPos = proj.Position, HitLocation = proj.Type == ProjectileType.Arrow ? RollArrowHitLocation(proj.IsLob) : HitLocation.Chest });
+                        _hits.Add(new ProjectileHit { UnitIdx = bestIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type, SpellID = proj.SpellID, ImpactPos = proj.Position, HitLocation = proj.Type == ProjectileType.Arrow ? RollArrowHitLocation(proj.IsLob) : HitLocation.Chest, FlightDir = proj.Velocity, ImpactForce = proj.ImpactForce, ImpactUpward = proj.ImpactUpward });
                 }
                 _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = proj.AoeRadius, SpellID = proj.SpellID, HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale, HitEffectBlendMode = proj.HitEffectBlendMode, HitEffectAlignment = proj.HitEffectAlignment });
                 proj.Alive = false;

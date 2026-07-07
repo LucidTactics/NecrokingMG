@@ -1586,6 +1586,56 @@
         "alignment": "Ground",
         "duration": 0.4
       }
+    },
+    {
+      "name": "Test Impact",
+      "id": "test_impact",
+      "school": "Evocation",
+      "tileTemplate": "evocation",
+      "icon": "assets/UI/Icons/Spells/fireball.png",
+      "hidden": true,
+      "range": 15,
+      "manaCost": 5,
+      "cooldown": 0.5,
+      "aoeType": "AOE",
+      "damage": 0,
+      "aoeRadius": 2,
+      "hitEffectFlipbook": {
+        "flipbookID": "cloud03",
+        "fps": 0,
+        "scale": 1.2,
+        "color": {
+          "r": 179,
+          "g": 79,
+          "b": 255,
+          "a": 255,
+          "intensity": 5.019231
+        },
+        "rotation": 0,
+        "blendMode": "Alpha",
+        "alignment": "Ground",
+        "duration": -1
+      },
+      "projectileSpeed": 28.3,
+      "projectileFlipbook": {
+        "flipbookID": "fire_loop",
+        "fps": 0,
+        "scale": 1.5,
+        "color": {
+          "r": 179,
+          "g": 79,
+          "b": 255,
+          "a": 255,
+          "intensity": 1.4
+        },
+        "rotation": 0,
+        "blendMode": "Alpha",
+        "alignment": "Ground",
+        "duration": -1
+      },
+      "trajectory": "DirectFire",
+      "impactForce": 30,
+      "impactUpward": 8
     }
   ]
 }

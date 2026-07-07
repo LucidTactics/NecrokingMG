@@ -797,6 +797,13 @@ public class Simulation
                     spellDef.KnockbackForce, spellDef.KnockbackUpward, hit.OwnerFaction);
             }
 
+            // Directional impact: shove the struck unit along the projectile's flight
+            // path (per-hit, unlike the radial knockback above). Also before damage so
+            // a killed unit's corpse inherits the arc.
+            if (hit.ImpactForce > 0f && hit.UnitIdx >= 0 && hit.UnitIdx < _units.Count)
+                _physics.ApplyImpulse(_units, hit.UnitIdx, hit.FlightDir,
+                    hit.ImpactForce, hit.ImpactUpward);
+
             if (hit.UnitIdx >= 0 && hit.UnitIdx < _units.Count && _units[hit.UnitIdx].Alive)
             {
                 // Resolve the casting unit so the hit is attributed to them

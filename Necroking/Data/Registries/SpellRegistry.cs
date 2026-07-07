@@ -200,6 +200,17 @@ public class SpellDef : IHasId
     [EditorField(Label = "Knockback Radius", Group = "PHYSICS", Order = 112, Step = 0.5f, Decimals = 1)]
     [JsonPropertyName("knockbackRadius")] public float KnockbackRadius { get; set; }
 
+    // Directional impact (applied only to units the projectile actually hits,
+    // shoving them along the projectile's flight direction — unlike Knockback,
+    // which blasts radially outward from the impact point)
+    [EditorVisible("Category", "Projectile")]
+    [EditorField(Label = "Impact Force", Group = "PHYSICS", Order = 113, Step = 1f, Decimals = 0)]
+    [JsonPropertyName("impactForce")] public float ImpactForce { get; set; }
+
+    [EditorVisible("Category", "Projectile")]
+    [EditorField(Label = "Impact Up", Group = "PHYSICS", Order = 114, Step = 1f, Decimals = 0)]
+    [JsonPropertyName("impactUpward")] public float ImpactUpward { get; set; }
+
     // ============ Shared fields (ungrouped, between COMMON and category sections) ============
     // AoeType — used in Projectile and Buff/Debuff
     [EditorVisible("Category", "Projectile", "Buff", "Debuff")]
