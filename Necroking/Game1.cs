@@ -4154,21 +4154,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         catch { _itemTextureCache[path] = null; return null; }
     }
 
-    private Texture2D? GetItemTexture(string itemId)
-    {
-        if (string.IsNullOrEmpty(itemId)) return null;
-        if (_itemTextureCache.TryGetValue(itemId, out var cached)) return cached;
-        var item = _gameData.Items.Get(itemId);
-        if (item == null || string.IsNullOrEmpty(item.Icon)) { _itemTextureCache[itemId] = null; return null; }
-        try
-        {
-            var tex = TextureUtil.LoadPremultiplied(GraphicsDevice, GamePaths.Resolve(item.Icon));
-            _itemTextureCache[itemId] = tex;
-            return tex;
-        }
-        catch { _itemTextureCache[itemId] = null; return null; }
-    }
-
     // Enemy = different faction from the necromancer (undead).
     private int FindClosestEnemyToPoint(Vec2 worldPos, float maxRange)
         => _sim.Query.NearestEnemyToPoint(worldPos, maxRange, Faction.Undead);
