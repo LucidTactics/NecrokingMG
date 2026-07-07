@@ -173,41 +173,38 @@ public class SpriteAtlas
         string resolvedMeta = Path.IsPathRooted(metaPath) ? metaPath : Core.GamePaths.Resolve(metaPath);
         if (!File.Exists(resolvedPng) || !File.Exists(resolvedMeta)) return false;
 
-        // Load texture
+        // Reimplemented on the split-phase primitives so the base-load finalize
+        // sequence (clear/add lists, FixupYOrigin, RescaleAllFrames,
+        // ComputeFrameBoundingBoxes, IsLoaded) lives in exactly one place —
+        // SetTextureAndFinalize. Parse runs before texture creation, which is
+        // equivalent to the old load-then-parse order: ParseMeta only mutates
+        // _units, while the texture-tracking lists are owned solely by
+        // SetTextureAndFinalize, so the two touch disjoint state. A parse failure
+        // returns false without having created (or leaked) a GPU texture.
+        if (!ParseMetaOnly(resolvedMeta)) return false;
+
         using var stream = File.OpenRead(resolvedPng);
         var tex = TextureUtil.LoadPremultiplied(device, stream);
         if (tex == null) return false;
 
-        _textures.Clear();
-        _originalWidths.Clear();
-        _originalHeights.Clear();
-        _yFixupPending.Clear();
-        _textures.Add(tex);
-        _originalWidths.Add(tex.Width);
-        _originalHeights.Add(tex.Height);
-        _yFixupPending.Add(true);
-        _scaleX = 1f;
-        _scaleY = 1f;
-
-        // Parse spritemeta (all frames default to TextureIndex 0).
-        if (!ParseMeta(metaPath, textureIndex: 0))
-        {
-            foreach (var t in _textures) t.Dispose();
-            _textures.Clear();
-            return false;
-        }
-
-        FixupYOrigin();
-        RescaleAllFrames();
-        ComputeFrameBoundingBoxes(0);
-        IsLoaded = true;
+        SetTextureAndFinalize(tex, tex.Width, tex.Height);
         return true;
     }
 
     /// <summary>Attach an overflow sheet (base atlas name + __N suffix). Adds its
     /// texture at the next TextureIndex and merges its spritemeta into the
     /// existing <see cref="Units"/> dictionary — new units/animations/frames get
-    /// the new TextureIndex. Call AFTER <see cref="Load"/> or equivalent.</summary>
+    /// the new TextureIndex. Call AFTER <see cref="Load"/> or equivalent.
+    ///
+    /// NOT reimplemented on ParseExtensionMeta + AttachExtensionTexture (unlike
+    /// <see cref="Load"/> on ParseMetaOnly + SetTextureAndFinalize): that split pair
+    /// is structural variance, not duplication. ParseExtensionMeta pushes placeholder
+    /// width/height/pending entries whose only job is to advance the TextureIndex
+    /// counter; the parallel-decode pipeline discards them via SetTextureAndFinalize's
+    /// list-clear before AttachExtensionTexture appends the real values. Calling the
+    /// two back-to-back here (texture already in hand, no clear between) would
+    /// double-add to the tracking lists and misalign the per-index heights, breaking
+    /// FixupYOrigin. The immediate-texture path below is the correct single-call form.</summary>
     public bool LoadExtension(GraphicsDevice device, string pngPath, string metaPath)
     {
         if (!IsLoaded) return false; // base must be loaded first
