@@ -468,6 +468,14 @@ public static class SubroutineSteps
 
     public static int FindClosestEnemy(ref AIContext ctx, float maxRange)
     {
+        // Canonical scan: WorldQuery.NearestEnemyOf (quadtree-backed with its own
+        // linear fallback on an empty tree). The loops below are only the fallback
+        // for minimal contexts (OnSpawn / hand-built scenario contexts) that carry
+        // no Query handle. maxRange <= 0 keeps the old "no range = no result"
+        // semantics rather than WorldQuery's unbounded-scan meaning.
+        if (ctx.Query != null && maxRange > 0f)
+            return ctx.Query.NearestEnemyOf(ctx.UnitIndex, maxRange);
+
         float bestDist = maxRange * maxRange;
         int bestIdx = -1;
         var myFaction = ctx.MyFaction;

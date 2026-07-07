@@ -22,6 +22,11 @@ public ref struct AIContext
     public GameData GameData;
     public World.Pathfinder? Pathfinder;
     public Spatial.Quadtree? Quadtree;
+    /// <summary>Central world-query engine (canonical nearest-of / in-radius scans —
+    /// see <see cref="GameSystems.WorldQuery"/>). Set by Simulation.BuildAIContext;
+    /// null in minimal contexts (OnSpawn, hand-built scenario/AIControl contexts) —
+    /// steps that use it must keep a null-tolerant fallback.</summary>
+    public GameSystems.WorldQuery? Query;
     public GameSystems.HordeSystem? Horde;
     /// <summary>Live squad registry (herds / packs / patrols). Handlers read their own group via
     /// <see cref="MySquad"/> for cohesion + shared-alert; recomputed before the AI pass each frame.</summary>

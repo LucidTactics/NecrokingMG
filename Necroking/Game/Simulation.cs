@@ -3153,20 +3153,9 @@ public class Simulation
         return v.LengthSq() > 0.01f ? v.Normalized() : new Vec2(0f, 1f);
     }
 
-    private int FindNearestEnemyIndex(int i, float radius)
-    {
-        _quadtree.QueryRadiusByFaction(_units[i].Position, radius,
-            FactionMaskExt.AllExcept(_units[i].Faction), _moraleScratch);
-        int best = -1; float bestD = float.MaxValue;
-        for (int k = 0; k < _moraleScratch.Count; k++)
-        {
-            int idx = UnitUtil.ResolveUnitIndex(_units, _moraleScratch[k]);
-            if (idx < 0 || !_units[idx].Alive) continue;
-            float d = (_units[idx].Position - _units[i].Position).LengthSq();
-            if (d < bestD) { bestD = d; best = idx; }
-        }
-        return best;
-    }
+    /// <summary>Nearest living enemy within radius — forwards to the canonical
+    /// <see cref="WorldQuery.NearestEnemyOf"/> scan (was a hand-rolled copy).</summary>
+    private int FindNearestEnemyIndex(int i, float radius) => Query.NearestEnemyOf(i, radius);
 
     /// <summary>
     /// Per-frame tick for the knockdown recovery-roll system. After the initial
@@ -3236,7 +3225,7 @@ public class Simulation
     private AI.AIContext BuildAIContext(int i, float dt, float dayFraction, bool isNight) => new AI.AIContext
     {
         UnitIndex = i, Units = _units, Dt = dt, FrameNumber = (int)_frameNumber,
-        GameData = _gameData, Pathfinder = _pathfinder, Quadtree = _quadtree,
+        GameData = _gameData, Pathfinder = _pathfinder, Quadtree = _quadtree, Query = Query,
         Horde = _horde, TriggerSystem = _triggerSystem, Villages = _villages, EnvSystem = _envSystem,
         Workers = Workers,
         Projectiles = _projectiles, MagicGlyphs = _magicGlyphs, Lightning = _lightning,
