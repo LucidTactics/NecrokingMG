@@ -1,11 +1,16 @@
----
-name: dup-review
-description: Re-run the whole-codebase semantic duplication / consolidation review (label every method by intent, cluster near-duplicates, judge each unit, publish verdicts). Run ONLY when the user explicitly asks to re-run the duplication / consolidation review (or a labels-only "refresh the dup-review labels"). NEVER trigger from routine coding work — it is a multi-hour, multi-million-token operation. For an authoring-time "does similar code already exist?" check, use `tools/label_store.py query` (or the locate-behavior finder), NOT this skill.
----
-
 # Duplication / consolidation review (re-runnable)
 
-This skill re-runs the 2026-07-06 semantic-duplication review incrementally: it re-labels
+> **Out-of-context procedure — deliberately NOT a registered skill** (see
+> docs/OutOfContext_Skills/README.md). This file is found and read only when the user
+> explicitly asks to re-run the duplication / consolidation review (or a labels-only
+> "refresh the dup-review labels"). It is a multi-hour, multi-million-token operation —
+> never run it from routine coding work. For an authoring-time "does similar code
+> already exist?" check, use `tools/label_store.py query` instead, NOT this procedure.
+>
+> **What it does:** label every method by intent, cluster near-duplicates, judge each
+> unit, publish verdicts — incrementally against the persisted store.
+
+This procedure re-runs the 2026-07-06 semantic-duplication review incrementally: it re-labels
 only the methods whose bodies drifted, re-judges only the units whose evidence changed, and
 carries forward everything the last review already settled. The expensive investment (the
 label store + judged verdicts) lives in `docs/consolidation-review/store/`; this pipeline

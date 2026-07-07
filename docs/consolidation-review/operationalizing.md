@@ -9,7 +9,7 @@ against the existing codebase at authoring time.
 > `cluster_labels.py --store`, and the `/dup-review` skill. See the checklist in §6 for
 > per-item status. **Two user decisions recorded this build:**
 > - **locate-behavior integration was declined** (§3 option (d)). find-similar is NOT wired
->   into the locate-behavior finder. It stays a **user-invoked skill (`/dup-review`)** plus a
+>   into the locate-behavior finder. It stays a **user-invoked out-of-context procedure (docs/OutOfContext_Skills/dup-review/, invoked by asking Claude to 're-run the dup review')** plus a
 >   **manual `tools/label_store.py query` CLI** (kept explicitly so find-similar remains
 >   available on request). Future sessions: do not re-add the locate-behavior integration.
 > - The re-runnable review is a **user-invoked skill only**, never auto-triggered.
@@ -24,7 +24,7 @@ against the existing codebase at authoring time.
 | Extractor output | `cache/method_extract/` — gitignored, regenerated on demand (existing default) |
 | Method identity | `file::type::name::sig-hash` key + comment/whitespace-stripped body hash (`body12`) for staleness/rename detection |
 | Verdicts | Persisted in the store (`verdicts.json`, anchored to method keys) so KEEP_SEPARATE rulings are never re-litigated blind |
-| Use 1 (full re-run) | New curated skill **`/dup-review`** — user-invoked only, incremental by default (re-labels only drifted methods, re-judges only units whose evidence changed) |
+| Use 1 (full re-run) | Out-of-context procedure **dup-review** (docs/OutOfContext_Skills/) — user-invoked only, incremental by default (re-labels only drifted methods, re-judges only units whose evidence changed) |
 | Use 2 (authoring-time) | **Manual `tools/label_store.py query` CLI** (locate-behavior integration was **declined** by the user — see §3). The finder may still be asked to run a query, but nothing auto-wires it. No hooks. |
 | New machinery | One new tool: `tools/label_store.py` (~300 lines, stdlib-only). Two small mods: MethodExtractor emits `BodyHash`; `cluster_labels.py` reads the store. |
 | Typical costs | find-similar query ≈ 0 agent tokens / seconds · label one new file ≈ 1–3k in-session tokens · full re-run after normal drift ≈ 1.5–2.5M tokens (vs ~4.5–5M from scratch) |
@@ -69,7 +69,7 @@ MethodExtractor), and the dossiers/verdicts.md (already in `docs/consolidation-r
 | Store metadata | `docs/consolidation-review/store/meta.json` | committed | Staleness anchor: which commit/date the labels describe. |
 | Extractor output (catalog + body batches) | `cache/method_extract/` | gitignored (existing `cache/` rule) | Regenerates in ~1 minute from source; bodies would bloat git for nothing. `run_method_extractor.py` already defaults here. |
 | Human-facing review outputs | `docs/consolidation-review/` (README, verdicts.md, dossiers/) | committed | Already the convention. Re-runs overwrite in place; git history is the archive of past reviews (matches the `defunct/` philosophy: git history is the durable archive). |
-| Pipeline prompts (labeler/judge templates) | `.claude/skills/dup-review/` | committed via gitignore un-ignore | They're procedure, not reference — skill territory per CLAUDE.md routing style. |
+| Pipeline prompts (labeler/judge templates) | `docs/OutOfContext_Skills/dup-review/` | committed (docs/ is tracked) | Moved out of .claude/skills/ to docs/OutOfContext_Skills/ (2026-07-07, user decision): zero per-session context cost; found via the OutOfContext_Skills README when the user asks. |
 | Query/update CLI | `tools/label_store.py` | committed | Normal tools/ convention. |
 
 **Alternatives considered and rejected**
@@ -142,9 +142,10 @@ evaporate). Mechanism:
 
 ## 2. Use 1 — `/dup-review`: the re-runnable full review
 
-A new curated skill at `.claude/skills/dup-review/` (needs a `!.claude/skills/dup-review/`
-un-ignore line in `.gitignore`). **User-invoked only** — the SKILL.md description must say
-so explicitly ("Run ONLY when the user explicitly asks to re-run the duplication /
+An out-of-context procedure at `docs/OutOfContext_Skills/dup-review/` (plain tracked docs —
+deliberately NOT a registered skill, per the user's 2026-07-07 decision, so it costs zero
+per-session context; discovered via docs/OutOfContext_Skills/README.md). **User-invoked
+only** — the procedure's header says so explicitly ("read ONLY when the user explicitly asks to re-run the duplication /
 consolidation review; never trigger from routine coding work") so trigger-matching never
 fires it spontaneously. It is a multi-hour, multi-million-token operation.
 
@@ -363,8 +364,8 @@ Built this session (ordered; 1–3 unlocked everything else):
    the persisted store; the ~16% that drifted are the ones the consolidation batches touched.
 3. [x] `tools/cluster_labels.py` — added `--store` input mode (reads the persisted
    `labels.json`, optional line refresh from `--extract-dir`); original scratch-dir mode kept.
-4. [x] `.claude/skills/dup-review/` — `SKILL.md` (pipeline §2.2, budgets §2.3,
-   user-invoked-only), `labeler-prompt.md`, `judge-prompt.md`. Plus `!.claude/skills/dup-review/`
+4. [x] `docs/OutOfContext_Skills/dup-review/` — `SKILL.md` (pipeline §2.2, budgets §2.3,
+   user-invoked-only), `labeler-prompt.md`, `judge-prompt.md`. Plus `!docs/OutOfContext_Skills/dup-review/`
    in `.gitignore`.
 5. [ ] **DECLINED by the user** — `docs/locate-behavior/README.md` "Similar existing code"
    step. Not built and not to be built; the manual `label_store.py query` CLI is the

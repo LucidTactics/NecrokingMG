@@ -8,7 +8,8 @@ homes now recorded in [standard_patterns.md](standard_patterns.md).
 Follow-ups landed 2026-07-07 evening: C8 (paralysis stun = Incapacitating buff, c433fb7 —
 also fixed a latent stuck-Stunned bug on the archetype anim path), C13 (preview arcs match
 the game, 302c310), B7 (editor headers unified on Bar style, 1c0acb9), and the dup-review
-tooling (`tools/label_store.py`, extractor BodyHash, `/dup-review` skill — user-invoked
+tooling (`tools/label_store.py`, extractor BodyHash, the dup-review out-of-context
+procedure at docs/OutOfContext_Skills/dup-review/ — user-invoked
 only; locate-behavior integration explicitly declined).
 
 ## Remaining (deferred with reasons — awaiting user decision or future need)
