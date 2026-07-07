@@ -844,7 +844,13 @@ public class MapEditorWindow
         }
 
         // --- Tab switching via click ---
-        if (leftClick && overPanel)
+        // Gate on the actual panel rect (IsPanelAt), NOT overPanel: overPanel
+        // folds in OverGameplayHud (cursor on the HUD rows drawn over the
+        // editor, kept true so clicks there don't paint), and the menu-button
+        // row overlaps tab row 1's y-band — a click on it used to reach here
+        // with a NEGATIVE relX that integer division truncated toward zero,
+        // silently selecting column 0 (the Ground tab).
+        if (leftClick && IsPanelAt(mouse.X, mouse.Y, screenW, screenH))
         {
             int tabY1 = panelY;
             int tabY2 = panelY + TabRowHeight;
@@ -854,13 +860,13 @@ public class MapEditorWindow
             if (mouse.Y >= tabY1 && mouse.Y < tabY1 + TabRowHeight)
             {
                 int relX = mouse.X - panelX;
-                int idx = relX / tabW1;
+                int idx = relX >= 0 ? relX / tabW1 : -1;
                 if (idx >= 0 && idx < TabRow1.Length) ActiveTab = (MapEditorTab)idx;
             }
             else if (mouse.Y >= tabY2 && mouse.Y < tabY2 + TabRowHeight)
             {
                 int relX = mouse.X - panelX;
-                int idx = relX / tabW2;
+                int idx = relX >= 0 ? relX / tabW2 : -1;
                 if (idx >= 0 && idx < TabRow2.Length) ActiveTab = (MapEditorTab)(idx + TabRow1.Length);
             }
         }
