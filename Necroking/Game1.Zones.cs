@@ -126,21 +126,12 @@ public partial class Game1
         DebugLog.Log("startup", $"[zones] village '{z.Name}' ({z.Id}): adopted {adopted}, spawned {spawned}");
     }
 
-    /// <summary>Mirror of the legacy SpawnGroup (Game1.Villages.cs) but scattering inside
-    /// the zone rect instead of an annulus.</summary>
+    /// <summary>Zone-rect entry to the shared villager-group spawn loop
+    /// (SpawnGroupCore, Game1.Villages.cs) — scatters inside the zone rect
+    /// instead of the legacy annulus.</summary>
     private int SpawnZoneGroup(string defId, int count, int villageId, MapZone z,
         TileGrid? grid, ref uint rng)
-    {
-        for (int k = 0; k < count; k++)
-        {
-            Vec2 p = ScatterSpotInRect(grid, z, ref rng);
-            SpawnUnit(defId, p);
-            int idx = _sim.Units.Count - 1;
-            _sim.UnitsMut[idx].VillageId = (short)villageId;
-            _sim.UnitsMut[idx].SpawnPosition = p;
-        }
-        return count;
-    }
+        => SpawnGroupCore(defId, count, villageId, grid, ref rng, z, default, 0f, 0f);
 
     /// <summary>Deterministic search for a walkable point inside the zone rect (90% of the
     /// half-extents so spawns hug the interior). Falls back to the zone center.

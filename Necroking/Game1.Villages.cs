@@ -175,12 +175,19 @@ public partial class Game1
         _pendingVillages = null;
     }
 
-    private int SpawnGroup(string defId, int count, int villageId, Vec2 center,
-        float inner, float outer, TileGrid? grid, ref uint rng)
+    /// <summary>The one villager-group spawn loop shared by the legacy villages
+    /// path and the zone-village path (SpawnZoneGroup, Game1.Zones.cs): scatter a
+    /// spot, spawn the unit, tag VillageId + SpawnPosition. The scatter region is
+    /// the only variance — the <paramref name="zoneRect"/> when given, otherwise
+    /// the (center, inner, outer) annulus.</summary>
+    private int SpawnGroupCore(string defId, int count, int villageId, TileGrid? grid,
+        ref uint rng, MapZone? zoneRect, Vec2 center, float inner, float outer)
     {
         for (int k = 0; k < count; k++)
         {
-            Vec2 p = ScatterSpot(grid, center, inner, outer, ref rng);
+            Vec2 p = zoneRect != null
+                ? ScatterSpotInRect(grid, zoneRect, ref rng)
+                : ScatterSpot(grid, center, inner, outer, ref rng);
             SpawnUnit(defId, p);
             int idx = _sim.Units.Count - 1;
             _sim.UnitsMut[idx].VillageId = (short)villageId;
@@ -188,6 +195,10 @@ public partial class Game1
         }
         return count;
     }
+
+    private int SpawnGroup(string defId, int count, int villageId, Vec2 center,
+        float inner, float outer, TileGrid? grid, ref uint rng)
+        => SpawnGroupCore(defId, count, villageId, grid, ref rng, null, center, inner, outer);
 
     private void SpawnPatrols(VillageFileDto file, TileGrid? grid, ref uint rng)
     {
