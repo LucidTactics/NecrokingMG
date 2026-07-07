@@ -62,7 +62,7 @@ public class UnitEditorWindow
 
     // --- Public accessors for scenario testing ---
     /// <summary>Open the weapon sub-editor popup (for UI test scenarios).</summary>
-    public void OpenWeaponSubEditor() { _activeSubEditor = SubEditor.Weapon; _subSelectedIdx = 0; }
+    public void OpenWeaponSubEditor() { _activeSubEditor = SubEditor.Weapon; if (_weaponPanel != null) _weaponPanel.SelectedIdx = 0; }
     /// <summary>Current preview animation playing state.</summary>
     public bool PreviewPlaying => _previewPlaying;
     /// <summary>Current preview animation looping state.</summary>
@@ -138,9 +138,14 @@ public class UnitEditorWindow
     private const int SubEditorInputLayer = 1;
     private SubEditor _activeSubEditor = SubEditor.None;
 
-    private int _subSelectedIdx = -1;
     private string _subSearchFilter = "";
     private float _subPropScroll;
+
+    // Generic sub-editor panels (created in SetGameData): list/CRUD/clipboard mechanics
+    // live in RegistryCrudPanel; each panel owns its own selection + Ctrl+C/V clipboard.
+    private RegistryCrudPanel<WeaponDef> _weaponPanel = null!;
+    private RegistryCrudPanel<ArmorDef> _armorPanel = null!;
+    private RegistryCrudPanel<ShieldDef> _shieldPanel = null!;
 
     // --- Group editor popup state ---
     private bool _groupEditorOpen;
@@ -149,9 +154,6 @@ public class UnitEditorWindow
 
     // --- Clipboard for Ctrl+C / Ctrl+V ---
     private UnitDef _clipboardUnit;
-    private WeaponDef? _clipboardWeapon;
-    private ArmorDef? _clipboardArmor;
-    private ShieldDef? _clipboardShield;
 
     /// <summary>
     /// When true, Game1 should close this editor (toggle menu state).
@@ -191,7 +193,33 @@ public class UnitEditorWindow
     public void SetGameData(GameData gameData)
     {
         _gameData = gameData;
+
+        // Generic registry sub-editors (RegistryCrudPanel owns list/CRUD/clipboard
+        // mechanics; the DrawXDetail forms below stay caller-owned).
+        _weaponPanel = new RegistryCrudPanel<WeaponDef>(_ui, gameData.Weapons, "sub_wlist",
+            "weapon_", "New Weapon", "weapon", "data/weapons.json", DrawWeaponDetail,
+            SetStatus, () => _unsavedChanges = true,
+            id => gameData.Units.CountUnitsWithWeapon(id), id => gameData.Units.RemoveWeaponFromAll(id));
+        _armorPanel = new RegistryCrudPanel<ArmorDef>(_ui, gameData.Armors, "sub_alist",
+            "armor_", "New Armor", "armor", "data/armor.json", DrawArmorDetail,
+            SetStatus, () => _unsavedChanges = true,
+            id => gameData.Units.CountUnitsWithArmor(id), id => gameData.Units.RemoveArmorFromAll(id));
+        _shieldPanel = new RegistryCrudPanel<ShieldDef>(_ui, gameData.Shields, "sub_slist",
+            "shield_", "New Shield", "shield", "data/shields.json", DrawShieldDetail,
+            SetStatus, () => _unsavedChanges = true,
+            id => gameData.Units.CountUnitsWithShield(id), id => gameData.Units.RemoveShieldFromAll(id));
     }
+
+    /// <summary>The sub-editor panel matching a SubEditor tag (null for None).</summary>
+    private IRegistryCrudPanel? PanelFor(SubEditor which) => which switch
+    {
+        SubEditor.Weapon => _weaponPanel,
+        SubEditor.Armor => _armorPanel,
+        SubEditor.Shield => _shieldPanel,
+        _ => null
+    };
+
+    private IRegistryCrudPanel? ActivePanel => PanelFor(_activeSubEditor);
 
     private GraphicsDevice? _graphicsDevice;
 
@@ -271,7 +299,7 @@ public class UnitEditorWindow
             _confirmDeleteUnitLayer.OnCancelAction = () => _confirmDeleteUnit = false;
             _confirmDeleteGroupLayer.OnCancelAction = () => _confirmDeleteGroup = false;
             _pickModeLayer.OnCancelAction = () => _pickMode = PickTarget.None;
-            _activeSubEditorLayer.OnCancelAction = () => { _activeSubEditor = SubEditor.None; _subSelectedIdx = -1; };
+            _activeSubEditorLayer.OnCancelAction = () => { if (ActivePanel != null) ActivePanel.SelectedIdx = -1; _activeSubEditor = SubEditor.None; };
             _groupEditorLayer.OnCancelAction = () => _groupEditorOpen = false;
             _unitModalLayersWired = true;
         }
@@ -374,32 +402,9 @@ public class UnitEditorWindow
         if (!textActive && ctrlDown &&
             _ui._kb.IsKeyDown(Keys.C) && !_ui._prevKb.IsKeyDown(Keys.C))
         {
-            if (_activeSubEditor == SubEditor.Weapon)
+            if (ActivePanel != null)
             {
-                var wIds = _gameData.Weapons.GetIDs();
-                if (_subSelectedIdx >= 0 && _subSelectedIdx < wIds.Count)
-                {
-                    var srcW = _gameData.Weapons.Get(wIds[_subSelectedIdx]);
-                    if (srcW != null) { _clipboardWeapon = CloneWeapon(srcW, srcW.Id); SetStatus("Copied weapon: " + srcW.Id); }
-                }
-            }
-            else if (_activeSubEditor == SubEditor.Armor)
-            {
-                var aIds = _gameData.Armors.GetIDs();
-                if (_subSelectedIdx >= 0 && _subSelectedIdx < aIds.Count)
-                {
-                    var srcA = _gameData.Armors.Get(aIds[_subSelectedIdx]);
-                    if (srcA != null) { _clipboardArmor = CloneArmor(srcA, srcA.Id); SetStatus("Copied armor: " + srcA.Id); }
-                }
-            }
-            else if (_activeSubEditor == SubEditor.Shield)
-            {
-                var sIds = _gameData.Shields.GetIDs();
-                if (_subSelectedIdx >= 0 && _subSelectedIdx < sIds.Count)
-                {
-                    var srcS = _gameData.Shields.Get(sIds[_subSelectedIdx]);
-                    if (srcS != null) { _clipboardShield = CloneShield(srcS, srcS.Id); SetStatus("Copied shield: " + srcS.Id); }
-                }
+                ActivePanel.CopyToClipboard();
             }
             else if (!_groupEditorOpen)
             {
@@ -420,41 +425,9 @@ public class UnitEditorWindow
         if (!textActive && ctrlDown &&
             _ui._kb.IsKeyDown(Keys.V) && !_ui._prevKb.IsKeyDown(Keys.V))
         {
-            if (_activeSubEditor == SubEditor.Weapon && _clipboardWeapon != null)
+            if (ActivePanel != null)
             {
-                string newId = _clipboardWeapon.Id + "_paste";
-                int suffix = 1;
-                while (_gameData.Weapons.Get(newId) != null) newId = _clipboardWeapon.Id + "_paste" + (++suffix);
-                var newDef = CloneWeapon(_clipboardWeapon, newId);
-                newDef.DisplayName = _clipboardWeapon.DisplayName + " (Paste)";
-                _gameData.Weapons.Add(newDef);
-                _subSelectedIdx = IndexOf(_gameData.Weapons.GetIDs(), newId);
-                _unsavedChanges = true;
-                SetStatus("Pasted weapon: " + newId);
-            }
-            else if (_activeSubEditor == SubEditor.Armor && _clipboardArmor != null)
-            {
-                string newId = _clipboardArmor.Id + "_paste";
-                int suffix = 1;
-                while (_gameData.Armors.Get(newId) != null) newId = _clipboardArmor.Id + "_paste" + (++suffix);
-                var newDef = CloneArmor(_clipboardArmor, newId);
-                newDef.DisplayName = _clipboardArmor.DisplayName + " (Paste)";
-                _gameData.Armors.Add(newDef);
-                _subSelectedIdx = IndexOf(_gameData.Armors.GetIDs(), newId);
-                _unsavedChanges = true;
-                SetStatus("Pasted armor: " + newId);
-            }
-            else if (_activeSubEditor == SubEditor.Shield && _clipboardShield != null)
-            {
-                string newId = _clipboardShield.Id + "_paste";
-                int suffix = 1;
-                while (_gameData.Shields.Get(newId) != null) newId = _clipboardShield.Id + "_paste" + (++suffix);
-                var newDef = CloneShield(_clipboardShield, newId);
-                newDef.DisplayName = _clipboardShield.DisplayName + " (Paste)";
-                _gameData.Shields.Add(newDef);
-                _subSelectedIdx = IndexOf(_gameData.Shields.GetIDs(), newId);
-                _unsavedChanges = true;
-                SetStatus("Pasted shield: " + newId);
+                ActivePanel.PasteFromClipboard();
             }
             else if (_activeSubEditor == SubEditor.None && !_groupEditorOpen && _clipboardUnit != null)
             {
@@ -581,38 +554,13 @@ public class UnitEditorWindow
         if (_confirmDeleteOpen)
         {
             // RU18: Show affected unit count in delete confirmation
-            int affectedCount = _confirmDeleteType switch
-            {
-                SubEditor.Weapon => _gameData.Units.CountUnitsWithWeapon(_confirmDeleteId),
-                SubEditor.Armor => _gameData.Units.CountUnitsWithArmor(_confirmDeleteId),
-                SubEditor.Shield => _gameData.Units.CountUnitsWithShield(_confirmDeleteId),
-                _ => 0
-            };
+            var confirmPanel = PanelFor(_confirmDeleteType);
+            int affectedCount = confirmPanel?.CountReferences(_confirmDeleteId) ?? 0;
             string confirmMsg = $"Delete '{_confirmDeleteId}'? Used by {affectedCount} unit(s). Remove from all?";
             if (_ui.DrawConfirmDialog("Confirm Delete", confirmMsg, ref _confirmDeleteOpen))
             {
-                // Confirmed deletion
-                switch (_confirmDeleteType)
-                {
-                    case SubEditor.Weapon:
-                        _gameData.Units.RemoveWeaponFromAll(_confirmDeleteId);
-                        _gameData.Weapons.Remove(_confirmDeleteId);
-                        _subSelectedIdx = Math.Min(_subSelectedIdx, _gameData.Weapons.Count - 1);
-                        SetStatus("Removed weapon: " + _confirmDeleteId);
-                        break;
-                    case SubEditor.Armor:
-                        _gameData.Units.RemoveArmorFromAll(_confirmDeleteId);
-                        _gameData.Armors.Remove(_confirmDeleteId);
-                        _subSelectedIdx = Math.Min(_subSelectedIdx, _gameData.Armors.Count - 1);
-                        SetStatus("Removed armor: " + _confirmDeleteId);
-                        break;
-                    case SubEditor.Shield:
-                        _gameData.Units.RemoveShieldFromAll(_confirmDeleteId);
-                        _gameData.Shields.Remove(_confirmDeleteId);
-                        _subSelectedIdx = Math.Min(_subSelectedIdx, _gameData.Shields.Count - 1);
-                        SetStatus("Removed shield: " + _confirmDeleteId);
-                        break;
-                }
+                // Confirmed deletion (strips references, removes, clamps selection)
+                confirmPanel?.DeleteWithReferences(_confirmDeleteId);
                 _unsavedChanges = true;
             }
         }
@@ -2868,8 +2816,8 @@ public class UnitEditorWindow
         // Close button
         if (_ui.DrawButton("X", popX + popW - 30, popY + 3, 24, 22, EditorBase.DangerColor))
         {
+            if (ActivePanel != null) ActivePanel.SelectedIdx = -1;
             _activeSubEditor = SubEditor.None;
-            _subSelectedIdx = -1;
             _ui.EndOverlay();
             return;
         }
@@ -2878,18 +2826,14 @@ public class UnitEditorWindow
         int contentH = popH - 72;
         int listW = 200;
 
-        // --- Left: search + list ---
+        // --- Left: search + list; right: detail (RegistryCrudPanel mechanics) ---
         int leftX = popX + 4;
         _subSearchFilter = _ui.DrawSearchField("sub_search", _subSearchFilter, leftX, contentY, listW);
         int listY = contentY + 26;
         int listH = contentH - 26;
 
-        switch (_activeSubEditor)
-        {
-            case SubEditor.Weapon: DrawWeaponSubEditor(leftX, listY, listW, listH, popX, popW, contentY, contentH); break;
-            case SubEditor.Armor: DrawArmorSubEditor(leftX, listY, listW, listH, popX, popW, contentY, contentH); break;
-            case SubEditor.Shield: DrawShieldSubEditor(leftX, listY, listW, listH, popX, popW, contentY, contentH); break;
-        }
+        ActivePanel?.DrawListAndDetail(_subSearchFilter, leftX, listY, listW, listH,
+            popX, popW, contentY, contentH, () => _subPropScroll = 0);
 
         // --- Bottom CRUD buttons ---
         int bottomY = popY + popH - 34;
@@ -2898,52 +2842,7 @@ public class UnitEditorWindow
         _ui.EndOverlay();
     }
 
-    // ---- WEAPON SUB-EDITOR ----
-
-    private void DrawWeaponSubEditor(int leftX, int listY, int listW, int listH,
-        int popX, int popW, int contentY, int contentH)
-    {
-        var ids = _gameData.Weapons.GetIDs();
-        var displayItems = new List<string>();
-        var filteredIds = new List<string>();
-        foreach (var id in ids)
-        {
-            string name = _gameData.Weapons.NameOf(id);
-            if (!string.IsNullOrEmpty(_subSearchFilter) &&
-                !id.Contains(_subSearchFilter, StringComparison.OrdinalIgnoreCase) &&
-                !name.Contains(_subSearchFilter, StringComparison.OrdinalIgnoreCase))
-                continue;
-            filteredIds.Add(id);
-            displayItems.Add(name);
-        }
-
-        int filteredSelIdx = _subSelectedIdx >= 0 && _subSelectedIdx < ids.Count
-            ? filteredIds.IndexOf(ids[_subSelectedIdx]) : -1;
-
-        int clicked = _ui.DrawScrollableList("sub_wlist", displayItems, filteredSelIdx,
-            leftX, listY, listW, listH, null);
-        if (clicked >= 0 && clicked < filteredIds.Count)
-        {
-            _subSelectedIdx = IndexOf(ids, filteredIds[clicked]);
-            _subPropScroll = 0;
-        }
-
-        // --- Right: detail ---
-        int rightX = popX + listW + 12;
-        int rightW = popW - listW - 20;
-        _ui.DrawRect(new Rectangle(rightX - 2, contentY, 1, contentH), EditorBase.PanelBorder);
-
-        if (_subSelectedIdx >= 0 && _subSelectedIdx < ids.Count)
-        {
-            var wDef = _gameData.Weapons.Get(ids[_subSelectedIdx]);
-            if (wDef != null)
-            {
-                _ui.BeginClip(new Rectangle(rightX, contentY, rightW, contentH));
-                DrawWeaponDetail(wDef, rightX, contentY, rightW, contentH);
-                _ui.EndClip();
-            }
-        }
-    }
+    // ---- WEAPON SUB-EDITOR (list/CRUD mechanics live in RegistryCrudPanel) ----
 
     private void DrawWeaponDetail(WeaponDef w, int x, int y, int ww, int h)
     {
@@ -3163,51 +3062,7 @@ public class UnitEditorWindow
         _ui.SetPanelContentHeight("unit_weapondetail", weaponContentH);
     }
 
-    // ---- ARMOR SUB-EDITOR ----
-
-    private void DrawArmorSubEditor(int leftX, int listY, int listW, int listH,
-        int popX, int popW, int contentY, int contentH)
-    {
-        var ids = _gameData.Armors.GetIDs();
-        var displayItems = new List<string>();
-        var filteredIds = new List<string>();
-        foreach (var id in ids)
-        {
-            string name = _gameData.Armors.NameOf(id);
-            if (!string.IsNullOrEmpty(_subSearchFilter) &&
-                !id.Contains(_subSearchFilter, StringComparison.OrdinalIgnoreCase) &&
-                !name.Contains(_subSearchFilter, StringComparison.OrdinalIgnoreCase))
-                continue;
-            filteredIds.Add(id);
-            displayItems.Add(name);
-        }
-
-        int filteredSelIdx = _subSelectedIdx >= 0 && _subSelectedIdx < ids.Count
-            ? filteredIds.IndexOf(ids[_subSelectedIdx]) : -1;
-
-        int clicked = _ui.DrawScrollableList("sub_alist", displayItems, filteredSelIdx,
-            leftX, listY, listW, listH, null);
-        if (clicked >= 0 && clicked < filteredIds.Count)
-        {
-            _subSelectedIdx = IndexOf(ids, filteredIds[clicked]);
-            _subPropScroll = 0;
-        }
-
-        int rightX = popX + listW + 12;
-        int rightW = popW - listW - 20;
-        _ui.DrawRect(new Rectangle(rightX - 2, contentY, 1, contentH), EditorBase.PanelBorder);
-
-        if (_subSelectedIdx >= 0 && _subSelectedIdx < ids.Count)
-        {
-            var aDef = _gameData.Armors.Get(ids[_subSelectedIdx]);
-            if (aDef != null)
-            {
-                _ui.BeginClip(new Rectangle(rightX, contentY, rightW, contentH));
-                DrawArmorDetail(aDef, rightX, contentY, rightW, contentH);
-                _ui.EndClip();
-            }
-        }
-    }
+    // ---- ARMOR SUB-EDITOR (list/CRUD mechanics live in RegistryCrudPanel) ----
 
     private void DrawArmorDetail(ArmorDef a, int x, int y, int ww, int h)
     {
@@ -3266,51 +3121,7 @@ public class UnitEditorWindow
         _ui.SetPanelContentHeight("unit_armordetail", armorContentH);
     }
 
-    // ---- SHIELD SUB-EDITOR ----
-
-    private void DrawShieldSubEditor(int leftX, int listY, int listW, int listH,
-        int popX, int popW, int contentY, int contentH)
-    {
-        var ids = _gameData.Shields.GetIDs();
-        var displayItems = new List<string>();
-        var filteredIds = new List<string>();
-        foreach (var id in ids)
-        {
-            string name = _gameData.Shields.NameOf(id);
-            if (!string.IsNullOrEmpty(_subSearchFilter) &&
-                !id.Contains(_subSearchFilter, StringComparison.OrdinalIgnoreCase) &&
-                !name.Contains(_subSearchFilter, StringComparison.OrdinalIgnoreCase))
-                continue;
-            filteredIds.Add(id);
-            displayItems.Add(name);
-        }
-
-        int filteredSelIdx = _subSelectedIdx >= 0 && _subSelectedIdx < ids.Count
-            ? filteredIds.IndexOf(ids[_subSelectedIdx]) : -1;
-
-        int clicked = _ui.DrawScrollableList("sub_slist", displayItems, filteredSelIdx,
-            leftX, listY, listW, listH, null);
-        if (clicked >= 0 && clicked < filteredIds.Count)
-        {
-            _subSelectedIdx = IndexOf(ids, filteredIds[clicked]);
-            _subPropScroll = 0;
-        }
-
-        int rightX = popX + listW + 12;
-        int rightW = popW - listW - 20;
-        _ui.DrawRect(new Rectangle(rightX - 2, contentY, 1, contentH), EditorBase.PanelBorder);
-
-        if (_subSelectedIdx >= 0 && _subSelectedIdx < ids.Count)
-        {
-            var sDef = _gameData.Shields.Get(ids[_subSelectedIdx]);
-            if (sDef != null)
-            {
-                _ui.BeginClip(new Rectangle(rightX, contentY, rightW, contentH));
-                DrawShieldDetail(sDef, rightX, contentY, rightW, contentH);
-                _ui.EndClip();
-            }
-        }
-    }
+    // ---- SHIELD SUB-EDITOR (list/CRUD mechanics live in RegistryCrudPanel) ----
 
     private void DrawShieldDetail(ShieldDef s, int x, int y, int ww, int h)
     {
@@ -3352,214 +3163,23 @@ public class UnitEditorWindow
 
     private void DrawSubEditorCrudButtons(int popX, int bottomY, int popW)
     {
-        int bx = popX + 8;
-        int btnW = 70;
-        int btnH = 24;
-
         // Apply & Close button (bottom-right area)
-        if (_ui.DrawButton("Apply & Close", popX + popW - 190, bottomY, 100, btnH, EditorBase.AccentColor))
+        if (_ui.DrawButton("Apply & Close", popX + popW - 190, bottomY, 100, 24, EditorBase.AccentColor))
         {
+            if (ActivePanel != null) ActivePanel.SelectedIdx = -1;
             _activeSubEditor = SubEditor.None;
-            _subSelectedIdx = -1;
             return;
         }
 
-        switch (_activeSubEditor)
+        // +New / Copy / Delete / Save mechanics live in RegistryCrudPanel; a
+        // reference-guarded delete routes through the window's confirm dialog
+        // (drawn in Update — it owns the modal input layer).
+        ActivePanel?.DrawCrudButtons(popX, bottomY, popW, id =>
         {
-            case SubEditor.Weapon:
-            {
-                if (_ui.DrawButton("+ New", bx, bottomY, btnW, btnH))
-                {
-                    string newId = "weapon_" + DateTime.Now.ToString("HHmmss");
-                    var newDef = new WeaponDef { Id = newId, DisplayName = "New Weapon" };
-                    _gameData.Weapons.Add(newDef);
-                    _subSelectedIdx = IndexOf(_gameData.Weapons.GetIDs(), newId);
-                    _unsavedChanges = true;
-                    SetStatus("Added weapon: " + newId);
-                }
-                bx += btnW + 4;
-
-                var wIds = _gameData.Weapons.GetIDs();
-                if (_subSelectedIdx >= 0 && _subSelectedIdx < wIds.Count)
-                {
-                    // Copy button
-                    if (_ui.DrawButton("Copy", bx, bottomY, btnW, btnH))
-                    {
-                        var srcW = _gameData.Weapons.Get(wIds[_subSelectedIdx]);
-                        if (srcW != null)
-                        {
-                            string newId = srcW.Id + "_copy";
-                            int suffix = 1;
-                            while (_gameData.Weapons.Get(newId) != null)
-                                newId = srcW.Id + "_copy" + (++suffix);
-                            var newDef = CloneWeapon(srcW, newId);
-                            newDef.DisplayName = srcW.DisplayName + " (Copy)";
-                            _gameData.Weapons.AddAfter(newDef, srcW.Id);
-                            _subSelectedIdx = IndexOf(_gameData.Weapons.GetIDs(), newId);
-                            _unsavedChanges = true;
-                            SetStatus("Copied weapon: " + newId);
-                        }
-                    }
-                    bx += btnW + 4;
-
-                    // Delete button with confirmation if referenced
-                    if (_ui.DrawButton("Delete", bx, bottomY, btnW, btnH, EditorBase.DangerColor))
-                    {
-                        string removeId = wIds[_subSelectedIdx];
-                        int refCount = _gameData.Units.CountUnitsWithWeapon(removeId);
-                        if (refCount > 0)
-                        {
-                            _confirmDeleteOpen = true;
-                            _confirmDeleteId = removeId;
-                            _confirmDeleteType = SubEditor.Weapon;
-                        }
-                        else
-                        {
-                            _gameData.Weapons.Remove(removeId);
-                            _subSelectedIdx = Math.Min(_subSelectedIdx, _gameData.Weapons.Count - 1);
-                            _unsavedChanges = true;
-                            SetStatus("Removed weapon: " + removeId);
-                        }
-                    }
-                }
-
-                // Save
-                if (_ui.DrawButton("Save", popX + popW - 80, bottomY, 70, btnH, EditorBase.SuccessColor))
-                {
-                    bool ok = _gameData.Weapons.Save(Core.GamePaths.Resolve("data/weapons.json"));
-                    SetStatus(ok ? "Saved weapons.json" : "SAVE FAILED!");
-                }
-                break;
-            }
-            case SubEditor.Armor:
-            {
-                if (_ui.DrawButton("+ New", bx, bottomY, btnW, btnH))
-                {
-                    string newId = "armor_" + DateTime.Now.ToString("HHmmss");
-                    var newDef = new ArmorDef { Id = newId, DisplayName = "New Armor" };
-                    _gameData.Armors.Add(newDef);
-                    _subSelectedIdx = IndexOf(_gameData.Armors.GetIDs(), newId);
-                    _unsavedChanges = true;
-                    SetStatus("Added armor: " + newId);
-                }
-                bx += btnW + 4;
-
-                var aIds = _gameData.Armors.GetIDs();
-                if (_subSelectedIdx >= 0 && _subSelectedIdx < aIds.Count)
-                {
-                    // Copy button
-                    if (_ui.DrawButton("Copy", bx, bottomY, btnW, btnH))
-                    {
-                        var srcA = _gameData.Armors.Get(aIds[_subSelectedIdx]);
-                        if (srcA != null)
-                        {
-                            string newId = srcA.Id + "_copy";
-                            int suffix = 1;
-                            while (_gameData.Armors.Get(newId) != null)
-                                newId = srcA.Id + "_copy" + (++suffix);
-                            var newDef = CloneArmor(srcA, newId);
-                            newDef.DisplayName = srcA.DisplayName + " (Copy)";
-                            _gameData.Armors.AddAfter(newDef, srcA.Id);
-                            _subSelectedIdx = IndexOf(_gameData.Armors.GetIDs(), newId);
-                            _unsavedChanges = true;
-                            SetStatus("Copied armor: " + newId);
-                        }
-                    }
-                    bx += btnW + 4;
-
-                    // Delete button with confirmation if referenced
-                    if (_ui.DrawButton("Delete", bx, bottomY, btnW, btnH, EditorBase.DangerColor))
-                    {
-                        string removeId = aIds[_subSelectedIdx];
-                        int refCount = _gameData.Units.CountUnitsWithArmor(removeId);
-                        if (refCount > 0)
-                        {
-                            _confirmDeleteOpen = true;
-                            _confirmDeleteId = removeId;
-                            _confirmDeleteType = SubEditor.Armor;
-                        }
-                        else
-                        {
-                            _gameData.Armors.Remove(removeId);
-                            _subSelectedIdx = Math.Min(_subSelectedIdx, _gameData.Armors.Count - 1);
-                            _unsavedChanges = true;
-                            SetStatus("Removed armor: " + removeId);
-                        }
-                    }
-                }
-
-                if (_ui.DrawButton("Save", popX + popW - 80, bottomY, 70, btnH, EditorBase.SuccessColor))
-                {
-                    bool ok = _gameData.Armors.Save(Core.GamePaths.Resolve("data/armor.json"));
-                    SetStatus(ok ? "Saved armor.json" : "SAVE FAILED!");
-                }
-                break;
-            }
-            case SubEditor.Shield:
-            {
-                if (_ui.DrawButton("+ New", bx, bottomY, btnW, btnH))
-                {
-                    string newId = "shield_" + DateTime.Now.ToString("HHmmss");
-                    var newDef = new ShieldDef { Id = newId, DisplayName = "New Shield" };
-                    _gameData.Shields.Add(newDef);
-                    _subSelectedIdx = IndexOf(_gameData.Shields.GetIDs(), newId);
-                    _unsavedChanges = true;
-                    SetStatus("Added shield: " + newId);
-                }
-                bx += btnW + 4;
-
-                var sIds = _gameData.Shields.GetIDs();
-                if (_subSelectedIdx >= 0 && _subSelectedIdx < sIds.Count)
-                {
-                    // Copy button
-                    if (_ui.DrawButton("Copy", bx, bottomY, btnW, btnH))
-                    {
-                        var srcS = _gameData.Shields.Get(sIds[_subSelectedIdx]);
-                        if (srcS != null)
-                        {
-                            string newId = srcS.Id + "_copy";
-                            int suffix = 1;
-                            while (_gameData.Shields.Get(newId) != null)
-                                newId = srcS.Id + "_copy" + (++suffix);
-                            var newDef = CloneShield(srcS, newId);
-                            newDef.DisplayName = srcS.DisplayName + " (Copy)";
-                            _gameData.Shields.AddAfter(newDef, srcS.Id);
-                            _subSelectedIdx = IndexOf(_gameData.Shields.GetIDs(), newId);
-                            _unsavedChanges = true;
-                            SetStatus("Copied shield: " + newId);
-                        }
-                    }
-                    bx += btnW + 4;
-
-                    // Delete button with confirmation if referenced
-                    if (_ui.DrawButton("Delete", bx, bottomY, btnW, btnH, EditorBase.DangerColor))
-                    {
-                        string removeId = sIds[_subSelectedIdx];
-                        int refCount = _gameData.Units.CountUnitsWithShield(removeId);
-                        if (refCount > 0)
-                        {
-                            _confirmDeleteOpen = true;
-                            _confirmDeleteId = removeId;
-                            _confirmDeleteType = SubEditor.Shield;
-                        }
-                        else
-                        {
-                            _gameData.Shields.Remove(removeId);
-                            _subSelectedIdx = Math.Min(_subSelectedIdx, _gameData.Shields.Count - 1);
-                            _unsavedChanges = true;
-                            SetStatus("Removed shield: " + removeId);
-                        }
-                    }
-                }
-
-                if (_ui.DrawButton("Save", popX + popW - 80, bottomY, 70, btnH, EditorBase.SuccessColor))
-                {
-                    bool ok = _gameData.Shields.Save(Core.GamePaths.Resolve("data/shields.json"));
-                    SetStatus(ok ? "Saved shields.json" : "SAVE FAILED!");
-                }
-                break;
-            }
-        }
+            _confirmDeleteOpen = true;
+            _confirmDeleteId = id;
+            _confirmDeleteType = _activeSubEditor;
+        });
     }
 
     // =========================================================================
@@ -3751,21 +3371,13 @@ public class UnitEditorWindow
     // clone fidelity == save/load fidelity, so fields added to the defs later
     // can never be silently dropped by Copy/Paste again. (The old hand-written
     // member copies here had drifted badly — CloneUnit lost morale, detection,
-    // locomotion calibration and wading data; CloneWeapon lost the entire
-    // pounce/trample/sweep archetype block.) DisplayName suffixing is done at
-    // the call sites ("(Copy)" on duplicate buttons, "(Paste)" on Ctrl+V).
+    // locomotion calibration and wading data; the old CloneWeapon lost the entire
+    // pounce/trample/sweep archetype block.) Weapon/armor/shield clones now live
+    // inside RegistryCrudPanel (same CloneDef path). DisplayName suffixing is done
+    // at the call sites ("(Copy)" on duplicate buttons, "(Paste)" on Ctrl+V).
 
     private UnitDef CloneUnit(UnitDef src, string newId)
         => _gameData.Units.CloneDef(src, newId) ?? new UnitDef { Id = newId, DisplayName = src.DisplayName };
-
-    private WeaponDef CloneWeapon(WeaponDef src, string newId)
-        => _gameData.Weapons.CloneDef(src, newId) ?? new WeaponDef { Id = newId, DisplayName = src.DisplayName };
-
-    private ArmorDef CloneArmor(ArmorDef src, string newId)
-        => _gameData.Armors.CloneDef(src, newId) ?? new ArmorDef { Id = newId, DisplayName = src.DisplayName };
-
-    private ShieldDef CloneShield(ShieldDef src, string newId)
-        => _gameData.Shields.CloneDef(src, newId) ?? new ShieldDef { Id = newId, DisplayName = src.DisplayName };
 
     private static int IndexOf(IReadOnlyList<string> list, string value)
     {

@@ -689,6 +689,7 @@ public class SpellEditorWindow : EditorWindow
             var iRect = new Rectangle(px + 4, (int)fbDrawY, listW - 8, itemH);
             bool sel = (i == _fbSelectedIdx);
             bool hov = !_ui.IsInputBlocked(_ui.EffectiveLayer(0)) && _ui.HitTest(iRect);
+            if (hov) _ui.SetMouseOverUI(); // drift fix: buff list already did this
 
             Color bg = sel ? new Color(60, 60, 90) : (hov ? new Color(45, 45, 60) : Color.Transparent);
             _ui.DrawRect(iRect, bg);
