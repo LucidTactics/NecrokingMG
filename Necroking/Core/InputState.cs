@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
+using Necroking.UI;
 
 namespace Necroking.Core;
 
@@ -32,6 +33,8 @@ public class InputState
     private bool _mouseConsumed;
     private bool _scrollConsumed;
     private bool _kbConsumed;
+
+    private IModalLayer _mouseConsumer;
     // Per-key consumption — lets a top-of-stack popup eat ESC for itself without
     // blocking unrelated keys (movement, hotkeys) on the same frame. The kb-wide
     // _kbConsumed flag is kept for text-input scenarios where a popup wants to
@@ -42,7 +45,11 @@ public class InputState
     public bool IsScrollConsumed => _scrollConsumed;
     public bool IsKbConsumed => _kbConsumed;
 
-    public void ConsumeMouse() { _mouseConsumed = true; MouseOverUI = true; }
+    public IModalLayer MouseConsumer => _mouseConsumer;
+
+    public void ConsumeMouse(IModalLayer consumer=null) { _mouseConsumed = true; MouseOverUI = true;
+       _mouseConsumer = consumer;
+    }
     public void ConsumeScroll() => _scrollConsumed = true;
     public void ConsumeKb() => _kbConsumed = true;
     public void ConsumeKey(Keys key) => _consumedKeys.Add(key);
@@ -85,6 +92,7 @@ public class InputState
         _mouseConsumed = false;
         _scrollConsumed = false;
         _kbConsumed = false;
+        _mouseConsumer = null;
         _consumedKeys.Clear();
         MouseOverUI = false;
     }

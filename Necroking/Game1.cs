@@ -727,7 +727,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// narrow runtime hook (e.g. the spell editor reloading flipbooks after an
     /// edit) without threading the game through their constructors. Same
     /// lifetime rationale as <see cref="Popups"/>; assigned in the ctor.</summary>
-    public static Game1? Instance { get; private set; }
+    public static Game1 Instance { get; private set; }
 
     // Modal-stack adapters for the top-level editor windows. Each is
     // pushed/popped to keep the stack in sync with <see cref="_menuState"/>;

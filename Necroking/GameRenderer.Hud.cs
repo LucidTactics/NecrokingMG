@@ -639,7 +639,7 @@ partial class GameRenderer
 
     /// <summary>Bitmask of which core menus are open, by HUDRenderer.Menu* index,
     /// for highlighting the top-right menu buttons.</summary>
-    private int BuildMenuOpenMask()
+    internal int BuildMenuOpenMask()
     {
         int m = 0;
         if (_g._inventoryUI.IsVisible)     m |= 1 << HUDRenderer.MenuInventory;

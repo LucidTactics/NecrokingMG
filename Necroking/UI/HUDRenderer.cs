@@ -280,7 +280,7 @@ public partial class HUDRenderer
 
     /// <summary>Draw the row of core-menu buttons. <paramref name="menuOpenMask"/>
     /// has bit i set when menu i is currently open (highlighted).</summary>
-    private void DrawMenuButtons(int screenW, int menuOpenMask, int mx, int my)
+    internal void DrawMenuButtons(int screenW, int menuOpenMask, int mx, int my)
     {
         if (!LayoutMenuButtons(screenW)) return;
         for (int i = 0; i < MenuBtnCount; i++)

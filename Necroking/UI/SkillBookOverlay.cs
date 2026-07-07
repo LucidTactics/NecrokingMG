@@ -174,6 +174,20 @@ public class SkillBookOverlay : IModalLayer
             return;
         }
 
+        // WIP
+        {
+           // --- Core-menu buttons (top-right) click ---
+           if (input.LeftPressed && this.Equals(input.MouseConsumer))
+           {
+              int mbHit = Game1.Instance._hudRenderer.HitTestMenuButtons(Game1.Instance.GraphicsDevice.Viewport.Width, mx, my);
+              if (mbHit >= 0)
+              {
+                 Game1.Instance._gameRenderer.ToggleCoreMenu(mbHit, Game1.Instance.GraphicsDevice.Viewport.Width, Game1.Instance.GraphicsDevice.Viewport.Height);
+                 return;
+              }
+           }
+        }
+
         if (!ContainsMouse(mx, my)) return;
 
         // Hover tooltip: track the tile under the cursor (skip while editing layout,
@@ -272,6 +286,13 @@ public class SkillBookOverlay : IModalLayer
 
         // Bind the chrome (title + tab labels/highlights) then draw the window.
         BindChrome();
+        
+        // WIP
+        {
+           Game1.Instance._hudRenderer.
+              DrawMenuButtons(sw, Game1.Instance._gameRenderer.BuildMenuOpenMask(), (int)Game1.Instance._input.MousePos.X, (int)Game1.Instance._input.MousePos.Y);
+        }
+        
         _renderer.DrawWidget(WindowId, _x, _y, Instance);
 
         // Tree: connectors first (under the tiles), then the stamped tiles.

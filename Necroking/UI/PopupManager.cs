@@ -192,16 +192,16 @@ public sealed class PopupManager
             bool inside = top.ContainsMouse(mx, my);
             if (inside)
             {
-                input.ConsumeMouse();
+                input.ConsumeMouse(top);
             }
             else if (top.LightDismiss)
             {
                 top.OnCancel();
-                input.ConsumeMouse();
+                input.ConsumeMouse(top);
             }
             else if (top.IsBlocking)
             {
-                input.ConsumeMouse();
+                input.ConsumeMouse(top);
             }
             else if (top.CloseOnOutsideClick)
             {
