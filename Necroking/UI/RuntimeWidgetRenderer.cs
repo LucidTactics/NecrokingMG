@@ -30,13 +30,16 @@ public class RuntimeWidgetRenderer
     private readonly List<UIEditorElementDef> _elementDefs = new();
     private readonly List<UIEditorWidgetDef> _widgetDefs = new();
 
-    // Texture/nine-slice cache
-    private readonly Render.TextureCache _textures = new("error");
-    private readonly Dictionary<string, NineSlice> _nsInstances = new();
+    // Texture / nine-slice / harmonized cache mechanics (shared with the UI editor).
+    // Built in the constructor so it is always non-null (Shutdown may run without Init);
+    // the device provider reads _device lazily (assigned in Init).
+    private readonly WidgetResourceCache _resources;
 
-    // Harmonized texture/nine-slice cache (layer-prefixed keys like editor: "bg|texPath")
-    private readonly Dictionary<string, Texture2D> _harmonizedTextures = new();
-    private readonly Dictionary<string, NineSlice> _harmonizedNineSlices = new();
+    public RuntimeWidgetRenderer()
+    {
+        _resources = new WidgetResourceCache(() => _device,
+            nsId => _nineSliceDefs.FirstOrDefault(d => d.Id == nsId), "error");
+    }
 
     // Per-widget text overrides: widgetInstanceId -> (childName -> text)
     // This allows runtime code to change text without mutating defs
@@ -724,28 +727,9 @@ public class RuntimeWidgetRenderer
         return font == null ? Vector2.Zero : font.MeasureString(text);
     }
 
-    private Texture2D? GetOrLoadTexture(string texPath) => _textures.GetOrLoad(_device, texPath);
+    private Texture2D? GetOrLoadTexture(string texPath) => _resources.GetOrLoadTexture(texPath);
 
-    private NineSlice? GetOrLoadNineSlice(string nsId)
-    {
-        if (string.IsNullOrEmpty(nsId)) return null;
-        if (_nsInstances.TryGetValue(nsId, out var ns)) return ns;
-
-        var def = _nineSliceDefs.FirstOrDefault(d => d.Id == nsId);
-        if (def == null) return null;
-
-        var nsDef = new NineSliceDef
-        {
-            Id = def.Id, TexturePath = def.Texture,
-            BorderLeft = def.BorderLeft, BorderRight = def.BorderRight,
-            BorderTop = def.BorderTop, BorderBottom = def.BorderBottom,
-            TileEdges = def.TileEdges,
-        };
-        ns = new NineSlice();
-        if (!ns.Load(_device, nsDef)) return null;
-        _nsInstances[nsId] = ns;
-        return ns;
-    }
+    private NineSlice? GetOrLoadNineSlice(string nsId) => _resources.GetOrLoadNineSlice(nsId);
 
     // ═══════════════════════════════════════
     //  JSON Loading — via UIDefsIO, the single parser+writer shared with the
@@ -893,7 +877,7 @@ public class RuntimeWidgetRenderer
             if (!job.Changed) continue; // settings produced no change (matches old null skip)
             var tex = new Texture2D(_device, job.W, job.H);
             tex.SetData(job.Pixels);
-            _harmonizedTextures[job.CacheKey] = tex;
+            _resources.StoreHarmonizedTexture(job.CacheKey, tex);
             if (!string.IsNullOrEmpty(job.NsLookupId))
             {
                 var nsDef = _nineSliceDefs.FirstOrDefault(n => n.Id == job.NsLookupId);
@@ -902,7 +886,7 @@ public class RuntimeWidgetRenderer
                     var nsInst = new NineSlice();
                     nsInst.LoadFromTexture(tex, nsDef.BorderLeft, nsDef.BorderRight,
                         nsDef.BorderTop, nsDef.BorderBottom, nsDef.TileEdges);
-                    _harmonizedNineSlices[job.Prefix + "|" + job.NsLookupId] = nsInst;
+                    _resources.StoreHarmonizedNineSlice(job.Prefix + "|" + job.NsLookupId, nsInst);
                 }
             }
         }
@@ -912,32 +896,17 @@ public class RuntimeWidgetRenderer
     }
 
     /// <summary>Get harmonized nine-slice if available, otherwise original.</summary>
-    private NineSlice? GetNineSlice(string nsId, string cachePrefix)
-    {
-        string cacheKey = cachePrefix + "|" + nsId;
-        if (_harmonizedNineSlices.TryGetValue(cacheKey, out var harmonized))
-            return harmonized;
-        return GetOrLoadNineSlice(nsId);
-    }
+    private NineSlice? GetNineSlice(string nsId, string cachePrefix) => _resources.GetNineSlice(nsId, cachePrefix);
 
     /// <summary>Get harmonized texture if available, otherwise original.</summary>
-    private Texture2D? GetTexture(string path, string cachePrefix)
-    {
-        string cacheKey = cachePrefix + "|" + path;
-        if (_harmonizedTextures.TryGetValue(cacheKey, out var harmonized))
-            return harmonized;
-        return GetOrLoadTexture(path);
-    }
+    private Texture2D? GetTexture(string path, string cachePrefix) => _resources.GetTexture(path, cachePrefix);
 
     public void Shutdown()
     {
-        foreach (var ns in _nsInstances.Values) ns.Unload();
-        _nsInstances.Clear();
-        foreach (var ns in _harmonizedNineSlices.Values) ns.Unload();
-        _harmonizedNineSlices.Clear();
-        _textures.DisposeAll();
-        foreach (var tex in _harmonizedTextures.Values) tex.Dispose();
-        _harmonizedTextures.Clear();
+        _resources.ClearNineSliceInstances();
+        _resources.ClearHarmonizedNineSlices(unload: true);
+        _resources.DisposeRawTextures();
+        _resources.ClearHarmonizedTextures();
         // _pixel is the shared TextureUtil.GetWhitePixel cache — do NOT dispose it here.
     }
 }

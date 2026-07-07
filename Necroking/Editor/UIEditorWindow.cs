@@ -324,15 +324,16 @@ public partial class UIEditorWindow : EditorBase
     private Point _widgetDragStart;
     private int _wDragOrigX, _wDragOrigY, _wDragOrigW, _wDragOrigH;
 
-    // Loaded textures (for nine-slice display)
-    private readonly Render.TextureCache _textures = new();
+    // Texture / nine-slice / harmonized cache mechanics (shared with RuntimeWidgetRenderer).
+    // Initialized in the constructor: the device provider reads _device lazily (assigned by
+    // Init), and the nine-slice resolver reads this editor's live _nineSlices list.
+    private readonly WidgetResourceCache _resources;
 
-    // Harmonized texture cache (per-pixel color-shifted copies, keyed by source path)
-    private readonly Dictionary<string, Texture2D> _harmonizedTextures = new();
-    private readonly Dictionary<string, NineSlice> _harmonizedNineSlices = new();
-
-    // Loaded NineSlice instances (for preview rendering)
-    private readonly Dictionary<string, NineSlice> _nsInstances = new();
+    public UIEditorWindow()
+    {
+        _resources = new WidgetResourceCache(() => _device,
+            nsId => _nineSlices.FirstOrDefault(d => d.Id == nsId));
+    }
 
     // Definitions path
     private string _defsDir = "";
@@ -453,40 +454,14 @@ public partial class UIEditorWindow : EditorBase
     //  Texture loading helpers
     // ═══════════════════════════════════════
 
-    private Texture2D? GetOrLoadTexture(string texPath) => _textures.GetOrLoad(_device, texPath);
+    private Texture2D? GetOrLoadTexture(string texPath) => _resources.GetOrLoadTexture(texPath);
 
-    private NineSlice? GetOrLoadNineSlice(string nsId)
-    {
-        if (string.IsNullOrEmpty(nsId) || _device == null) return null;
-        if (_nsInstances.TryGetValue(nsId, out var ns)) return ns;
-
-        var def = _nineSlices.FirstOrDefault(d => d.Id == nsId);
-        if (def == null) return null;
-
-        var nsDef = new NineSliceDef
-        {
-            Id = def.Id,
-            TexturePath = def.Texture,
-            BorderLeft = def.BorderLeft,
-            BorderRight = def.BorderRight,
-            BorderTop = def.BorderTop,
-            BorderBottom = def.BorderBottom,
-            TileEdges = def.TileEdges,
-        };
-        ns = new NineSlice();
-        if (!ns.Load(_device, nsDef)) return null;
-        _nsInstances[nsId] = ns;
-        return ns;
-    }
+    private NineSlice? GetOrLoadNineSlice(string nsId) => _resources.GetOrLoadNineSlice(nsId);
 
     /// <summary>Invalidate cached NineSlice instance so it gets rebuilt from current def.</summary>
     private void InvalidateNineSlice(string nsId)
     {
-        if (_nsInstances.TryGetValue(nsId, out var old))
-        {
-            old.Unload();
-            _nsInstances.Remove(nsId);
-        }
+        _resources.InvalidateNineSliceInstance(nsId);
 
         // Harmonized nine-slice instances bake the borders/texture at bake time
         // into separate per-consumer caches — rebake every element/widget layer
@@ -515,13 +490,11 @@ public partial class UIEditorWindow : EditorBase
     /// </summary>
     private void InvalidateAllDerivedCaches()
     {
-        foreach (var inst in _nsInstances.Values)
-            inst.Unload();
-        _nsInstances.Clear();
-        foreach (var tex in _harmonizedTextures.Values)
-            tex.Dispose();
-        _harmonizedTextures.Clear();
-        _harmonizedNineSlices.Clear();
+        _resources.ClearNineSliceInstances();
+        _resources.ClearHarmonizedTextures();
+        // Harmonized nine-slices reference the harmonized textures just disposed, so
+        // clear WITHOUT unloading (unload would double-dispose those textures).
+        _resources.ClearHarmonizedNineSlices(unload: false);
         if (_device != null)
             RegenerateAllOnLoad();
     }

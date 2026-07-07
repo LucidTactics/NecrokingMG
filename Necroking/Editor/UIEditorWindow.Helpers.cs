@@ -15,23 +15,11 @@ public partial class UIEditorWindow
 
     /// <summary>Get harmonized texture if available, otherwise original. Handles cache prefix.</summary>
     private Texture2D? GetTexture(string imagePath, string cachePrefix = "")
-    {
-        if (string.IsNullOrEmpty(imagePath)) return null;
-        string cacheKey = string.IsNullOrEmpty(cachePrefix) ? imagePath : cachePrefix + "|" + imagePath;
-        if (_harmonizedTextures.TryGetValue(cacheKey, out var harmonized))
-            return harmonized;
-        return GetOrLoadTexture(imagePath);
-    }
+        => _resources.GetTexture(imagePath, cachePrefix);
 
     /// <summary>Get harmonized nine-slice if available, otherwise original. Handles cache prefix.</summary>
     private NineSlice? GetNineSlice(string nsId, string cachePrefix = "")
-    {
-        if (string.IsNullOrEmpty(nsId)) return null;
-        string cacheKey = string.IsNullOrEmpty(cachePrefix) ? nsId : cachePrefix + "|" + nsId;
-        if (_harmonizedNineSlices.TryGetValue(cacheKey, out var harmonized))
-            return harmonized;
-        return GetOrLoadNineSlice(nsId);
-    }
+        => _resources.GetNineSlice(nsId, cachePrefix);
 
     // ═══════════════════════════════════════
     //  Widget Layer Rendering
@@ -220,12 +208,13 @@ public partial class UIEditorWindow
 
         if (settings == null || !settings.HasEffect)
         {
-            // Clear cache to show original
-            if (_harmonizedTextures.TryGetValue(cacheKey, out var old) && old != sourceTex)
+            // Clear cache to show original. Dispose the old harmonized texture only if it
+            // isn't the source itself (which the TextureCache owns).
+            if (_resources.TryGetHarmonizedTexture(cacheKey, out var old) && old != sourceTex)
                 old.Dispose();
-            _harmonizedTextures.Remove(cacheKey);
+            _resources.RemoveHarmonizedTexture(cacheKey);
             if (!string.IsNullOrEmpty(nsLookupId))
-                _harmonizedNineSlices.Remove(cachePrefix + "|" + nsLookupId);
+                _resources.RemoveHarmonizedNineSlice(cachePrefix + "|" + nsLookupId);
             return;
         }
 
@@ -233,9 +222,9 @@ public partial class UIEditorWindow
         var harmonized = ColorHarmonizer.HarmonizeTexture(sourceTex, _device, settings);
         if (harmonized != null)
         {
-            if (_harmonizedTextures.TryGetValue(cacheKey, out var old) && old != sourceTex)
+            if (_resources.TryGetHarmonizedTexture(cacheKey, out var old) && old != sourceTex)
                 old.Dispose();
-            _harmonizedTextures[cacheKey] = harmonized;
+            _resources.StoreHarmonizedTexture(cacheKey, harmonized);
 
             if (!string.IsNullOrEmpty(nsLookupId))
             {
@@ -245,7 +234,7 @@ public partial class UIEditorWindow
                     var nsInst = new NineSlice();
                     nsInst.LoadFromTexture(harmonized, nsDef.BorderLeft, nsDef.BorderRight,
                         nsDef.BorderTop, nsDef.BorderBottom, nsDef.TileEdges);
-                    _harmonizedNineSlices[cachePrefix + "|" + nsLookupId] = nsInst;
+                    _resources.StoreHarmonizedNineSlice(cachePrefix + "|" + nsLookupId, nsInst);
                 }
             }
         }
