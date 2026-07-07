@@ -428,6 +428,34 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         Necroking.Core.DebugLog.Log("startup", "  [LazyInit] Inventory/Building/Crafting/Table UIs initialized on demand");
     }
 
+    /// <summary>Which screen edge a HUD panel docks to. Docked panels are exclusive
+    /// per side: opening one closes whatever else is on that side, so a left and a
+    /// right panel can coexist but never two left panels. Centered overlays
+    /// (inventory, skill book) and contextual popups (table craft) don't participate.</summary>
+    internal enum PanelSide { Left, Right }
+
+    /// <summary>Close every visible panel docked on <paramref name="side"/> except
+    /// <paramref name="opening"/>. Call right before opening a docked panel (skip when
+    /// the toggle is about to close it). Each panel closes via its own method so it
+    /// pops itself off <see cref="Popups"/> — never mutate the stack directly.</summary>
+    internal void CloseSameSidePanels(PanelSide side, object opening)
+    {
+        if (side == PanelSide.Left)
+        {
+            if (!ReferenceEquals(opening, _craftingMenu) && _craftingMenu.IsVisible) _craftingMenu.Close();
+            if (!ReferenceEquals(opening, _buildingMenuUI) && _buildingMenuUI.IsVisible) _buildingMenuUI.Close();
+            if (!ReferenceEquals(opening, _grimoireOverlay) && _grimoireOverlay.IsVisible) _grimoireOverlay.Hide();
+            if (!ReferenceEquals(opening, _characterStatsUI) && _characterStatsUI.IsVisible) _characterStatsUI.Close();
+            if (!ReferenceEquals(opening, _jobBoardUI) && _jobBoardUI.IsVisible) _jobBoardUI.Close();
+        }
+        else
+        {
+            // Only the pinned unit-info sheet docks right today. Transient (hover)
+            // shows never route through here — they'd slam other panels shut every frame.
+            if (!ReferenceEquals(opening, _unitInfoPanel) && _unitInfoPanel.IsVisible) _unitInfoPanel.Hide();
+        }
+    }
+
     private bool _uiEditorInitialized;
     /// <summary>Deferred init for the UI editor (F12 / menu). LoadDefinitions bakes
     /// every harmonized widget/element texture (~4s of CPU work) — a dev-only tool
@@ -3068,12 +3096,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             && !_input.IsKeyDown(Keys.LeftShift) && !_input.IsKeyDown(Keys.RightShift))
         {
             EnsureInventoryUIsInitialized();
+            if (!_jobBoardUI.IsVisible) CloseSameSidePanels(PanelSide.Left, _jobBoardUI);
             _jobBoardUI.Toggle(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
         }
 
         // 'Tab' key toggles character stats
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.Tab) && _menuState == MenuState.None)
+        {
+            if (!_characterStatsUI.IsVisible) CloseSameSidePanels(PanelSide.Left, _characterStatsUI);
             _characterStatsUI.Toggle();
+        }
 
         // 'K' = the Ability Upgrades skill book (tabbed school trees).
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.K) && _menuState == MenuState.None)
@@ -3083,6 +3115,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.J) && _menuState == MenuState.None)
         {
             EnsureInventoryUIsInitialized();
+            if (!_grimoireOverlay.IsVisible) CloseSameSidePanels(PanelSide.Left, _grimoireOverlay);
             _grimoireOverlay.Toggle();
         }
 
@@ -3093,7 +3126,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (_unitInfoPanel.IsVisible)
                 _unitInfoPanel.Hide();
             else if (_sim.NecromancerIndex >= 0)
+            {
+                CloseSameSidePanels(PanelSide.Right, _unitInfoPanel);
                 _unitInfoPanel.ShowForUnit(_sim.Units[_sim.NecromancerIndex].Id);
+            }
         }
 
         // Hover-highlight is configured in Settings ▸ Tooltips (per-category shape/style). A dev
@@ -3621,7 +3657,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (_input.WasKeyPressed(Keys.B))
             {
                 EnsureInventoryUIsInitialized();
-                if (_craftingMenu.IsVisible) _craftingMenu.Close();
+                if (!_buildingMenuUI.IsVisible) CloseSameSidePanels(PanelSide.Left, _buildingMenuUI);
                 _buildingMenuUI.Toggle(screenW, screenH);
             }
 
@@ -3629,7 +3665,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (_input.WasKeyPressed(Keys.C))
             {
                 EnsureInventoryUIsInitialized();
-                if (_buildingMenuUI.IsVisible) _buildingMenuUI.Close();
+                if (!_craftingMenu.IsVisible) CloseSameSidePanels(PanelSide.Left, _craftingMenu);
                 _craftingMenu.Toggle(screenW, screenH);
             }
 

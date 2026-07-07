@@ -534,6 +534,44 @@ public partial class Game1 {
                break;
             }
 
+            // Toggle a core HUD menu through the real click path (ToggleCoreMenu),
+            // including the per-side panel exclusivity — unlike `overlay`, which
+            // sets panel state directly. Replies with every panel's visibility.
+            case "toggle_menu": {
+               if (c.Args.Length < 1) {
+                  c.Complete(Necroking.Dev.DevServer.Error(
+                     "toggle_menu needs: <inventory|crafting|building|grimoire|skills|character>"));
+                  break;
+               }
+
+               int idx = c.Args[0].ToLowerInvariant() switch {
+                  "inventory" => Necroking.UI.HUDRenderer.MenuInventory,
+                  "crafting" => Necroking.UI.HUDRenderer.MenuCrafting,
+                  "building" => Necroking.UI.HUDRenderer.MenuBuilding,
+                  "grimoire" => Necroking.UI.HUDRenderer.MenuGrimoire,
+                  "skills" or "skill_book" => Necroking.UI.HUDRenderer.MenuSkills,
+                  "character" or "stats" => Necroking.UI.HUDRenderer.MenuCharacter,
+                  _ => -1,
+               };
+               if (idx < 0) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"unknown menu: {c.Args[0]}"));
+                  break;
+               }
+
+               if (!_gameWorldLoaded) StartGame();
+               _gameRenderer.ToggleCoreMenu(idx, GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
+               c.Complete(Necroking.Dev.DevServer.OkRaw(
+                  $"{{\"inventory\":{(_inventoryUI.IsVisible ? "true" : "false")}," +
+                  $"\"crafting\":{(_craftingMenu.IsVisible ? "true" : "false")}," +
+                  $"\"building\":{(_buildingMenuUI.IsVisible ? "true" : "false")}," +
+                  $"\"grimoire\":{(_grimoireOverlay.IsVisible ? "true" : "false")}," +
+                  $"\"skills\":{(_skillBookOverlay.IsVisible ? "true" : "false")}," +
+                  $"\"character\":{(_characterStatsUI.IsVisible ? "true" : "false")}," +
+                  $"\"job_board\":{(_jobBoardUI.IsVisible ? "true" : "false")}," +
+                  $"\"unit_info\":{(_unitInfoPanel.IsVisible ? "true" : "false")}}}"));
+               break;
+            }
+
             // Select an entry in the currently open editor (by index, def id,
             // or display name) so its preview/detail renders for a screenshot.
             case "select": {

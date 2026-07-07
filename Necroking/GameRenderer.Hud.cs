@@ -652,8 +652,8 @@ partial class GameRenderer
     }
 
     /// <summary>Toggle a core menu by its HUDRenderer.Menu* index — the click-side
-    /// mirror of the keyboard shortcuts (I/C/B/J/K/Tab), including the
-    /// building↔crafting mutual-close.</summary>
+    /// mirror of the keyboard shortcuts (I/C/B/J/K/Tab), including the per-side
+    /// panel exclusivity (Game1.CloseSameSidePanels).</summary>
     internal void ToggleCoreMenu(int idx, int screenW, int screenH)
     {
         _g.EnsureInventoryUIsInitialized();
@@ -663,20 +663,22 @@ partial class GameRenderer
                 _g._inventoryUI.Toggle(screenW, screenH);
                 break;
             case HUDRenderer.MenuCrafting:
-                if (_g._buildingMenuUI.IsVisible) _g._buildingMenuUI.Close();
+                if (!_g._craftingMenu.IsVisible) _g.CloseSameSidePanels(Game1.PanelSide.Left, _g._craftingMenu);
                 _g._craftingMenu.Toggle(screenW, screenH);
                 break;
             case HUDRenderer.MenuBuilding:
-                if (_g._craftingMenu.IsVisible) _g._craftingMenu.Close();
+                if (!_g._buildingMenuUI.IsVisible) _g.CloseSameSidePanels(Game1.PanelSide.Left, _g._buildingMenuUI);
                 _g._buildingMenuUI.Toggle(screenW, screenH);
                 break;
             case HUDRenderer.MenuGrimoire:
+                if (!_g._grimoireOverlay.IsVisible) _g.CloseSameSidePanels(Game1.PanelSide.Left, _g._grimoireOverlay);
                 _g._grimoireOverlay.Toggle();
                 break;
             case HUDRenderer.MenuSkills:
                 _g._skillBookOverlay.Toggle();
                 break;
             case HUDRenderer.MenuCharacter:
+                if (!_g._characterStatsUI.IsVisible) _g.CloseSameSidePanels(Game1.PanelSide.Left, _g._characterStatsUI);
                 _g._characterStatsUI.Toggle();
                 break;
         }

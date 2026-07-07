@@ -135,14 +135,20 @@ public class CharacterStatsUI : IModalLayer
     {
         if (IsVisible)
         {
-            IsVisible = false;
-            Necroking.Game1.Popups.Pop(this);
+            Close();
         }
         else
         {
             IsVisible = true;
             Necroking.Game1.Popups.Push(this);
         }
+    }
+
+    public void Close()
+    {
+        if (!IsVisible) return;
+        IsVisible = false;
+        Necroking.Game1.Popups.Pop(this);
     }
 
     // === IModalLayer ===
