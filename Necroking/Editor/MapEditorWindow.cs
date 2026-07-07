@@ -6186,14 +6186,10 @@ public class MapEditorWindow
             writer.WriteEndObject();
             writer.Flush();
 
-            // Save triggers separately
-            SaveTriggers(mapsDir);
-
-            // Save roads separately
-            SaveRoads(mapsDir);
-
-            // Save zones separately
-            SaveZones(mapsDir);
+            // Sidecars (triggers / roads / zones) — one reader+writer in MapSidecars
+            MapSidecars.SaveTriggers(Path.Combine(mapsDir, _mapFilename + "_triggers.json"), _triggerSystem);
+            MapSidecars.SaveRoads(Path.Combine(mapsDir, _mapFilename + "_roads.json"), _roadSystem);
+            MapSidecars.SaveZones(Path.Combine(mapsDir, _mapFilename + "_zones.json"), _zoneSystem);
 
             _statusMessage = $"Saved: {path}";
             _statusTimer = 3f;
@@ -6269,16 +6265,16 @@ public class MapEditorWindow
             }
 
             // Load triggers
-            MapData.LoadTriggers(triggerPath, _triggerSystem);
+            MapSidecars.LoadTriggers(triggerPath, _triggerSystem);
 
             // Load roads
-            MapData.LoadRoads(roadsPath, _roadSystem);
+            MapSidecars.LoadRoads(roadsPath, _roadSystem);
 
             // Load zones. Explicit Clear first: LoadZones no-ops on a missing file,
             // and stale zones must not survive a map switch.
             _zoneSystem.Clear();
             SelectedZoneIndex = -1;
-            MapData.LoadZones(zonesPath, _zoneSystem);
+            MapSidecars.LoadZones(zonesPath, _zoneSystem);
 
             // Reload env textures
             _envSystem.LoadTextures(_device);
@@ -6300,288 +6296,8 @@ public class MapEditorWindow
         }
     }
 
-    /// <summary>Write the authored zones to the <c>&lt;map&gt;_zones.json</c> sidecar
-    /// (same pattern as SaveTriggers/SaveRoads). Population is only written for
-    /// Village zones, the periodic spawn table only for the other kinds.</summary>
-    private void SaveZones(string mapsDir)
-    {
-        string path = Path.Combine(mapsDir, _mapFilename + "_zones.json");
-        using var stream = File.Create(path);
-        using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-
-        writer.WriteStartObject();
-        writer.WriteStartArray("zones");
-        foreach (var z in _zoneSystem.Zones)
-        {
-            writer.WriteStartObject();
-            writer.WriteString("id", z.Id);
-            writer.WriteString("name", z.Name);
-            writer.WriteString("kind", z.Kind.ToString());
-            writer.WriteNumber("x", z.X);
-            writer.WriteNumber("y", z.Y);
-            writer.WriteNumber("halfW", z.HalfW);
-            writer.WriteNumber("halfH", z.HalfH);
-            if (z.Kind == ZoneKind.Village)
-            {
-                writer.WriteStartObject("population");
-                writer.WriteNumber("peasant", z.Population.Peasant);
-                writer.WriteNumber("hunter", z.Population.Hunter);
-                writer.WriteNumber("militia", z.Population.Militia);
-                writer.WriteNumber("watchdog", z.Population.Watchdog);
-                writer.WriteEndObject();
-            }
-            else if (z.Spawns.Count > 0)
-            {
-                writer.WriteStartArray("spawns");
-                foreach (var s in z.Spawns)
-                {
-                    writer.WriteStartObject();
-                    writer.WriteString("defId", s.DefId);
-                    writer.WriteNumber("perMinute", s.PerMinute);
-                    writer.WriteNumber("maxAlive", s.MaxAlive);
-                    writer.WriteEndObject();
-                }
-                writer.WriteEndArray();
-            }
-            writer.WriteEndObject();
-        }
-        writer.WriteEndArray();
-        writer.WriteEndObject();
-        writer.Flush();
-    }
-
-    private void SaveTriggers(string mapsDir)
-    {
-        string path = Path.Combine(mapsDir, _mapFilename + "_triggers.json");
-        using var stream = File.Create(path);
-        using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-
-        writer.WriteStartObject();
-
-        // Regions
-        writer.WriteStartArray("regions");
-        foreach (var r in _triggerSystem.Regions)
-        {
-            writer.WriteStartObject();
-            writer.WriteString("id", r.Id);
-            writer.WriteString("name", r.Name);
-            writer.WriteString("shape", r.Shape.ToString());
-            writer.WriteNumber("x", r.X);
-            writer.WriteNumber("y", r.Y);
-            writer.WriteNumber("halfW", r.HalfW);
-            writer.WriteNumber("halfH", r.HalfH);
-            writer.WriteNumber("radius", r.Radius);
-            writer.WriteEndObject();
-        }
-        writer.WriteEndArray();
-
-        // Patrol routes
-        writer.WriteStartArray("patrolRoutes");
-        foreach (var pr in _triggerSystem.PatrolRoutes)
-        {
-            writer.WriteStartObject();
-            writer.WriteString("id", pr.Id);
-            writer.WriteString("name", pr.Name);
-            writer.WriteBoolean("loop", pr.Loop);
-            writer.WriteStartArray("waypoints");
-            foreach (var wp in pr.Waypoints)
-            {
-                writer.WriteStartObject();
-                writer.WriteNumber("x", wp.X);
-                writer.WriteNumber("y", wp.Y);
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-            writer.WriteEndObject();
-        }
-        writer.WriteEndArray();
-
-        // Trigger defs
-        writer.WriteStartArray("triggers");
-        foreach (var t in _triggerSystem.Triggers)
-        {
-            writer.WriteStartObject();
-            writer.WriteString("id", t.Id);
-            writer.WriteString("name", t.Name);
-            writer.WriteBoolean("activeByDefault", t.ActiveByDefault);
-            writer.WriteBoolean("oneShot", t.OneShot);
-            writer.WriteNumber("maxFireCount", t.MaxFireCount);
-            if (!string.IsNullOrEmpty(t.BoundObjectID))
-                writer.WriteString("boundObjectID", t.BoundObjectID);
-
-            // Condition
-            if (t.Condition != null)
-            {
-                writer.WritePropertyName("condition");
-                WriteCondition(writer, t.Condition);
-            }
-
-            // Effects
-            writer.WriteStartArray("effects");
-            foreach (var e in t.Effects)
-                WriteEffect(writer, e);
-            writer.WriteEndArray();
-
-            writer.WriteEndObject();
-        }
-        writer.WriteEndArray();
-
-        // Instances
-        writer.WriteStartArray("instances");
-        foreach (var inst in _triggerSystem.Instances)
-        {
-            writer.WriteStartObject();
-            writer.WriteString("instanceID", inst.InstanceID);
-            writer.WriteString("parentTriggerID", inst.ParentTriggerID);
-            writer.WriteBoolean("activeByDefault", inst.ActiveByDefault);
-            writer.WriteBoolean("autoCreated", inst.AutoCreated);
-            if (!string.IsNullOrEmpty(inst.BoundObjectID))
-                writer.WriteString("boundObjectID", inst.BoundObjectID);
-            writer.WriteEndObject();
-        }
-        writer.WriteEndArray();
-
-        writer.WriteEndObject();
-    }
-
-    private void SaveRoads(string mapsDir)
-    {
-        string path = Path.Combine(mapsDir, _mapFilename + "_roads.json");
-        using var stream = File.Create(path);
-        using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-
-        writer.WriteStartObject();
-
-        writer.WriteStartArray("roads");
-        foreach (var road in _roadSystem.Roads)
-        {
-            writer.WriteStartObject();
-            writer.WriteString("id", road.Id);
-            writer.WriteString("name", road.Name);
-            writer.WriteNumber("textureDefIndex", road.TextureDefIndex);
-            writer.WriteNumber("renderOrder", road.RenderOrder);
-            writer.WriteBoolean("closed", road.Closed);
-            writer.WriteNumber("edgeSoftness", road.EdgeSoftness);
-            writer.WriteNumber("textureScale", road.TextureScale);
-            writer.WriteNumber("rimTextureDefIndex", road.RimTextureDefIndex);
-            writer.WriteNumber("rimWidth", road.RimWidth);
-            writer.WriteNumber("rimTextureScale", road.RimTextureScale);
-            writer.WriteNumber("rimEdgeSoftness", road.RimEdgeSoftness);
-
-            writer.WriteStartArray("points");
-            foreach (var pt in road.Points)
-            {
-                writer.WriteStartObject();
-                writer.WriteNumber("x", pt.Position.X);
-                writer.WriteNumber("y", pt.Position.Y);
-                writer.WriteNumber("width", pt.Width);
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-            writer.WriteEndObject();
-        }
-        writer.WriteEndArray();
-
-        writer.WriteStartArray("junctions");
-        foreach (var j in _roadSystem.Junctions)
-        {
-            writer.WriteStartObject();
-            writer.WriteString("id", j.Id);
-            writer.WriteString("name", j.Name);
-            writer.WriteNumber("x", j.Position.X);
-            writer.WriteNumber("y", j.Position.Y);
-            writer.WriteNumber("radius", j.Radius);
-            writer.WriteNumber("textureDefIndex", j.TextureDefIndex);
-            writer.WriteNumber("textureScale", j.TextureScale);
-            writer.WriteNumber("edgeSoftness", j.EdgeSoftness);
-            writer.WriteEndObject();
-        }
-        writer.WriteEndArray();
-
-        writer.WriteEndObject();
-    }
-
-    private static void WriteCondition(Utf8JsonWriter writer, ConditionNode cond)
-    {
-        writer.WriteStartObject();
-        switch (cond)
-        {
-            case CondAnd andC:
-                writer.WriteString("type", "AND");
-                writer.WriteStartArray("children");
-                foreach (var child in andC.Children) WriteCondition(writer, child);
-                writer.WriteEndArray();
-                break;
-            case CondOr orC:
-                writer.WriteString("type", "OR");
-                writer.WriteStartArray("children");
-                foreach (var child in orC.Children) WriteCondition(writer, child);
-                writer.WriteEndArray();
-                break;
-            case CondNot notC:
-                writer.WriteString("type", "NOT");
-                if (notC.Child != null)
-                {
-                    writer.WritePropertyName("child");
-                    WriteCondition(writer, notC.Child);
-                }
-                break;
-            case CondEntersRegion er:
-                writer.WriteString("type", "EntersRegion");
-                writer.WriteString("regionID", er.RegionID);
-                writer.WriteNumber("minCount", er.MinCount);
-                break;
-            case CondUnitsKilled uk:
-                writer.WriteString("type", "UnitsKilled");
-                writer.WriteNumber("count", uk.Count);
-                writer.WriteBoolean("cumulative", uk.Cumulative);
-                break;
-            case CondGameTime gt:
-                writer.WriteString("type", "GameTime");
-                writer.WriteNumber("time", gt.Time);
-                break;
-            case CondCooldown cd:
-                writer.WriteString("type", "Cooldown");
-                writer.WriteNumber("interval", cd.Interval);
-                break;
-        }
-        writer.WriteEndObject();
-    }
-
-    private static void WriteEffect(Utf8JsonWriter writer, TriggerEffect effect)
-    {
-        writer.WriteStartObject();
-        switch (effect)
-        {
-            case EffActivateTrigger act:
-                writer.WriteString("type", "ActivateTrigger");
-                writer.WriteString("triggerID", act.TriggerID);
-                break;
-            case EffDeactivateTrigger deact:
-                writer.WriteString("type", "DeactivateTrigger");
-                writer.WriteString("triggerID", deact.TriggerID);
-                break;
-            case EffSpawnUnits spawn:
-                writer.WriteString("type", "SpawnUnits");
-                writer.WriteString("unitDefID", spawn.UnitDefID);
-                writer.WriteNumber("count", spawn.Count);
-                writer.WriteString("faction", spawn.Faction.ToString());
-                writer.WriteString("regionID", spawn.RegionID);
-                writer.WriteNumber("posX", spawn.Position.X);
-                writer.WriteNumber("posY", spawn.Position.Y);
-                writer.WriteNumber("spawnDistance", spawn.SpawnDistance);
-                writer.WriteNumber("spawnInterval", spawn.SpawnInterval);
-                writer.WriteString("postBehavior", spawn.PostBehavior.ToString());
-                writer.WriteString("patrolRouteID", spawn.PatrolRouteID);
-                break;
-            case EffKillUnits kill:
-                writer.WriteString("type", "KillUnits");
-                writer.WriteString("regionID", kill.RegionID);
-                writer.WriteNumber("maxKills", kill.MaxKills);
-                break;
-        }
-        writer.WriteEndObject();
-    }
+    // (Sidecar savers + WriteCondition/WriteEffect moved to Data/MapSidecars —
+    // reader and writer now live together, fixing the shape/junction round-trip drift.)
 
     // ====================================================================
     //  BRUSH SYSTEM (shared)

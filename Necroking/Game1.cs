@@ -1554,9 +1554,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // the same JsonDocument it already parsed, avoiding a redundant disk+parse pass.
             MapData.Load(mapPath, _groundSystem, _envSystem, _wallSystem, placedUnits,
                 out var grassInfo);
-            MapData.LoadTriggers(GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}_triggers.json"), _triggerSystem);
-            MapData.LoadRoads(GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}_roads.json"), _roadSystem);
-            MapData.LoadZones(GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}_zones.json"), _zoneSystem);
+            MapSidecars.LoadTriggers(GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}_triggers.json"), _triggerSystem);
+            MapSidecars.LoadRoads(GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}_roads.json"), _roadSystem);
+            MapSidecars.LoadZones(GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}_zones.json"), _zoneSystem);
             // Village structures are placed here (before the collision bake below) so their
             // buildings are stamped into the pathfinding grid alongside the map's own objects.
             LoadVillageStructures(mapName);

@@ -129,6 +129,7 @@ public static class ScenarioRegistry
         Register("path_buff", () => new Scenarios.PathBuffScenario());
         Register("seen_item", () => new Scenarios.SeenItemScenario());
         Register("corpses_eaten", () => new Scenarios.CorpsesEatenScenario());
+        Register("sidecar_roundtrip", () => new Scenarios.SidecarRoundtripScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)
