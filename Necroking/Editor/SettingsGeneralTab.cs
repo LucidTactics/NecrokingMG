@@ -17,16 +17,6 @@ public static class SettingsGeneralTab
     /// <summary>
     /// Draw all General settings fields. Returns the total height consumed.
     /// </summary>
-    public static int Draw(EditorBase ui, GeneralSettings s, int x, int y, int w)
-    {
-        return Draw(ui, s, null, null, x, y, w);
-    }
-
-    public static int Draw(EditorBase ui, GeneralSettings s, PerformanceSettings? perf, int x, int y, int w)
-    {
-        return Draw(ui, s, perf, null, x, y, w);
-    }
-
     public static int Draw(EditorBase ui, GeneralSettings s, PerformanceSettings? perf, CombatSettings? combat, int x, int y, int w)
     {
         int curY = y;

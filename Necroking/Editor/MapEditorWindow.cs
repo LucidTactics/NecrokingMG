@@ -394,17 +394,6 @@ public class MapEditorWindow
         }
     }
 
-    private class UndoObjectRemove : UndoAction
-    {
-        public EnvironmentSystem Env = null!;
-        public ushort DefIndex;
-        public float X, Y, Scale, Seed;
-        public override void Undo()
-        {
-            Env.AddObject(DefIndex, X, Y, Scale, Seed, persistent: true);
-        }
-    }
-
     // M28: Batch undo for paint-mode object placement
     private class UndoObjectBatchPlace : UndoAction
     {
@@ -2765,68 +2754,6 @@ public class MapEditorWindow
                 result.Add((i, MathF.Max(0.001f, d.GroupWeight)));
         }
         return result;
-    }
-
-    private void PaintObjects(MouseState mouse, int screenW, int screenH)
-    {
-        if (SelectedEnvDefIndex < 0) return;
-        Vec2 worldPos = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
-        var def = _envSystem.GetDef(SelectedEnvDefIndex);
-        // RM05: Use collision radius in spacing calculation
-        float colRadius = def.CollisionRadius > 0 ? def.CollisionRadius : def.PlacementScale;
-        float spacing = Math.Max(1f, colRadius * 2.2f);
-
-        // Suppress per-AddObject pathfinder rebuilds and use incremental
-        // collision stamping for the whole stroke. One brush press = O(brush²)
-        // instead of O(brush² × total_objects).
-        var prevHandler = _envSystem.OnCollisionsDirty;
-        _envSystem.OnCollisionsDirty = null;
-        try
-        {
-            for (int dy = -BrushRadius; dy <= BrushRadius; dy++)
-            {
-                for (int dx = -BrushRadius; dx <= BrushRadius; dx++)
-                {
-                    if (dx * dx + dy * dy > BrushRadius * BrushRadius) continue;
-                    // Hex-grid offset
-                    float ox = dx * spacing + (dy % 2 == 0 ? 0 : spacing * 0.5f);
-                    float oy = dy * spacing * 0.866f; // sqrt(3)/2
-
-                    // RM05: Random jitter
-                    float jitter = spacing * 0.25f;
-                    ox += (Random.Shared.NextSingle() - 0.5f) * 2f * jitter;
-                    oy += (Random.Shared.NextSingle() - 0.5f) * 2f * jitter;
-
-                    float px = worldPos.X + ox;
-                    float py = worldPos.Y + oy;
-
-                    // Check no existing object too close
-                    bool tooClose = false;
-                    float minDist2 = spacing * spacing * 0.5f;
-                    for (int i = 0; i < _envSystem.ObjectCount; i++)
-                    {
-                        var obj = _envSystem.GetObject(i);
-                        float ddx = obj.X - px, ddy = obj.Y - py;
-                        if (ddx * ddx + ddy * ddy < minDist2) { tooClose = true; break; }
-                    }
-                    // RM03: Check collision overlap
-                    if (!tooClose && !_envSystem.CanPlaceObject(SelectedEnvDefIndex, px, py))
-                        tooClose = true;
-
-                    if (!tooClose)
-                    {
-                        float groupScale = GetRandomPlacementScale(SelectedEnvDefIndex);
-                        int newIdx = _envSystem.AddObject((ushort)SelectedEnvDefIndex, px, py, groupScale, persistent: true);
-                        AutoCreateTriggerInstance(newIdx); // RM06
-                        _envSystem.StampObjectCollisionAt(_tileGrid, newIdx);
-                    }
-                }
-            }
-        }
-        finally
-        {
-            _envSystem.OnCollisionsDirty = prevHandler;
-        }
     }
 
     private void DrawObjectsTab(int panelX, int contentY, int contentH, int screenW, int screenH)
