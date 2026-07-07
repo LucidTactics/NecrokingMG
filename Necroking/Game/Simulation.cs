@@ -177,6 +177,7 @@ public class Simulation
     private readonly System.Collections.Generic.List<uint> _moraleScratch = new();
     private int _nextCorpseID;
     private readonly List<PendingZombieRaise> _pendingZombieRaises = new();
+    private readonly List<GameSystems.AISpellCastRequest> _pendingAISpellCasts = new();
     private readonly PlayerResources _playerResources = new() { Essence = 100, MaxEssence = 100 };
 
     // Public accessors
@@ -346,6 +347,12 @@ public class Simulation
     public EnvironmentSystem? EnvironmentSystem => _envSystem;
     public WallSystem? WallSystem => _wallSystem;
     public List<PendingZombieRaise> PendingZombieRaises => _pendingZombieRaises;
+    /// <summary>Spell casts requested by AI archetype handlers this tick (via
+    /// AIContext.SpellCasts). Game1.DrainAISpellCasts runs them through the shared
+    /// SpellCaster + SpellEffectSystem pipeline right after the tick. Cleared at the
+    /// start of every tick — in headless runs (no Game1) the requests are simply
+    /// dropped, so AI casters don't cast there.</summary>
+    public List<GameSystems.AISpellCastRequest> PendingAISpellCasts => _pendingAISpellCasts;
     /// <summary>Game1 sets this to route a ready zombie-raise through the composite reanimation
     /// pipeline (effect + body morph + deferred slow rise). When unset (headless sims) the tick
     /// falls back to spawning the zombie directly with the slow standup.</summary>
@@ -631,6 +638,10 @@ public class Simulation
         Movement.Locomotion.UpdateSpeeds(_units, _gameData, _grid, dt, locoInput);
         PhaseEnd("loco_speeds");
 
+        // Drop last tick's AI cast requests: Game1 drained them right after the
+        // previous tick, so anything still here belongs to a headless run with no
+        // drain — clearing keeps the list from growing unbounded there.
+        _pendingAISpellCasts.Clear();
         PhaseStart(); UpdateAI(dt); PhaseEnd("ai");
 
         // Zombie boars peel off the horde to eat nearby mushrooms. Runs after the
@@ -3256,6 +3267,7 @@ public class Simulation
         Horde = _horde, TriggerSystem = _triggerSystem, Villages = _villages, EnvSystem = _envSystem,
         Workers = Workers,
         Projectiles = _projectiles, MagicGlyphs = _magicGlyphs, Lightning = _lightning,
+        SpellCasts = _pendingAISpellCasts,
         GameTime = _gameTime, DayTime = dayFraction, IsNight = isNight,
         AmortizedAI = _amortizedAI, AmortizationInterval = _aiUpdateInterval,
         AnimMeta = _animMeta,

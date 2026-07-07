@@ -3675,6 +3675,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
             // --- Simulate ---
             _sim.Tick(_clock.WorldDt);
+            // AI cast requests queued during the tick's AI pass run through the
+            // shared SpellCaster + SpellEffectSystem pipeline (same as the player).
+            DrainAISpellCasts();
             _workerSystem.Update(_clock.WorldDt);
             ApplyBlightBombImpacts();
             FinalizeBushWorkIfPending();
@@ -3993,8 +3996,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             else if (spell.Category == "Cloud")
             {
                 // Spawn cloud at the trap position (not the target — the trap itself is
-                // where the burst originates). Same code path as a caster casting the spell.
-                GameSystems.SpellEffectSystem.ExecuteCloud(spell, _sim, evt.TrapPos);
+                // where the burst originates). Same code path as a caster casting the
+                // spell; traps are player-built, so the cloud is Undead-owned.
+                GameSystems.SpellEffectSystem.ExecuteCloud(spell, _sim, evt.TrapPos, Faction.Undead);
             }
         }
     }

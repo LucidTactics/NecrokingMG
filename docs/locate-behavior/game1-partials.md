@@ -185,18 +185,25 @@ never set `_pendingCastAnim` — there is no cast-duration window to lock agains
 `SpellEffectSystem.Execute`'s Beam/Drain cases, released in `Game1.cs` Update when the slot key is
 let go via `Lightning.CancelBeamsForCaster`/`CancelDrainsForCaster`) — unrelated to
 `_pendingCastAnim`.
-**Player-only cast state census (for anyone un-globalizing casting):** `Game1._pendingSpell` — the
-single shared `PendingSpellCast` instance (targeting results: `TargetCorpseID`/`TargetUnitID`/
-`SummonUnitID`/multi-shot counters) written by `SpellCaster.TryStartSpellCast` and read later at
-effect time by `SpellEffectSystem.ExecuteSummonSpell` via `game._pendingSpell` (one caster at a
-time by construction); `Game1._pendingCastAnim`/`_channelingSlot`/`_pendingProjectiles`/
-`_pendingReanimRises` as above; mana + per-spell cooldown dict on `Simulation.NecroState`
-(`NecromancerState`, `Movement/UnitModel.cs` — deducted inside `TryStartSpellCast`'s success path,
-refunded by `SpellCaster.RefundSpellCast` on channel cancel); the necromancer-only cast-plant flag
-`Simulation.SetNecromancerCasting` driven by `TickCastPlant` (`Game1.Animation.cs`). AI casters
-(`AI/CasterUnitHandler.cs`) bypass ALL of this — see ai.md "CasterUnit archetype" pipeline note.
-There is no charge-up or combo system; the only wind-up mechanisms are the cast plant + `CastTime`
-and the channel Start/Loop/Finish machine.
+**Cast state census (updated 2026-07-07 — the pipeline is now caster-agnostic):**
+`Game1._pendingSpell` is the PLAYER's `PendingSpellCast` (targeting results:
+`TargetCorpseID`/`TargetUnitID`/`SummonUnitID`) — it must survive multi-second cast
+anims/channels, so it stays a Game1 field, but `SpellEffectSystem.Execute` now takes the
+pending record as an explicit parameter instead of reading `game._pendingSpell`; AI casts
+use the `Game1._aiPendingSpell` scratch (reset per cast, consumed immediately in
+`DrainAISpellCasts`). Mana + per-spell cooldowns are behind
+`Movement.ICasterResources` — implemented by `NecromancerState` (player) and
+`Movement.UnitCasterResources` (AI units: `Unit.Mana` + lazily-allocated
+`Unit.SpellCooldowns` dict). `_pendingProjectiles` groups carry `CasterUid` (multi-shot
+follows the caster's hand, player or AI; dropped if the caster dies).
+Still player-only: `_pendingCastAnim` + `TickCastPlant`/`SetNecromancerCasting` (cast
+anims/plant), `_channelingSlot` (key-hold channel release — AI channels use
+`Unit.ChannelTimer` instead, see ai.md "CasterUnit archetype" pipeline note), slot flash,
+cast-fail texts, `PlayerEvents.Tally`, horde caps (`caster is NecromancerState` gate in
+`TryStartSpellCast`). AI cast entry: `Simulation.PendingAISpellCasts` →
+`Game1.DrainAISpellCasts` (called right after `_sim.Tick` in Update).
+There is no charge-up or combo system; the only wind-up mechanisms are the cast plant +
+`CastTime` and the channel Start/Loop/Finish machine.
 See also: **`docs/spells.md`** (read before adding/changing a spell — explains the three-layer
 split), `Game/SpellCasting.cs`, `Game/SpellEffectSystem.cs`, `Game/SpellPenetration.cs`,
 `Data/Registries/SpellRegistry.cs`, `Game1.Spells.cs` is paired with the main loop in `Game1.cs`.

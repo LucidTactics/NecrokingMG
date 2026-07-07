@@ -193,7 +193,7 @@ public partial class Game1
                 if (pca.LoopElapsed >= loopBudget)
                 {
                     var spell = _gameData.Spells.Get(pca.SpellID);
-                    if (spell != null) ExecuteSpellEffect(spell, necroIdx, pca.Target, pca.Slot);
+                    if (spell != null) ExecuteSpellEffect(spell, necroIdx, pca.Target, pca.Slot, _pendingSpell);
                     // Tail-cancel (Q3, Settings.Animation.CastTailCancel): with
                     // movement input held, skip the Finish anim — the payoff has
                     // already popped; the player is running again this frame.
@@ -818,7 +818,7 @@ public partial class Game1
                     var pca = _pendingCastAnim.Value;
                     var spell = _gameData.Spells.Get(pca.SpellID);
                     if (spell != null)
-                        ExecuteSpellEffect(spell, i, pca.Target, pca.Slot);
+                        ExecuteSpellEffect(spell, i, pca.Target, pca.Slot, _pendingSpell);
                     _pendingCastAnim = null;
                     // Tail-cancel (Q3, Settings.Animation.CastTailCancel): the spell
                     // has fired; with movement input held, cut the Spell1 recovery
@@ -873,7 +873,7 @@ public partial class Game1
                     var pca = _pendingCastAnim.Value;
                     var spell = _gameData.Spells.Get(pca.SpellID);
                     if (spell != null)
-                        ExecuteSpellEffect(spell, necroIdx, pca.Target, pca.Slot);
+                        ExecuteSpellEffect(spell, necroIdx, pca.Target, pca.Slot, _pendingSpell);
                     _pendingCastAnim = null;
                     RemoveCastingBuffAll(necroIdx);
                 }

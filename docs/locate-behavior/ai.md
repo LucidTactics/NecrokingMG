@@ -209,21 +209,31 @@ marks the spot). `Simulation.ApplyDefRuntimeFields` now copies `def.MaxMana`/`Ma
 `SpellID` onto the unit (spawns start at full mana). Path levels are still read from the
 def at cast time (`UnitDef.GetPathLevel`, buffs via `BuffSystem.EffectivePathLevel`).
 
-**Pipeline note — AI casting does NOT share the player pipeline.**
-`CasterUnitHandler.TryCast` bypasses `SpellCaster.TryStartSpellCast` and
-`SpellEffectSystem.Execute` entirely: it hand-rolls Strike-style casts only
-(`ctx.Lightning.SpawnZap`/`SpawnStrike` + `DamageSystem.Apply` + casting buff), gated by
-the **per-unit scalars** `Unit.Mana`/`MaxMana`/`ManaRegen`/`SpellID`/`SpellCooldownTimer`
-(one spell per unit, one float cooldown — no per-spell dict; regen+cooldown are ticked
-inside `CasterUnitHandler.Update`, nothing else ticks unit mana). Everything else —
-Projectile/Summon/Beam/Drain/Blight/Cloud/Sacrifice categories, multi-shot, cast
-anims/plant/channel phases — is **player-only**, driven by Game1-level state
-(`_pendingSpell`, `_pendingCastAnim`, `_channelingSlot`, `_pendingProjectiles`,
-`Simulation.NecroState` mana/cooldown dict) and `SpellEffectSystem.Execute(spell,
-Game1 game, …)` which takes `Game1` directly. Giving AI units the full pipeline means
-de-globalizing that state (see game1-partials.md → `Game1.Spells.cs`). Precedent for
-exposing a casting service to handlers: `AIContext` already carries `Lightning` and
-`DamageEvents`.
+**Pipeline note — AI casting SHARES the player pipeline (2026-07-07).**
+`CasterUnitHandler.TryCast` pre-gates cheaply (per-spell cooldown via the lazily-allocated
+`Unit.SpellCooldowns` dict, path levels, mana — read-only) and enqueues an
+`AISpellCastRequest` on `AIContext.SpellCasts` (= `Simulation.PendingAISpellCasts`, cleared
+at each Tick start). `Game1.DrainAISpellCasts` (called right after `_sim.Tick`) runs each
+request through the SAME `SpellCaster.TryStartSpellCast` (targeting is caster-faction-aware;
+mana paid from `Unit.Mana` + cooldown stamped into `Unit.SpellCooldowns` via the
+`Movement.UnitCasterResources : ICasterResources` adapter — `NecromancerState` implements
+the same interface for the player) and `SpellEffectSystem.Execute(spell, game, casterIdx,
+target, slot, pending)`. AI casts pass `slot = -1` and a scratch `PendingSpellCast`
+(`Game1._aiPendingSpell`); the player passes its spell-bar slot and `Game1._pendingSpell`
+(which must survive multi-second cast anims/channels). Beam/Drain channels for AI run on
+`Unit.ChannelTimer` (armed by `SpellEffectSystem.StartChannel` when slot < 0, ticked +
+cancelled by `CasterUnitHandler`); the player's channel stays keyed to the held slot
+(`Game1._channelingSlot`). Multi-shot volleys (`Game1._pendingProjectiles`) carry
+`CasterUid` and track that caster's hand — dropped if the caster dies. Mana regen +
+cooldown ticking for units still live ONLY in `CasterUnitHandler.Update` (the old
+single-float `Unit.SpellCooldownTimer` is gone). **Player-only remains**: cast
+anims/plant/channel phases (`_pendingCastAnim`, `TickCastPlant`), slot flash, cast-fail
+text, `PlayerEvents.Tally`, horde caps (gated on `caster is NecromancerState`). Headless
+sims (no Game1 drain) drop AI cast requests — AI casters simply don't cast there.
+Dev testing: `set_spell <selector> <spellID>` hands any unit a spell (Priest def id =
+`militia_copy_copy`). Gotcha: Drain damage is a visual-only stub for EVERYONE
+(`ActiveDrain.DamagePerTick`/`HealPercent` are never read) — an AI drain channels
+correctly but deals nothing, same as the player's.
 
 ## Legacy `AIBehavior` — post-migration state (migrated 2026-07-07, commits d08b584…d21ad4a)
 

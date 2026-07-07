@@ -8,12 +8,18 @@ using Necroking.Movement;
 namespace Necroking.AI;
 
 /// <summary>
-/// Caster unit handler — NPC spellcasters (e.g. the Priest). Migrated from the
-/// legacy AIBehavior.Caster block in Simulation.UpdateAI: stands its ground and
-/// casts its def's spell (Unit.SpellID) at enemies, gated by mana, cooldown,
-/// spell range, and magic-path requirements (BuffSystem.EffectivePathLevel, so
-/// path buffs count). Unlike the legacy block it will also close to spell range
-/// when the target is too far, and returns to its spawn like other archetypes.
+/// Caster unit handler — NPC spellcasters (e.g. the Priest). Stands its ground and
+/// casts its def's spell (Unit.SpellID) at enemies through the SAME pipeline as the
+/// player necromancer: the handler pre-gates (mana, per-spell cooldown, magic paths)
+/// and enqueues an AISpellCastRequest; Game1.DrainAISpellCasts runs it through
+/// SpellCaster.TryStartSpellCast + SpellEffectSystem right after the tick. That gives
+/// AI casters every spell category — projectiles (incl. multi-shot volleys), strikes
+/// (with magic-resistance gates), clouds, buffs/debuffs, beams/drains (held via
+/// Unit.ChannelTimer instead of the player's key-hold), summons.
+///
+/// Resources are per-unit: Unit.Mana (regenned here — nothing else ticks unit mana;
+/// the necromancer's pool lives separately in NecroState) and the per-spell
+/// Unit.SpellCooldowns dict, both paid/stamped by the shared pipeline.
 ///
 /// Routines (mirrors RangedUnitHandler):
 ///   0 = IdleRoaming  — wander near spawn at low speed
@@ -43,11 +49,13 @@ public class CasterUnitHandler : IArchetypeHandler
 
     public void OnRoutineExit(ref AIContext ctx, byte oldRoutine, byte newRoutine)
     {
-        // Combat owns the target.
+        // Combat owns the target — and any channel running against it.
         if (oldRoutine == RoutineCombat)
         {
             ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
             ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
+            if (ctx.Units[ctx.UnitIndex].ChannelTimer > 0f)
+                CancelChannel(ref ctx);
         }
     }
 
@@ -56,11 +64,22 @@ public class CasterUnitHandler : IArchetypeHandler
         int i = ctx.UnitIndex;
 
         // Mana regen + spell cooldown tick every frame, whatever the routine
-        // (the legacy Caster block owned these; no other system ticks unit mana —
-        // the necromancer's pool lives separately in NecroState).
+        // (no other system ticks unit mana — the necromancer's pool lives
+        // separately in NecroState, ticked by Simulation).
         ctx.Units[i].Mana = MathF.Min(ctx.Units[i].MaxMana,
             ctx.Units[i].Mana + ctx.Units[i].ManaRegen * ctx.Dt);
-        ctx.Units[i].SpellCooldownTimer = MathF.Max(0f, ctx.Units[i].SpellCooldownTimer - ctx.Dt);
+        UnitCasterResources.TickCooldowns(ctx.Units[i].SpellCooldowns, ctx.Dt);
+
+        // Channel hold (Beam/Drain cast through the shared pipeline armed this;
+        // the player's equivalent is holding the spell-bar key). Combat handles
+        // the stand-still; here we only run the clock and cut the beams/drains
+        // when it expires.
+        if (ctx.Units[i].ChannelTimer > 0f)
+        {
+            ctx.Units[i].ChannelTimer -= ctx.Dt;
+            if (ctx.Units[i].ChannelTimer <= 0f)
+                CancelChannel(ref ctx);
+        }
 
         EvaluateRoutine(ref ctx);
 
@@ -150,6 +169,18 @@ public class CasterUnitHandler : IArchetypeHandler
         if (targetIdx < 0) return;
 
         int i = ctx.UnitIndex;
+
+        // Mid-channel (Beam/Drain): plant and keep facing the target — walking
+        // off would look wrong while the beam is attached. Update's tick ends
+        // the channel; OnRoutineExit cancels it if combat ends first.
+        if (ctx.Units[i].ChannelTimer > 0f)
+        {
+            ctx.Units[i].PreferredVel = Vec2.Zero;
+            SubroutineSteps.SetLocomotionAnim(ref ctx);
+            SubroutineSteps.FacePosition(ref ctx, ctx.Units[targetIdx].Position);
+            return;
+        }
+
         var spell = GetSpell(ref ctx);
         float maxRange = spell != null && spell.Range > 0f ? spell.Range : DefaultRange;
         float dist = (ctx.Units[targetIdx].Position - ctx.MyPos).Length();
@@ -203,79 +234,59 @@ public class CasterUnitHandler : IArchetypeHandler
         return ctx.GameData.Spells.Get(spellId);
     }
 
-    /// <summary>Cast the spell at the target if every gate passes: path
-    /// requirements (buff-aware effective levels), scaled mana cost, and
-    /// cooldown. Migrated verbatim from the legacy AIBehavior.Caster block.</summary>
+    /// <summary>Request the spell at the target through the shared player pipeline:
+    /// pre-gate cheaply (per-spell cooldown, path requirements, mana — all read-only;
+    /// the drain re-checks and actually PAYS), then enqueue an AISpellCastRequest that
+    /// Game1.DrainAISpellCasts validates, targets, and executes right after the tick.
+    /// The cooldown/mana the drain stamps onto this unit gate the next attempt.</summary>
     private static void TryCast(ref AIContext ctx, int targetIdx, SpellDef spell)
     {
         int i = ctx.UnitIndex;
-        if (ctx.Units[i].SpellCooldownTimer > 0f) return;
-        var lightning = ctx.Lightning;
-        if (lightning == null) return;
+        // No request queue = bare headless sim with no Game1 drain — can't cast.
+        if (ctx.SpellCasts == null) return;
+        if (GetCooldown(ctx.Units[i], spell.Id) > 0f) return;
 
         // Path-aware gating: the caster must meet primary+secondary path
         // requirements; cost is scaled down by primary mastery. Effective
         // levels so path buffs (and god mode's AllPaths floor) count.
         var units = ctx.Units;
-        var gameData = ctx.GameData;
-        var casterDef = gameData.Units.Get(units[i].UnitDefID);
+        var casterDef = ctx.GameData.Units.Get(units[i].UnitDefID);
         Func<MagicPath, int> casterLevel = p => BuffSystem.EffectivePathLevel(units, i, casterDef, p);
 
         if (!spell.MeetsPathRequirements(casterLevel)) return;
-        float effectiveCost = spell.EffectiveManaCost(casterLevel);
-        if (ctx.Units[i].Mana < effectiveCost) return;
+        if (ctx.Units[i].Mana < spell.EffectiveManaCost(casterLevel)) return;
 
-        var style = spell.BuildStrikeStyle();
-        var visual = spell.StrikeVisualType == "GodRay"
-            ? StrikeVisual.GodRay : StrikeVisual.Lightning;
-        var tFilter = Enum.TryParse<SpellTargetFilter>(spell.TargetFilter, out var tf)
-            ? tf : SpellTargetFilter.AnyEnemy;
-
-        if (spell.StrikeTargetUnit)
+        // Aim point — the AI's "mouse": offensive categories aim at the enemy;
+        // Buff aims at the caster itself so the shared targeting picks the ally
+        // nearest to it (which may be itself).
+        Vec2 aim = spell.Category == "Buff" ? ctx.MyPos : units[targetIdx].Position;
+        ctx.SpellCasts.Add(new AISpellCastRequest
         {
-            // Instant zap: caster hand to target unit
-            Vec2 casterPos = ctx.Units[i].EffectSpawnPos2D;
-            float casterHeight = ctx.Units[i].EffectSpawnHeight;
-            Vec2 targetPos = ctx.Units[targetIdx].Position;
-
-            // Target center of sprite body instead of feet
-            float targetH = 1.8f;
-            var tDef = gameData.Units.Get(ctx.Units[targetIdx].UnitDefID);
-            if (tDef != null) targetH = tDef.SpriteWorldHeight;
-            targetH *= ctx.Units[targetIdx].SpriteScale;
-
-            lightning.SpawnZap(casterPos, targetPos, spell.ZapDuration, style,
-                casterHeight, targetH * 0.5f);
-
-            // Apply direct damage to target, attributed to the caster.
-            if (ctx.DamageEvents != null)
-                DamageSystem.Apply(units, targetIdx, spell.Damage,
-                    DamageType.Physical, DamageFlags.ArmorNegating, ctx.DamageEvents, i);
-        }
-        else
-        {
-            // Sky strike: telegraph then AOE (damage flows through the
-            // lightning damage list drained in Simulation.Update).
-            lightning.SpawnStrike(ctx.Units[targetIdx].Position,
-                spell.TelegraphDuration, spell.StrikeDuration,
-                spell.AoeRadius, spell.Damage, style, spell.Id, visual,
-                spell.BuildGodRayParams(), tFilter,
-                spell.TelegraphVisible, ctx.Units[i].Id);
-        }
-
-        ctx.Units[i].Mana -= effectiveCost;
-        ctx.Units[i].SpellCooldownTimer = spell.Cooldown;
-
-        // Apply casting buff
-        if (!string.IsNullOrEmpty(spell.CastingBuffID))
-        {
-            var castBuff = gameData.Buffs.Get(spell.CastingBuffID);
-            if (castBuff != null) BuffSystem.ApplyBuff(units, i, castBuff, gameData);
-        }
+            CasterId = ctx.MyId,
+            SpellID = spell.Id,
+            Target = aim,
+        });
 
         // Face target (rate-capped by unit TurnSpeed — no instant snap, so the
         // caster visibly turns to its target as the spell winds up).
         SubroutineSteps.FacePosition(ref ctx, ctx.Units[targetIdx].Position);
+    }
+
+    /// <summary>This unit's remaining cooldown for a spell (per-spell dict, stamped
+    /// by the shared pipeline at drain time; 0 when it has never cast it).</summary>
+    private static float GetCooldown(Unit u, string spellId)
+    {
+        var cds = u.SpellCooldowns;
+        return cds != null && cds.TryGetValue(spellId, out float cd) ? cd : 0f;
+    }
+
+    /// <summary>End an AI channel: zero the hold timer and cut any beams/drains this
+    /// unit is sourcing. Unconditional — callers gate on ChannelTimer where it matters.</summary>
+    private static void CancelChannel(ref AIContext ctx)
+    {
+        ctx.Units[ctx.UnitIndex].ChannelTimer = 0f;
+        ctx.Lightning?.CancelBeamsForCaster(ctx.MyId);
+        ctx.Lightning?.CancelDrainsForCaster(ctx.MyId);
     }
 
     public string GetRoutineName(byte routine) => routine switch

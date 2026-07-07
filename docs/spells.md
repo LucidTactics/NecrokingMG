@@ -51,13 +51,31 @@ is the single entry point for both spell bars. In order:
      `ExecuteSpellEffect`).
    - **Immediate** (no casting buff): `ExecuteSpellEffect` is called right away.
 6. `ExecuteSpellEffect` (in `Game1.Spells.cs`) spawns the cast flipbook at the caster,
-   then calls `SpellEffectSystem.Execute(spell, this, necroIdx, target, slot)` (the
-   *effect* layer). No callbacks, no result struct: the system writes Game1-owned
-   results directly (`game._channelingSlot` for Beam/Drain, `game._pendingProjectiles`
-   for multi-shot groups) and enqueues rises via `game.QueueReanimRise`.
+   then calls `SpellEffectSystem.Execute(spell, this, casterIdx, target, slot, pending)`
+   (the *effect* layer). No callbacks, no result struct: the system writes Game1-owned
+   results directly (`game._channelingSlot` for the player's Beam/Drain key-hold,
+   `game._pendingProjectiles` for multi-shot groups) and enqueues rises via
+   `game.QueueReanimRise`. `pending` is THIS cast's targeting record — the player's
+   `_pendingSpell` (it must survive a multi-second cast anim), or an AI cast's scratch.
 
 So: **targeting** is in `SpellCaster`, **all effects** are in `SpellEffectSystem`, and
 `Game1.Spells.cs` wires them together + ticks the deferred queues.
+
+## AI casters use the same pipeline
+
+`SpellCaster.TryStartSpellCast`/`RefundSpellCast` take a `Movement.ICasterResources`
+(mana + per-spell cooldowns): `NecromancerState` for the player, `UnitCasterResources`
+(over `Unit.Mana` + the lazily-allocated `Unit.SpellCooldowns` dict) for AI units, and
+all targeting is caster-faction-aware ("ally" = same faction as the caster). AI
+archetype handlers (`AI/CasterUnitHandler.cs`) enqueue an `AISpellCastRequest`
+(`AIContext.SpellCasts` → `Simulation.PendingAISpellCasts`) during the AI pass;
+`Game1.DrainAISpellCasts` runs it through steps 3 and 6 above right after the tick
+(slot = -1, immediate execution — no cast anims/plant, no slot flash, no player-event
+tally, no horde caps). AI Beam/Drain channels are held by `Unit.ChannelTimer` (armed in
+`SpellEffectSystem.StartChannel`, ticked/cancelled by the handler) since an AI has no
+key to release. Test with the dev command `set_spell <selector> <spellID>`. A spell you
+add per this doc is castable by any AI caster unit (set `spellID` + `maxMana` on its
+UnitDef) with no extra code.
 
 ## What lives directly in `Game1.Spells.cs`
 

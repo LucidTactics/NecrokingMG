@@ -1448,6 +1448,34 @@ public partial class Game1 {
                break;
             }
 
+            // Hand an AI unit a (different) spell to cast: sets Unit.SpellID (what
+            // CasterUnitHandler casts through the shared pipeline) and gives it a
+            // default mana pool if it has none. Path requirements still gate the
+            // cast — set them on the def or a buff. window.dev('set_spell',['9','nether_darts'])
+            case "set_spell": {
+               if (c.Args.Length < 2) {
+                  c.Complete(Necroking.Dev.DevServer.Error("set_spell needs: <selector> <spellID>"));
+                  break;
+               }
+               string spellId = c.Args[c.Args.Length - 1];
+               if (_gameData.Spells.Get(spellId) == null) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"unknown spell: {spellId}"));
+                  break;
+               }
+               string spellSel = string.Join(" ", c.Args, 0, c.Args.Length - 1);
+               var spellIdxs = DevResolveUnits(spellSel);
+               foreach (int i in spellIdxs) {
+                  _sim.UnitsMut[i].SpellID = spellId;
+                  if (_sim.UnitsMut[i].MaxMana <= 0f) {
+                     _sim.UnitsMut[i].MaxMana = 50f;
+                     _sim.UnitsMut[i].Mana = 50f;
+                     _sim.UnitsMut[i].ManaRegen = 1f;
+                  }
+               }
+               c.Complete(Necroking.Dev.DevServer.Ok($"set spell={spellId} on {spellIdxs.Count} unit(s)"));
+               break;
+            }
+
             // Swap the necromancer's UnitDef in-place (same path the
             // Metamorphosis tree uses on Become Pale Acolyte / Wight / etc.).
             // For testing different player chassis without restarting the map.
@@ -1715,7 +1743,7 @@ public partial class Game1 {
                   "damage <selector> <amount>", "kill <selector>", "remove <selector>",
                   "zombify [selector]", "set_ai <selector> <AIBehavior>", "move <selector> <x> <y>",
                   "set_hp <selector> <hp> [maxHp]", "set_mana <selector|necro> <mana> [maxMana]",
-                  "set_necro_type <unitDefId>", "godmode [on|off]",
+                  "set_spell <selector> <spellID>", "set_necro_type <unitDefId>", "godmode [on|off]",
                   "walk_necro <x> <y>  (or 'clear'; cancelled by any WASD press)",
                   "mark <selector|clear>", "unmark [selector]",
                   // spells & reanimation

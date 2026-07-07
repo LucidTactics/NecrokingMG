@@ -28,6 +28,20 @@ public class PendingSpellCast
     public bool Active;
 }
 
+/// <summary>An AI unit asking to cast a spell through the SAME pipeline as the player
+/// (SpellCaster.TryStartSpellCast → SpellEffectSystem.Execute). Handlers enqueue these
+/// during the sim's AI pass (AIContext.SpellCasts); Game1.DrainAISpellCasts validates,
+/// pays, and executes them right after the tick — the effect layer (reanim FX, summon
+/// effects, death fog) lives on Game1, which is why the sim can't execute them itself.
+/// The queue is cleared at the start of every Simulation.Tick, so requests never pile
+/// up in headless runs where nothing drains them (headless casters simply don't cast).</summary>
+public struct AISpellCastRequest
+{
+    public uint CasterId;     // stable unit id — re-resolved at drain time
+    public string SpellID;
+    public Vec2 Target;       // world-space aim point (the AI's "mouse")
+}
+
 public static class SpellCaster
 {
     /// <summary>
@@ -40,18 +54,26 @@ public static class SpellCaster
         return def != null && !string.IsNullOrEmpty(def.ZombieTypeID);
     }
 
+    /// <summary>Targeting + gates for ANY caster — the player necromancer (pass
+    /// <see cref="NecromancerState"/>) or an AI caster unit (pass a
+    /// <see cref="UnitCasterResources"/> over its unit fields). "Ally"/"enemy" in the
+    /// per-category targeting means same/different faction as the caster, so a Human
+    /// priest's Debuff finds undead and its Buff finds fellow humans. Horde-cap
+    /// gating only applies to the player (the caps live on NecromancerState).
+    /// <paramref name="targetWorld"/> is the aim point — the mouse for the player,
+    /// the AI's chosen cast point for units.</summary>
     public static CastResult TryStartSpellCast(
-        string spellID, SpellRegistry spells, NecromancerState necro,
-        UnitArrays units, int necroIdx, Vec2 mouseWorld,
+        string spellID, SpellRegistry spells, ICasterResources caster,
+        UnitArrays units, int casterIdx, Vec2 targetWorld,
         IReadOnlyList<Corpse> corpses, PendingSpellCast outPending,
         GameData gameData = null)
     {
-        if (necroIdx < 0) return CastResult.NoNecromancer;
+        if (casterIdx < 0) return CastResult.NoNecromancer;
 
         var spell = spells.Get(spellID);
         if (spell == null) return CastResult.NoValidTarget;
 
-        if (necro.GetCooldown(spellID) > 0f) return CastResult.OnCooldown;
+        if (caster.GetCooldown(spellID) > 0f) return CastResult.OnCooldown;
         // Path-aware cost: caster's UnitDef carries Paths, the spell's primary
         // path scales the mana cost downward when caster level exceeds the
         // requirement. Secondary path is a hard gate only — meeting it doesn't
@@ -59,20 +81,21 @@ public static class SpellCaster
         // existing test paths keep working. Buff "AllPaths" Set effects floor
         // every path level (e.g. god mode = 9 everywhere) without overwriting
         // higher native levels.
-        var casterDef = gameData.Units.Get(units[necroIdx].UnitDefID);
-        Func<MagicPath, int> casterLevel = ResolveCasterLevel(casterDef, units, necroIdx);
+        var casterDef = gameData.Units.Get(units[casterIdx].UnitDefID);
+        Func<MagicPath, int> casterLevel = ResolveCasterLevel(casterDef, units, casterIdx);
         // Path gate is a DISTINCT failure from mana — don't conflate them, or the
         // feedback lies ("not enough mana" when the caster simply lacks the path).
         if (!spell.MeetsPathRequirements(casterLevel)) return CastResult.MissingPath;
         float effectiveCost = spell.EffectiveManaCost(casterLevel);
-        if (necro.Mana < effectiveCost) return CastResult.NotEnoughMana;
+        if (caster.Mana < effectiveCost) return CastResult.NotEnoughMana;
 
-        var necroPos = units[necroIdx].Position;
+        var casterPos = units[casterIdx].Position;
+        var casterFaction = units[casterIdx].Faction;
 
         // Reset pending state
         outPending.SpellID = spellID;
         outPending.Category = spell.Category;
-        outPending.TargetPos = mouseWorld;
+        outPending.TargetPos = targetWorld;
         outPending.TargetCorpseIdx = -1;
         outPending.TargetCorpseID = -1;
         outPending.TargetUnitIdx = -1;
@@ -87,9 +110,9 @@ public static class SpellCaster
         {
             case "Projectile":
             {
-                float dist = (mouseWorld - necroPos).Length();
+                float dist = (targetWorld - casterPos).Length();
                 if (dist > spell.Range) return CastResult.OutOfRange;
-                outPending.TargetPos = mouseWorld;
+                outPending.TargetPos = targetWorld;
                 outPending.RemainingProjectiles = spell.Quantity;
                 outPending.ProjectileTimer = 0f;
                 break;
@@ -98,7 +121,7 @@ public static class SpellCaster
             case "Buff":
             case "Debuff":
             {
-                outPending.TargetPos = mouseWorld;
+                outPending.TargetPos = targetWorld;
                 if (spell.AoeType != "AOE")
                 {
                     // Single target: find closest valid unit near mouse within spell range
@@ -107,12 +130,12 @@ public static class SpellCaster
                     for (int i = 0; i < units.Count; i++)
                     {
                         if (!units[i].Alive) continue;
-                        float distToNecro = (units[i].Position - necroPos).Length();
-                        if (distToNecro > spell.Range) continue;
-                        if (spell.Category == "Buff" && units[i].Faction != Faction.Undead) continue;
-                        if (spell.Category == "Debuff" && units[i].Faction == Faction.Undead) continue;
+                        float distToCaster = (units[i].Position - casterPos).Length();
+                        if (distToCaster > spell.Range) continue;
+                        if (spell.Category == "Buff" && units[i].Faction != casterFaction) continue;
+                        if (spell.Category == "Debuff" && units[i].Faction == casterFaction) continue;
 
-                        float distToCursor = (units[i].Position - mouseWorld).Length();
+                        float distToCursor = (units[i].Position - targetWorld).Length();
                         if (distToCursor < bestDist)
                         {
                             bestDist = distToCursor;
@@ -142,9 +165,9 @@ public static class SpellCaster
                         if (corpses[i].DraggedByUnitID != GameConstants.InvalidUnit) continue;
                         if (corpses[i].BaggedByUnitID != GameConstants.InvalidUnit) continue;
                         if (needsZombieType && !CorpseHasZombieType(corpses[i], gameData)) continue;
-                        float distToNecro = (corpses[i].Position - necroPos).Length();
-                        if (distToNecro > spell.Range) continue;
-                        float distToCursor = (corpses[i].Position - mouseWorld).Length();
+                        float distToCaster = (corpses[i].Position - casterPos).Length();
+                        if (distToCaster > spell.Range) continue;
+                        float distToCursor = (corpses[i].Position - targetWorld).Length();
                         if (distToCursor < bestDist)
                         {
                             bestDist = distToCursor;
@@ -165,9 +188,9 @@ public static class SpellCaster
                     for (int i = 0; i < units.Count; i++)
                     {
                         if (!units[i].Alive) continue;
-                        if (units[i].Faction != Faction.Undead) continue;
-                        float distToNecro = (units[i].Position - necroPos).Length();
-                        if (distToNecro > spell.Range) continue;
+                        if (units[i].Faction != casterFaction) continue;
+                        float distToCaster = (units[i].Position - casterPos).Length();
+                        if (distToCaster > spell.Range) continue;
 
                         // Check if unit type matches acceptable targets using unitDefID
                         bool acceptable = spell.AcceptableTargets == null || spell.AcceptableTargets.Count == 0;
@@ -181,7 +204,7 @@ public static class SpellCaster
                         }
                         if (!acceptable) continue;
 
-                        float distToCursor = (units[i].Position - mouseWorld).Length();
+                        float distToCursor = (units[i].Position - targetWorld).Length();
                         if (distToCursor < bestDist)
                         {
                             bestDist = distToCursor;
@@ -197,7 +220,7 @@ public static class SpellCaster
                 else if (spell.SummonTargetReq == "CorpseAOE")
                 {
                     // AOE corpse targeting: validate at least one valid corpse with zombieTypeID in AOE
-                    float dist = (mouseWorld - necroPos).Length();
+                    float dist = (targetWorld - casterPos).Length();
                     if (dist > spell.Range) return CastResult.OutOfRange;
 
                     bool foundValid = false;
@@ -206,14 +229,14 @@ public static class SpellCaster
                         if (corpses[i].Dissolving || corpses[i].ConsumedBySummon) continue;
                         if (corpses[i].DraggedByUnitID != GameConstants.InvalidUnit) continue;
                         if (corpses[i].BaggedByUnitID != GameConstants.InvalidUnit) continue;
-                        float distToTarget = (corpses[i].Position - mouseWorld).Length();
+                        float distToTarget = (corpses[i].Position - targetWorld).Length();
                         if (distToTarget > spell.AoeRadius) continue;
                         if (!CorpseHasZombieType(corpses[i], gameData)) continue;
                         foundValid = true;
                         break;
                     }
                     if (!foundValid) return CastResult.NoValidTarget;
-                    outPending.TargetPos = mouseWorld;
+                    outPending.TargetPos = targetWorld;
                 }
                 else
                 {
@@ -222,13 +245,13 @@ public static class SpellCaster
                     if (spell.SpawnLocation == "AtTargetLocation" ||
                         spell.SpawnLocation == "NearestTargetToMouse")
                     {
-                        float dist = (mouseWorld - necroPos).Length();
+                        float dist = (targetWorld - casterPos).Length();
                         if (spell.Range > 0 && dist > spell.Range) return CastResult.OutOfRange;
-                        outPending.TargetPos = mouseWorld;
+                        outPending.TargetPos = targetWorld;
                     }
                     else
                     {
-                        outPending.TargetPos = necroPos; // spawn near caster
+                        outPending.TargetPos = casterPos; // spawn near caster
                     }
                 }
 
@@ -238,7 +261,9 @@ public static class SpellCaster
                 // the army — and for CorpseAOE-without-a-fixed-summonUnitID,
                 // since per-corpse category resolution happens at execute time
                 // (different corpses may produce different categories).
-                if (spell.SummonMode != "Transform")
+                // Player-only: the caps live on NecromancerState — AI casters'
+                // summons aren't part of the player's horde and aren't capped.
+                if (spell.SummonMode != "Transform" && caster is NecromancerState hordeState)
                 {
                     string predictId = outPending.SummonUnitID;
                     if (string.IsNullOrEmpty(predictId)
@@ -252,7 +277,7 @@ public static class SpellCaster
                     {
                         var cat = HordeCapTracker.CategoryFor(gameData, predictId);
                         if (cat != UndeadCategory.None
-                            && HordeCapTracker.Available(units, gameData, necro, cat) <= 0)
+                            && HordeCapTracker.Available(units, gameData, hordeState, cat) <= 0)
                         {
                             return CastResult.HordeCapFull;
                         }
@@ -271,10 +296,10 @@ public static class SpellCaster
                     for (int i = 0; i < units.Count; i++)
                     {
                         if (!units[i].Alive) continue;
-                        if (units[i].Faction == Faction.Undead) continue;
-                        float distToNecro = (units[i].Position - necroPos).Length();
-                        if (distToNecro > spell.Range) continue;
-                        float distToCursor = (units[i].Position - mouseWorld).Length();
+                        if (units[i].Faction == casterFaction) continue;
+                        float distToCaster = (units[i].Position - casterPos).Length();
+                        if (distToCaster > spell.Range) continue;
+                        float distToCursor = (units[i].Position - targetWorld).Length();
                         if (distToCursor < bestDist)
                         {
                             bestDist = distToCursor;
@@ -288,9 +313,9 @@ public static class SpellCaster
                 }
                 else
                 {
-                    float dist = (mouseWorld - necroPos).Length();
+                    float dist = (targetWorld - casterPos).Length();
                     if (dist > spell.Range) return CastResult.OutOfRange;
-                    outPending.TargetPos = mouseWorld;
+                    outPending.TargetPos = targetWorld;
                 }
                 break;
             }
@@ -302,10 +327,10 @@ public static class SpellCaster
                 for (int i = 0; i < units.Count; i++)
                 {
                     if (!units[i].Alive) continue;
-                    if (units[i].Faction == Faction.Undead) continue;
-                    float distToNecro = (units[i].Position - necroPos).Length();
-                    if (distToNecro > spell.Range) continue;
-                    float distToCursor = (units[i].Position - mouseWorld).Length();
+                    if (units[i].Faction == casterFaction) continue;
+                    float distToCaster = (units[i].Position - casterPos).Length();
+                    if (distToCaster > spell.Range) continue;
+                    float distToCursor = (units[i].Position - targetWorld).Length();
                     if (distToCursor < bestDist)
                     {
                         bestDist = distToCursor;
@@ -329,16 +354,16 @@ public static class SpellCaster
                     if (!units[i].Alive) continue;
                     if (spell.DrainReversed)
                     {
-                        if (units[i].Faction != Faction.Undead) continue;
-                        if (i == necroIdx) continue;
+                        if (units[i].Faction != casterFaction) continue;
+                        if (i == casterIdx) continue;
                     }
                     else
                     {
-                        if (units[i].Faction == Faction.Undead) continue;
+                        if (units[i].Faction == casterFaction) continue;
                     }
-                    float distToNecro = (units[i].Position - necroPos).Length();
-                    if (distToNecro > spell.Range) continue;
-                    float distToCursor = (units[i].Position - mouseWorld).Length();
+                    float distToCaster = (units[i].Position - casterPos).Length();
+                    if (distToCaster > spell.Range) continue;
+                    float distToCursor = (units[i].Position - targetWorld).Length();
                     if (distToCursor < bestDist)
                     {
                         bestDist = distToCursor;
@@ -361,9 +386,9 @@ public static class SpellCaster
                     for (int i = 0; i < corpses.Count; i++)
                     {
                         if (corpses[i].Dissolving || corpses[i].ConsumedBySummon) continue;
-                        float distToNecro = (corpses[i].Position - necroPos).Length();
-                        if (distToNecro > spell.Range) continue;
-                        float distToCursor = (corpses[i].Position - mouseWorld).Length();
+                        float distToCaster = (corpses[i].Position - casterPos).Length();
+                        if (distToCaster > spell.Range) continue;
+                        float distToCursor = (corpses[i].Position - targetWorld).Length();
                         if (distToCursor < bestCorpseDist)
                         {
                             bestCorpseDist = distToCursor;
@@ -394,12 +419,12 @@ public static class SpellCaster
                 for (int i = 0; i < units.Count; i++)
                 {
                     if (!units[i].Alive) continue;
-                    if (i == necroIdx) continue;
-                    if (units[i].Faction != Faction.Undead) continue;
+                    if (i == casterIdx) continue;
+                    if (units[i].Faction != casterFaction) continue;
                     if (restrict && !spell.AcceptableTargets!.Contains(units[i].UnitDefID)) continue;
-                    float distToNecro = (units[i].Position - necroPos).Length();
-                    if (distToNecro > spell.Range) continue;
-                    float distToCursor = (units[i].Position - mouseWorld).Length();
+                    float distToCaster = (units[i].Position - casterPos).Length();
+                    if (distToCaster > spell.Range) continue;
+                    float distToCursor = (units[i].Position - targetWorld).Length();
                     if (distToCursor < bestDist)
                     {
                         bestDist = distToCursor;
@@ -415,23 +440,23 @@ public static class SpellCaster
 
             case "Cloud":
             {
-                float dist = (mouseWorld - necroPos).Length();
+                float dist = (targetWorld - casterPos).Length();
                 if (dist > spell.Range) return CastResult.OutOfRange;
-                outPending.TargetPos = mouseWorld;
+                outPending.TargetPos = targetWorld;
                 break;
             }
 
             case "Toggle":
             {
-                outPending.TargetPos = necroPos;
+                outPending.TargetPos = casterPos;
                 break;
             }
 
             default:
             {
-                float dist = (mouseWorld - necroPos).Length();
+                float dist = (targetWorld - casterPos).Length();
                 if (dist > spell.Range) return CastResult.OutOfRange;
-                outPending.TargetPos = mouseWorld;
+                outPending.TargetPos = targetWorld;
                 break;
             }
         }
@@ -439,17 +464,17 @@ public static class SpellCaster
         // Deduct mana and start cooldown. Recompute the effective cost rather
         // than capturing it from the eligibility check so we stay in sync if a
         // future refactor moves the gate around.
-        var castingDef = gameData.Units.Get(units[necroIdx].UnitDefID);
-        Func<MagicPath, int> castingLevel = ResolveCasterLevel(castingDef, units, necroIdx);
-        necro.Mana -= spell.EffectiveManaCost(castingLevel);
+        var castingDef = gameData.Units.Get(units[casterIdx].UnitDefID);
+        Func<MagicPath, int> castingLevel = ResolveCasterLevel(castingDef, units, casterIdx);
+        caster.Mana -= spell.EffectiveManaCost(castingLevel);
         if (spell.Cooldown > 0f)
-            necro.SpellCooldowns[spellID] = spell.Cooldown;
+            caster.SetCooldown(spellID, spell.Cooldown);
 
         // Floating spell-name label above the necromancer — only on confirmed
         // cast, never on a failed validation, or the label lies (says "Fireball"
         // when nothing fired). See UnitData.ActionLabel.
-        units[necroIdx].ActionLabel = string.IsNullOrEmpty(spell.DisplayName) ? spell.Id : spell.DisplayName;
-        units[necroIdx].ActionLabelTimer = 1.5f;
+        units[casterIdx].ActionLabel = string.IsNullOrEmpty(spell.DisplayName) ? spell.Id : spell.DisplayName;
+        units[casterIdx].ActionLabelTimer = 1.5f;
 
         return CastResult.Success;
     }
@@ -460,15 +485,15 @@ public static class SpellCaster
     /// way the deduction did so the two always match. Mana may transiently exceed
     /// max (regen ticked during the wind-up); the per-frame clamp in Game1 corrects
     /// it next tick.</summary>
-    public static void RefundSpellCast(string spellID, SpellRegistry spells, NecromancerState necro,
-        UnitArrays units, int necroIdx, GameData gameData)
+    public static void RefundSpellCast(string spellID, SpellRegistry spells, ICasterResources caster,
+        UnitArrays units, int casterIdx, GameData gameData)
     {
         var spell = spells.Get(spellID);
-        if (spell == null || necroIdx < 0 || necroIdx >= units.Count) return;
-        var castingDef = gameData.Units.Get(units[necroIdx].UnitDefID);
-        Func<MagicPath, int> castingLevel = ResolveCasterLevel(castingDef, units, necroIdx);
-        necro.Mana += spell.EffectiveManaCost(castingLevel);
-        necro.SpellCooldowns.Remove(spellID);
+        if (spell == null || casterIdx < 0 || casterIdx >= units.Count) return;
+        var castingDef = gameData.Units.Get(units[casterIdx].UnitDefID);
+        Func<MagicPath, int> castingLevel = ResolveCasterLevel(castingDef, units, casterIdx);
+        caster.Mana += spell.EffectiveManaCost(castingLevel);
+        caster.ClearCooldown(spellID);
     }
 
     /// <summary>True if the necromancer meets a spell's magic-path requirements
@@ -477,14 +502,14 @@ public static class SpellCaster
     /// unlocked paths, not current resources (players don't expect a spell to
     /// vanish from the book just because they're low on mana). Used to filter
     /// the grimoire so spells whose paths the player hasn't unlocked don't show.
-    /// necroIdx &lt; 0 (no caster context, e.g. editor/tests) => true (show all).</summary>
+    /// casterIdx &lt; 0 (no caster context, e.g. editor/tests) => true (show all).</summary>
     public static bool HasSpellRequirements(SpellDef? spell, GameData gameData,
-        UnitArrays units, int necroIdx)
+        UnitArrays units, int casterIdx)
     {
         if (spell == null) return false;
-        if (necroIdx < 0) return true;
-        var def = gameData.Units.Get(units[necroIdx].UnitDefID);
-        return spell.MeetsPathRequirements(ResolveCasterLevel(def, units, necroIdx));
+        if (casterIdx < 0) return true;
+        var def = gameData.Units.Get(units[casterIdx].UnitDefID);
+        return spell.MeetsPathRequirements(ResolveCasterLevel(def, units, casterIdx));
     }
 
     /// <summary>Human-readable description of which path requirement(s) the caster
@@ -494,11 +519,11 @@ public static class SpellCaster
     /// names the path the player still needs, instead of misreporting it as a mana
     /// shortfall.</summary>
     public static string DescribeMissingPath(SpellDef? spell, GameData gameData,
-        UnitArrays units, int necroIdx)
+        UnitArrays units, int casterIdx)
     {
-        if (spell == null || necroIdx < 0) return "";
-        var def = gameData.Units.Get(units[necroIdx].UnitDefID);
-        var casterLevel = ResolveCasterLevel(def, units, necroIdx);
+        if (spell == null || casterIdx < 0) return "";
+        var def = gameData.Units.Get(units[casterIdx].UnitDefID);
+        var casterLevel = ResolveCasterLevel(def, units, casterIdx);
 
         var parts = new List<string>();
         var pri = spell.GetPrimary();
@@ -515,6 +540,6 @@ public static class SpellCaster
     /// "AllPaths" Set effects (e.g. god mode pinning every path to 9). Higher
     /// native levels win over the buff floor so investing further in a path
     /// isn't wasted while the buff is up.</summary>
-    private static Func<MagicPath, int> ResolveCasterLevel(UnitDef def, UnitArrays units, int necroIdx)
-        => p => BuffSystem.EffectivePathLevel(units, necroIdx, def, p);
+    private static Func<MagicPath, int> ResolveCasterLevel(UnitDef def, UnitArrays units, int casterIdx)
+        => p => BuffSystem.EffectivePathLevel(units, casterIdx, def, p);
 }

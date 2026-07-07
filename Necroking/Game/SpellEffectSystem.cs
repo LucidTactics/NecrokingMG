@@ -9,10 +9,13 @@ using Necroking.Spatial;
 
 namespace Necroking.GameSystems;
 
-/// <summary>Queued multi-projectile group for delayed spawning.</summary>
+/// <summary>Queued multi-projectile group for delayed spawning. Carries its caster's
+/// stable uid so follow-up shots track THAT caster's hand (player or AI) — the group
+/// is dropped if the caster dies mid-volley.</summary>
 public struct PendingProjectileGroup
 {
     public string SpellID;
+    public uint CasterUid;
     public Vec2 Origin;
     public Vec2 Target;
     public int Remaining;
@@ -44,32 +47,42 @@ public struct DamageNumber
 public static class SpellEffectSystem
 {
     /// <summary>
-    /// Execute a spell effect by category.
+    /// Execute a spell effect by category — for ANY caster, player or AI.
     /// </summary>
     /// <param name="spell">Spell definition</param>
     /// <param name="game">The game — sim, game data, death fog, damage numbers,
     /// channeling/pending-projectile state, and the summon/reanim pipeline.</param>
     /// <param name="casterIdx">Caster unit index</param>
     /// <param name="target">World-space target position</param>
-    /// <param name="slot">Spell bar slot index (for channeling)</param>
-    public static void Execute(SpellDef spell, Game1 game, int casterIdx, Vec2 target, int slot)
+    /// <param name="slot">Spell bar slot index for the player's hold-to-channel
+    /// (Beam/Drain). Pass -1 for AI casts: their channels run on a per-unit timer
+    /// (Unit.ChannelTimer) instead of a held key.</param>
+    /// <param name="pending">The targeting results TryStartSpellCast wrote for THIS
+    /// cast (corpse/unit ids, summon type). Per-caster — the player passes
+    /// Game1._pendingSpell, AI casts pass their own record, so concurrent casters
+    /// can't stomp each other's targeting.</param>
+    public static void Execute(SpellDef spell, Game1 game, int casterIdx, Vec2 target, int slot,
+        PendingSpellCast pending)
     {
         var sim = game._sim;
         var gameData = game._gameData;
         var units = sim.UnitsMut;
         var casterUid = units[casterIdx].Id;
+        var casterFaction = units[casterIdx].Faction;
         var effectOrigin = units[casterIdx].EffectSpawnPos2D;
         var effectOriginH = units[casterIdx].EffectSpawnHeight;
 
         switch (spell.Category)
         {
             case "Projectile":
-                SpawnProjectile(spell, sim.Projectiles, effectOrigin, target, casterUid, effectOriginH);
+                SpawnProjectile(spell, sim.Projectiles, effectOrigin, target, casterUid,
+                    effectOriginH, casterFaction);
                 if (spell.Quantity > 1)
                 {
                     game._pendingProjectiles.Add(new PendingProjectileGroup
                     {
                         SpellID = spell.Id,
+                        CasterUid = casterUid,
                         Origin = effectOrigin,
                         Target = target,
                         Remaining = spell.Quantity - 1,
@@ -89,32 +102,32 @@ public static class SpellEffectSystem
                 break;
 
             case "Summon":
-                ExecuteSummonSpell(spell, game, game._pendingSpell, units[casterIdx].Position, casterIdx);
+                ExecuteSummonSpell(spell, game, pending, units[casterIdx].Position, casterIdx);
                 break;
 
             case "Beam":
             {
-                int beamTarget = FindClosestEnemy(sim, target, 3f, units[casterIdx].Faction);
+                int beamTarget = FindClosestEnemy(sim, target, 3f, casterFaction);
                 if (beamTarget >= 0)
                 {
                     sim.Lightning.SpawnBeam(casterUid, units[beamTarget].Id,
                         spell.Id, spell.Damage, spell.BeamTickRate, spell.BeamRetargetRadius,
                         spell.BuildBeamStyle());
-                    game._channelingSlot = slot;
+                    StartChannel(game, units, casterIdx, slot, spell);
                 }
                 break;
             }
 
             case "Drain":
             {
-                int drainTarget = FindClosestEnemy(sim, target, 5f, units[casterIdx].Faction);
+                int drainTarget = FindClosestEnemy(sim, target, 5f, casterFaction);
                 if (drainTarget >= 0)
                 {
                     sim.Lightning.SpawnDrain(casterUid, units[drainTarget].Id,
                         spell.Id, spell.Damage, spell.DrainTickRate, spell.DrainHealPercent,
                         spell.DrainCorpseHP, spell.DrainReversed, spell.DrainMaxDuration,
                         spell.BuildDrainVisuals());
-                    game._channelingSlot = slot;
+                    StartChannel(game, units, casterIdx, slot, spell);
                 }
                 break;
             }
@@ -127,7 +140,7 @@ public static class SpellEffectSystem
                 break;
 
             case "Cloud":
-                ExecuteCloud(spell, sim, target);
+                ExecuteCloud(spell, sim, target, casterFaction);
                 break;
 
             case "WolfHunt":
@@ -162,12 +175,14 @@ public static class SpellEffectSystem
                 }
                 else if (hasBomb)
                 {
-                    SpawnProjectile(spell, sim.Projectiles, effectOrigin, target, casterUid, effectOriginH);
+                    SpawnProjectile(spell, sim.Projectiles, effectOrigin, target, casterUid,
+                        effectOriginH, casterFaction);
                     if (spell.Quantity > 1)
                     {
                         game._pendingProjectiles.Add(new PendingProjectileGroup
                         {
                             SpellID = spell.Id,
+                            CasterUid = casterUid,
                             Origin = effectOrigin,
                             Target = target,
                             Remaining = spell.Quantity - 1,
@@ -184,6 +199,25 @@ public static class SpellEffectSystem
                     units[casterIdx].GhostMode = !units[casterIdx].GhostMode;
                 break;
         }
+    }
+
+    /// <summary>Arm the channel-hold for a just-started Beam/Drain. Player casts
+    /// (slot &gt;= 0) are released by letting go of the spell-bar key (Game1's
+    /// channel-hold block); AI casts (slot &lt; 0) run on a per-unit timer that the
+    /// caster's archetype handler ticks down and cancels — an AI has no key to
+    /// release. Drains prefer their own max duration so the channel matches the
+    /// visual; CastTime is the generic fallback knob.</summary>
+    private static void StartChannel(Game1 game, UnitArrays units, int casterIdx, int slot, SpellDef spell)
+    {
+        if (slot >= 0)
+        {
+            game._channelingSlot = slot;
+            return;
+        }
+        float duration = spell.Category == "Drain" && spell.DrainMaxDuration > 0f
+            ? spell.DrainMaxDuration
+            : (spell.CastTime > 0f ? spell.CastTime : 4f);
+        units[casterIdx].ChannelTimer = duration;
     }
 
     /// <summary>
@@ -368,10 +402,10 @@ public static class SpellEffectSystem
     /// projectile/hit-effect flipbook refs. Public — Game1.TickPendingProjectiles also
     /// calls it for the staggered Quantity&gt;1 shots.</summary>
     public static void SpawnProjectile(SpellDef spell, ProjectileManager projectiles,
-        Vec2 origin, Vec2 target, uint ownerUid, float spawnHeight)
+        Vec2 origin, Vec2 target, uint ownerUid, float spawnHeight, Faction casterFaction)
     {
         projectiles.SpawnFireball(origin, target,
-            Faction.Undead, ownerUid, spell.Damage, spell.AoeRadius, spell.DisplayName,
+            casterFaction, ownerUid, spell.Damage, spell.AoeRadius, spell.DisplayName,
             spawnHeight: spawnHeight);
         var projs = projectiles.Projectiles;
         if (projs.Count > 0) {
@@ -513,16 +547,16 @@ public static class SpellEffectSystem
         }
     }
 
-    public static void ExecuteCloud(SpellDef spell, Simulation sim, Vec2 target)
+    public static void ExecuteCloud(SpellDef spell, Simulation sim, Vec2 target, Faction casterFaction)
     {
-        sim.PoisonClouds.SpawnCloud(target, spell, Faction.Undead);
+        sim.PoisonClouds.SpawnCloud(target, spell, casterFaction);
 
         float radius = spell.AoeRadius > 0 ? spell.AoeRadius : spell.CloudRadius;
 
         if (spell.CloudAppliesParalysis)
         {
             // Paralysis clouds use their AoE burst to apply paralysis (no poison stacks).
-            PotionSystem.ApplyParalysisAoE(sim.UnitsMut, sim.Quadtree, target, radius, Faction.Undead);
+            PotionSystem.ApplyParalysisAoE(sim.UnitsMut, sim.Quadtree, target, radius, casterFaction);
             return;
         }
 
@@ -530,7 +564,7 @@ public static class SpellEffectSystem
         {
             var flags = SpellDamageFlags(spell);
             DamageSystem.ApplyAoE(sim.UnitsMut, sim.Quadtree, target, radius,
-                spell.Damage, DamageType.Poison, flags, Faction.Undead, sim.DamageEventsMut);
+                spell.Damage, DamageType.Poison, flags, casterFaction, sim.DamageEventsMut);
         }
     }
 

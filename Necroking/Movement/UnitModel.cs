@@ -359,8 +359,16 @@ public class Unit
     public float Mana;
     public float MaxMana;
     public float ManaRegen;
-    public float SpellCooldownTimer;
     public string SpellID = "";
+    /// <summary>Per-spell cooldowns, lazily allocated — only casting units ever carry one.
+    /// Written by the shared SpellCaster pipeline (via <see cref="UnitCasterResources"/>),
+    /// ticked by the unit's archetype handler (CasterUnitHandler). The player necromancer's
+    /// cooldowns live on <see cref="NecromancerState.SpellCooldowns"/> instead.</summary>
+    public Dictionary<string, float>? SpellCooldowns;
+    /// <summary>AI channel hold for Beam/Drain spells: seconds left to keep channeling. The
+    /// caster's handler stands still while &gt; 0 and cancels its beams/drains when it expires.
+    /// Player channels are keyed to the held spell-bar slot (Game1._channelingSlot) instead.</summary>
+    public float ChannelTimer;
 
     // Engagement & combat state
     public CombatTarget EngagedTarget = CombatTarget.None;
@@ -680,7 +688,64 @@ public static class UnitUtil
     }
 }
 
-public class NecromancerState
+/// <summary>The mana pool + per-spell cooldown store behind the shared SpellCaster
+/// pipeline, so the player necromancer (<see cref="NecromancerState"/>) and AI caster
+/// units (<see cref="UnitCasterResources"/>) pay for and cool down spells through the
+/// same code path (TryStartSpellCast deducts / stamps, RefundSpellCast undoes).</summary>
+public interface ICasterResources
+{
+    float Mana { get; set; }
+    float GetCooldown(string spellId);
+    void SetCooldown(string spellId, float seconds);
+    void ClearCooldown(string spellId);
+}
+
+/// <summary>ICasterResources over a plain unit's caster fields (Unit.Mana + the
+/// lazily-allocated Unit.SpellCooldowns dict) — lets AI casters run the same
+/// SpellCaster pipeline as the player necromancer. Allocated per cast at the
+/// Game1 drain site; casts are rare so the small allocation is fine.</summary>
+public sealed class UnitCasterResources : ICasterResources
+{
+    private readonly UnitArrays _units;
+    private readonly int _idx;
+
+    public UnitCasterResources(UnitArrays units, int idx) { _units = units; _idx = idx; }
+
+    public float Mana
+    {
+        get => _units[_idx].Mana;
+        set => _units[_idx].Mana = value;
+    }
+
+    public float GetCooldown(string spellId)
+    {
+        var cds = _units[_idx].SpellCooldowns;
+        return cds != null && cds.TryGetValue(spellId, out float cd) ? cd : 0f;
+    }
+
+    public void SetCooldown(string spellId, float seconds) =>
+        (_units[_idx].SpellCooldowns ??= new())[spellId] = seconds;
+
+    public void ClearCooldown(string spellId) =>
+        _units[_idx].SpellCooldowns?.Remove(spellId);
+
+    private static readonly List<string> _tickScratch = new();
+
+    /// <summary>Tick a unit's per-spell cooldowns down (rate 1, unlike the
+    /// necromancer's buff-scaled <see cref="NecromancerState.TickCooldowns"/>).
+    /// Static scratch keeps the per-frame handler tick allocation-free —
+    /// safe because AI handlers run single-threaded from Simulation.Tick.</summary>
+    public static void TickCooldowns(Dictionary<string, float>? cds, float dt)
+    {
+        if (cds == null || cds.Count == 0) return;
+        _tickScratch.Clear();
+        foreach (var key in cds.Keys) _tickScratch.Add(key);
+        for (int k = 0; k < _tickScratch.Count; k++)
+            cds[_tickScratch[k]] = MathF.Max(0f, cds[_tickScratch[k]] - dt);
+    }
+}
+
+public class NecromancerState : ICasterResources
 {
     public float Mana { get; set; } = 10f;
     public float MaxMana { get; set; } = 50f;
@@ -726,4 +791,8 @@ public class NecromancerState
 
     public float GetCooldown(string id) =>
         SpellCooldowns.TryGetValue(id, out float cd) ? cd : 0f;
+
+    public void SetCooldown(string id, float seconds) => SpellCooldowns[id] = seconds;
+
+    public void ClearCooldown(string id) => SpellCooldowns.Remove(id);
 }

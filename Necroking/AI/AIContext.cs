@@ -35,6 +35,12 @@ public ref struct AIContext
     /// <summary>Strike/zap spawner for casting archetypes (CasterUnitHandler). Null in
     /// minimal contexts (OnSpawn) — handlers must only cast from Update.</summary>
     public GameSystems.LightningSystem? Lightning;
+    /// <summary>Spell-cast request queue for casting archetypes: enqueue an
+    /// <see cref="GameSystems.AISpellCastRequest"/> and Game1 runs it through the SAME
+    /// SpellCaster + SpellEffectSystem pipeline as the player right after the tick
+    /// (targeting, path/mana/cooldown gates, every spell category). Null in minimal
+    /// contexts; in headless runs requests are dropped unexecuted.</summary>
+    public List<GameSystems.AISpellCastRequest>? SpellCasts;
     public List<GameSystems.DamageEvent>? DamageEvents;
     // Anim metadata for effect-time lookups (used by AI to time things like pounce takeoffs).
     public Dictionary<string, AnimationMeta>? AnimMeta;

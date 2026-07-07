@@ -159,16 +159,20 @@ public partial class Game1 {
    }
 
    /// <summary>
-   /// Execute a spell's effect (projectile, buff, strike, etc.). Called either immediately
-   /// (no casting buff) or at the Spell1 animation action moment (deferred cast).
+   /// Execute a spell's effect (projectile, buff, strike, etc.) for any caster. Called
+   /// either immediately (no casting buff / AI cast) or at the Spell1 animation action
+   /// moment (player deferred cast). <paramref name="pending"/> is THIS cast's targeting
+   /// record (the player's _pendingSpell, or an AI cast's own) — see
+   /// SpellEffectSystem.Execute. slot -1 = AI cast (no spell bar, timer-based channel).
    /// </summary>
-   void ExecuteSpellEffect(SpellDef spell, int necroIdx, Vec2 target, int slot) {
+   void ExecuteSpellEffect(SpellDef spell, int casterIdx, Vec2 target, int slot,
+      GameSystems.PendingSpellCast pending) {
       // Cast flipbook effect at caster position
-      SpawnCastEffect(spell, _sim.Units[necroIdx].EffectSpawnPos2D);
+      SpawnCastEffect(spell, _sim.Units[casterIdx].EffectSpawnPos2D);
 
       // All category logic lives in SpellEffectSystem — it reaches Game1 state
       // (death fog, channeling slot, pending projectiles/rises) through `this`.
-      GameSystems.SpellEffectSystem.Execute(spell, this, necroIdx, target, slot);
+      GameSystems.SpellEffectSystem.Execute(spell, this, casterIdx, target, slot, pending);
    }
 
    /// <summary>Drop the blight where a thrown Blight bomb actually exploded. A Blight
@@ -331,7 +335,7 @@ public partial class Game1 {
       } else {
          // No casting buff → execute immediately (legacy behavior; Q6 — no anim,
          // no pose to mismatch, so no plant either: castable at a full sprint).
-         ExecuteSpellEffect(spell, necroIdx, mouseWorld, slot);
+         ExecuteSpellEffect(spell, necroIdx, mouseWorld, slot, _pendingSpell);
          return CastResult.Success;
       }
 
@@ -496,6 +500,15 @@ public partial class Game1 {
    void TickPendingProjectiles(float dt) {
       for (int i = _pendingProjectiles.Count - 1; i >= 0; i--) {
          var pg = _pendingProjectiles[i];
+
+         // Follow-up shots track the group's OWN caster (player or AI) by stable
+         // id; a caster that died mid-volley stops shooting.
+         int casterIdx = _sim.ResolveUnitID(pg.CasterUid);
+         if (casterIdx < 0 || !_sim.Units[casterIdx].Alive) {
+            _pendingProjectiles.RemoveAt(i);
+            continue;
+         }
+
          pg.Timer += dt;
          if (pg.Timer >= pg.Interval) {
             pg.Timer -= pg.Interval;
@@ -503,12 +516,9 @@ public partial class Game1 {
 
             var spell = _gameData.Spells.Get(pg.SpellID);
             if (spell != null) {
-               int necroIdx = FindNecromancer();
-               uint ownerUid = necroIdx >= 0 ? _sim.Units[necroIdx].Id : 0;
-               Vec2 origin = necroIdx >= 0 ? _sim.Units[necroIdx].EffectSpawnPos2D : pg.Origin;
-               float spawnH = necroIdx >= 0 ? _sim.Units[necroIdx].EffectSpawnHeight : 0.6f;
                GameSystems.SpellEffectSystem.SpawnProjectile(spell, _sim.Projectiles,
-                  origin, pg.Target, ownerUid, spawnH);
+                  _sim.Units[casterIdx].EffectSpawnPos2D, pg.Target, pg.CasterUid,
+                  _sim.Units[casterIdx].EffectSpawnHeight, _sim.Units[casterIdx].Faction);
             }
 
             if (pg.Remaining <= 0) {
@@ -519,5 +529,47 @@ public partial class Game1 {
 
          _pendingProjectiles[i] = pg;
       }
+   }
+
+   // Scratch targeting record for AI casts — reset by every TryStartSpellCast and
+   // consumed immediately by ExecuteSpellEffect within the same drain iteration, so
+   // one instance serves all AI casters (unlike the player's _pendingSpell, which
+   // must survive a multi-second cast anim/channel).
+   readonly GameSystems.PendingSpellCast _aiPendingSpell = new();
+
+   /// <summary>Run the AI cast requests queued by archetype handlers during this
+   /// tick (AIContext.SpellCasts) through the SAME pipeline as the player:
+   /// SpellCaster.TryStartSpellCast (targeting + path/mana/cooldown gates, paid from
+   /// the unit's own mana + per-spell cooldowns via UnitCasterResources) then
+   /// ExecuteSpellEffect (all categories — projectiles/multi-shot, strikes, clouds,
+   /// beams/drains with a timer channel, summons, buffs). Player-only side effects
+   /// (slot flash, cast-fail text, PlayerEvents.Tally, cast plant) deliberately
+   /// don't happen here. Called once per tick right after the sim.</summary>
+   void DrainAISpellCasts() {
+      var requests = _sim.PendingAISpellCasts;
+      if (requests.Count == 0) return;
+      for (int r = 0; r < requests.Count; r++) {
+         var req = requests[r];
+         int casterIdx = _sim.ResolveUnitID(req.CasterId);
+         if (casterIdx < 0 || !_sim.Units[casterIdx].Alive) continue;
+         var spell = _gameData.Spells.Get(req.SpellID);
+         if (spell == null) continue;
+
+         var resources = new Movement.UnitCasterResources(_sim.UnitsMut, casterIdx);
+         var result = SpellCaster.TryStartSpellCast(req.SpellID, _gameData.Spells,
+            resources, _sim.Units, casterIdx, req.Target, _sim.Corpses,
+            _aiPendingSpell, _gameData);
+         if (result != CastResult.Success) continue;
+
+         // Casting buff (glow/weapon particle) — same visual the legacy AI cast
+         // applied; it expires on its own duration since AI has no anim-end hook.
+         if (!string.IsNullOrEmpty(spell.CastingBuffID)) {
+            var castBuff = _gameData.Buffs.Get(spell.CastingBuffID);
+            if (castBuff != null) BuffSystem.ApplyBuff(_sim.UnitsMut, casterIdx, castBuff, _gameData);
+         }
+
+         ExecuteSpellEffect(spell, casterIdx, req.Target, slot: -1, _aiPendingSpell);
+      }
+      requests.Clear();
    }
 }
