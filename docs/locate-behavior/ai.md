@@ -454,3 +454,15 @@ see "Shared transition logic" above. Current external writers:
   "Corpse" count, not as a loose body).
 - game1-partials.md — `Game1.cs` archetype registration + `SpawnUnit`;
   `Game/SpellEffectSystem.cs` `ExecuteSummonSpell` (moved out of `Game1.Spells.cs` 2026-07).
+
+## Consolidation update (2026-07-07)
+
+- **SentryTransitions** (`AI/SentryTransitions.cs`) is the shared Idle/Alert/
+  Combat/Return ladder for sentry archetypes (CombatUnit/RangedUnit/CasterUnit/
+  SoloPredator handlers), parameterized by `SentryConfig`. Frenzy behavior
+  (wider re-search, never leash-return) lives HERE and applies to all four.
+- **AIContext.Query** — nullable WorldQuery handle set by `BuildAIContext`;
+  `SubroutineSteps.FindClosestEnemy` and friends route through it (linear
+  fallback when null). `Simulation.FindNearestEnemyIndex` is a forwarder.
+- Legacy `Simulation.MoveTowardPosition`/inline MoveToPoint now bridge to
+  `SubroutineSteps.MoveToward` (the one seek implementation).

@@ -83,3 +83,15 @@ All serialization is **System.Text.Json**; there is no third-party JSON library.
 - [editor.md](editor.md) — the in-game editors whose Save buttons call `GameData.Save()`.
 - [game1-partials.md](game1-partials.md) — `Game1` owns the `GameData` instance and calls
   `Load()` at startup.
+
+## Consolidation update (2026-07-07)
+
+- **Data/MapSidecars.cs** = one reader+writer per map sidecar (triggers/zones/
+  roads) via Core.JsonFile — fixed circle-region + junction + condition/effect
+  round-trip losses. Regression scenarios: sidecar_roundtrip, env_defs_roundtrip,
+  ui_defs_roundtrip, atomic_stream.
+- env_defs.json: attribute-based serializer (`MapData.EnvDefJson`) replaced the
+  split ParseEnvDef/WriteJson pair. Main map save + SkillBookData now atomic
+  (AtomicFile stream API).
+- **RegistryBase.NameOf(id)** (INamedDef) = the id->display-name lookup with
+  blank-name fallback; don't hand-roll `?.DisplayName ?? id`.

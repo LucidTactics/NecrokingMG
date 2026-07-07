@@ -204,3 +204,12 @@ hold a `List<>` cheaply) — a count + a single def id covers the common case.
   `CorpseEatAI` as the passive-eat template, `ArchetypeRegistry` registration.
 - [corpses.md](corpses.md) — the corpse produced on death (separate from the mushroom spit-out).
 - game1-partials.md — `Game1.cs` archetype registration + `SpawnUnit`; env system is bound there.
+
+## Consolidation update (2026-07-07)
+
+- WorkerSystem's six find-scans, BoarForageAI mushrooms, VillageThreat, trap
+  targeting, and Game1 berry-bush/tether picks all route through **WorldQuery**
+  (`_sim.Query`) now. Remaining unmigrated scans: CorpseInteractionManager +
+  SpellCasting/Projectile corpse scans.
+- Env def category/group distinct-scans: `EnvironmentSystem.DistinctCategories/
+  DistinctGroups`.

@@ -194,3 +194,16 @@ engage/attack-distance behavior, not the resolver.
   `GetMeleeRange`); `SubroutineSteps.AttackTarget`/`Disengage`.
 - game1-partials.md — `Game1.WorldClicks.cs` world-click dispatch, `Game1.Animation.cs`
   hit-frame tick, `Game1.cs` `FindClosestEnemyToPoint`.
+
+## Consolidation update (2026-07-07)
+
+- **DamageSystem.Kill** is the only sanctioned way to kill a unit (HP=0,
+  Alive=false, death anim, prone-snap, attribution) — used by Apply/ApplyDirect,
+  limb-chop, poison ticks, trigger kills. StampAttacker = shared attribution tail.
+- **SpellEffectSystem.ExecuteStrikeFrom** = the single Strike executor for
+  player/AI/trap sources (traps pass casterIdx=-1: base MR penetration, no kill
+  credit). Trap fire no longer hand-rolls zaps.
+- **WeaponBonusEffectSystem** ticks timed on-hit effects; potion weapon coats
+  are BonusEffects entries (300s), the old coat timer fields are gone.
+- Ballistic arcs: `ProjectileManager.SolveLobTheta/BallisticVelocity/
+  DirectFireTheta` (+Gravity/MagicSpeed) — shared with the editor preview.

@@ -457,3 +457,18 @@ Look/edit here when: the reanimate/raise visual is wrong. Driven from `Game1.Spe
 - `Game/` (not documented) — systems that *trigger* effects: `SpellEffectSystem`,
   `Projectile` (→ `SpawnImpactEffects`), `LightningSystem`, `PoisonCloudSystem`.
 - `Data/Registries/` (not documented) — `FlipbookDef` registry (effect art/ids).
+
+## Consolidation update (2026-07-07)
+
+- **FloatingText** (in Game/SpellEffectSystem.cs, next to DamageNumber) is the
+  one spawn helper for damage numbers / floating text — head-height formula
+  lives there only.
+- **Render/TextureCache** = path->Texture2D get-or-load (6 former hand-rolls);
+  **UI/WidgetResourceCache** = widget texture/nine-slice caches (editor +
+  runtime share it); **TextureUtil.GetRadialGlow** = the cached radial glow.
+- **Render/HashNoise** = CellHash/HashToFloat scatter hashes (DeathFog +
+  GrassTuft). 2.5D projection: Camera25D is the single home (Renderer and
+  GrassTuftRenderer delegate). Angle math: MathUtil.
+- SpriteAtlas sync `Load` is reimplemented on the split-phase primitives;
+  `LoadExtension` deliberately is not (placeholder-list bookend — see
+  docs/consolidation-review/dossiers/texture-asset-caching.md).

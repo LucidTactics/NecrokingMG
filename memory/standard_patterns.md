@@ -128,3 +128,37 @@ CLAUDE.md → "Standard Patterns Reference".)
 - `Game1.Popups` (`PopupManager`) is EDITOR-INTERNAL sub-popups only, seated via
   `ModalStackLayer`. Game panels must not push to it.
 - Headless verification: dev verbs `ui_click <x> <y>`, `ui_key escape`, `ui_rects`.
+
+## Consolidation canonical homes (2026-07-07 pass)
+
+Established by the consolidation batches (evidence: docs/consolidation-review/):
+
+- **Killing a unit**: `DamageSystem.Kill` is the only sanctioned way to flip
+  `Alive=false` (death anim + prone-snap + attribution). Never hand-roll death.
+- **Timed on-hit weapon effects**: `Unit.BonusEffects` + `WeaponBonusEffectSystem`
+  (real expiry tick). Potion coats live here; no new per-effect timer fields.
+- **Ballistic arcs**: `ProjectileManager.SolveLobTheta/BallisticVelocity/DirectFireTheta`
+  (+ `Gravity`/`MagicSpeed` constants) — game AND editor preview.
+- **Strike execution**: `SpellEffectSystem.ExecuteStrikeFrom` — every source
+  (player/AI/traps); casterless sources pass casterIdx=-1.
+- **Sentry AI ladder**: `AI/SentryTransitions.cs` (Idle/Alert/Combat/Return + frenzy)
+  for sentry-style archetypes; `AIContext.Query` = WorldQuery handle for AI scans.
+- **Spawning**: `Simulation.SpawnUnitByID` is the def→unit pipeline;
+  `Game1.SpawnUnit` only wraps it; anim init via the single `BuildUnitAnimData`.
+- **Angle math / lerp**: `MathUtil` (AngleDeltaDeg/Rad, LerpAngleDeg/Rad, Lerp).
+- **Path→Texture2D caching**: `Render/TextureCache`; widget texture/nine-slice
+  caches: `UI/WidgetResourceCache`; radial glow: `TextureUtil.GetRadialGlow`.
+- **Renderer scatter hashes**: `Render/HashNoise`.
+- **Registry display names**: `RegistryBase.NameOf(id)` (INamedDef).
+- **Registry sub-editors**: `Editor/RegistryCrudPanel<TDef>` (list+CRUD mechanics;
+  detail forms caller-owned). Single-line editor fields: `EditorBase` FieldCore
+  wrappers; section headers: `EditorBase.DrawSectionHeader`.
+- **Map sidecar I/O**: `Data/MapSidecars.cs` (triggers/zones/roads, one
+  reader+writer, atomic). UI widget defs: `Editor/UIDefsIO.cs`. env defs:
+  attribute-based serializer in MapData (`EnvDefJson`).
+- **Rich cursor tooltips**: `UI/RichTip.cs` (wrap/palette/edge-flip/rows);
+  simple one-liners stay on `HUDRenderer.DrawCursorTooltip`. Side-list menus:
+  `UI/SideListMenu` base (Building/Crafting).
+- **Floating damage/text numbers**: `FloatingText` helper (SpellEffectSystem.cs).
+- **World nearest-X queries**: `WorldQuery` (`_sim.Query`) — unit, env-object,
+  faction, threat; hand-rolled scans are migration debt.

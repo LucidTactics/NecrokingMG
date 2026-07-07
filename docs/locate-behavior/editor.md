@@ -309,3 +309,18 @@ model and both save + clone paths.
 - Runtime widget rendering/layout: `UI/RuntimeWidgetRenderer.cs`, `UI/WidgetLayoutUtils.cs`
   (see [ui.md](ui.md) for the runtime overlays/panels that consume widgets).
 - Harmonize/recolor payload: `Editor/HarmonizeSettings.cs`, `Editor/ColorHarmonizer.cs`.
+
+## Consolidation update (2026-07-07)
+
+- **Single-line fields**: `EditorBase` FieldCore owns click/drag-select/commit
+  for DrawTextField/DrawIntField/DrawFloatField/DrawSearchField — add new field
+  types as wrappers over it, don't hand-roll activation.
+- **Section headers**: `EditorBase.DrawSectionHeader` (Rule/Bar/Label styles).
+  MapEditorWindow keeps its own small-font variant deliberately.
+- **Registry sub-editors**: `Editor/RegistryCrudPanel<TDef>` = list+select+
+  New/Copy/Delete/Save+clipboard over `RegistryBase<TDef>`; weapon/armor/shield
+  sub-editors use it. The spell-editor buff/flipbook manager POPUPS are NOT on
+  it (modal chrome + apply-on-close semantics = structural variance; see
+  docs/consolidation-review/dossiers/editor-parallel-subeditors.md).
+- **UI widget def files**: `Editor/UIDefsIO.cs` is the one reader+writer used by
+  both UIEditorWindow and RuntimeWidgetRenderer.
