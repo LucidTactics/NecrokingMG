@@ -952,18 +952,26 @@ public class EditorBase
         _textFieldLayer.Panel = inputRect;
     }
 
-    public string DrawTextField(string fieldId, string label, string value, int x, int y, int w)
+    /// <summary>
+    /// Shared click/drag/focus/deactivate + render core for every single-line field
+    /// (text, int, float, search, slider value box). Owns: activate-on-click,
+    /// click-to-position-cursor + drag-selection, outside-click-deactivate, and the
+    /// box render (with optional placeholder). Wrappers layer parse-type + steppers on
+    /// top — that's the only per-field variance.
+    ///
+    /// Returns: <c>text</c> = the edit buffer while the field is active or on the commit
+    /// frame, otherwise <paramref name="display"/>; <c>active</c> = field is focused;
+    /// <c>committed</c> = the field just deactivated this frame via an outside click, so
+    /// a numeric wrapper should parse <c>text</c> and return it (and skip its steppers
+    /// that frame, matching the pre-refactor early-return behavior).
+    /// </summary>
+    private (string text, bool active, bool committed) FieldCore(
+        string fieldId, string display, Rectangle inputRect, string? placeholder = null)
     {
-        int labelW = 120;
-        DrawText(label, new Vector2(x, y + 2), TextDim);
-
-        int inputX = x + labelW;
-        int inputW = w - labelW;
-        int inputH = 20;
-        var inputRect = new Rectangle(inputX, y, inputW, inputH);
-
         bool isActive = _activeFieldId == fieldId;
         bool hovered = IsHovered(inputRect);
+        bool committed = false;
+        int inputX = inputRect.X;
 
         // Click to activate (or reposition cursor if already active)
         if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
@@ -971,7 +979,7 @@ public class EditorBase
             if (!isActive)
             {
                 // First click: activate with select-all
-                FocusTextField(fieldId, value, inputRect);
+                FocusTextField(fieldId, display, inputRect);
                 isActive = true;
             }
             else
@@ -1007,14 +1015,33 @@ public class EditorBase
             _selectAll = false;
             _selectionStart = -1;
             _draggingSelection = false;
-            return _inputBuffer;
+            isActive = false;
+            committed = true;
         }
 
         DrawRect(inputRect, InputBg);
         DrawBorder(inputRect, isActive ? InputActive : InputBorder);
-        DrawFieldContent(inputRect, isActive ? _inputBuffer : value, isActive);
 
-        return isActive ? _inputBuffer : value;
+        if (placeholder != null && string.IsNullOrEmpty(display) && !isActive)
+            DrawText(placeholder, new Vector2(inputRect.X + 3, inputRect.Y + 3), new Color(80, 80, 100));
+        else
+            DrawFieldContent(inputRect, isActive ? _inputBuffer : display, isActive);
+
+        string text = (isActive || committed) ? _inputBuffer : display;
+        return (text, isActive, committed);
+    }
+
+    public string DrawTextField(string fieldId, string label, string value, int x, int y, int w)
+    {
+        int labelW = 120;
+        DrawText(label, new Vector2(x, y + 2), TextDim);
+
+        int inputX = x + labelW;
+        int inputW = w - labelW;
+        var inputRect = new Rectangle(inputX, y, inputW, 20);
+
+        var (text, _, _) = FieldCore(fieldId, value, inputRect);
+        return text;
     }
 
     /// <summary>
@@ -1029,44 +1056,25 @@ public class EditorBase
         int inputW = w - labelW - 46; // room for +/- buttons
         int inputH = 20;
 
-        // Text display
         var inputRect = new Rectangle(inputX, y, inputW, inputH);
-        bool isActive = _activeFieldId == fieldId;
-        bool hovered = IsHovered(inputRect);
-
-        if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
-        {
-            FocusTextField(fieldId, value.ToString(), inputRect);
-            isActive = true;
-        }
-        else if (isActive && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released && !hovered)
-        {
-            _activeFieldId = null;
-            _selectAll = false;
-            _selectionStart = -1;
-            if (int.TryParse(_inputBuffer, out int parsed))
-                return parsed;
-            return value;
-        }
-
-        DrawRect(inputRect, InputBg);
-        DrawBorder(inputRect, isActive ? InputActive : InputBorder);
-        DrawFieldContent(inputRect, isActive ? _inputBuffer : value.ToString(), isActive);
+        var (text, active, committed) = FieldCore(fieldId, value.ToString(), inputRect);
+        if (committed)
+            return int.TryParse(text, out int parsed) ? parsed : value;
 
         // +/- buttons
         int btnX = inputX + inputW + 2;
         if (DrawButton("-", btnX, y, 20, inputH))
         {
-            if (isActive && int.TryParse(_inputBuffer, out int v)) { _inputBuffer = (v - 1).ToString(); return v - 1; }
+            if (active && int.TryParse(_inputBuffer, out int v)) { _inputBuffer = (v - 1).ToString(); return v - 1; }
             return value - 1;
         }
         if (DrawButton("+", btnX + 22, y, 20, inputH))
         {
-            if (isActive && int.TryParse(_inputBuffer, out int v)) { _inputBuffer = (v + 1).ToString(); return v + 1; }
+            if (active && int.TryParse(_inputBuffer, out int v)) { _inputBuffer = (v + 1).ToString(); return v + 1; }
             return value + 1;
         }
 
-        if (isActive && int.TryParse(_inputBuffer, out int current))
+        if (active && int.TryParse(_inputBuffer, out int current))
             return current;
         return value;
     }
@@ -1083,44 +1091,26 @@ public class EditorBase
         int inputH = 20;
 
         var inputRect = new Rectangle(inputX, y, inputW, inputH);
-        bool isActive = _activeFieldId == fieldId;
-        bool hovered = IsHovered(inputRect);
-
-        if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
-        {
-            FocusTextField(fieldId, value.ToString("F2"), inputRect);
-            isActive = true;
-        }
-        else if (isActive && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released && !hovered)
-        {
-            _activeFieldId = null;
-            _selectAll = false;
-            _selectionStart = -1;
-            if (float.TryParse(_inputBuffer, out float parsed))
-                return parsed;
-            return value;
-        }
-
-        DrawRect(inputRect, InputBg);
-        DrawBorder(inputRect, isActive ? InputActive : InputBorder);
-        DrawFieldContent(inputRect, isActive ? _inputBuffer : value.ToString("F2"), isActive);
+        var (text, active, committed) = FieldCore(fieldId, value.ToString("F2"), inputRect);
+        if (committed)
+            return float.TryParse(text, out float parsed) ? parsed : value;
 
         // +/- buttons
         int btnX = inputX + inputW + 2;
         if (DrawButton("-", btnX, y, 20, inputH))
         {
             float newVal = MathF.Round((value - step) / step) * step;
-            if (isActive) _inputBuffer = newVal.ToString("F2");
+            if (active) _inputBuffer = newVal.ToString("F2");
             return newVal;
         }
         if (DrawButton("+", btnX + 22, y, 20, inputH))
         {
             float newVal = MathF.Round((value + step) / step) * step;
-            if (isActive) _inputBuffer = newVal.ToString("F2");
+            if (active) _inputBuffer = newVal.ToString("F2");
             return newVal;
         }
 
-        if (isActive && float.TryParse(_inputBuffer, out float cur))
+        if (active && float.TryParse(_inputBuffer, out float cur))
             return cur;
         return value;
     }
@@ -1771,33 +1761,9 @@ public class EditorBase
     /// </summary>
     public string DrawSearchField(string fieldId, string value, int x, int y, int w)
     {
-        int inputH = 22;
-        var inputRect = new Rectangle(x, y, w, inputH);
-        bool isActive = _activeFieldId == fieldId;
-        bool hovered = IsHovered(inputRect);
-
-        if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
-        {
-            FocusTextField(fieldId, value, inputRect);
-            isActive = true;
-        }
-        else if (isActive && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released && !hovered)
-        {
-            _activeFieldId = null;
-            _selectAll = false;
-            _selectionStart = -1;
-            return _inputBuffer;
-        }
-
-        DrawRect(inputRect, InputBg);
-        DrawBorder(inputRect, isActive ? InputActive : InputBorder);
-
-        if (string.IsNullOrEmpty(value) && !isActive)
-            DrawText("Search...", new Vector2(x + 3, y + 3), new Color(80, 80, 100));
-        else
-            DrawFieldContent(inputRect, isActive ? _inputBuffer : value, isActive);
-
-        return isActive ? _inputBuffer : value;
+        var inputRect = new Rectangle(x, y, w, 22);
+        var (text, _, _) = FieldCore(fieldId, value, inputRect, placeholder: "Search...");
+        return text;
     }
 
     // === INF08: Slider + value box combo widget ===
@@ -1857,28 +1823,10 @@ public class EditorBase
         string valueFieldId2 = id + "_val";
         int vbX = sliderX + sliderW + 4;
         var vbRect = new Rectangle(vbX, y, valueBoxW, 20);
-        bool vbActive = _activeFieldId == valueFieldId2;
-        bool vbHovered = IsHovered(vbRect);
 
-        if (vbHovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
-        {
-            // Select-all on focus, same as every other field — typing replaces.
-            FocusTextField(valueFieldId2, value.ToString("F2"), vbRect);
-            vbActive = true;
-        }
-        else if (vbActive && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released && !vbHovered)
-        {
-            _activeFieldId = null;
-            _selectAll = false;
-            _selectionStart = -1;
-            if (float.TryParse(_inputBuffer, out float parsed))
-                return Math.Clamp(parsed, min, max);
-            return value;
-        }
-
-        DrawRect(vbRect, InputBg);
-        DrawBorder(vbRect, vbActive ? InputActive : InputBorder);
-        DrawFieldContent(vbRect, vbActive ? _inputBuffer : value.ToString("F2"), vbActive);
+        var (vbText, vbActive, vbCommitted) = FieldCore(valueFieldId2, value.ToString("F2"), vbRect);
+        if (vbCommitted)
+            return float.TryParse(vbText, out float parsed) ? Math.Clamp(parsed, min, max) : value;
 
         if (vbActive && float.TryParse(_inputBuffer, out float cur))
             return Math.Clamp(cur, min, max);
