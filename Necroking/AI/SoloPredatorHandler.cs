@@ -180,18 +180,13 @@ public class SoloPredatorHandler : IArchetypeHandler
 
             case SubDisengage:
             {
-                // Force-clear engagement and lockout every tick — the predator
-                // must move NOW, never planted by a stale queued attack.
-                ctx.Units[i].EngagedTarget = CombatTarget.None;
-                ctx.Units[i].PendingAttack = CombatTarget.None;
-                ctx.Units[i].PostAttackTimer = 0f;
-
-                if (dist < disengageDist)
-                {
-                    Vec2 awayDir = dist > 0.01f ? (myPos - targetPos) * (1f / dist) : new Vec2(1, 0);
-                    ctx.Units[i].PreferredVel = awayDir * ctx.Units[i].MaxSpeed;
-                }
-                else
+                // Shared back-off step: force-clears EngagedTarget/PendingAttack/
+                // PostAttackTimer every call — the predator must move NOW, never
+                // planted by a stale queued attack (the legacy bypass, preserved
+                // by Disengage's per-tick clears). Composed like RatPackHandler's
+                // FightSkitter.
+                SubroutineSteps.Disengage(ref ctx, disengageDist);
+                if (SubroutineSteps.Disengage_Complete(ref ctx, disengageDist))
                 {
                     ctx.Subroutine = SubWaitCooldown;
                     ctx.SubroutineTimer = 0f;

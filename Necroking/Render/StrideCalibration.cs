@@ -434,14 +434,9 @@ public static class StrideCalibration
         GaitCalibration g, float spriteWorldHeight, float spriteScale,
         float bodySubtractionPx, float dutyCycle, float targetCycleSeconds)
     {
-        if (g.StridePx <= 0f || g.AvgPixelHeight <= 0f
-            || spriteWorldHeight <= 0f || spriteScale <= 0f
-            || dutyCycle <= 0f || dutyCycle >= 1f)
-            return 0f;
-        float effectiveStridePx = MathF.Max(g.StridePx - bodySubtractionPx, 1f);
-        float effectiveWorldHeight = spriteWorldHeight * spriteScale;
-        float pixelsPerWorldUnit = g.AvgPixelHeight / effectiveWorldHeight;
-        float cycleDistanceWorld = (effectiveStridePx / dutyCycle) / pixelsPerWorldUnit;
+        float cycleDistanceWorld = CycleDistanceWorld(g, spriteWorldHeight, spriteScale,
+            bodySubtractionPx, dutyCycle);
+        if (cycleDistanceWorld <= 0f) return 0f;
         // Use target cycle if specified, otherwise the artist's authored cycle.
         float t = targetCycleSeconds > 0f ? targetCycleSeconds : g.CycleSeconds;
         if (t <= 0f) return 0f;
@@ -452,8 +447,24 @@ public static class StrideCalibration
         float spriteScale = 1f, float bodySubtractionPx = 0f,
         float dutyCycle = DefaultDutyCycle)
     {
-        if (g.StridePx <= 0f || g.CycleSeconds <= 0f
-            || g.AvgPixelHeight <= 0f || spriteWorldHeight <= 0f || spriteScale <= 0f
+        if (g.CycleSeconds <= 0f) return 0f;
+        float cycleDistanceWorld = CycleDistanceWorld(g, spriteWorldHeight, spriteScale,
+            bodySubtractionPx, dutyCycle);
+        if (cycleDistanceWorld <= 0f) return 0f;
+        return cycleDistanceWorld / g.CycleSeconds;
+    }
+
+    /// <summary>The ONE stride→distance formula shared by the runtime feet-lock
+    /// velocity (<see cref="ResolveAnimVel"/>) and the editor's CombatSpeed
+    /// suggestion (<see cref="ResolveSuggestedCombatSpeed"/>) — the suggestion
+    /// is only meaningful because it matches the runtime formula exactly.
+    /// World-units the body covers over one full anim cycle. Returns 0 on
+    /// missing/invalid calibration inputs (callers treat 0 as "unknown").</summary>
+    private static float CycleDistanceWorld(GaitCalibration g, float spriteWorldHeight,
+        float spriteScale, float bodySubtractionPx, float dutyCycle)
+    {
+        if (g.StridePx <= 0f || g.AvgPixelHeight <= 0f
+            || spriteWorldHeight <= 0f || spriteScale <= 0f
             || dutyCycle <= 0f || dutyCycle >= 1f)
             return 0f;
         // Subtract body-width contamination for quadrupeds (caller passes the
@@ -468,8 +479,7 @@ public static class StrideCalibration
         // → × 1.33, accounting for the fact that with 75% duty, the per-leg
         // amplitude in body frame is traversed in 0.75T (not 0.5T), so body
         // covers stride/0.75 per cycle, not stride/0.5.
-        float cycleDistanceWorld = (effectiveStridePx / dutyCycle) / pixelsPerWorldUnit;
-        return cycleDistanceWorld / g.CycleSeconds;
+        return (effectiveStridePx / dutyCycle) / pixelsPerWorldUnit;
     }
 
     // =========================================================================
