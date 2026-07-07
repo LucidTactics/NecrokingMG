@@ -143,20 +143,10 @@ public partial class Game1
     }
 
     /// <summary>Deterministic search for a walkable point inside the zone rect (90% of the
-    /// half-extents so spawns hug the interior). Falls back to the zone center.</summary>
+    /// half-extents so spawns hug the interior). Falls back to the zone center.
+    /// (Shared retry/walkability core: <see cref="ScatterSpots"/>.)</summary>
     private static Vec2 ScatterSpotInRect(TileGrid? grid, MapZone z, ref uint rng)
-    {
-        for (int a = 0; a < 24; a++)
-        {
-            rng = rng * 1664525u + 1013904223u;
-            float fx = ((rng % 1000u) / 1000f - 0.5f) * 2f;
-            rng = rng * 1664525u + 1013904223u;
-            float fy = ((rng % 1000u) / 1000f - 0.5f) * 2f;
-            Vec2 p = new Vec2(z.X + fx * z.HalfW * 0.9f, z.Y + fy * z.HalfH * 0.9f);
-            if (grid == null || AI.SubroutineSteps.IsPointWalkable(grid, p, 0.5f)) return p;
-        }
-        return new Vec2(z.X, z.Y);
-    }
+        => ScatterSpots.InRect(grid, new Vec2(z.X, z.Y), z.HalfW, z.HalfH, ref rng, extentScale: 0.9f);
 
     /// <summary>Group the wild animals inside the zone into one pre-formed squad —
     /// units of <paramref name="archetype"/>, or any Animal-faction unit when null
@@ -283,20 +273,10 @@ public partial class Game1
     }
 
     /// <summary>Deterministic search for a walkable point within <paramref name="radius"/>
-    /// of a pack's position (mirror of ScatterSpotInRect for a circle).</summary>
+    /// of a pack's position — the square-box case of the shared
+    /// <see cref="ScatterSpots"/> core (identical draws to the old copy).</summary>
     private static Vec2 ScatterSpotNear(TileGrid? grid, Vec2 center, float radius, ref uint rng)
-    {
-        for (int a = 0; a < 24; a++)
-        {
-            rng = rng * 1664525u + 1013904223u;
-            float fx = ((rng % 1000u) / 1000f - 0.5f) * 2f;
-            rng = rng * 1664525u + 1013904223u;
-            float fy = ((rng % 1000u) / 1000f - 0.5f) * 2f;
-            Vec2 p = new Vec2(center.X + fx * radius, center.Y + fy * radius);
-            if (grid == null || AI.SubroutineSteps.IsPointWalkable(grid, p, 0.5f)) return p;
-        }
-        return center;
-    }
+        => ScatterSpots.InRect(grid, center, radius, radius, ref rng);
 
     // Scratch list for CountActiveOfDefInRect position collection (1 Hz tick, no alloc).
     private readonly List<Vec2> _zoneForagePosScratch = new();

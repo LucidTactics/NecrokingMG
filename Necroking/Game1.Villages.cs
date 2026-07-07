@@ -222,18 +222,8 @@ public partial class Game1
     }
 
     /// <summary>Deterministic search for a walkable point in an annulus around <paramref name="center"/>.
-    /// Falls back to the centre if nothing walkable is found in a handful of tries.</summary>
+    /// Falls back to the centre if nothing walkable is found in a handful of tries.
+    /// (Shared retry/walkability core: <see cref="ScatterSpots"/>.)</summary>
     private static Vec2 ScatterSpot(TileGrid? grid, Vec2 center, float minR, float maxR, ref uint rng)
-    {
-        for (int a = 0; a < 24; a++)
-        {
-            rng = rng * 1664525u + 1013904223u;
-            float ang = (rng % 62832u) / 10000f;
-            rng = rng * 1664525u + 1013904223u;
-            float r = minR + (rng % 1000u) / 1000f * (maxR - minR);
-            Vec2 p = center + new Vec2(MathF.Cos(ang) * r, MathF.Sin(ang) * r);
-            if (grid == null || AI.SubroutineSteps.IsPointWalkable(grid, p, 0.5f)) return p;
-        }
-        return center;
-    }
+        => ScatterSpots.InAnnulus(grid, center, minR, maxR, ref rng);
 }
