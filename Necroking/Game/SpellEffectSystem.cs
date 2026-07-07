@@ -39,6 +39,47 @@ public struct DamageNumber
 }
 
 /// <summary>
+/// Canonical spawn helpers for floating text (<see cref="DamageNumber"/>).
+/// The Height-anchor trap (documented in docs/locate-behavior/render.md):
+/// WorldToScreen lifts by Height*Zoom*YRatio, but sprites draw
+/// SpriteWorldHeight*SpriteScale*Zoom pixels tall (no YRatio) — so
+/// <see cref="HeadHeight"/> is the ONE place the sprite-height → lift-units
+/// conversion lives. Spawn through these instead of inline
+/// <c>list.Add(new DamageNumber { ... })</c> so height conventions can't drift.
+/// </summary>
+public static class FloatingText
+{
+    /// <summary>Head height of a unit in DamageNumber.Height lift units:
+    /// Z + SpriteWorldHeight*SpriteScale / yRatio (1.8f default sprite height).
+    /// The old constant 2f landed mid-sprite for want of the YRatio divide.</summary>
+    public static float HeadHeight(Unit u, UnitDef? def, float yRatio)
+    {
+        float spriteWorldH = (def != null && def.SpriteWorldHeight > 0 ? def.SpriteWorldHeight : 1.8f)
+                             * u.SpriteScale;
+        return u.Z + spriteWorldH / yRatio;
+    }
+
+    /// <summary>Floating damage number at a world position.</summary>
+    public static void AddDamage(List<DamageNumber> list, Vec2 pos, int damage,
+        float height, bool poison = false, bool fatigue = false)
+        => list.Add(new DamageNumber
+        {
+            WorldPos = pos, Damage = damage, Timer = 0f, Height = height,
+            IsPoison = poison, IsFatigue = fatigue,
+        });
+
+    /// <summary>Floating text: green "+text" pickup gain by default, or a red
+    /// warning (no "+" prefix) when <paramref name="alert"/> is set.</summary>
+    public static void AddText(List<DamageNumber> list, Vec2 pos, string text,
+        float height, bool alert = false)
+        => list.Add(new DamageNumber
+        {
+            WorldPos = pos, PickupText = text, Timer = 0f, Height = height,
+            IsAlert = alert,
+        });
+}
+
+/// <summary>
 /// Owns ALL spell-category effect logic. Takes Game1 directly (same pattern as
 /// GameRenderer/ForagableSystem) and reaches sim + presentation state through it —
 /// Game1-owned results (channeling slot, pending projectile groups, reanim rises)
@@ -540,11 +581,7 @@ public static class SpellEffectSystem
                 if (SpellPenetration.Affects(gameData, units, casterIdx, enemy, spell))
                 {
                     sim.DealDamage(enemy, spell.Damage, casterIdx);
-                    damageNumbers.Add(new DamageNumber
-                    {
-                        WorldPos = targetPos, Damage = spell.Damage,
-                        Timer = 0f, Height = targetH
-                    });
+                    FloatingText.AddDamage(damageNumbers, targetPos, spell.Damage, targetH);
                 }
             }
         }
@@ -609,13 +646,9 @@ public static class SpellEffectSystem
 
         if (gained > 0)
         {
-            damageNumbers.Add(new DamageNumber
-            {
-                WorldPos = units[casterIdx].Position,
-                PickupText = gained.ToString(),
-                Timer = 0f,
-                Height = units[casterIdx].EffectSpawnHeight,
-            });
+            // Weapon-tip anchor (EffectSpawnHeight), deliberately not head height.
+            FloatingText.AddText(damageNumbers, units[casterIdx].Position,
+                gained.ToString(), units[casterIdx].EffectSpawnHeight);
         }
 
         // The victim crumbles into a corpse — the visible "sacrifice".

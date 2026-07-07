@@ -105,15 +105,8 @@ public partial class Game1
     /// Spawns the floating green pickup text in the damage-numbers list.</summary>
     private void OnForagablePickedUp(Vec2 worldPos, string resourceType)
     {
-        _damageNumbers.Add(new DamageNumber
-        {
-            WorldPos = worldPos,
-            Damage = 0,
-            Timer = 0f,
-            Height = 2f,
-            IsPoison = false,
-            PickupText = resourceType,
-        });
+        // Fixed 2f lift: the anchor is a ground foragable, not a unit's head.
+        FloatingText.AddText(_damageNumbers, worldPos, resourceType, height: 2f);
     }
 
     /// <summary>Simulation hook fired when a foraging boar swallows a mushroom.

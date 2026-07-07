@@ -3731,19 +3731,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 }
             }
 
-            // Collect damage events for floating numbers
+            // Collect damage events for floating numbers (height owned by the sim event)
             foreach (var dmg in _sim.DamageEvents)
-            {
-                _damageNumbers.Add(new DamageNumber
-                {
-                    WorldPos = dmg.Position,
-                    Damage = dmg.Damage,
-                    Timer = 0f,
-                    Height = dmg.Height,
-                    IsPoison = dmg.IsPoison,
-                    IsFatigue = dmg.IsFatigue
-                });
-            }
+                FloatingText.AddDamage(_damageNumbers, dmg.Position, dmg.Damage,
+                    dmg.Height, dmg.IsPoison, dmg.IsFatigue);
         }
 
         // --- Scenario tick when editor is active (editors pause normal sim but scenarios must still tick) ---
@@ -4130,26 +4121,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (necroIdx < 0 || necroIdx >= _sim.Units.Count) return;
         if (string.IsNullOrEmpty(message)) return;
 
-        // Head height in DamageNumber.Height units: WorldToScreen lifts by
-        // Height*Zoom*YRatio, but sprites draw SpriteWorldHeight*SpriteScale*Zoom
-        // pixels tall (no YRatio) — so dividing by YRatio converts sprite height
-        // into lift units. The old constant 2f landed mid-sprite for this reason.
+        // Head anchor via the canonical formula (FloatingText.HeadHeight owns
+        // the YRatio conversion — see its doc for the Height trap).
         var unit = _sim.Units[necroIdx];
         var udef = _gameData.Units.Get(unit.UnitDefID);
-        float spriteWorldH = (udef != null && udef.SpriteWorldHeight > 0 ? udef.SpriteWorldHeight : 1.8f)
-                             * unit.SpriteScale;
-        float headHeight = unit.Z + spriteWorldH / _camera.YRatio;
-
-        _damageNumbers.Add(new DamageNumber
-        {
-            WorldPos = unit.Position,
-            Damage = 0,
-            Timer = 0f,
-            Height = headHeight,
-            IsPoison = false,
-            PickupText = message,
-            IsAlert = true,
-        });
+        FloatingText.AddText(_damageNumbers, unit.Position, message,
+            FloatingText.HeadHeight(unit, udef, _camera.YRatio), alert: true);
     }
 
     private void SpawnHordeCapText(int necroIdx) => SpawnCastFailText(necroIdx, "Horde Full");
