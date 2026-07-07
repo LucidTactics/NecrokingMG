@@ -4,13 +4,13 @@ Executes the findings from [docs/consolidation-review/](../docs/consolidation-re
 (116 findings; queue in [memory/consolidation_opportunities.md](../memory/consolidation_opportunities.md)).
 Check off items here as they land; delete this file when the queue is drained.
 
-**Status (2026-07-07): reconciled against Johan's 22 pulled commits — he already implemented the
-NPC-caster unification (ICasterResources), the AwarenessSystem→WorldQuery reroute, the horde
-LerpAngle bug fix, a blocking-query facade, and the UIRouter panel work. Remaining items are now
-CATEGORIZED BY CONFIDENCE (A certain / B high / C moderate / D low) in
-memory/consolidation_opportunities.md — user is selecting which to execute. DO NOT START until
-the user picks. The phase structure below still applies to whatever subset is chosen
-(bugs → mechanical → editor/UI → design items).**
+**Status (2026-07-07 evening): EXECUTED. 41 consolidation commits landed across 6 sequential
+agent batches (sim/combat core, Game1 glue, data/IO, editor toolkit, render/core/texture, UI
+panels). All A+B items done; C/D done except principled deferrals — see the pruned
+memory/consolidation_opportunities.md for what remains + open questions. Canonical homes
+recorded in memory/standard_patterns.md + locate-behavior docs. This file can be deleted once
+the deferred questions are answered and the /dup-review + label-store tooling decision is made
+(design: docs/consolidation-review/operationalizing.md).**
 
 Design north star from the user (2026-07-06): attacks are processed by ONE tag-driven pipeline
 (tags on the weapon/spell def decide armor interaction etc.; traps get a weapon/spell def), and
