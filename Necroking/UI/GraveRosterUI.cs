@@ -46,14 +46,12 @@ public class GraveRosterUI : IModalLayer
         _h = TitleH + Pad + RowH + 10 + 18 + MaxVisibleRows * RowH + Pad;
         _x = screenW / 2 - _w / 2;
         _y = screenH / 2 - _h / 2;
-        Game1.Popups.Push(this);
     }
 
     public void Close()
     {
         _visible = false;
         _graveObjIdx = -1;
-        Game1.Popups.Pop(this);
     }
 
     private Rectangle CloseRect => new(_x + _w - 22, _y + 4, 18, 18);

@@ -77,6 +77,8 @@ public class SkillBookOverlay : IModalLayer
     private readonly List<(string id, Rectangle rect)> _tileRects = new();
 
     public bool IsVisible { get; private set; }
+    /// <summary>Layout-editor tile drag in progress — the router captures the mouse for us.</summary>
+    public bool IsDragging => _dragId != null;
 
     public void Init(RuntimeWidgetRenderer renderer, SpriteBatch batch, Texture2D pixel)
     {
@@ -93,8 +95,8 @@ public class SkillBookOverlay : IModalLayer
     }
 
     public void Toggle() { if (IsVisible) Close(); else Open(); }
-    public void Open()  { IsVisible = true;  Game1.Popups.Push(this); }
-    public void Close() { IsVisible = false; Game1.Popups.Pop(this); }
+    public void Open()  { IsVisible = true; }
+    public void Close() { IsVisible = false; }
 
     // === IModalLayer ===
     public bool LightDismiss => false;
@@ -172,20 +174,6 @@ public class SkillBookOverlay : IModalLayer
             if (input.LeftDown) DragTo(mx, my);
             else _dragId = null;
             return;
-        }
-
-        // WIP
-        {
-           // --- Core-menu buttons (top-right) click ---
-           if (input.LeftPressed && this.Equals(input.MouseConsumer))
-           {
-              int mbHit = Game1.Instance._hudRenderer.HitTestMenuButtons(Game1.Instance.GraphicsDevice.Viewport.Width, mx, my);
-              if (mbHit >= 0)
-              {
-                 Game1.Instance._gameRenderer.ToggleCoreMenu(mbHit, Game1.Instance.GraphicsDevice.Viewport.Width, Game1.Instance.GraphicsDevice.Viewport.Height);
-                 return;
-              }
-           }
         }
 
         if (!ContainsMouse(mx, my)) return;
@@ -301,13 +289,7 @@ public class SkillBookOverlay : IModalLayer
 
         if (_editLayout) DrawEditOverlay();
         if (EnableLayoutEditor) DrawLayoutToolbar();
-        
-        // WIP
-        {
-           Game1.Instance._hudRenderer.
-              DrawMenuButtons(sw, Game1.Instance._gameRenderer.BuildMenuOpenMask(), (int)Game1.Instance._input.MousePos.X, (int)Game1.Instance._input.MousePos.Y);
-        }
-        
+
         if (_toast != null) DrawToast();
         if (_hoverId != null) DrawHoverTooltip(sw, sh);
     }

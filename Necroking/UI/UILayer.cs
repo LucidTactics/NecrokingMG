@@ -82,6 +82,22 @@ public abstract class UILayer
     /// this instead of the global consumption flags.</summary>
     public bool InputGranted;
 
+    /// <summary>Stamped by the router each dispatch: this layer is the hover
+    /// owner — the layer a click at the current cursor position would land in.
+    /// THE hover/click-sync guarantee: a widget may only draw its hover
+    /// highlight when its layer IsHovered, so a button never lights up when a
+    /// click would actually hit a panel covering it.</summary>
+    public bool IsHovered;
+
+    /// <summary>Stamped by the router each dispatch: some OTHER layer owns the
+    /// cursor (it is hovering that layer, or a blocking/light-dismiss layer
+    /// above this one would swallow the click). When true, this layer must not
+    /// hover-react at the cursor position — adapters mask MousePos off-screen
+    /// so wrapped panels' internal hover tests fail automatically. False when
+    /// the cursor is over open world: the layer sees the real position (it
+    /// just isn't under the cursor).</summary>
+    public bool HoverStolen;
+
     /// <summary>Blocking modal: clicks outside the layer are swallowed so
     /// nothing below (panels, world) sees them. The layer stays open.</summary>
     public virtual bool Blocking => false;
@@ -149,9 +165,13 @@ public abstract class UILayer
             {
                 input.ConsumeMouse();
             }
-            else if (CloseOnOutsideClick)
+            else if (CloseOnOutsideClick && !input.MouseOverUI)
             {
-                OnCancel(); // close but DON'T consume — click-away still acts below
+                // Click-away onto the WORLD closes the layer without consuming,
+                // so the same click still acts on what was clicked. Clicks on
+                // OTHER UI (e.g. the inventory, to deposit into the bench) must
+                // not dismiss — hence the MouseOverUI gate.
+                OnCancel();
             }
         }
 

@@ -102,7 +102,6 @@ public class GrimoireOverlay : IModalLayer
         _pathFilter = MagicPath.None;
         _scrollRow = 0;
         Refresh();
-        Game1.Popups.Push(this);
     }
 
     public void Hide()
@@ -110,7 +109,6 @@ public class GrimoireOverlay : IModalLayer
         if (!IsVisible) return;
         IsVisible = false;
         _onPick = null;
-        Game1.Popups.Pop(this);
     }
 
     private void Refresh()

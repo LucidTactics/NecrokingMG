@@ -73,7 +73,12 @@ public interface IModalLayer
 }
 
 /// <summary>
-/// Owns the modal stack and routes input to the topmost open popup.
+/// Owns the EDITOR-INTERNAL modal stack and routes input to the topmost open
+/// popup. Since the UIRouter migration this stack only ever holds the
+/// full-screen editors' transient sub-popups (dropdowns, text fields, confirm
+/// dialogs, color picker, texture browser, env/wall editors) — game panels are
+/// individual UILayer seats in the router, and the stack itself participates
+/// via <see cref="ModalStackLayer"/> at the top of the layer order.
 ///
 /// Behavior (modeled after Dear ImGui's popup stack + the HTML &lt;dialog&gt;
 /// "top layer" rules, since both target the same single-threaded-game-loop /
@@ -192,16 +197,16 @@ public sealed class PopupManager
             bool inside = top.ContainsMouse(mx, my);
             if (inside)
             {
-                input.ConsumeMouse(top);
+                input.ConsumeMouse();
             }
             else if (top.LightDismiss)
             {
                 top.OnCancel();
-                input.ConsumeMouse(top);
+                input.ConsumeMouse();
             }
             else if (top.IsBlocking)
             {
-                input.ConsumeMouse(top);
+                input.ConsumeMouse();
             }
             else if (top.CloseOnOutsideClick)
             {

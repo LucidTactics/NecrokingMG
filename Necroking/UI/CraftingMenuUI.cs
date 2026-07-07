@@ -93,7 +93,6 @@ public class CraftingMenuUI : IModalLayer
         _crafting = false;
         _craftProgress = 0f;
         _craftingIndex = -1;
-        Necroking.Game1.Popups.Push(this);
 
         // Left-aligned, same as build menu
         _screenX = -12;
@@ -136,7 +135,6 @@ public class CraftingMenuUI : IModalLayer
         _craftProgress = 0f;
         _craftingIndex = -1;
         _selectedIndex = -1;
-        Necroking.Game1.Popups.Pop(this);
     }
 
     // === IModalLayer ===

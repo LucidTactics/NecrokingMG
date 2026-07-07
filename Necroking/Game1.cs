@@ -733,21 +733,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// lifetime rationale as <see cref="Popups"/>; assigned in the ctor.</summary>
     public static Game1 Instance { get; private set; }
 
-    // Modal-stack adapters for the top-level editor windows. Each is
-    // pushed/popped to keep the stack in sync with <see cref="_menuState"/>;
-    // OnCancel transitions the menu state back so PopupManager's ESC routing
-    // closes the editor exactly like the old Game1 ESC branch did — except
-    // PopupManager handles the entire stack uniformly, so opening sub-popups
-    // (eg env-object editor on top of map editor) and closing them with ESC
-    // no longer leaks through to the parent editor.
-    private readonly Necroking.UI.ActionModalLayer _unitEditorLayer  = new() { LightDismiss = false, IsBlocking = true };
-    private readonly Necroking.UI.ActionModalLayer _spellEditorLayer = new() { LightDismiss = false, IsBlocking = true };
-    private readonly Necroking.UI.ActionModalLayer _mapEditorLayer   = new() { LightDismiss = false, IsBlocking = true };
-    private readonly Necroking.UI.ActionModalLayer _uiEditorLayer    = new() { LightDismiss = false, IsBlocking = true };
-    private readonly Necroking.UI.ActionModalLayer _itemEditorLayer  = new() { LightDismiss = false, IsBlocking = true };
-    private readonly Necroking.UI.ActionModalLayer _settingsLayer    = new() { LightDismiss = false, IsBlocking = true };
-    private readonly Necroking.UI.ActionModalLayer _multiplayerLayer = new() { LightDismiss = false, IsBlocking = true };
-    private readonly Necroking.UI.ActionModalLayer _pauseMenuLayer   = new() { LightDismiss = false, IsBlocking = true };
+    // (The per-editor/menu ActionModalLayers + ReconcileTopLevelEditorLayers
+    // are gone: the full-screen editors sit in the router as one opaque
+    // EditorHostLayer and the pause-menu family as one MenuHostLayer — see
+    // UI/Layers/HostLayers.cs. Game1.Popups now only carries the editors'
+    // transient sub-popups, seated in the router via ModalStackLayer.)
 
     // Pending spell cast with animation delay (Spell1 animation → action moment → execute)
     private struct PendingCastAnim
@@ -899,34 +889,73 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         // Unified UI layer list (see UI/UIRouter.cs): input dispatches through
         // these top-down in reverse render order, so the topmost visible widget
-        // gets the click. Registration order is the within-band tiebreak.
+        // gets the click, hover ownership matches click ownership, and drawing
+        // (phase 3) walks the same list bottom-up. Registration order is the
+        // within-band tiebreak (later = on top), mirroring the historical
+        // DrawHudBlock order within the Panels band.
         _uiRouter.Register(new Necroking.UI.WorldInputLayer(this));
         _uiRouter.Register(new Necroking.UI.SpellBarLayer(this));
         _uiRouter.Register(new Necroking.UI.TimeControlsLayer(this));
         _uiRouter.Register(new Necroking.UI.AggressionBarLayer(this));
+
+        // In-game panels (Panels band). Ids keep the "popup.<Type>" convention
+        // the hit registry has always used. Update delegates own each panel's
+        // per-frame input logic; drag providers get router mouse capture.
+        _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _inventoryUI,
+            Necroking.UI.UIBand.Panels, "popup.InventoryUI",
+            () => _inventoryUI.IsVisible,
+            (InputState inp, in Necroking.UI.UICtx c) => _inventoryUI.Update(inp),
+            () => _inventoryUI.IsDragging));
+        _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _tableMenuUI,
+            Necroking.UI.UIBand.Panels, "popup.TableCraftMenuUI",
+            () => _tableMenuUI.IsVisible,
+            (InputState inp, in Necroking.UI.UICtx c) => _tableMenuUI.Update(inp)));
+        _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _graveRosterUI,
+            Necroking.UI.UIBand.Panels, "popup.GraveRosterUI",
+            () => _graveRosterUI.IsVisible,
+            (InputState inp, in Necroking.UI.UICtx c) => _graveRosterUI.Update(inp)));
+        _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _jobBoardUI,
+            Necroking.UI.UIBand.Panels, "popup.JobBoardUI",
+            () => _jobBoardUI.IsVisible,
+            (InputState inp, in Necroking.UI.UICtx c) => _jobBoardUI.Update(inp),
+            () => _jobBoardUI.IsDragging));
+        _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _characterStatsUI,
+            Necroking.UI.UIBand.Panels, "popup.CharacterStatsUI",
+            () => _characterStatsUI.IsVisible)); // input-in-Draw panel: no Update
+        _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _unitInfoPanel,
+            Necroking.UI.UIBand.Panels, "popup.UnitInfoPanel",
+            // Transient (auto-hover) views must not claim hits/ESC — only a
+            // pinned sheet is a real layer.
+            () => _unitInfoPanel.IsVisible && !_unitInfoPanel.IsTransient));
+        _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _grimoireOverlay,
+            Necroking.UI.UIBand.Panels, "popup.GrimoireOverlay",
+            () => _grimoireOverlay.IsVisible,
+            (InputState inp, in Necroking.UI.UICtx c) => _grimoireOverlay.Update(inp, c.ScreenW, c.ScreenH)));
+        _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _buildingMenuUI,
+            Necroking.UI.UIBand.Panels, "popup.BuildingMenuUI",
+            () => _buildingMenuUI.IsVisible,
+            (InputState inp, in Necroking.UI.UICtx c) => _buildingMenuUI.Update(inp, c.ScreenW, c.ScreenH)));
+        _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _craftingMenu,
+            Necroking.UI.UIBand.Panels, "popup.CraftingMenuUI",
+            () => _craftingMenu.IsVisible,
+            (InputState inp, in Necroking.UI.UICtx c) => _craftingMenu.Update(inp, c.ScreenW, c.ScreenH, _clock.VisualDt)));
+
+        // Blocking full overlay (Overlay band), then the HUD rows that sit
+        // ABOVE it (HudTop band) — the declarative form of "menu buttons work
+        // over the open skill book".
+        _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _skillBookOverlay,
+            Necroking.UI.UIBand.Overlay, "popup.SkillBookOverlay",
+            () => _skillBookOverlay.IsVisible,
+            (InputState inp, in Necroking.UI.UICtx c) => _skillBookOverlay.Update(inp, c.ScreenW, c.ScreenH, c.TimeSec),
+            () => _skillBookOverlay.IsDragging));
         _uiRouter.Register(new Necroking.UI.CoreMenuButtonsLayer(this));
         _uiRouter.Register(new Necroking.UI.EditorLauncherLayer(this));
         _uiRouter.Register(new Necroking.UI.SkillToastLayer(this));
 
-        // Wire the top-level editor modal layers. Each layer's OnCancel
-        // transitions _menuState back; ReconcileTopLevelEditorLayers (run
-        // before _popups.RouteInput each frame) keeps the stack in sync
-        // with the current menu state, so any keybind / button / pause-
-        // menu path that flips the state also flips stack membership.
-        _unitEditorLayer.OnCancelAction  = () => { _editorUi?.ResetAllState(); _menuState = MenuState.None; };
-        _spellEditorLayer.OnCancelAction = () => { _editorUi?.ResetAllState(); _menuState = MenuState.None; };
-        _mapEditorLayer.OnCancelAction   = () => { _editorUi?.ResetAllState(); _menuState = MenuState.None; };
-        // The UI editor IS its own EditorBase (_uiEditor, not _editorUi) —
-        // resetting the wrong instance left a stale focused field / open picker
-        // across close/reopen, which blocked Ctrl+S/undo until a stray click.
-        _uiEditorLayer.OnCancelAction    = () => { _uiEditor?.ResetAllState(); _menuState = MenuState.None; };
-        _itemEditorLayer.OnCancelAction  = () => { _editorUi?.ResetAllState(); _menuState = MenuState.None; };
-        // Settings is reachable only from the pause menu; ESC returns there.
-        _settingsLayer.OnCancelAction    = () => { _editorUi?.ResetAllState(); _menuState = MenuState.PauseMenu; };
-        // Multiplayer, same deal (closing the menu does NOT stop the session).
-        _multiplayerLayer.OnCancelAction = () => { _editorUi?.ResetAllState(); _menuState = MenuState.PauseMenu; };
-        // Pause menu: ESC unpauses back to gameplay.
-        _pauseMenuLayer.OnCancelAction   = () => { _menuState = MenuState.None; _clock.ClearAllPauses(); };
+        // Menus, editors, and the editors' transient sub-popup stack, top bands.
+        _uiRouter.Register(new Necroking.UI.MenuHostLayer(this));
+        _uiRouter.Register(new Necroking.UI.EditorHostLayer(this));
+        _uiRouter.Register(new Necroking.UI.ModalStackLayer(_popups));
 
         _graphics = new GraphicsDeviceManager(this);
         _graphics.GraphicsProfile = GraphicsProfile.HiDef;
@@ -2658,7 +2687,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// editor's side panel, or while a sub-popup (texture browser, env editor, …)
     /// sits above the editor on the popup stack.</summary>
     internal bool HoverBlockedByUI(int screenW, int screenH) => _menuState == MenuState.MapEditor
-        ? _popups.Top != _mapEditorLayer || _mapEditor.IsMouseOverPanel(screenW, screenH)
+        ? !_popups.IsEmpty || _mapEditor.IsMouseOverPanel(screenW, screenH)
         : _input.MouseOverUI;
 
     /// <summary>Rebuild the central UI hit-rect registry for this frame and derive
@@ -2672,7 +2701,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private void RebuildUIHitRects(int screenW, int screenH)
     {
         _uiHits.Clear();
-        _popups.AppendHitRects(_uiHits, screenW, screenH);
+        // Router layers top-down (append order = z-order, so HitId returns the
+        // true topmost region): editor sub-popups via ModalStackLayer, the
+        // editor/menu blankets, panels via their PanelLayers. The persistent
+        // HUD widgets keep their fine-grained per-button ids below instead
+        // (their layers deliberately don't self-append).
+        _uiRouter.AppendHitRects(_uiHits,
+            new Necroking.UI.UICtx(screenW, screenH, _clock.VisualTime));
 
         // The persistent gameplay HUD draws during normal play AND on top of the
         // (full-screen) map editor — HudVisible mirrors the showUI gate in DrawHudBlock.
@@ -2795,15 +2830,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 ToggleWindowMode();
         }
 
-        // Modal stack input routing. Runs *before* anything else reads input so:
-        //   - ESC is dispatched to the topmost popup, never two layers at once.
-        //   - Outside-clicks on light-dismiss popups (dropdowns / popovers)
-        //     close them and swallow the click.
-        // Popups Push themselves on open, Pop on close. When the stack is empty
-        // this call is a no-op and input flows to gameplay normally. See
-        // Necroking/UI/PopupManager.cs for the contract.
-        ReconcileTopLevelEditorLayers();
-        _popups.RouteInput(_input);
+        // (All modal/panel/HUD/world input routing now happens in ONE place —
+        // the _uiRouter.DispatchInput call further down, after hit rects are
+        // rebuilt and the world clock is gated. Layers are walked top-down in
+        // reverse render order and consume what they use; nothing is
+        // pre-consumed on anyone's behalf.)
 
         // MapEditor → gameplay transition: fire the suppressed pathfinder
         // rebuild once. Per-click placement skips it (would be O(N) per
@@ -3237,21 +3268,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // --- ESC: gameplay → pause menu only ---
-        // Every other ESC case (editors, settings, sub-popups, in-game panels)
-        // is handled by PopupManager.RouteInput via the IModalLayer.OnCancel
-        // path — see ReconcileTopLevelEditorLayers + Game1.Popups. By the time
-        // we get here, IsKeyConsumed is true unless the stack was empty, so
-        // the only branch left is "no popup, no editor → pause the game".
-        // Text-field ESC is handled by EditorBase.HandleTextInput (deactivates
-        // the field), independent of all this.
-        if (!anyTextInputActive && !_input.IsKeyConsumed(Keys.Escape) && _input.WasKeyPressed(Keys.Escape))
-        {
-            if (_menuState == MenuState.None)
-            {
-                _menuState = MenuState.PauseMenu;
-                _clock.Pause(GameClock.PauseSource.User);
-            }
-        }
+        // (The "ESC with nothing open → pause menu" fallback now lives AFTER
+        // the router dispatch below, since panels/editors/popups consume ESC
+        // during the dispatch walk, not before this point.)
 
         // --- Editor updates ---
         int screenW = GraphicsDevice.Viewport.Width;
@@ -3260,7 +3279,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // WASD/arrow ownership: only the BARE map editor (map editor on top, no
         // sub-editor popup focused) keeps WASD for camera panning; everywhere else
         // WASD navigates the focused editor list. Arrows always navigate lists.
-        bool bareMapEditor = _menuState == MenuState.MapEditor && _popups.Top == _mapEditorLayer;
+        // "Bare" = the map editor with no sub-editor popup above it (the popup
+        // stack now only ever holds the editors' transient sub-popups).
+        bool bareMapEditor = _menuState == MenuState.MapEditor && _popups.IsEmpty;
         _editorUi.AllowWasdListNav = !bareMapEditor;
         if (_uiEditor != null) _uiEditor.AllowWasdListNav = true;
         if (_mapEditor != null) _mapEditor.CameraInputEnabled = bareMapEditor;
@@ -3333,18 +3354,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // (Skill-toast clicks, the aggression bar, and gameplay scroll-zoom are
         // handled by their router layers in the dispatch below.)
 
-        // Scroll zoom, map editor only (gameplay zoom lives in WorldLayer):
-        //   zoom when cursor is over the world area (not the sidebar) AND only
-        //   when the map editor itself is the top of the popup stack — any
-        //   sub-popup (texture file browser, color picker, env editor, etc.)
-        //   sits above and should own the scroll instead. We can't gate on
-        //   _input.MouseOverUI here because PopupManager sets it whenever
-        //   _mapEditorLayer is on the stack (full-screen ContainsMouse), which
-        //   would block zoom even in the world area.
+        // Scroll zoom, map editor only (gameplay zoom lives in WorldInputLayer):
+        //   zoom when cursor is over the world area (not the sidebar) AND no
+        //   editor sub-popup (texture file browser, color picker, env editor,
+        //   etc.) is open above the editor. We can't gate on _input.MouseOverUI
+        //   here because the EditorHostLayer blankets the whole screen in the
+        //   hit registry, which would block zoom even in the world area.
         if (_input.ScrollDelta != 0)
         {
             bool canZoomMapEditor = _menuState == MenuState.MapEditor
-                && _popups.Top == _mapEditorLayer
+                && _popups.IsEmpty
                 && !_mapEditor.IsMouseOverPanel(screenW, screenH);
             if (canZoomMapEditor)
                 _camera.ZoomBy(_input.ScrollDelta / 120f);
@@ -3364,14 +3383,26 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (_menuState == MenuState.MapEditor)
             UpdateHoverPicks(screenW, screenH);
 
-        // --- Unified UI input dispatch: every clickable UI surface (HUD
-        // widgets, toasts, the world floor) as router layers, walked top-down
-        // in reverse render order. Replaces the old per-widget click blocks
-        // that were scattered through this method in execution order.
-        // (Panels/overlays still route via _popups.RouteInput above; they fold
-        // into this dispatch in the next migration step.)
+        // --- Unified UI input dispatch: every clickable UI surface — editor
+        // sub-popups, editors, menus, toasts, HUD-over-overlay button rows,
+        // the blocking skill book, side panels, HUD widgets, and the world
+        // floor — as router layers walked top-down in reverse render order.
+        // Each layer sees exactly what the layers above it left un-consumed;
+        // hover ownership is stamped from the same walk (IsHovered /
+        // HoverStolen), so a widget only hover-lights when a click would
+        // actually reach it.
         _uiRouter.DispatchInput(_input,
             new Necroking.UI.UICtx(screenW, screenH, gameTime.TotalGameTime.TotalSeconds));
+
+        // ESC fallback: nothing above wanted the key (no popup, panel, editor,
+        // or menu consumed it) → open the pause menu.
+        if (!anyTextInputActive && _input.WasKeyPressedUnhandled(Keys.Escape)
+            && _menuState == MenuState.None)
+        {
+            _menuState = MenuState.PauseMenu;
+            _clock.Pause(GameClock.PauseSource.User);
+            _input.ConsumeKey(Keys.Escape);
+        }
 
         if (_clock.WorldRunning)
         {
@@ -3878,19 +3909,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _gameOver = true;
         }
 
-        // Update inventory UI after all sim/scenario ticks (so slot sync sees latest inventory state)
-        _inventoryUI.Update(_input);
-        _buildingMenuUI.Update(_input, screenW, screenH);
-        _craftingMenu.Update(_input, screenW, screenH, dt);
-        _grimoireOverlay.Update(_input, screenW, screenH);
-        _tableMenuUI.Update(_input);
-        _graveRosterUI.Update(_input);
-        _jobBoardUI.Update(_input);
-        // Inventory slot clicks (table deposit / consumable use) are dispatched via
-        // _inventoryUI.OnSlotClicked, set in EnsureInventoryUIsInitialized — the
-        // inventory is a modal layer whose inside-panel clicks PopupManager consumes
-        // before this point, so they can't be handled inline here.
-        _skillBookOverlay.Update(_input, screenW, screenH, gameTime.TotalGameTime.TotalSeconds);
+        // (Panel per-frame updates — inventory, building, crafting, grimoire,
+        // table bench, grave roster, job board, skill book — run inside the
+        // router dispatch above, each at its own z-position with press edges
+        // masked when a higher layer claimed the click. Slot-sync consequences
+        // of THIS frame's sim tick therefore show one frame later, which is
+        // imperceptible.)
 
         // Cursor swap: hand when hovering interactive UI, arrow otherwise
         bool overInteractiveUI = _input.MouseOverUI || _editorUi.IsMouseOverUI;
@@ -4305,36 +4329,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // channels a reanimation at the necro table.
     private const string TableChannelBuffId = "buff_4_copy";
 
-    /// <summary>Keep the modal stack in sync with <see cref="_menuState"/>:
-    /// push the matching top-level editor layer when its state becomes
-    /// active, pop it when the state changes away. Called every frame
-    /// just before <see cref="Necroking.UI.PopupManager.RouteInput"/> so
-    /// the freshly-pushed layer participates in this frame's ESC / click
-    /// routing immediately. The layer's panel rect is the full viewport
-    /// since editors paint full-screen.</summary>
-    private void ReconcileTopLevelEditorLayers()
-    {
-        int sw = GraphicsDevice.Viewport.Width;
-        int sh = GraphicsDevice.Viewport.Height;
-        var fullScreen = new Rectangle(0, 0, sw, sh);
-
-        Sync(_unitEditorLayer,  _menuState == MenuState.UnitEditor);
-        Sync(_spellEditorLayer, _menuState == MenuState.SpellEditor);
-        Sync(_mapEditorLayer,   _menuState == MenuState.MapEditor);
-        Sync(_uiEditorLayer,    _menuState == MenuState.UIEditor);
-        Sync(_itemEditorLayer,  _menuState == MenuState.ItemEditor);
-        Sync(_settingsLayer,    _menuState == MenuState.Settings);
-        Sync(_multiplayerLayer, _menuState == MenuState.Multiplayer);
-        Sync(_pauseMenuLayer,   _menuState == MenuState.PauseMenu);
-
-        void Sync(Necroking.UI.ActionModalLayer layer, bool open)
-        {
-            layer.Panel = fullScreen;
-            bool onStack = _popups.Contains(layer);
-            if (open && !onStack) _popups.Push(layer);
-            else if (!open && onStack) _popups.Pop(layer);
-        }
-    }
+    // (ReconcileTopLevelEditorLayers is gone: the editors/menus sit in the
+    // router as EditorHostLayer/MenuHostLayer with LIVE Visible getters over
+    // _menuState — no per-frame stack syncing needed.)
 
     // ── Raw-corpse carry (body bag mothballed; see GameConstants.UseBodyBag) ──
 

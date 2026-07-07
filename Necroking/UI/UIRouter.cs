@@ -75,11 +75,53 @@ public sealed class UIRouter
         _sorted = true;
     }
 
+    /// <summary>The layer a click at the current cursor position would land in
+    /// (this frame's hover owner), or null when the cursor is over open world.
+    /// Computed by <see cref="DispatchInput"/>.</summary>
+    public UILayer? HoverLayer { get; private set; }
+
     /// <summary>Per-frame input dispatch. Call once per Update after the frame's
     /// InputState is captured and hit rects are rebuilt.</summary>
     public void DispatchInput(InputState input, in UICtx ctx)
     {
         EnsureSorted();
+
+        // --- Hover pass: find the layer a click at the cursor would land in,
+        // walking top-down with the same rules the click dispatch uses. A
+        // blocking / light-dismiss layer that doesn't contain the cursor still
+        // ENDS the walk (it would swallow the click), so nothing below it may
+        // hover-react. This is what keeps "lights up on hover" and "activates
+        // on click" in sync.
+        int hmx = (int)input.MousePos.X, hmy = (int)input.MousePos.Y;
+        UILayer? hover = null;
+        bool hoverBlocked = false;
+        if (_capture != null && _capture.Visible)
+        {
+            hover = _capture; // a drag owns the cursor outright
+        }
+        else
+        {
+            for (int i = _layers.Count - 1; i >= 0; i--)
+            {
+                var layer = _layers[i];
+                if (!layer.Visible) continue;
+                if (layer.ContainsMouse(hmx, hmy, in ctx)) { hover = layer; break; }
+                if (layer.Blocking || layer.LightDismiss) { hoverBlocked = true; break; }
+            }
+        }
+        HoverLayer = hover;
+        for (int i = 0; i < _layers.Count; i++)
+        {
+            var layer = _layers[i];
+            layer.IsHovered = layer == hover;
+            // Cursor belongs to someone else (another layer, or a blanket above
+            // this one). Below the hover owner / blanket, everything is stolen;
+            // above it, layers simply don't contain the cursor and keep the
+            // real position.
+            layer.HoverStolen = layer != hover
+                && (hoverBlocked || hover != null)
+                && !IsAboveHover(layer, hover);
+        }
 
         // A drag in progress owns the mouse outright — the capturing layer
         // handles input first and everything else sees it consumed.
@@ -109,6 +151,11 @@ public sealed class UIRouter
             layer.HandleInput(input, in ctx);
         }
     }
+
+    private static bool IsAboveHover(UILayer layer, UILayer? hover)
+        => hover != null
+           && (layer.Band > hover.Band
+               || (layer.Band == hover.Band && layer.SubOrder > hover.SubOrder));
 
     /// <summary>Catalogue every visible layer's footprint into the central hit
     /// registry, top-down — append order is z-order, so UIHitRegistry.HitId

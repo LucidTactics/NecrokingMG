@@ -44,6 +44,8 @@ public class JobBoardUI : IModalLayer
     private const int FsTitle = 18, FsName = 15, FsSmall = 12, FsBtn = 13;
 
     public bool IsVisible => _visible;
+    /// <summary>Job-row drag in progress — the router captures the mouse for us.</summary>
+    public bool IsDragging => _dragging;
 
     public void Init(SpriteBatch batch, Texture2D pixel, RuntimeWidgetRenderer renderer, WorkerSystem ws)
     { _batch = batch; _pixel = pixel; _r = renderer; _ws = ws; }
@@ -52,10 +54,9 @@ public class JobBoardUI : IModalLayer
     {
         if (_visible) { Close(); return; }
         _visible = true; _w = 410; _x = 40; _y = 70;
-        Game1.Popups.Push(this);
     }
 
-    public void Close() { _visible = false; _dragging = false; _dragJobId = ""; Game1.Popups.Pop(this); }
+    public void Close() { _visible = false; _dragging = false; _dragJobId = ""; }
 
     private int ListTop => _y + TitleH + Pad;
 

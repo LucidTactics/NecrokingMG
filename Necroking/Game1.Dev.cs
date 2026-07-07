@@ -1668,12 +1668,11 @@ public partial class Game1 {
             }
 
             // Inject a SCREEN-space click through the real UI routing pipeline
-            // (PopupManager.RouteInput + UIRouter.DispatchInput) with a synthetic
-            // InputState — verifies z-order and consumption exactly as a real
-            // mouse press would, headless-safe. Reports which registry region was
-            // under the point and who consumed the click. Note: panels that act
-            // on the SHARED _input in their own Update (inventory slots, etc.)
-            // won't see a synthetic click — this drives the router layers.
+            // (UIRouter.DispatchInput, which includes the editor sub-popup stack
+            // via ModalStackLayer) with a synthetic InputState — verifies z-order,
+            // consumption, and hover ownership exactly as a real mouse press
+            // would, headless-safe. Reports the registry region under the point,
+            // the hover-owning layer, and whether the click was consumed.
             case "ui_click": {
                if (c.Args.Length < 2) {
                   c.Complete(Necroking.Dev.DevServer.Error("ui_click needs: <sx> <sy> [right]"));
@@ -1695,14 +1694,39 @@ public partial class Game1 {
                syn.Capture(downNow, upPrev, kbNow, kbNow);
                syn.MouseOverUI = _uiHits.Hit(sx, sy);
                string? uiHitId = _uiHits.HitId(sx, sy);
-               _popups.RouteInput(syn);
-               bool popupConsumed = syn.IsMouseConsumed;
                _uiRouter.DispatchInput(syn,
                   new Necroking.UI.UICtx(usw, ush, _clock.VisualTime));
+               string hoverId = _uiRouter.HoverLayer?.Id ?? "none";
                c.Complete(Necroking.Dev.DevServer.OkRaw(
                   $"{{\"hit\":\"{uiHitId ?? "none"}\"," +
-                  $"\"popupConsumed\":{(popupConsumed ? "true" : "false")}," +
+                  $"\"hover\":\"{hoverId}\"," +
                   $"\"consumed\":{(syn.IsMouseConsumed ? "true" : "false")}}}"));
+               break;
+            }
+
+            // Inject a key press through the router dispatch (currently ESC
+            // only) — verifies the Closable-walk ESC routing headlessly: the
+            // topmost closable layer cancels, the key is consumed, nothing
+            // below double-closes.
+            case "ui_key": {
+               string keyName = c.Args.Length >= 1 ? c.Args[0].ToLowerInvariant() : "escape";
+               if (keyName != "escape" && keyName != "esc") {
+                  c.Complete(Necroking.Dev.DevServer.Error("ui_key supports: escape"));
+                  break;
+               }
+               int ksw = GraphicsDevice.Viewport.Width, ksh = GraphicsDevice.Viewport.Height;
+               var kbtnUp = Microsoft.Xna.Framework.Input.ButtonState.Released;
+               var kMouse = new Microsoft.Xna.Framework.Input.MouseState(0, 0, 0,
+                  kbtnUp, kbtnUp, kbtnUp, kbtnUp, kbtnUp);
+               var synk = new Necroking.Core.InputState();
+               synk.Capture(kMouse, kMouse,
+                  new Microsoft.Xna.Framework.Input.KeyboardState(Microsoft.Xna.Framework.Input.Keys.Escape),
+                  new Microsoft.Xna.Framework.Input.KeyboardState());
+               _uiRouter.DispatchInput(synk,
+                  new Necroking.UI.UICtx(ksw, ksh, _clock.VisualTime));
+               bool escConsumed = synk.IsKeyConsumed(Microsoft.Xna.Framework.Input.Keys.Escape);
+               c.Complete(Necroking.Dev.DevServer.OkRaw(
+                  $"{{\"consumed\":{(escConsumed ? "true" : "false")}}}"));
                break;
             }
 

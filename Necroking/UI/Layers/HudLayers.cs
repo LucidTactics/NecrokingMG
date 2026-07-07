@@ -7,6 +7,12 @@ namespace Necroking.UI;
 // of truth stays there; these classes only route). Each replaces an ad-hoc
 // `if (_input.LeftPressed …)` block that used to live in Game1.Update at a
 // position unrelated to draw order.
+//
+// Hit-rect note: these HUD layers deliberately do NOT self-append to the
+// UIHitRegistry — Game1.RebuildUIHitRects still catalogues the HUD through
+// HUDRenderer.AppendHitRects (+ toast/aggro extras) under the fine-grained
+// per-button ids ("hud.menu_row.2") the ui_rects dev command and the map
+// editor's OverGameplayHud prefix checks rely on.
 
 /// <summary>The world floor — the layer everything else sits above. Owns world
 /// clicks (Game1.WorldClicks.cs dispatch) and camera scroll-zoom. Overrides the
@@ -56,6 +62,7 @@ public sealed class SpellBarLayer : UILayer
     public SpellBarLayer(Game1 g) { _g = g; Band = UIBand.Hud; }
 
     public override string Id => "hud.spell_bar";
+    public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { } // HUD rects catalogued by HUDRenderer.AppendHitRects (see file header)
     public override bool Visible => _g.HudVisible && _g._menuState == MenuState.None;
 
     private int HitSlot(int mx, int my, in UICtx ctx)
@@ -86,6 +93,7 @@ public sealed class TimeControlsLayer : UILayer
     public TimeControlsLayer(Game1 g) { _g = g; Band = UIBand.Hud; }
 
     public override string Id => "hud.time_controls";
+    public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { } // HUD rects catalogued by HUDRenderer.AppendHitRects (see file header)
     public override bool Visible => _g.HudVisible && _g._menuState == MenuState.None
         && _g._gameData.Settings.General.ShowTimeControls;
 
@@ -118,6 +126,7 @@ public sealed class AggressionBarLayer : UILayer
     public AggressionBarLayer(Game1 g) { _g = g; Band = UIBand.Hud; }
 
     public override string Id => "hud.aggression_bar";
+    public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { } // HUD rects catalogued by HUDRenderer.AppendHitRects (see file header)
     public override bool Visible => _g.HudVisible && _g._menuState == MenuState.None;
 
     public override bool ContainsMouse(int mx, int my, in UICtx ctx)
@@ -148,6 +157,7 @@ public sealed class CoreMenuButtonsLayer : UILayer
     public CoreMenuButtonsLayer(Game1 g) { _g = g; Band = UIBand.HudTop; }
 
     public override string Id => "hud.menu_row";
+    public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { } // HUD rects catalogued by HUDRenderer.AppendHitRects (see file header)
     public override bool Visible => _g.HudVisible;
 
     public override bool ContainsMouse(int mx, int my, in UICtx ctx)
@@ -169,6 +179,7 @@ public sealed class EditorLauncherLayer : UILayer
     public EditorLauncherLayer(Game1 g) { _g = g; Band = UIBand.HudTop; }
 
     public override string Id => "hud.editor_row";
+    public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { } // HUD rects catalogued by HUDRenderer.AppendHitRects (see file header)
     public override bool Visible => _g.HudVisible;
 
     public override bool ContainsMouse(int mx, int my, in UICtx ctx)
@@ -192,6 +203,7 @@ public sealed class SkillToastLayer : UILayer
     public SkillToastLayer(Game1 g) { _g = g; Band = UIBand.Toast; }
 
     public override string Id => "toast.skill_learn";
+    public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { } // HUD rects catalogued by HUDRenderer.AppendHitRects (see file header)
     public override bool Visible => _g.HudVisible && _g._menuState == MenuState.None
         && _g._skillLearnToasts.Count > 0;
 

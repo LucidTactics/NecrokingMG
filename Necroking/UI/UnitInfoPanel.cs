@@ -55,7 +55,6 @@ public class UnitInfoPanel : IModalLayer
     /// don't claim MouseOverUI — otherwise the hover logic that owns them could
     /// never re-pick a new unit or dismiss when the cursor leaves.</summary>
     public bool IsTransient { get; private set; }
-    private bool _pushed; // whether we're currently registered on the popup stack
     public Action<string, Rectangle>? DrawUnitIconCallback;
     public Action? OnClosed;
 
@@ -65,19 +64,19 @@ public class UnitInfoPanel : IModalLayer
         _gameData = gameData;
     }
 
-    /// <summary>Pin a unit's sheet (manual 'U'/'L' inspect). Registered as a popup
-    /// so ESC/click routing and MouseOverUI behave like other panels.</summary>
+    /// <summary>Pin a unit's sheet (manual 'U'/'L' inspect). A pinned sheet is a
+    /// visible router layer, so ESC/click routing and MouseOverUI behave like
+    /// other panels; a transient view is not (see <see cref="IsTransient"/>).</summary>
     public void ShowForUnit(uint unitId)
     {
         if (IsVisible && _unitId == unitId) { Hide(); return; }
         _unitId = unitId;
         IsTransient = false;
         IsVisible = true;
-        if (!_pushed) { Game1.Popups.Push(this); _pushed = true; }
     }
 
     /// <summary>Show a unit's sheet as a transient cursor-driven view (auto-hover).
-    /// Deliberately not pushed to the popup stack — see <see cref="IsTransient"/>.</summary>
+    /// Deliberately not a hit-claiming layer — see <see cref="IsTransient"/>.</summary>
     public void ShowForUnitTransient(uint unitId)
     {
         _unitId = unitId;
@@ -92,7 +91,6 @@ public class UnitInfoPanel : IModalLayer
         IsTransient = false;
         _unitId = Core.GameConstants.InvalidUnit;
         _unitIndex = -1;
-        if (_pushed) { Game1.Popups.Pop(this); _pushed = false; }
         OnClosed?.Invoke();
     }
 

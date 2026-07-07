@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
-using Necroking.UI;
 
 namespace Necroking.Core;
 
@@ -29,12 +28,14 @@ public class InputState
     public bool RightDown;
     public bool RightReleased;
 
-    // Consumption flags — once consumed, lower-priority systems should not act
+    // Consumption flags — once consumed, lower-priority systems should not act.
+    // "Who consumed it" is no longer tracked here: the UIRouter dispatch walks
+    // layers top-down and stamps UILayer.InputGranted per layer, so a layer
+    // knows whether the click was its to take without identity bookkeeping.
     private bool _mouseConsumed;
     private bool _scrollConsumed;
     private bool _kbConsumed;
 
-    private IModalLayer _mouseConsumer;
     // Per-key consumption — lets a top-of-stack popup eat ESC for itself without
     // blocking unrelated keys (movement, hotkeys) on the same frame. The kb-wide
     // _kbConsumed flag is kept for text-input scenarios where a popup wants to
@@ -45,11 +46,7 @@ public class InputState
     public bool IsScrollConsumed => _scrollConsumed;
     public bool IsKbConsumed => _kbConsumed;
 
-    public IModalLayer MouseConsumer => _mouseConsumer;
-
-    public void ConsumeMouse(IModalLayer consumer=null) { _mouseConsumed = true; MouseOverUI = true;
-       _mouseConsumer = consumer;
-    }
+    public void ConsumeMouse() { _mouseConsumed = true; MouseOverUI = true; }
     public void ConsumeScroll() => _scrollConsumed = true;
     public void ConsumeKb() => _kbConsumed = true;
     public void ConsumeKey(Keys key) => _consumedKeys.Add(key);
@@ -92,7 +89,6 @@ public class InputState
         _mouseConsumed = false;
         _scrollConsumed = false;
         _kbConsumed = false;
-        _mouseConsumer = null;
         _consumedKeys.Clear();
         MouseOverUI = false;
     }

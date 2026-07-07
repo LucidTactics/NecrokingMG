@@ -154,14 +154,12 @@ public class TableCraftMenuUI : IModalLayer
         // Initial position; Update() re-anchors every frame so the menu tracks
         // the table as the camera pans.
         RepositionAboveTable();
-        Necroking.Game1.Popups.Push(this);
     }
 
     public void Close()
     {
         _visible = false;
         _envIdx = -1;
-        Necroking.Game1.Popups.Pop(this);
     }
 
     // === IModalLayer ===

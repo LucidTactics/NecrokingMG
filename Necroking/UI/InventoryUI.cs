@@ -66,6 +66,8 @@ public class InventoryUI : IModalLayer
     public Action<int>? OnSlotClicked;
 
     public bool IsVisible => _visible;
+    /// <summary>Window-drag in progress — the router captures the mouse for us.</summary>
+    public bool IsDragging => _dragging;
     public int Width => _widgetW;
     public int Height => _widgetH;
     public RuntimeWidgetRenderer Renderer => _renderer;
@@ -150,13 +152,11 @@ public class InventoryUI : IModalLayer
     {
         _visible = true;
         CenterOnScreen(screenW, screenH);
-        Necroking.Game1.Popups.Push(this);
     }
 
     public void Close()
     {
         _visible = false;
-        Necroking.Game1.Popups.Pop(this);
     }
 
     // === IModalLayer ===

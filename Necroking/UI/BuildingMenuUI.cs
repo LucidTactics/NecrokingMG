@@ -83,7 +83,6 @@ public class BuildingMenuUI : IModalLayer
         _visible = true;
         _placementActive = false;
         _selectedIndex = -1;
-        Necroking.Game1.Popups.Push(this);
 
         // Position: left-aligned, 12px off-screen
         _screenX = -12;
@@ -118,7 +117,6 @@ public class BuildingMenuUI : IModalLayer
         _visible = false;
         _placementActive = false;
         _selectedIndex = -1;
-        Necroking.Game1.Popups.Pop(this);
     }
 
     // === IModalLayer ===
