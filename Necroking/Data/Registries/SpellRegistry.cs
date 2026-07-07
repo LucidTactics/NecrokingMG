@@ -254,6 +254,12 @@ public class SpellDef : IHasId
     [EditorField(Label = "Precision Bonus", Group = "PROJECTILE", Order = 203)]
     [JsonPropertyName("precisionBonus")] public int PrecisionBonus { get; set; }
 
+    // Burst exactly at the aimed point once the arc passes it, instead of wherever
+    // the ballistics happen to land (Blight bombs always do this regardless of the flag)
+    [EditorVisible("Category", "Projectile")]
+    [EditorField(Label = "Detonate At Target", Group = "PROJECTILE", Order = 204)]
+    [JsonPropertyName("detonateAtTarget")] public bool DetonateAtTarget { get; set; }
+
     [EditorVisible("Category", "Projectile")]
     [EditorField(Label = "Proj Delay", Group = "PROJECTILE", Order = 205, Step = 0.01f, Decimals = 2)]
     [JsonPropertyName("projectileDelay")] public float ProjectileDelay { get; set; }

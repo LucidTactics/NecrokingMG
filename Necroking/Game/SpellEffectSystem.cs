@@ -418,8 +418,8 @@ public static class SpellEffectSystem
 
             // Blight bombs must burst exactly where the player clicked, not wherever
             // the ballistic arc happens to land. Forward the aimed point and flag the
-            // projectile so it detonates on overshoot.
-            if (spell.Category == "Blight") {
+            // projectile so it detonates on overshoot. Other spells opt in via the def.
+            if (spell.Category == "Blight" || spell.DetonateAtTarget) {
                 lastProj.TargetPos = target;
                 lastProj.DetonateAtTarget = true;
             }

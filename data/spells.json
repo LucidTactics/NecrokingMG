@@ -1594,7 +1594,7 @@
       "tileTemplate": "evocation",
       "icon": "assets/UI/Icons/Spells/fireball.png",
       "hidden": true,
-      "range": 15,
+      "range": 35,
       "manaCost": 5,
       "cooldown": 0.5,
       "aoeType": "AOE",
@@ -1616,7 +1616,7 @@
         "alignment": "Ground",
         "duration": -1
       },
-      "projectileSpeed": 28.3,
+      "projectileSpeed": 54,
       "projectileFlipbook": {
         "flipbookID": "fire_loop",
         "fps": 0,
@@ -1635,7 +1635,8 @@
       },
       "trajectory": "DirectFire",
       "impactForce": 30,
-      "impactUpward": 8
+      "impactUpward": 8,
+      "detonateAtTarget": true
     }
   ]
 }
