@@ -103,6 +103,45 @@ per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, pr
 - **Legacy path**: `AIBehavior.ArcherAttack` in `Simulation.UpdateAI` (`~line 1046`)
   spawns arrows directly (no anim sync) for archetype-less units — don't extend it; new
   ranged behavior belongs in `RangedUnitHandler`.
+- **Hit consumption**: `ProjectileManager.Update` fills per-frame `Hits`
+  (`ProjectileHit`: UnitIdx, Damage, OwnerID/Faction, SpellID, AoeRadius, ImpactPos,
+  PotionID, HitLocation…) and `Impacts` (`ImpactEvent`, ground/visual). **The single
+  consumer is the `foreach (var hit in _projectiles.Hits)` loop in `Simulation.Tick`**
+  (the "Projectiles" phase): potions → `PotionSystem.ApplyPotionEffect`/corpse raise;
+  spell projectiles → resolve `SpellDef` from `hit.SpellID`, apply **physics knockback
+  BEFORE damage** (so a killed unit's corpse inherits the arc) via
+  `_physics.ApplyRadialImpulse` when `spellDef.KnockbackForce > 0` (radius =
+  `KnockbackRadius` or `hit.AoeRadius`), then MR gate (`SpellPenetration`) and
+  `DealDamage` (plain arrows go through `ResolveArrowHit` instead). Note: ProjectileHit
+  does NOT carry the projectile's flight direction — a directional (non-radial) impulse
+  needs a new field populated at the `_hits.Add(...)` sites from `proj.Velocity`.
+- **Spell-projectile spawn/config chokepoint**: `SpellEffectSystem.SpawnProjectile(spell,
+  projectiles, origin, target, ownerUid, spawnHeight, casterFaction)` — calls
+  `SpawnFireball` then post-configures the last projectile from the `SpellDef` (SpellID
+  tag, Trajectory Direct/Swirly/Homing/Lob, DetonateAtTarget for Blight, flipbooks).
+  Called from `SpellEffectSystem` cast paths and `Game1.Spells.cs`
+  (`TickPendingProjectiles` staggered Quantity>1 shots) — a new per-projectile field set
+  here covers every shot.
+
+### `Necroking/Game/PhysicsSystem.cs` — impulse knockback (units only)
+The 2.5D "popcorn" physics: a unit hit by an impulse enters `InPhysics` (AI/ORCA
+suspended, `AIControl.Interrupt` fired, Fall anim forced), flies with gravity/drag,
+chains into standing units via inelastic mass³ momentum transfer, and lands with the
+`buff_knockdown` buff.
+- **`ApplyImpulse(units, unitIdx, direction, force, upwardForce, bypassResistance,
+  bypassMinZ, gravityMul, dragMul)`** — the single-unit directional launch (size-based
+  resistance: `Size * ResistanceMultiplier` subtracts from force; charging trample units
+  are immune).
+- **`ApplyRadialImpulse(units, center, radius, force, upwardForce, ownerFaction)`** —
+  explosion knockback with linear falloff; **hits everyone incl. friendlies**.
+- Bodies are keyed by stable `UnitId`, not index. Ticked from `Simulation.Tick`.
+- Corpses inherit the body's velocity at death (`TryGetBodyVelocity`/`TryGetBodyTuning`
+  → corpse arc integrated in `Simulation.UpdateCorpses`). **Environment objects/props
+  have no physics** — `EnvironmentSystem` placed objects are static; pushing props would
+  be new work.
+- Spell data hooks: `SpellDef.KnockbackForce/KnockbackUpward/KnockbackRadius`
+  (`Data/Registries/SpellRegistry.cs`, PHYSICS editor group) consumed in the Simulation
+  hits loop; weapons have `TrampleKnockbackForce` (TrampleSystem).
 
 ### `Necroking/Game1.Animation.cs` — the resolve trigger
 The per-unit anim tick (`~line 752`): when `animData.Ctrl.JustHitEffectFrame` fires and the
