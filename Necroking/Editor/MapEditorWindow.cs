@@ -679,19 +679,28 @@ public class MapEditorWindow
         // (and the `mousepos` dev override patches only MousePos, so headless
         // hover tests see the same panel gating a real mouse would).
         var mouse = _eb._input.MousePos;
+        return IsPanelAt((int)mouse.X, (int)mouse.Y, screenW, screenH);
+    }
+
+    /// <summary>Pure point test against the editor's own UI surfaces — the right
+    /// side panel plus the Zones tab's left village panel. This is the map-editor
+    /// layer's ContainsMouse in the UI router (its footprint: the editor is NOT a
+    /// blocking blanket; the world area stays paintable underneath).</summary>
+    public bool IsPanelAt(int mx, int my, int screenW, int screenH)
+    {
         int panelX = screenW - PanelWidth - 10;
         int panelY = 10;
         int panelH = screenH - 20;
-        if (mouse.X >= panelX && mouse.X < panelX + PanelWidth &&
-            mouse.Y >= panelY && mouse.Y < panelY + panelH)
+        if (mx >= panelX && mx < panelX + PanelWidth &&
+            my >= panelY && my < panelY + panelH)
             return true;
 
         // The Zones tab's left village panel is UI too — without this, clicks on it
         // would bleed into the world (drag zones, place objects) underneath it.
         var leftPanel = ZoneLeftPanelRect(screenH);
         return leftPanel.HasValue &&
-               mouse.X >= leftPanel.Value.X && mouse.X < leftPanel.Value.Right &&
-               mouse.Y >= leftPanel.Value.Y && mouse.Y < leftPanel.Value.Bottom;
+               mx >= leftPanel.Value.X && mx < leftPanel.Value.Right &&
+               my >= leftPanel.Value.Y && my < leftPanel.Value.Bottom;
     }
 
     /// <summary>True if any sub-popup is open over the map editor and should

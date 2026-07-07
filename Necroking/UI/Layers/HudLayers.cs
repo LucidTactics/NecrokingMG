@@ -203,7 +203,11 @@ public sealed class CoreMenuButtonsLayer : UILayer
 
     public override string Id => "hud.menu_row";
     public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { } // HUD rects catalogued by HUDRenderer.AppendHitRects (see file header)
-    public override bool Visible => _g.HudVisible;
+    // Input only during normal play: the row also DRAWS over the map editor
+    // (VisibleForDraw), but opening gameplay panels from inside the editor
+    // would layer them under the editor's overlays — keep it inert there, as
+    // it has always been.
+    public override bool Visible => _g.HudVisible && _g._menuState == MenuState.None;
 
     public override bool ContainsMouse(int mx, int my, in UICtx ctx)
         => _g._hudRenderer.HitTestMenuButtons(ctx.ScreenW, mx, my) >= 0;

@@ -32,9 +32,12 @@ getters (no per-frame push/pop syncing).
   layers (spell bar, time controls, aggression bar, `HudChromeLayer` draw-only chrome) and
   the **HudTop** rows (`CoreMenuButtonsLayer`, `EditorLauncherLayer` — above panels AND the
   blocking skill book, below toasts); `HostLayers.cs` holds `MenuHostLayer`
-  (pause/settings/multiplayer + game-over draw), `EditorHostLayer` (all five full-screen
-  editors as one opaque blocking seat), and `ModalStackLayer` (the editors' transient
-  sub-popup stack, still `Game1.Popups`/`PopupManager` — editor-internal only).
+  (pause/settings/multiplayer + game-over draw), `MapEditorLayer` (the map editor as its
+  own NON-blocking seat: footprint = its side panel via `MapEditorWindow.IsPanelAt`, world
+  stays paintable underneath, owns map-editor scroll-zoom + ESC + draw), `EditorHostLayer`
+  (the remaining four full-screen editors as one opaque blocking seat), and
+  `ModalStackLayer` (the editors' transient sub-popup stack, still
+  `Game1.Popups`/`PopupManager` — editor-internal only).
 - **Dev verbs**: `ui_click <sx> <sy> [right]` injects a click through the real dispatch
   (reports registry hit id, hover-owner layer id, consumed); `ui_key escape` drives the
   ESC chain; `ui_rects` dumps the hit registry.

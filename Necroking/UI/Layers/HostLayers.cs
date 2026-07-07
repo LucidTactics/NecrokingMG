@@ -34,11 +34,67 @@ public sealed class ModalStackLayer : UILayer
 }
 
 /// <summary>
-/// The full-screen editors (unit/spell/map/UI/item) as ONE opaque blocking
-/// layer. Editor internals (immediate-mode input during Draw, EditorBase
-/// machinery) are untouched — this seat only provides the blocking blanket,
-/// ESC-to-close, and the z-position above menus and below editor sub-popups.
-/// Replaces the five per-editor ActionModalLayers + ReconcileTopLevelEditorLayers.
+/// The map editor as its own NON-BLOCKING router layer — unlike the other
+/// editors it is panel-like: its interactive surface is the right side panel
+/// (plus the Zones tab's left village panel), while the world stays visible
+/// and paintable underneath. Its footprint in the hit registry is that panel
+/// rect, not a fullscreen blanket, so MouseOverUI / hover ownership over the
+/// world area behave like they do next to any docked panel. Painting itself
+/// stays immediate-mode inside MapEditorWindow (raw mouse during Draw), gated
+/// by OverGameplayHud + its own popup checks as before.
+/// </summary>
+public sealed class MapEditorLayer : UILayer
+{
+    private readonly Game1 _g;
+    private readonly PopupManager _popups;
+    public MapEditorLayer(Game1 g, PopupManager popups)
+    {
+        _g = g;
+        _popups = popups;
+        Band = UIBand.Editor;
+    }
+
+    public override string Id => "editor.map";
+    public override bool Visible => _g._menuState == MenuState.MapEditor && _g._gameWorldLoaded;
+    public override bool Closable => true;
+
+    public override void OnCancel()
+    {
+        _g._editorUi?.ResetAllState();
+        _g._menuState = MenuState.None;
+    }
+
+    public override bool ContainsMouse(int mx, int my, in UICtx ctx)
+        => _g._mapEditor.IsPanelAt(mx, my, ctx.ScreenW, ctx.ScreenH);
+
+    protected override void OnFrame(InputState input, in UICtx ctx)
+    {
+        // Camera zoom over the world area (moved out of Game1.Update's special
+        // block): only while no sub-popup sits above the editor — a texture
+        // browser / color picker / env editor owns the wheel then — and the
+        // cursor is off the side panel (the panel's own per-tab scroll reads
+        // raw mouse in the immediate-mode pass).
+        if (input.ScrollDelta != 0 && !input.IsScrollConsumed
+            && _popups.IsEmpty
+            && !ContainsMouse((int)input.MousePos.X, (int)input.MousePos.Y, in ctx))
+        {
+            _g._camera.ZoomBy(input.ScrollDelta / 120f);
+            input.ConsumeScroll();
+        }
+    }
+
+    public override void Draw(in UICtx ctx)
+        => _g._mapEditor.Draw(ctx.ScreenW, ctx.ScreenH);
+}
+
+/// <summary>
+/// The remaining full-screen editors (unit/spell/UI/item) as ONE opaque
+/// blocking layer. Editor internals (immediate-mode input during Draw,
+/// EditorBase machinery) are untouched — this seat only provides the blocking
+/// blanket, ESC-to-close, and the z-position above menus and below editor
+/// sub-popups. Replaces the per-editor ActionModalLayers +
+/// ReconcileTopLevelEditorLayers. The map editor has its own panel-like seat
+/// (<see cref="MapEditorLayer"/>).
 /// </summary>
 public sealed class EditorHostLayer : UILayer
 {
@@ -46,7 +102,7 @@ public sealed class EditorHostLayer : UILayer
     public EditorHostLayer(Game1 g) { _g = g; Band = UIBand.Editor; }
 
     public override string Id => "editor.host";
-    public override bool Visible => _g.EditorActive;
+    public override bool Visible => _g.EditorActive && _g._menuState != MenuState.MapEditor;
     public override bool Blocking => true;
     public override bool Closable => true;
     public override bool ContainsMouse(int mx, int my, in UICtx ctx) => true;
@@ -85,9 +141,6 @@ public sealed class EditorHostLayer : UILayer
                     _g._editorUi.ResetAllState();
                     _g._menuState = MenuState.None;
                 }
-                break;
-            case MenuState.MapEditor:
-                _g._mapEditor.Draw(ctx.ScreenW, ctx.ScreenH);
                 break;
             case MenuState.UIEditor:
                 _g._uiEditor.Draw(ctx.ScreenW, ctx.ScreenH);

@@ -985,7 +985,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _uiRouter.Register(new Necroking.UI.SkillToastLayer(this));
 
         // Menus, editors, and the editors' transient sub-popup stack, top bands.
+        // The map editor gets its own panel-like seat (non-blocking, footprint =
+        // its side panel); the remaining full-screen editors share the opaque
+        // EditorHostLayer. Mutually exclusive via _menuState.
         _uiRouter.Register(new Necroking.UI.MenuHostLayer(this));
+        _uiRouter.Register(new Necroking.UI.MapEditorLayer(this, _popups));
         _uiRouter.Register(new Necroking.UI.EditorHostLayer(this));
         _uiRouter.Register(new Necroking.UI.ModalStackLayer(_popups));
 
@@ -3386,20 +3390,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // (Skill-toast clicks, the aggression bar, and gameplay scroll-zoom are
         // handled by their router layers in the dispatch below.)
 
-        // Scroll zoom, map editor only (gameplay zoom lives in WorldInputLayer):
-        //   zoom when cursor is over the world area (not the sidebar) AND no
-        //   editor sub-popup (texture file browser, color picker, env editor,
-        //   etc.) is open above the editor. We can't gate on _input.MouseOverUI
-        //   here because the EditorHostLayer blankets the whole screen in the
-        //   hit registry, which would block zoom even in the world area.
-        if (_input.ScrollDelta != 0)
-        {
-            bool canZoomMapEditor = _menuState == MenuState.MapEditor
-                && _popups.IsEmpty
-                && !_mapEditor.IsMouseOverPanel(screenW, screenH);
-            if (canZoomMapEditor)
-                _camera.ZoomBy(_input.ScrollDelta / 120f);
-        }
+        // (Scroll zoom lives in the router layers: gameplay zoom in
+        // WorldInputLayer, map-editor world-area zoom in MapEditorLayer.)
 
         // Editors pause the game. Clock phase 2: all pause/menu input for the frame
         // has run by here, so gate the world domain — WorldRunning/WorldDt reflect
