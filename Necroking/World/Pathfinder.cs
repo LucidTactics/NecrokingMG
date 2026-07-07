@@ -902,29 +902,28 @@ public class Pathfinder
             }
             if (f > st.G + RouteHeuristic(nid, targetSector, tier) + 0.001f) continue; // stale entry (relaxed since enqueue)
 
-            st.Settled = true;
-            route.Nodes[nid] = st;
-            if (targets.Contains(nid)) // small list (sector portal count) — linear is fine
-            {
-                bestTargetG = Math.Min(bestTargetG, st.G);
-                if (--unsettled == 0)
-                {
-                    route.ResolvedSectors.Add(targetSector);
-                    pq.Clear();
-                    return true;
-                }
-            }
-
             int pid = nid >> 1;
             int side = nid & 1;
             var p = flat[pid];
 
-            // Twin: step across the border to the portal's other side.
-            RelaxPortalNode(route, pq, pid * 2 + (side ^ 1), st.G + PortalCrossCost, targetSector, tier);
-
+            // Fetch the matrix BEFORE settling: settling and expanding must be
+            // atomic. A settled node is never re-enqueued (the resume rebuilds
+            // the open set from UNSETTLED nodes only), so bailing after the
+            // settle would lose this node's out-edges from the search forever —
+            // later requesters saw suboptimal costs or a false "unreachable".
+            // Bailing here instead leaves the node unsettled in the frontier;
+            // the next resume re-pops it and the matrix continues at its
+            // persisted row (PartialMatrix), so progress is still monotonic.
             int s = side == 0 ? p.SectorA : p.SectorB;
             var m = GetPortalMatrix(s, tier);
             if (m == null) { pq.Clear(); return false; } // budget died — Nodes persist, next request resumes
+
+            st.Settled = true;
+            route.Nodes[nid] = st;
+
+            // Twin: step across the border to the portal's other side.
+            RelaxPortalNode(route, pq, pid * 2 + (side ^ 1), st.G + PortalCrossCost, targetSector, tier);
+
             int myIdx = side == 0 ? p.IdxInA : p.IdxInB;
             var ids = _sectorPortals[tier][s];
             for (int j = 0; j < ids.Count; j++)
@@ -934,6 +933,21 @@ public class Pathfinder
                 float w = m.Cost[myIdx * m.N + j];
                 if (w >= GameConstants.InfCost) continue;
                 RelaxPortalNode(route, pq, qid * 2 + (flat[qid].SectorA == s ? 0 : 1), st.G + w, targetSector, tier);
+            }
+
+            // Target bookkeeping AFTER expansion, for the same atomicity: the
+            // route object is shared by every sector requesting this dest, so
+            // even the node that completes THIS resume must relax its edges
+            // first — a later resume toward a farther sector routes through it.
+            if (targets.Contains(nid)) // small list (sector portal count) — linear is fine
+            {
+                bestTargetG = Math.Min(bestTargetG, st.G);
+                if (--unsettled == 0)
+                {
+                    route.ResolvedSectors.Add(targetSector);
+                    pq.Clear();
+                    return true;
+                }
             }
 
             // Matrices dominate the cost and charge the budget themselves,
@@ -1845,7 +1859,7 @@ public class Pathfinder
             else { y += stepY; tMaxY += tDeltaY; }
             if (!_grid.InBounds(x, y) || _grid.GetCost(x, y, tier) == 255) return false;
         }
-        return guard > 0;
+        return x == x1 && y == y1; // false only when the guard ran out mid-line
     }
 
     public Vec2 GetDirection(Vec2 unitPos, Vec2 targetPos, uint frame, int sizeTier = 0, uint unitId = GameConstants.InvalidUnit)

@@ -4,6 +4,7 @@ using Necroking.Core;
 using Necroking.Data;
 using Necroking.GameSystems;
 using Necroking.Movement;
+using Necroking.Render;
 using Necroking.World;
 
 namespace Necroking.Scenario.Scenarios;
@@ -29,6 +30,7 @@ public class PathfindingTestScenario : ScenarioBase
     private readonly List<bool> _testPassed = new();
     private readonly List<string> _testNames = new();
     private float _testStartTime;
+    private bool _awaitingShot; // hold AdvanceTest until the _done/_timeout capture lands
     private const float TestTimeout = 30f; // seconds per test
     private const float TargetReachDist = 2f;
     private const float UnitSpeed = 20f;
@@ -37,6 +39,10 @@ public class PathfindingTestScenario : ScenarioBase
     {
         DebugLog.Clear(ScenarioLog);
         DebugLog.Log(ScenarioLog, "=== Pathfinding Test Scenario ===");
+        // Terrain here is raw grid.SetTerrain with no visual objects, so
+        // screenshots were black except the unit sprite. The cost-field
+        // overlay makes walls/routes visible in the _nav/_done captures.
+        CollisionDebugOverride = CollisionDebugMode.CostField;
         _testNum = 0;
         _phase = 0;
         SetupTest1(sim);
@@ -299,6 +305,22 @@ public class PathfindingTestScenario : ScenarioBase
         if (_complete) return;
         _elapsed += dt;
 
+        // The _done/_timeout screenshot is captured on the next rendered frame,
+        // but at --speed N many ticks run per frame — advancing immediately let
+        // the next test's setup rebuild the terrain before the capture, so every
+        // _done shot showed the WRONG map (and the last test's shot was never
+        // written at all: the game exited first). Hold here until the renderer
+        // consumes the pending capture, then advance.
+        if (_awaitingShot)
+        {
+            if (DeferredScreenshot == null)
+            {
+                _awaitingShot = false;
+                AdvanceTest(sim);
+            }
+            return;
+        }
+
         float testElapsed = _elapsed - _testStartTime;
 
         // Check if current test units reached their targets
@@ -345,7 +367,7 @@ public class PathfindingTestScenario : ScenarioBase
             DebugLog.Log(ScenarioLog, $"Test {_testNum + 1} PASSED: all units reached target in {testElapsed:F1}s");
             _testPassed.Add(true);
             DeferredScreenshot = $"pathfinding_test{_testNum + 1}_done";
-            AdvanceTest(sim);
+            _awaitingShot = true;
         }
         else if (testElapsed > TestTimeout)
         {
@@ -363,7 +385,7 @@ public class PathfindingTestScenario : ScenarioBase
             DebugLog.Log(ScenarioLog, $"Test {_testNum + 1} FAILED: timeout after {TestTimeout:F0}s");
             _testPassed.Add(false);
             DeferredScreenshot = $"pathfinding_test{_testNum + 1}_timeout";
-            AdvanceTest(sim);
+            _awaitingShot = true;
         }
     }
 
