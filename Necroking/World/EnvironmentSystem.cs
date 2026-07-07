@@ -14,6 +14,7 @@ public class ProcessSlot
 {
     public string Kind { get; set; } = "";
     public string ResourceID { get; set; } = "";
+    [System.Text.Json.Serialization.JsonIgnore]
     public bool IsEmpty => string.IsNullOrEmpty(Kind);
 }
 
@@ -135,7 +136,14 @@ public class TableCraftState
     }
 }
 
-public class EnvironmentObjectDef
+/// <summary>
+/// One env-object definition (env_defs.json entry). Serialized directly via
+/// System.Text.Json (camelCase naming + HdrColor/HarmonizeSettings converters,
+/// see MapData.EnvDefJson) — the old split hand-written reader/writer pair
+/// (MapData.ParseEnvDef / WriteJson here) is gone, so a property added to this
+/// class round-trips by construction.
+/// </summary>
+public class EnvironmentObjectDef : System.Text.Json.Serialization.IJsonOnDeserialized
 {
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
@@ -253,7 +261,17 @@ public class EnvironmentObjectDef
     // horizontally ~50% of the time, adding natural variety. Default depends on
     // category (see DefaultRandomFlipForCategory) — on for organic props like
     // trees/bushes/rocks, off for directional/readable things like buildings.
-    public bool RandomFlip { get; set; }
+    // The setter flag + OnDeserialized below apply the category default only
+    // when the JSON carried no "randomFlip" field (older maps' embedded defs).
+    private bool _randomFlip;
+    private bool _randomFlipAuthored;
+    public bool RandomFlip { get => _randomFlip; set { _randomFlip = value; _randomFlipAuthored = true; } }
+
+    void System.Text.Json.Serialization.IJsonOnDeserialized.OnDeserialized()
+    {
+        if (!_randomFlipAuthored)
+            _randomFlip = DefaultRandomFlipForCategory(Category);
+    }
 
     /// <summary>Sensible default for <see cref="RandomFlip"/> based on category.
     /// Off for structured/directional/readable objects (they look wrong mirrored
@@ -311,6 +329,7 @@ public class EnvironmentObjectDef
     public string CorruptedSprite { get; set; } = "";
 
     /// <summary>Total frame count for animated spritesheets.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
     public int AnimTotalFrames => AnimFramesX * AnimFramesY;
 
     /// <summary>Get the source rectangle for a specific frame in the spritesheet.</summary>
@@ -323,125 +342,9 @@ public class EnvironmentObjectDef
         return new Rectangle(col * fw, row * fh, fw, fh);
     }
 
-    /// <summary>
-    /// Write all properties of this def to a Utf8JsonWriter.
-    /// Caller must call WriteStartObject/WriteEndObject around this.
-    /// </summary>
-    public void WriteJson(Utf8JsonWriter writer)
-    {
-        writer.WriteString("id", Id);
-        writer.WriteString("name", Name);
-        writer.WriteString("category", Category);
-        writer.WriteString("texturePath", TexturePath);
-        writer.WriteString("heightMapPath", HeightMapPath);
-        writer.WriteNumber("spriteWorldHeight", SpriteWorldHeight);
-        writer.WriteNumber("worldHeight", WorldHeight);
-        writer.WriteNumber("pivotX", PivotX);
-        writer.WriteNumber("pivotY", PivotY);
-        writer.WriteNumber("collisionRadius", CollisionRadius);
-        writer.WriteNumber("collisionOffsetX", CollisionOffsetX);
-        writer.WriteNumber("collisionOffsetY", CollisionOffsetY);
-        writer.WriteNumber("scale", Scale);
-        writer.WriteNumber("placementScale", PlacementScale);
-        writer.WriteString("group", Group);
-        writer.WriteNumber("groupWeight", GroupWeight);
-        writer.WriteBoolean("isBuilding", IsBuilding);
-        writer.WriteBoolean("playerBuildable", PlayerBuildable);
-        writer.WriteNumber("buildingMaxHP", BuildingMaxHP);
-        writer.WriteNumber("buildingProtection", BuildingProtection);
-        writer.WriteNumber("buildingDefaultOwner", BuildingDefaultOwner);
-        writer.WriteNumber("costWood", CostWood);
-        writer.WriteNumber("costStone", CostStone);
-        writer.WriteNumber("costGold", CostGold);
-        writer.WriteString("cost1ItemId", Cost1ItemId);
-        writer.WriteNumber("cost1Amount", Cost1Amount);
-        writer.WriteString("cost2ItemId", Cost2ItemId);
-        writer.WriteNumber("cost2Amount", Cost2Amount);
-        writer.WriteNumber("placementRadius", PlacementRadius);
-        writer.WriteNumber("shadowType", ShadowType);
-        writer.WriteNumber("shadowOpacityScale", ShadowOpacityScale);
-        writer.WriteNumber("shadowOuterWScale", ShadowOuterWScale);
-        writer.WriteNumber("shadowOuterHScale", ShadowOuterHScale);
-        writer.WriteNumber("shadowInnerWScale", ShadowInnerWScale);
-        writer.WriteNumber("shadowInnerHScale", ShadowInnerHScale);
-        writer.WriteString("trapSpellId", TrapSpellId);
-        writer.WriteNumber("trapUses", TrapUses);
-        writer.WriteString("trapTriggeredSprite", TrapTriggeredSprite);
-        writer.WriteString("trapDeployedSprite", TrapDeployedSprite);
-        writer.WriteNumber("trapTriggeredDuration", TrapTriggeredDuration);
-        writer.WriteNumber("trapDeployedDuration", TrapDeployedDuration);
-        writer.WriteNumber("trapFadeDuration", TrapFadeDuration);
-        writer.WriteBoolean("isGlyphTrap", IsGlyphTrap);
-        writer.WriteNumber("glyphRadius", GlyphRadius);
-        writer.WriteString("boundTriggerID", BoundTriggerID);
-        // Processing slots
-        writer.WriteStartObject("input1");
-        writer.WriteString("kind", Input1.Kind);
-        writer.WriteString("resourceID", Input1.ResourceID);
-        writer.WriteEndObject();
-        writer.WriteStartObject("input2");
-        writer.WriteString("kind", Input2.Kind);
-        writer.WriteString("resourceID", Input2.ResourceID);
-        writer.WriteEndObject();
-        writer.WriteStartObject("output");
-        writer.WriteString("kind", Output.Kind);
-        writer.WriteString("resourceID", Output.ResourceID);
-        writer.WriteEndObject();
-        writer.WriteNumber("processTime", ProcessTime);
-        writer.WriteNumber("maxInputQueue", MaxInputQueue);
-        writer.WriteNumber("maxOutputQueue", MaxOutputQueue);
-        writer.WriteBoolean("autoSpawn", AutoSpawn);
-        writer.WriteNumber("spawnOffsetX", SpawnOffsetX);
-        writer.WriteNumber("spawnOffsetY", SpawnOffsetY);
-        writer.WriteNumber("corpseSlots", CorpseSlots);
-        writer.WriteNumber("itemSlots", ItemSlots);
-        writer.WriteNumber("essenceCost", EssenceCost);
-        // Worker job system
-        writer.WriteString("hostsJob", HostsJob);
-        writer.WriteString("storedResource", StoredResource);
-        writer.WriteNumber("storageCap", StorageCap);
-        writer.WriteBoolean("isWorkerHome", IsWorkerHome);
-        writer.WriteNumber("workerSlots", WorkerSlots);
-        // Animation
-        writer.WriteBoolean("isAnimated", IsAnimated);
-        writer.WriteNumber("animFramesX", AnimFramesX);
-        writer.WriteNumber("animFramesY", AnimFramesY);
-        writer.WriteNumber("animFPS", AnimFPS);
-        writer.WriteNumber("animNoise", AnimNoise);
-        writer.WriteNumber("animWindSync", AnimWindSync);
-        // Foragable
-        writer.WriteBoolean("isForagable", IsForagable);
-        writer.WriteString("foragableType", ForagableType);
-        writer.WriteNumber("respawnTime", RespawnTime);
-        writer.WriteNumber("fogEmitRate", FogEmitRate);
-        writer.WriteNumber("fogAbsorbRate", FogAbsorbRate);
-        writer.WriteBoolean("isCorruptable", IsCorruptable);
-        writer.WriteString("corruptedSprite", CorruptedSprite);
-        writer.WriteNumber("scaleMin", ScaleMin);
-        writer.WriteNumber("scaleMax", ScaleMax);
-        // Berry bush
-        writer.WriteBoolean("isBerryBush", IsBerryBush);
-        writer.WriteString("noBerrySprite", NoBerrySprite);
-        writer.WriteString("poisonedSprite", PoisonedSprite);
-        writer.WriteNumber("berryRespawnTime", BerryRespawnTime);
-        // Tint color
-        writer.WriteStartObject("tintColor");
-        writer.WriteNumber("r", TintColor.R);
-        writer.WriteNumber("g", TintColor.G);
-        writer.WriteNumber("b", TintColor.B);
-        writer.WriteNumber("a", TintColor.A);
-        writer.WriteNumber("intensity", TintColor.Intensity);
-        writer.WriteEndObject();
-
-        // Harmonization recipes (only written when present & meaningful, so
-        // un-harmonized defs stay clean in JSON).
-        if (Harmonize != null && Harmonize.HasEffect)
-            Harmonize.Write(writer, "harmonize");
-        if (HarmonizeCorrupt != null && HarmonizeCorrupt.HasEffect)
-            HarmonizeCorrupt.Write(writer, "harmonizeCorrupt");
-
-        writer.WriteBoolean("randomFlip", RandomFlip);
-    }
+    // (The hand-written WriteJson that used to live here — the writer half of
+    // the split reader/writer pair — is gone: env defs now serialize through
+    // MapData.EnvDefJson, the same options the loader uses.)
 }
 
 public struct PlacedObject

@@ -95,7 +95,7 @@ public static class MapData
                 foreach (var ed in edArr.EnumerateArray())
                 {
                     var def = ParseEnvDef(ed);
-                    env.AddDef(def);
+                    if (def != null) env.AddDef(def);
                 }
                 DebugLog.Log("startup", $"  Env defs (embedded fallback): {env.DefCount}");
             }
@@ -163,8 +163,25 @@ public static class MapData
         }
     }
 
-    /// <summary>Load env defs from a standalone JSON file (flat array format).
-    /// This is the canonical source — loaded before the map.</summary>
+    /// <summary>Serializer options for <see cref="EnvironmentObjectDef"/> — the ONE
+    /// definition of the env_defs.json field set (camelCase property names,
+    /// HdrColor as {r,g,b,a,intensity}, HarmonizeSettings via its canonical
+    /// Read/WriteValue, category-dependent randomFlip default via the def's
+    /// OnDeserialized hook). Replaces the old split hand-written pair
+    /// (ParseEnvDef here / EnvironmentObjectDef.WriteJson in EnvironmentSystem.cs).</summary>
+    internal static readonly JsonSerializerOptions EnvDefJson = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        Converters = { new Necroking.Core.HdrColorJsonConverter(), new Necroking.Editor.HarmonizeSettingsJsonConverter() },
+    };
+
+    /// <summary>Load env defs from a standalone JSON file (flat array format,
+    /// wrapped {"envDefs":[...]} also accepted). This is the canonical source —
+    /// loaded before the map. Verified against the old hand-written parser:
+    /// identical defs for every entry of the 2026-07 env_defs.json.</summary>
     public static bool LoadEnvDefs(string path, EnvironmentSystem env)
     {
         if (!File.Exists(path)) return false;
@@ -186,7 +203,7 @@ public static class MapData
             foreach (var ed in defsArray.EnumerateArray())
             {
                 var def = ParseEnvDef(ed);
-                if (!string.IsNullOrEmpty(def.Id))
+                if (def != null && !string.IsNullOrEmpty(def.Id))
                     env.AddDef(def);
             }
             DebugLog.Log("startup", $"  Env defs loaded: {env.DefCount} (from {path})");
@@ -199,29 +216,30 @@ public static class MapData
         }
     }
 
-    /// <summary>Save env defs to a standalone JSON file (flat array format).</summary>
+    /// <summary>Save env defs to a standalone JSON file (flat array format) —
+    /// atomic + if-changed via <see cref="Core.JsonFile.WriteStringIfChanged"/>.</summary>
     public static bool SaveEnvDefs(string path, EnvironmentSystem env)
     {
         try
         {
-            var dir = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-
-            using var stream = File.Create(path);
-            using var writer = new System.Text.Json.Utf8JsonWriter(stream, new System.Text.Json.JsonWriterOptions { Indented = true });
-
-            writer.WriteStartArray();
+            var list = new List<EnvironmentObjectDef>(env.DefCount);
             for (int i = 0; i < env.DefCount; i++)
             {
-                writer.WriteStartObject();
-                env.GetDef(i).WriteJson(writer);
-                writer.WriteEndObject();
+                var def = env.GetDef(i);
+                // Match the historical writer: a harmonize block with no effect is
+                // dropped (the old save omitted it; the next load produced null).
+                if (def.Harmonize is { HasEffect: false }) def.Harmonize = null;
+                if (def.HarmonizeCorrupt is { HasEffect: false }) def.HarmonizeCorrupt = null;
+                list.Add(def);
             }
-            writer.WriteEndArray();
-            writer.Flush();
-            return true;
+            string json = JsonSerializer.Serialize(list, EnvDefJson);
+            return Core.JsonFile.WriteStringIfChanged(path, json);
         }
-        catch { return false; }
+        catch (Exception ex)
+        {
+            DebugLog.Log("error", $"SaveEnvDefs failed for '{path}': {ex.Message}");
+            return false;
+        }
     }
 
     // Trigger / zone / road sidecar load+save moved to MapSidecars (one
@@ -331,125 +349,8 @@ public static class MapData
         }
     }
 
-    private static EnvironmentObjectDef ParseEnvDef(JsonElement ed)
-    {
-        var def = new EnvironmentObjectDef();
-        if (ed.TryGetProperty("id", out var id)) def.Id = id.GetString() ?? "";
-        if (ed.TryGetProperty("name", out var name)) def.Name = name.GetString() ?? "";
-        if (ed.TryGetProperty("category", out var cat)) def.Category = cat.GetString() ?? "Misc";
-        if (ed.TryGetProperty("texturePath", out var tp)) def.TexturePath = tp.GetString() ?? "";
-        if (ed.TryGetProperty("heightMapPath", out var hmp)) def.HeightMapPath = hmp.GetString() ?? "";
-        if (ed.TryGetProperty("spriteWorldHeight", out var swh)) def.SpriteWorldHeight = swh.GetSingle();
-        if (ed.TryGetProperty("worldHeight", out var wh)) def.WorldHeight = wh.GetSingle();
-        if (ed.TryGetProperty("pivotX", out var px)) def.PivotX = px.GetSingle();
-        if (ed.TryGetProperty("pivotY", out var py)) def.PivotY = py.GetSingle();
-        if (ed.TryGetProperty("collisionRadius", out var cr)) def.CollisionRadius = cr.GetSingle();
-        if (ed.TryGetProperty("collisionOffsetX", out var cox)) def.CollisionOffsetX = cox.GetSingle();
-        if (ed.TryGetProperty("collisionOffsetY", out var coy)) def.CollisionOffsetY = coy.GetSingle();
-        if (ed.TryGetProperty("scale", out var sc)) def.Scale = sc.GetSingle();
-        if (ed.TryGetProperty("placementScale", out var ps)) def.PlacementScale = ps.GetSingle();
-        if (ed.TryGetProperty("group", out var grp)) def.Group = grp.GetString() ?? "";
-        if (ed.TryGetProperty("groupWeight", out var gw)) def.GroupWeight = gw.GetSingle();
-        if (ed.TryGetProperty("isBuilding", out var ib)) def.IsBuilding = ib.GetBoolean();
-        if (ed.TryGetProperty("playerBuildable", out var pb)) def.PlayerBuildable = pb.GetBoolean();
-        if (ed.TryGetProperty("buildingMaxHP", out var bmhp)) def.BuildingMaxHP = bmhp.GetInt32();
-        if (ed.TryGetProperty("buildingProtection", out var bp)) def.BuildingProtection = bp.GetInt32();
-        if (ed.TryGetProperty("buildingDefaultOwner", out var bdo)) def.BuildingDefaultOwner = bdo.GetInt32();
-        if (ed.TryGetProperty("costWood", out var cw)) def.CostWood = cw.GetInt32();
-        if (ed.TryGetProperty("costStone", out var cs)) def.CostStone = cs.GetInt32();
-        if (ed.TryGetProperty("costGold", out var cg)) def.CostGold = cg.GetInt32();
-        if (ed.TryGetProperty("cost1ItemId", out var c1id)) def.Cost1ItemId = c1id.GetString() ?? "";
-        if (ed.TryGetProperty("cost1Amount", out var c1a)) def.Cost1Amount = c1a.GetInt32();
-        if (ed.TryGetProperty("cost2ItemId", out var c2id)) def.Cost2ItemId = c2id.GetString() ?? "";
-        if (ed.TryGetProperty("cost2Amount", out var c2a)) def.Cost2Amount = c2a.GetInt32();
-        if (ed.TryGetProperty("placementRadius", out var pr)) def.PlacementRadius = pr.GetSingle();
-        if (ed.TryGetProperty("shadowType", out var sht)) def.ShadowType = sht.GetInt32();
-        if (ed.TryGetProperty("shadowOpacityScale", out var sos)) def.ShadowOpacityScale = sos.GetSingle();
-        if (ed.TryGetProperty("shadowOuterWScale", out var sows)) def.ShadowOuterWScale = sows.GetSingle();
-        if (ed.TryGetProperty("shadowOuterHScale", out var sohs)) def.ShadowOuterHScale = sohs.GetSingle();
-        if (ed.TryGetProperty("shadowInnerWScale", out var siws)) def.ShadowInnerWScale = siws.GetSingle();
-        if (ed.TryGetProperty("shadowInnerHScale", out var sihs)) def.ShadowInnerHScale = sihs.GetSingle();
-        if (ed.TryGetProperty("trapSpellId", out var tsi)) def.TrapSpellId = tsi.GetString() ?? "";
-        if (ed.TryGetProperty("trapUses", out var tu)) def.TrapUses = tu.GetInt32();
-        if (ed.TryGetProperty("trapTriggeredSprite", out var tts)) def.TrapTriggeredSprite = tts.GetString() ?? "";
-        if (ed.TryGetProperty("trapDeployedSprite", out var tds)) def.TrapDeployedSprite = tds.GetString() ?? "";
-        if (ed.TryGetProperty("trapTriggeredDuration", out var ttd)) def.TrapTriggeredDuration = ttd.GetSingle();
-        if (ed.TryGetProperty("trapDeployedDuration", out var tdd)) def.TrapDeployedDuration = tdd.GetSingle();
-        if (ed.TryGetProperty("trapFadeDuration", out var tfd)) def.TrapFadeDuration = tfd.GetSingle();
-        if (ed.TryGetProperty("isGlyphTrap", out var igt)) def.IsGlyphTrap = igt.GetBoolean();
-        if (ed.TryGetProperty("glyphRadius", out var gr)) def.GlyphRadius = gr.GetSingle();
-        if (ed.TryGetProperty("boundTriggerID", out var btid)) def.BoundTriggerID = btid.GetString() ?? "";
-        if (ed.TryGetProperty("processTime", out var pt)) def.ProcessTime = pt.GetSingle();
-        if (ed.TryGetProperty("maxInputQueue", out var miq)) def.MaxInputQueue = miq.GetInt32();
-        if (ed.TryGetProperty("maxOutputQueue", out var moq)) def.MaxOutputQueue = moq.GetInt32();
-        if (ed.TryGetProperty("autoSpawn", out var ats)) def.AutoSpawn = ats.GetBoolean();
-        if (ed.TryGetProperty("spawnOffsetX", out var sox)) def.SpawnOffsetX = sox.GetSingle();
-        if (ed.TryGetProperty("spawnOffsetY", out var soy)) def.SpawnOffsetY = soy.GetSingle();
-        if (ed.TryGetProperty("corpseSlots", out var cps)) def.CorpseSlots = cps.GetInt32();
-        if (ed.TryGetProperty("itemSlots", out var its)) def.ItemSlots = its.GetInt32();
-        if (ed.TryGetProperty("essenceCost", out var ec)) def.EssenceCost = ec.GetInt32();
-        // Worker job system
-        if (ed.TryGetProperty("hostsJob", out var hj)) def.HostsJob = hj.GetString() ?? "";
-        if (ed.TryGetProperty("storedResource", out var sr)) def.StoredResource = sr.GetString() ?? "";
-        if (ed.TryGetProperty("storageCap", out var scap)) def.StorageCap = scap.GetInt32();
-        if (ed.TryGetProperty("isWorkerHome", out var iwh)) def.IsWorkerHome = iwh.GetBoolean();
-        if (ed.TryGetProperty("workerSlots", out var wsl)) def.WorkerSlots = wsl.GetInt32();
-        if (ed.TryGetProperty("isAnimated", out var ianim)) def.IsAnimated = ianim.GetBoolean();
-        if (ed.TryGetProperty("animFramesX", out var afx)) def.AnimFramesX = afx.GetInt32();
-        if (ed.TryGetProperty("animFramesY", out var afy)) def.AnimFramesY = afy.GetInt32();
-        if (ed.TryGetProperty("animFPS", out var afps)) def.AnimFPS = afps.GetSingle();
-        if (ed.TryGetProperty("animNoise", out var anoise)) def.AnimNoise = anoise.GetSingle();
-        if (ed.TryGetProperty("animWindSync", out var awind)) def.AnimWindSync = awind.GetSingle();
-        if (ed.TryGetProperty("isForagable", out var ifor)) def.IsForagable = ifor.GetBoolean();
-        if (ed.TryGetProperty("foragableType", out var ftyp)) def.ForagableType = ftyp.GetString() ?? "";
-        if (ed.TryGetProperty("respawnTime", out var rst)) def.RespawnTime = rst.GetSingle();
-        if (ed.TryGetProperty("scaleMin", out var smin)) def.ScaleMin = smin.GetSingle();
-        if (ed.TryGetProperty("scaleMax", out var smax)) def.ScaleMax = smax.GetSingle();
-        if (ed.TryGetProperty("isBerryBush", out var ibb)) def.IsBerryBush = ibb.GetBoolean();
-        if (ed.TryGetProperty("noBerrySprite", out var nbs)) def.NoBerrySprite = nbs.GetString() ?? "";
-        if (ed.TryGetProperty("poisonedSprite", out var pbs)) def.PoisonedSprite = pbs.GetString() ?? "";
-        if (ed.TryGetProperty("berryRespawnTime", out var brt)) def.BerryRespawnTime = brt.GetSingle();
-        if (ed.TryGetProperty("fogEmitRate", out var femit)) def.FogEmitRate = femit.GetSingle();
-        if (ed.TryGetProperty("fogAbsorbRate", out var fabs)) def.FogAbsorbRate = fabs.GetSingle();
-        if (ed.TryGetProperty("isCorruptable", out var icor)) def.IsCorruptable = icor.GetBoolean();
-        if (ed.TryGetProperty("corruptedSprite", out var csp)) def.CorruptedSprite = csp.GetString() ?? "";
-        // Processing slots
-        if (ed.TryGetProperty("input1", out var in1))
-        {
-            if (in1.TryGetProperty("kind", out var k)) def.Input1.Kind = k.GetString() ?? "";
-            if (in1.TryGetProperty("resourceID", out var r)) def.Input1.ResourceID = r.GetString() ?? "";
-        }
-        if (ed.TryGetProperty("input2", out var in2))
-        {
-            if (in2.TryGetProperty("kind", out var k)) def.Input2.Kind = k.GetString() ?? "";
-            if (in2.TryGetProperty("resourceID", out var r)) def.Input2.ResourceID = r.GetString() ?? "";
-        }
-        if (ed.TryGetProperty("output", out var outp))
-        {
-            if (outp.TryGetProperty("kind", out var k)) def.Output.Kind = k.GetString() ?? "";
-            if (outp.TryGetProperty("resourceID", out var r)) def.Output.ResourceID = r.GetString() ?? "";
-        }
-        // Tint color
-        if (ed.TryGetProperty("tintColor", out var tc))
-        {
-            byte tr = 255, tg = 255, tb = 255, ta = 255; float ti = 1f;
-            if (tc.TryGetProperty("r", out var tcr)) tr = (byte)tcr.GetInt32();
-            if (tc.TryGetProperty("g", out var tcg)) tg = (byte)tcg.GetInt32();
-            if (tc.TryGetProperty("b", out var tcb)) tb = (byte)tcb.GetInt32();
-            if (tc.TryGetProperty("a", out var tca)) ta = (byte)tca.GetInt32();
-            if (tc.TryGetProperty("intensity", out var tci)) ti = tci.GetSingle();
-            def.TintColor = new Necroking.Core.HdrColor(tr, tg, tb, ta, ti);
-        }
-        // Harmonization recipes (null when absent → harmonize disabled)
-        if (ed.TryGetProperty("harmonize", out var hm))
-            def.Harmonize = Necroking.Editor.HarmonizeSettings.Read(hm);
-        if (ed.TryGetProperty("harmonizeCorrupt", out var hmc))
-            def.HarmonizeCorrupt = Necroking.Editor.HarmonizeSettings.Read(hmc);
-        // Random horizontal flip — when the field is absent (older maps), default
-        // by category so organic props get variety and buildings/walls don't.
-        def.RandomFlip = ed.TryGetProperty("randomFlip", out var rf)
-            ? rf.GetBoolean()
-            : EnvironmentObjectDef.DefaultRandomFlipForCategory(def.Category);
-        return def;
-    }
+    /// <summary>One env def from a JSON element — via the attribute-based
+    /// serializer (EnvDefJson). Null on deserialize failure.</summary>
+    private static EnvironmentObjectDef? ParseEnvDef(JsonElement ed)
+        => JsonSerializer.Deserialize<EnvironmentObjectDef>(ed.GetRawText(), EnvDefJson);
 }

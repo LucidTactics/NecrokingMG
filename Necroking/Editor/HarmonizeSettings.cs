@@ -41,6 +41,13 @@ public class HarmonizeSettings
     public void Write(Utf8JsonWriter writer, string name)
     {
         writer.WritePropertyName(name);
+        WriteValue(writer);
+    }
+
+    /// <summary>Value-only variant of <see cref="Write"/> for use inside a
+    /// JsonConverter (property name already written by the serializer).</summary>
+    public void WriteValue(Utf8JsonWriter writer)
+    {
         writer.WriteStartObject();
         writer.WriteStartArray("targetColor");
         for (int i = 0; i < 4; i++) writer.WriteNumberValue(i < TargetColor.Length ? TargetColor[i] : (byte)255);
@@ -115,4 +122,19 @@ public class HarmonizeSettings
         GradColor = (byte[]?)GradColor?.Clone(), GradStrength = GradStrength,
         OutlineColor = (byte[]?)OutlineColor?.Clone(), OutlineThickness = OutlineThickness, OutlineOpacity = OutlineOpacity,
     };
+}
+
+/// <summary>Adapter exposing <see cref="HarmonizeSettings.Read"/> /
+/// <see cref="HarmonizeSettings.WriteValue"/> (the canonical hand-written
+/// format) to System.Text.Json attribute-based serialization (env defs).</summary>
+public class HarmonizeSettingsJsonConverter : System.Text.Json.Serialization.JsonConverter<HarmonizeSettings>
+{
+    public override HarmonizeSettings? Read(ref Utf8JsonReader reader, System.Type typeToConvert, JsonSerializerOptions options)
+    {
+        using var doc = JsonDocument.ParseValue(ref reader);
+        return HarmonizeSettings.Read(doc.RootElement);
+    }
+
+    public override void Write(Utf8JsonWriter writer, HarmonizeSettings value, JsonSerializerOptions options)
+        => value.WriteValue(writer);
 }

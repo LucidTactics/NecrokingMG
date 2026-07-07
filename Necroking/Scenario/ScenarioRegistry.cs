@@ -132,6 +132,7 @@ public static class ScenarioRegistry
         Register("sidecar_roundtrip", () => new Scenarios.SidecarRoundtripScenario());
         Register("atomic_stream", () => new Scenarios.AtomicStreamScenario());
         Register("ui_defs_roundtrip", () => new Scenarios.UIDefsRoundtripScenario());
+        Register("env_defs_roundtrip", () => new Scenarios.EnvDefsRoundtripScenario());
     }
 
     public static void Register(string name, Func<ScenarioBase> creator)
