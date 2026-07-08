@@ -56,6 +56,22 @@ All serialization is **System.Text.Json**; there is no third-party JSON library.
   - `UnitDef.Paths` sparseness ("only non-zero serialise") is enforced by the **editor**
     (`Editor/UnitEditorWindow.cs` removes zero entries on edit), not the serializer.
 
+- **Adding a new per-unit combat stat** (the number combat rolls read, e.g. Morale/Attack):
+  four touch points, all verified 2026-07-08 —
+  1. `UnitStatsJson` (`UnitRegistry.cs`) — the JSON shape inside `UnitDef.Stats`
+     (`[JsonPropertyName]` + initializer default; missing JSON = default).
+  2. `UnitStats` (`Necroking/Data/CombatTypes.cs`) — the runtime stats class combat reads
+     (`unit.Stats.X`).
+  3. `UnitRegistry.BuildStats` — the **explicit field-by-field UnitStatsJson→UnitStats copy**
+     in its object initializer; forgetting the copy line here silently zeroes the new field.
+     This is the ONLY def→runtime stat copy: every spawn path (`Game1.SpawnUnit`, net ghosts,
+     `Simulation.SpawnUnitByID`/`SpawnZombieMinion`/`TransformUnit`) funnels through
+     `BuildStats` + `Simulation.ApplyDefRuntimeFields` (`_units[idx].Stats = stats`).
+  4. Optional: `Editor/UnitEditorWindow.cs` `DrawStatsSection` (an `_ui.DrawIntField` row).
+  Buffs do NOT rebuild UnitStats (modifiers are computed on-read via
+  `BuffSystem.GetModifiedStat`), and unit stats are never saved — maps store `PlacedUnit`
+  (def id + pos) and stats rebuild from the def each load — so there are no other drop sites.
+
 - **Other registries** (`SpellRegistry.cs`, `ItemRegistry.cs`, `WeaponRegistry.cs`,
   `ArmorRegistry.cs`, `ShieldRegistry.cs`, `BuffRegistry.cs`, `PotionRegistry.cs`,
   `FlipbookRegistry.cs`, `WeatherRegistry.cs`, `UnitGroupRegistry.cs`) — all plain
