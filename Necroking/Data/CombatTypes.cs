@@ -133,6 +133,10 @@ public class UnitStats
     public int Morale { get; set; } = 10;
     public int Encumbrance { get; set; }
     public int NaturalProt { get; set; }
+    /// <summary>Dice tier for every roll this unit makes (attack/damage as attacker,
+    /// defense/protection as defender, morale, knockdown, MR): 1=d3, 2=d6,
+    /// 3=d6 exploding once, 4=d6 open-ended. See UnitUtil.RollDRN.</summary>
+    public int Drn { get; set; } = 2;
     public float CombatSpeed { get; set; } = 8.0f;
 
     // Primary weapon (backward compat — populated from first melee weapon)

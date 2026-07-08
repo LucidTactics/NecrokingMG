@@ -36,13 +36,17 @@ public static class SpellPenetration
     }
 
     /// <summary>Roll the opposed penetration-vs-MR check. True = the spell gets
-    /// through. Target MR includes buff/debuff modifiers.</summary>
-    public static bool Penetrates(UnitArrays units, int targetIdx, int penetration)
+    /// through. Target MR includes buff/debuff modifiers. Each side rolls with its
+    /// own DRN tier; casterIdx may be -1 (e.g. trap-fired spells) → default tier.</summary>
+    public static bool Penetrates(UnitArrays units, int casterIdx, int targetIdx, int penetration)
     {
         if (targetIdx < 0 || targetIdx >= units.Count) return true;
         int mr = (int)BuffSystem.GetModifiedStat(units, targetIdx, BuffStat.MagicResist,
             units[targetIdx].Stats.MagicResist);
-        return penetration + UnitUtil.RollDRN() > mr + UnitUtil.RollDRN();
+        int casterDrn = casterIdx >= 0 && casterIdx < units.Count
+            ? units[casterIdx].Stats.Drn : 2;
+        return penetration + UnitUtil.RollDRN(casterDrn)
+             > mr + UnitUtil.RollDRN(units[targetIdx].Stats.Drn);
     }
 
     /// <summary>Convenience gate: returns true if the spell should affect the
@@ -50,6 +54,6 @@ public static class SpellPenetration
     public static bool Affects(GameData gameData, UnitArrays units, int casterIdx, int targetIdx, SpellDef spell)
     {
         if (spell == null || !spell.ChecksMagicResist) return true;
-        return Penetrates(units, targetIdx, Compute(gameData, units, casterIdx, spell));
+        return Penetrates(units, casterIdx, targetIdx, Compute(gameData, units, casterIdx, spell));
     }
 }

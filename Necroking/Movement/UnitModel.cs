@@ -668,20 +668,37 @@ public static class UnitUtil
         return HitLocation.Feet;
     }
 
-    /// <summary>DRN: Dominions Random Number — 2d6 open-ended (exploding 6s)</summary>
-    public static int RollDRN()
+    /// <summary>Tiered dice roll — every combat roll uses the owning unit's tier
+    /// (<see cref="UnitStats.Drn"/>): the attacker's tier for attack/damage rolls,
+    /// the defender's for defense/protection rolls, etc.
+    ///   1: d3 closed
+    ///   2: d6 closed
+    ///   3: d6, a 6 adds one extra d6 (max one reroll, so ≤12)
+    ///   4: d6 open-ended (every 6 explodes into another die)
+    /// Replaced the old Dominions 2d6-open DRN (2026-07), so averages are roughly
+    /// half what the ported Dominions formulas were tuned for.</summary>
+    public static int RollDRN(int level)
     {
-        int total = 0;
-        for (int die = 0; die < 2; die++)
+        switch (level)
         {
-            int roll;
-            do
+            case 1:
+                return _rng.Next(1, 4);
+            case 3:
             {
-                roll = _rng.Next(1, 7);
-                total += roll;
-            } while (roll == 6);
+                int roll = _rng.Next(1, 7);
+                if (roll == 6) roll += _rng.Next(1, 7);
+                return roll;
+            }
+            case 4:
+            {
+                int total = 0;
+                int r;
+                do { r = _rng.Next(1, 7); total += r; } while (r == 6);
+                return total;
+            }
+            default: // level 2 (and any unassigned/out-of-range value)
+                return _rng.Next(1, 7);
         }
-        return total;
     }
 }
 

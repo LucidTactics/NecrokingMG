@@ -147,6 +147,7 @@ public class UnitStatsJson
     [JsonPropertyName("encumbrance")] public int Encumbrance { get; set; }
     [JsonPropertyName("naturalProt")] public int NaturalProt { get; set; }
     [JsonPropertyName("combatSpeed")] public float CombatSpeed { get; set; } = 8.0f;
+    [JsonPropertyName("drn")] public int Drn { get; set; } = 2;
 }
 
 public class UnitDef : INamedDef
@@ -593,7 +594,8 @@ public class UnitRegistry : RegistryBase<UnitDef>
             Morale = stats.Morale,
             Encumbrance = stats.Encumbrance,
             NaturalProt = stats.NaturalProt,
-            CombatSpeed = stats.CombatSpeed
+            CombatSpeed = stats.CombatSpeed,
+            Drn = stats.Drn
         };
 
         // Resolve weapons. Each weapon slot can carry a per-unit-per-slot anim override

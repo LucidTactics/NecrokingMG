@@ -1965,6 +1965,11 @@ public class UnitEditorWindow
         if (newMorale != s.Morale) { s.Morale = newMorale; _unsavedChanges = true; }
         curY += RowH;
 
+        // Dice tier: 1=d3, 2=d6, 3=d6 exploding once, 4=d6 open-ended
+        int newDrn = _ui.DrawIntField("st_drn", "DRN Level", s.Drn, x, curY, w);
+        if (newDrn != s.Drn) { s.Drn = Math.Clamp(newDrn, 1, 4); _unsavedChanges = true; }
+        curY += RowH;
+
         int newEnc = _ui.DrawIntField("st_enc", "Encumbrance", s.Encumbrance, x, curY, w);
         if (newEnc != s.Encumbrance) { s.Encumbrance = newEnc; _unsavedChanges = true; }
         curY += RowH;

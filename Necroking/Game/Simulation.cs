@@ -818,7 +818,7 @@ public class Simulation
                 bool affects = true;
                 if (spellDef != null && spellDef.ChecksMagicResist)
                 {
-                    affects = GameSystems.SpellPenetration.Penetrates(_units, hit.UnitIdx,
+                    affects = GameSystems.SpellPenetration.Penetrates(_units, casterIdx, hit.UnitIdx,
                         GameSystems.SpellPenetration.Compute(_gameData, _units, casterIdx, spellDef));
                 }
                 if (affects)
@@ -2410,10 +2410,13 @@ public class Simulation
     {
         int defenderIdx = hit.UnitIdx;
         var defStats = _units[defenderIdx].Stats;
+        // Shooter may have died while the arrow was in flight (attackerIdx == -1).
+        int atkDrn = attackerIdx >= 0 && attackerIdx < _units.Count
+            ? _units[attackerIdx].Stats.Drn : 2;
 
-        int atkRoll = hit.Precision + UnitUtil.RollDRN();
+        int atkRoll = hit.Precision + UnitUtil.RollDRN(atkDrn);
         int defRoll = Math.Max(defStats.Defense / 2 - _units[defenderIdx].Harassment, 0)
-                    + defStats.ShieldParry * 2 + UnitUtil.RollDRN();
+                    + defStats.ShieldParry * 2 + UnitUtil.RollDRN(defStats.Drn);
         if (atkRoll < defRoll)
         {
             DebugLog.Log("combat", $"[Ranged] {hit.WeaponName} deflected by #{defenderIdx}: " +
@@ -2424,8 +2427,8 @@ public class Simulation
         int armorProt = hit.HitLocation == HitLocation.Head
             ? defStats.Armor.HeadProtection : defStats.Armor.BodyProtection;
         float protStat = (defStats.NaturalProt + armorProt) * 0.85f; // piercing
-        int prot = (int)protStat + UnitUtil.RollDRN();
-        int netDmg = Math.Max(0, hit.Damage + UnitUtil.RollDRN() - prot);
+        int prot = (int)protStat + UnitUtil.RollDRN(defStats.Drn);
+        int netDmg = Math.Max(0, hit.Damage + UnitUtil.RollDRN(atkDrn) - prot);
 
         DebugLog.Log("combat", $"[Ranged] {hit.WeaponName} hits #{defenderIdx} " +
             $"{hit.HitLocation}: dmg {hit.Damage} vs prot {prot} → {netDmg} net");
@@ -2585,8 +2588,8 @@ public class Simulation
         // recovery formula). Regens at 1/tick every FatigueRegenInterval seconds.
         _units[attackerIdx].Fatigue = MathF.Min(100f, _units[attackerIdx].Fatigue + atkStats.Encumbrance);
 
-        int atkDRN = UnitUtil.RollDRN();
-        int defDRN = UnitUtil.RollDRN();
+        int atkDRN = UnitUtil.RollDRN(atkStats.Drn);
+        int defDRN = UnitUtil.RollDRN(defStats.Drn);
 
         // Fatigue penalties (manual p.61): attack −1 per 20 fatigue, defense −1 per
         // 10 fatigue (rounded down). This is what makes a tired unit easier to hit
@@ -2682,7 +2685,7 @@ public class Simulation
         // Damage roll: Strength (×1.25 if two-handed, manual p.61) + weapon damage + DRN.
         int strContribution = twoHanded ? (int)(atkStats.Strength * 1.25f) : atkStats.Strength;
         int baseDmg = (int)((strContribution + weaponDamage) * atkParalysis);
-        int dmgDRN = UnitUtil.RollDRN();
+        int dmgDRN = UnitUtil.RollDRN(atkStats.Drn);
         int dmgRoll = baseDmg + dmgDRN;
         // Blunt: +25% on HEAD hits, BEFORE protection is deducted.
         if (wType == WeaponDamageType.Blunt && hitLoc == HitLocation.Head)
@@ -2690,7 +2693,7 @@ public class Simulation
 
         // Protection roll: location armor (head→helmet) + natural + shield-on-shield-hit,
         // with piercing / armor-piercing / armor-defeating reductions, then + DRN.
-        int protDRN = UnitUtil.RollDRN();
+        int protDRN = UnitUtil.RollDRN(defStats.Drn);
         int armorProt = hitLoc == HitLocation.Head ? defStats.Armor.HeadProtection : defStats.Armor.BodyProtection;
         float protStat = defStats.NaturalProt + armorProt + (shieldHit ? defStats.ShieldProtection : 0);
 
@@ -2861,10 +2864,10 @@ public class Simulation
 
         int atkScore = _units[attackerIdx].Stats.Strength
                      + _units[attackerIdx].Size * 2
-                     + UnitUtil.RollDRN();
+                     + UnitUtil.RollDRN(_units[attackerIdx].Stats.Drn);
         int defScore = _units[defenderIdx].Stats.Strength
                      + _units[defenderIdx].Size * 2
-                     + UnitUtil.RollDRN();
+                     + UnitUtil.RollDRN(_units[defenderIdx].Stats.Drn);
 
         int diff = atkScore - defScore;
         if (diff < 0) return; // defender won (ties go to attacker)
@@ -3075,7 +3078,7 @@ public class Simulation
                 + outnumber * 0.5f
                 + (ownHpFrac < 0.5f ? (0.5f - ownHpFrac) * 25f : 0f);
 
-            int roll = _units[i].Stats.Morale + 2 * UnitUtil.RollDRN();
+            int roll = _units[i].Stats.Morale + 2 * UnitUtil.RollDRN(_units[i].Stats.Drn);
             if (roll < threshold)
             {
                 DebugLog.Log("combat", $"[Morale] unit#{i} ({_units[i].UnitDefID}) BROKE — " +
@@ -3188,8 +3191,8 @@ public class Simulation
             // Run the recovery check: knockdown side = secondsLeft + DRN, defender = (100-fatigue) + DRN.
             var buff = _units[i].ActiveBuffs[kdIdx];
             int secondsLeft = Math.Max(0, (int)MathF.Ceiling(buff.RemainingDuration));
-            int kdScore = secondsLeft + UnitUtil.RollDRN();
-            int defScore = (int)(100f - _units[i].Fatigue) + UnitUtil.RollDRN();
+            int kdScore = secondsLeft + UnitUtil.RollDRN(_units[i].Stats.Drn);
+            int defScore = (int)(100f - _units[i].Fatigue) + UnitUtil.RollDRN(_units[i].Stats.Drn);
 
             if (defScore > kdScore)
             {
