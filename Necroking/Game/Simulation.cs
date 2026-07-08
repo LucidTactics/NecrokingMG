@@ -2697,12 +2697,10 @@ public class Simulation
         int armorProt = hitLoc == HitLocation.Head ? defStats.Armor.HeadProtection : defStats.Armor.BodyProtection;
         float protStat = defStats.NaturalProt + armorProt + (shieldHit ? defStats.ShieldProtection : 0);
 
-        // Armor-defeating hit (manual p.60): a very low protection roll bypasses 25%
-        // of armor, gated by defender fatigue. Hard to land on a fresh unit.
-        float defFatigue = _units[defenderIdx].Fatigue;
-        bool armorDefeating = protDRN == 2
-            || (protDRN == 3 && defFatigue >= 50f)
-            || (protDRN == 4 && defFatigue >= 100f);
+        // Armor-defeating hit: a protection roll of 1 bypasses 25% of armor. Every
+        // DRN tier rolls a single die first, so a 1 is possible for everyone (d3: 1/3,
+        // d6 tiers: 1/6). Replaced the old 2d6-era 2/3/4-with-fatigue-gates version.
+        bool armorDefeating = protDRN == 1;
 
         if (weaponAN)
         {
