@@ -2699,8 +2699,10 @@ public class Simulation
 
         // Armor-defeating hit: a protection roll of 1 bypasses 25% of armor. Every
         // DRN tier rolls a single die first, so a 1 is possible for everyone (d3: 1/3,
-        // d6 tiers: 1/6). Replaced the old 2d6-era 2/3/4-with-fatigue-gates version.
-        bool armorDefeating = protDRN == 1;
+        // d6 tiers: 1/6). A tired defender (fatigue >= 50) is also defeated by a 2.
+        float defFatigue = _units[defenderIdx].Fatigue;
+        bool armorDefeating = protDRN == 1
+            || (protDRN == 2 && defFatigue >= 50f);
 
         if (weaponAN)
         {
