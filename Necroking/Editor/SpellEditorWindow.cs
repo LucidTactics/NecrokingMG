@@ -124,7 +124,7 @@ public class SpellEditorWindow : EditorWindow
     private static readonly string[] AlignOptions = { "Ground", "Upright" };
     private static readonly string[] EffectTypeOptions = { "Set", "Add", "Multiply" };
     private static readonly string[] StatOptions =
-        { "Strength", "Attack", "Defense", "MagicResist", "NaturalProt", "CombatSpeed", "MaxHP", "Encumbrance" };
+        { "Strength", "Attack", "Defense", "MagicResist", "Toughness", "CombatSpeed", "MaxHP", "Encumbrance" };
     private static readonly string[] IntBlendOptions = { "Alpha", "Additive" };
 
     // Layout constants

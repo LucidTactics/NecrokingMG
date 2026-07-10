@@ -132,7 +132,11 @@ public class UnitStats
     /// Mindless/fearless units use a very high value (e.g. 50).</summary>
     public int Morale { get; set; } = 10;
     public int Encumbrance { get; set; }
-    public int NaturalProt { get; set; }
+    /// <summary>Hide/flesh thickness. Unlike armor's flat block, toughness HALVES
+    /// post-armor damage up to its value: net = D - min(D, Toughness)/2. Great vs
+    /// chip damage, leaks vs big hits. Armor bypass mechanics (piercing/AP/
+    /// armor-defeating/AN) reduce it by the same fraction as armor.</summary>
+    public int Toughness { get; set; }
     /// <summary>Dice tier for every roll this unit makes (attack/damage as attacker,
     /// defense/protection as defender, morale, knockdown, MR): 1=d3, 2=d6,
     /// 3=d6 exploding once, 4=d6 open-ended. See UnitUtil.RollDRN.</summary>
@@ -157,7 +161,6 @@ public class UnitStats
     public bool HasArmorPiercing { get; set; }
     public bool HasArmorNegating { get; set; }
     public bool HasKnockdown { get; set; }
-    public bool HasTrueArmor { get; set; }
     public bool HasBarbed { get; set; }
 
     public List<float> RangedRange { get; set; } = new();

@@ -55,7 +55,7 @@ public class UIUnitInfoScenario : ScenarioBase
         Buff("buff_frenzy");     // Frenzy (icon 1): Mult Attack x1.2, Mult Speed x1.5 (multi-effect)
         Buff("strength_buff");   // Add Strength +5
         Buff("buff_3");          // Lucky: Add Defense +4
-        Buff("iron_skin");       // Set NaturalProt 15
+        Buff("iron_skin");       // Set Toughness 15
         Buff("iron_skin_copy");  // Quickness: Multiply CombatSpeed x2
         Buff("buff_miasma_slow");// Miasma: Multiply CombatSpeed x0.6 (mixed w/ above)
         DebugLog.Log(ScenarioLog, $"soldier buffs applied: {sim.Units[_soldierIdx].ActiveBuffs.Count}");

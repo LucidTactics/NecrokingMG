@@ -145,7 +145,7 @@ public class UnitStatsJson
     [JsonPropertyName("magicResist")] public int MagicResist { get; set; } = 10;
     [JsonPropertyName("morale")] public int Morale { get; set; } = 10;
     [JsonPropertyName("encumbrance")] public int Encumbrance { get; set; }
-    [JsonPropertyName("naturalProt")] public int NaturalProt { get; set; }
+    [JsonPropertyName("toughness")] public int Toughness { get; set; }
     [JsonPropertyName("combatSpeed")] public float CombatSpeed { get; set; } = 8.0f;
     [JsonPropertyName("drn")] public int Drn { get; set; } = 2;
 }
@@ -593,7 +593,7 @@ public class UnitRegistry : RegistryBase<UnitDef>
             MagicResist = stats.MagicResist,
             Morale = stats.Morale,
             Encumbrance = stats.Encumbrance,
-            NaturalProt = stats.NaturalProt,
+            Toughness = stats.Toughness,
             CombatSpeed = stats.CombatSpeed,
             Drn = stats.Drn
         };
@@ -713,7 +713,6 @@ public class UnitRegistry : RegistryBase<UnitDef>
 
             foreach (var b in a.Bonuses)
             {
-                if (b == "TrueArmor") s.HasTrueArmor = true;
                 if (b == "Barbed") s.HasBarbed = true;
             }
         }

@@ -129,6 +129,19 @@ public static class DamageSystem
     /// <param name="flags">ArmorNegating, DefenseNegating</param>
     /// <param name="damageEvents">List to append visual damage events to</param>
     /// <param name="attackerIdx">Optional attacker for aggro/LastAttackerID</param>
+    /// <summary>THE toughness formula — the single place damage meets hide. The
+    /// first <paramref name="toughness"/> points of post-armor damage are halved:
+    /// net = D − min(D, T)/2. Small hits get cut in half, big hits lose at most
+    /// T/2 — so a tough beast shrugs chip damage but never becomes immune.
+    /// Callers apply armor (and any piercing/AP/armor-defeating fraction, which
+    /// cuts toughness by the same fraction) BEFORE calling this.</summary>
+    public static int MitigateByToughness(int postArmorDamage, float toughness)
+    {
+        if (postArmorDamage <= 0) return 0;
+        if (toughness <= 0f) return postArmorDamage;
+        return postArmorDamage - Math.Min(postArmorDamage, (int)toughness) / 2;
+    }
+
     public static void Apply(UnitArrays units, int targetIdx, int rawDamage,
         DamageType type, DamageFlags flags, List<DamageEvent> damageEvents,
         int attackerIdx = -1)
@@ -139,12 +152,14 @@ public static class DamageSystem
         // Ghost mode: immune to all damage
         if (units[targetIdx].GhostMode) return;
 
-        // Armor reduction (unless ArmorNegating)
+        // Armor block then toughness halving (unless ArmorNegating, which skips both)
         int finalDamage = rawDamage;
         if ((flags & DamageFlags.ArmorNegating) == 0)
         {
-            int prot = units[targetIdx].Stats.NaturalProt + units[targetIdx].Stats.Armor.BodyProtection;
-            finalDamage = Math.Max(1, rawDamage - prot);
+            int postArmor = rawDamage - units[targetIdx].Stats.Armor.BodyProtection;
+            float toughness = BuffSystem.GetModifiedStat(units, targetIdx,
+                BuffStat.Toughness, units[targetIdx].Stats.Toughness);
+            finalDamage = Math.Max(1, MitigateByToughness(postArmor, toughness));
         }
 
         // Apply based on damage type

@@ -615,8 +615,10 @@ public static class SpellEffectSystem
         }
     }
 
-    /// <summary>Build DamageFlags from a spell's AN/DN settings.</summary>
-    private static DamageFlags SpellDamageFlags(SpellDef spell)
+    /// <summary>Build DamageFlags from a spell's AN/DN settings. Public because the
+    /// projectile-hit path in Simulation routes spell projectiles through the same
+    /// armor+toughness pipeline and needs the same flags.</summary>
+    public static DamageFlags SpellDamageFlags(SpellDef spell)
     {
         var flags = DamageFlags.None;
         if (spell.ArmorNegating) flags |= DamageFlags.ArmorNegating;

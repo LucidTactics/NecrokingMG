@@ -20,6 +20,7 @@ public class CombatLogEntry
     public int HarassmentPenalty;
     public int DamageBase, DamageDRN;
     public int ProtBase, ProtDRN;
+    public int ToughnessMit;   // damage absorbed by toughness halving (post-armor)
     public int NetDamage;
     public HitLocation HitLoc;
     public string HitLocationName = "";
@@ -75,7 +76,8 @@ public class CombatLog
         {
             int totalDmg = e.DamageBase + e.DamageDRN;
             int totalProt = e.ProtBase + e.ProtDRN;
-            DebugLog.Log(Tag, $"         Hit {e.HitLocationName}: Damage {e.DamageBase}+{e.DamageDRN}={totalDmg} - Prot {e.ProtBase}+{e.ProtDRN}={totalProt} = {e.NetDamage} net");
+            string tough = e.ToughnessMit != 0 ? $" - Tough {e.ToughnessMit}" : "";
+            DebugLog.Log(Tag, $"         Hit {e.HitLocationName}: Damage {e.DamageBase}+{e.DamageDRN}={totalDmg} - Prot {e.ProtBase}+{e.ProtDRN}={totalProt}{tough} = {e.NetDamage} net");
         }
     }
 }

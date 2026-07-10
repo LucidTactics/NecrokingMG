@@ -824,12 +824,18 @@ public class Simulation
                 if (affects)
                 {
                     // Plain arrows resolve Dominions-style (dodge roll + hit-location
-                    // armor); fireballs and spell projectiles auto-hit for flat damage.
+                    // armor); spell projectiles auto-hit but run the standard damage
+                    // pipeline (armor + toughness, honoring the spell's AN/DN flags).
                     if (hit.ProjectileType == ProjectileType.Arrow
                         && string.IsNullOrEmpty(hit.SpellID) && hit.Precision > 0)
                         ResolveArrowHit(hit, casterIdx);
+                    else if (spellDef != null)
+                        GameSystems.DamageSystem.Apply(_units, hit.UnitIdx, hit.Damage,
+                            GameSystems.DamageType.Physical,
+                            GameSystems.SpellEffectSystem.SpellDamageFlags(spellDef),
+                            _damageEvents, casterIdx);
                     else
-                        DealDamage(hit.UnitIdx, hit.Damage, casterIdx);
+                        DealDamage(hit.UnitIdx, hit.Damage, casterIdx); // dev fireball: flat
                 }
             }
         }
@@ -2424,11 +2430,16 @@ public class Simulation
             return;
         }
 
+        // Arrows count as piercing: 15% off armor AND toughness. Armor + prot roll
+        // subtract first, then toughness halves what's left (up to its value).
         int armorProt = hit.HitLocation == HitLocation.Head
             ? defStats.Armor.HeadProtection : defStats.Armor.BodyProtection;
-        float protStat = (defStats.NaturalProt + armorProt) * 0.85f; // piercing
+        float protStat = armorProt * 0.85f;
+        float toughness = BuffSystem.GetModifiedStat(_units, defenderIdx,
+            BuffStat.Toughness, defStats.Toughness) * 0.85f;
         int prot = (int)protStat + UnitUtil.RollDRN(defStats.Drn);
-        int netDmg = Math.Max(0, hit.Damage + UnitUtil.RollDRN(atkDrn) - prot);
+        int netDmg = DamageSystem.MitigateByToughness(
+            hit.Damage + UnitUtil.RollDRN(atkDrn) - prot, toughness);
 
         DebugLog.Log("combat", $"[Ranged] {hit.WeaponName} hits #{defenderIdx} " +
             $"{hit.HitLocation}: dmg {hit.Damage} vs prot {prot} → {netDmg} net");
@@ -2691,11 +2702,15 @@ public class Simulation
         if (wType == WeaponDamageType.Blunt && hitLoc == HitLocation.Head)
             dmgRoll = (int)(dmgRoll * 1.25f);
 
-        // Protection roll: location armor (head→helmet) + natural + shield-on-shield-hit,
-        // with piercing / armor-piercing / armor-defeating reductions, then + DRN.
+        // Protection roll: location armor (head→helmet) + shield-on-shield-hit + DRN,
+        // subtracted from damage; what's left is then halved by Toughness (hide/flesh,
+        // up to its value — see DamageSystem.MitigateByToughness). The piercing /
+        // armor-piercing / armor-defeating fraction cuts armor AND toughness alike.
         int protDRN = UnitUtil.RollDRN(defStats.Drn);
         int armorProt = hitLoc == HitLocation.Head ? defStats.Armor.HeadProtection : defStats.Armor.BodyProtection;
-        float protStat = defStats.NaturalProt + armorProt + (shieldHit ? defStats.ShieldProtection : 0);
+        float protStat = armorProt + (shieldHit ? defStats.ShieldProtection : 0);
+        float toughness = BuffSystem.GetModifiedStat(_units, defenderIdx,
+            BuffStat.Toughness, defStats.Toughness);
 
         // Armor-defeating hit: a protection roll of 1 bypasses 25% of armor. Every
         // DRN tier rolls a single die first, so a 1 is possible for everyone (d3: 1/3,
@@ -2706,7 +2721,8 @@ public class Simulation
 
         if (weaponAN)
         {
-            protStat = 0f; // armor-negating ignores protection entirely
+            protStat = 0f;   // armor-negating ignores protection entirely
+            toughness = 0f;  // ...and hide with it
         }
         else
         {
@@ -2716,10 +2732,13 @@ public class Simulation
             if (armorDefeating) reduction += 0.25f;                      // low protection roll
             reduction = MathF.Min(reduction, 1f);
             protStat *= (1f - reduction);
+            toughness *= (1f - reduction);
         }
         int prot = (int)protStat + protDRN;
 
-        int netDmg = dmgRoll - prot;
+        int postArmor = dmgRoll - prot;
+        int netDmg = DamageSystem.MitigateByToughness(postArmor, toughness);
+        int toughnessMit = Math.Max(0, postArmor) - netDmg;
         // Slashing: +25% AFTER protection is deducted (manual p.61).
         if (wType == WeaponDamageType.Slashing && netDmg > 0)
             netDmg = (int)(netDmg * 1.25f);
@@ -2737,6 +2756,7 @@ public class Simulation
         logEntry.DamageDRN = dmgDRN;
         logEntry.ProtBase = (int)protStat;
         logEntry.ProtDRN = protDRN;
+        logEntry.ToughnessMit = toughnessMit;
         logEntry.NetDamage = netDmg;
         _combatLog.AddEntry(logEntry);
 

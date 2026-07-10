@@ -26,7 +26,7 @@
         "magicResist": 16,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 2.5,
         "drn": 3
       },
@@ -76,7 +76,7 @@
         "magicResist": 6,
         "morale": 10,
         "encumbrance": 0,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 1.41,
         "drn": 2
       },
@@ -110,7 +110,7 @@
         "magicResist": 2,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 5,
+        "toughness": 5,
         "combatSpeed": 1.2,
         "drn": 1
       },
@@ -151,7 +151,7 @@
         "magicResist": 1,
         "morale": 50,
         "encumbrance": 2,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 1.3,
         "drn": 1
       },
@@ -189,7 +189,7 @@
         "magicResist": 1,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 1.3,
         "drn": 1
       },
@@ -219,7 +219,7 @@
         "magicResist": 2,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 4,
+        "toughness": 4,
         "combatSpeed": 1.2,
         "drn": 1
       },
@@ -266,7 +266,7 @@
         "magicResist": 3,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 5,
+        "toughness": 5,
         "combatSpeed": 1.2,
         "drn": 1
       },
@@ -309,7 +309,7 @@
         "magicResist": 3,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 3,
+        "toughness": 3,
         "combatSpeed": 2,
         "drn": 1
       },
@@ -370,7 +370,7 @@
         "magicResist": 3,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 8,
+        "toughness": 8,
         "combatSpeed": 0.8,
         "drn": 1
       },
@@ -432,7 +432,7 @@
         "magicResist": 4,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 8,
+        "toughness": 8,
         "combatSpeed": 1.1,
         "drn": 2
       },
@@ -494,7 +494,7 @@
         "magicResist": 3,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 3,
+        "toughness": 3,
         "combatSpeed": 3,
         "drn": 1
       },
@@ -548,7 +548,7 @@
         "magicResist": 3,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 2,
+        "toughness": 2,
         "combatSpeed": 2,
         "drn": 1
       },
@@ -620,7 +620,7 @@
         "magicResist": 3,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 3,
+        "toughness": 3,
         "combatSpeed": 2,
         "drn": 1
       },
@@ -666,7 +666,7 @@
         "magicResist": 3,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 3,
+        "toughness": 3,
         "combatSpeed": 2,
         "drn": 1
       },
@@ -703,7 +703,7 @@
         "magicResist": 3,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 4,
+        "toughness": 4,
         "combatSpeed": 1.2,
         "drn": 1
       },
@@ -757,7 +757,7 @@
         "magicResist": 14,
         "morale": 10,
         "encumbrance": 0,
-        "naturalProt": 8,
+        "toughness": 8,
         "combatSpeed": 5.59,
         "drn": 2
       },
@@ -802,7 +802,7 @@
         "magicResist": 11,
         "morale": 10,
         "encumbrance": 4,
-        "naturalProt": 1,
+        "toughness": 1,
         "combatSpeed": 1.62,
         "drn": 3
       },
@@ -844,7 +844,7 @@
         "magicResist": 6,
         "morale": 10,
         "encumbrance": 0,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 1.5,
         "drn": 2
       },
@@ -887,7 +887,7 @@
         "magicResist": 6,
         "morale": 10,
         "encumbrance": 0,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 1.5,
         "drn": 2
       },
@@ -930,7 +930,7 @@
         "magicResist": 6,
         "morale": 10,
         "encumbrance": 0,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 1.5,
         "drn": 2
       },
@@ -972,7 +972,7 @@
         "magicResist": 6,
         "morale": 10,
         "encumbrance": 0,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 1.5,
         "drn": 2
       },
@@ -1014,7 +1014,7 @@
         "magicResist": 6,
         "morale": 10,
         "encumbrance": 0,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 1.5,
         "drn": 2
       },
@@ -1056,7 +1056,7 @@
         "magicResist": 6,
         "morale": 10,
         "encumbrance": 0,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 1.5,
         "drn": 2
       },
@@ -1098,7 +1098,7 @@
         "magicResist": 6,
         "morale": 10,
         "encumbrance": 0,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 1.5,
         "drn": 2
       },
@@ -1140,7 +1140,7 @@
         "magicResist": 10,
         "morale": 10,
         "encumbrance": 4,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 3,
         "drn": 3
       },
@@ -1182,7 +1182,7 @@
         "magicResist": 14,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 3,
         "drn": 2
       },
@@ -1229,7 +1229,7 @@
         "magicResist": 10,
         "morale": 10,
         "encumbrance": 6,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 1.97,
         "drn": 3
       },
@@ -1276,7 +1276,7 @@
         "magicResist": 12,
         "morale": 10,
         "encumbrance": 5,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 1.97,
         "drn": 3
       },
@@ -1326,7 +1326,7 @@
         "magicResist": 10,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 1.72,
         "drn": 3
       },
@@ -1368,7 +1368,7 @@
         "magicResist": 6,
         "morale": 10,
         "encumbrance": 0,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 4.8,
         "drn": 2
       },
@@ -1411,7 +1411,7 @@
         "magicResist": 8,
         "morale": 10,
         "encumbrance": 0,
-        "naturalProt": 4,
+        "toughness": 4,
         "combatSpeed": 4.8,
         "drn": 2
       },
@@ -1456,7 +1456,7 @@
         "magicResist": 10,
         "morale": 10,
         "encumbrance": 0,
-        "naturalProt": 8,
+        "toughness": 8,
         "combatSpeed": 6,
         "drn": 2
       },
@@ -1495,7 +1495,7 @@
         "magicResist": 2,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 6,
+        "toughness": 6,
         "combatSpeed": 0.91,
         "drn": 1
       },
@@ -1546,7 +1546,7 @@
         "magicResist": 3,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 8,
+        "toughness": 8,
         "combatSpeed": 1.14,
         "drn": 1
       },
@@ -1594,7 +1594,7 @@
         "magicResist": 3,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 6,
+        "toughness": 6,
         "combatSpeed": 0.97,
         "drn": 1
       },
@@ -1646,7 +1646,7 @@
         "magicResist": 4,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 6,
+        "toughness": 6,
         "combatSpeed": 1.1,
         "drn": 2
       },
@@ -1698,7 +1698,7 @@
         "magicResist": 2,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 6,
+        "toughness": 6,
         "combatSpeed": 0.75,
         "drn": 1
       },
@@ -1748,7 +1748,7 @@
         "magicResist": 3,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 8,
+        "toughness": 8,
         "combatSpeed": 2.5,
         "drn": 1
       },
@@ -1804,7 +1804,7 @@
         "magicResist": 16,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 2.5,
         "drn": 3
       },
@@ -1847,7 +1847,7 @@
         "magicResist": 16,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 40,
+        "toughness": 40,
         "combatSpeed": 2.5,
         "drn": 3
       },
@@ -1889,7 +1889,7 @@
         "magicResist": 16,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 10,
+        "toughness": 10,
         "combatSpeed": 2.5,
         "drn": 3
       },
@@ -1931,7 +1931,7 @@
         "magicResist": 16,
         "morale": 10,
         "encumbrance": 0,
-        "naturalProt": 15,
+        "toughness": 15,
         "combatSpeed": 2.5,
         "drn": 3
       },
@@ -1973,7 +1973,7 @@
         "magicResist": 16,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 2.5,
         "drn": 3
       },
@@ -2016,7 +2016,7 @@
         "magicResist": 16,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 2.5,
         "drn": 3
       },
@@ -2079,7 +2079,7 @@
         "magicResist": 6,
         "morale": 10,
         "encumbrance": 0,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 1.41,
         "drn": 2
       },
@@ -2111,7 +2111,7 @@
         "magicResist": 3,
         "morale": 8,
         "encumbrance": 2,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 1.5,
         "drn": 2
       },
@@ -2146,7 +2146,7 @@
         "magicResist": 10,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 0,
+        "toughness": 0,
         "combatSpeed": 1.72,
         "drn": 3
       },
@@ -2192,7 +2192,7 @@
         "magicResist": 3,
         "morale": 10,
         "encumbrance": 2,
-        "naturalProt": 2,
+        "toughness": 2,
         "combatSpeed": 2.2,
         "drn": 1
       },

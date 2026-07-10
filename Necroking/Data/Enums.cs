@@ -76,12 +76,12 @@ public enum EffectAlignment : byte { Ground, Upright }
 // --- Buff ---
 
 public enum BuffEffectType : byte { Set, Add, Multiply }
-public enum BuffStat : byte { Strength, Attack, Defense, MagicResist, NaturalProt, CombatSpeed, MaxHP, Encumbrance, Count }
+public enum BuffStat : byte { Strength, Attack, Defense, MagicResist, Toughness, CombatSpeed, MaxHP, Encumbrance, Count }
 
 // --- Weapon/Armor ---
 
 public enum WeaponBonus : byte { ArmorPiercing, ArmorNegating, Knockdown }
-public enum ArmorBonus : byte { TrueArmor, Barbed }
+public enum ArmorBonus : byte { Barbed }
 public enum WeaponArchetype : byte { None = 0, Pounce = 1, Sweep = 2, Trample = 3 }
 
 // --- Settings ---

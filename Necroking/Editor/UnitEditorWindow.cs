@@ -1974,8 +1974,8 @@ public class UnitEditorWindow
         if (newEnc != s.Encumbrance) { s.Encumbrance = newEnc; _unsavedChanges = true; }
         curY += RowH;
 
-        int newProt = _ui.DrawIntField("st_prot", "NaturalProt", s.NaturalProt, x, curY, w);
-        if (newProt != s.NaturalProt) { s.NaturalProt = newProt; _unsavedChanges = true; }
+        int newTough = _ui.DrawIntField("st_prot", "Toughness", s.Toughness, x, curY, w);
+        if (newTough != s.Toughness) { s.Toughness = newTough; _unsavedChanges = true; }
         curY += RowH;
 
         // CombatSpeed input — shrunk to leave room for the suggestion hint and

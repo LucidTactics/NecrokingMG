@@ -238,11 +238,13 @@ public class UnitInfoPanel : IModalLayer
                 bv = s.MaxHP; fv = s.HP;
                 break;
             case "protection":
-                rows.Add(new ResourceTooltip.Row("Natural", s.NaturalProt.ToString(), ResourceTooltip.ValueDefault));
                 if (s.Armor.BodyProtection != 0)
                     rows.Add(ResourceTooltip.Entry("Body Armor", s.Armor.BodyProtection));
-                bv = b.NaturalProt + b.Armor.BodyProtection; fv = s.NaturalProt + s.Armor.BodyProtection;
+                if (s.Armor.HeadProtection != 0)
+                    rows.Add(ResourceTooltip.Entry("Head Armor", s.Armor.HeadProtection));
+                bv = b.Armor.BodyProtection; fv = s.Armor.BodyProtection;
                 break;
+            case "toughness": Generic(b.Toughness, fv = s.Toughness); bv = b.Toughness; break;
             case "shield": Generic(b.ShieldProtection, fv = s.ShieldProtection); bv = b.ShieldProtection; break;
             case "parry": Generic(b.ShieldParry, fv = s.ShieldParry); bv = b.ShieldParry; break;
             case "magicres": Generic(b.MagicResist, fv = s.MagicResist); bv = b.MagicResist; break;
@@ -292,11 +294,8 @@ public class UnitInfoPanel : IModalLayer
                     }
                 }
             }
-            // Final = buff-modified value. Protection's buff hits NaturalProt
-            // only, so re-add the armor component already folded into fv.
-            if (key == "protection")
-                fv = BuffSystem.GetModifiedStat(unit.ActiveBuffs, BuffStat.NaturalProt, s.NaturalProt) + s.Armor.BodyProtection;
-            else if (key != "hp") // hp header stays current HP; MaxHp buffs show as rows
+            // Final = buff-modified value.
+            if (key != "hp") // hp header stays current HP; MaxHp buffs show as rows
                 fv = BuffSystem.GetModifiedStat(unit.ActiveBuffs, bstat.Value, fv);
         }
 
@@ -328,23 +327,21 @@ public class UnitInfoPanel : IModalLayer
         float mHp   = BuffSystem.GetModifiedStat(bf, BuffStat.MaxHP, s.MaxHP);
         float mMr   = BuffSystem.GetModifiedStat(bf, BuffStat.MagicResist, s.MagicResist);
         float mStr  = BuffSystem.GetModifiedStat(bf, BuffStat.Strength, s.Strength);
-        float mNat  = BuffSystem.GetModifiedStat(bf, BuffStat.NaturalProt, s.NaturalProt);
+        float mTgh  = BuffSystem.GetModifiedStat(bf, BuffStat.Toughness, s.Toughness);
         float mAtk  = BuffSystem.GetModifiedStat(bf, BuffStat.Attack, s.Attack);
         float mDef  = BuffSystem.GetModifiedStat(bf, BuffStat.Defense, s.Defense);
         float mSpd  = BuffSystem.GetModifiedStat(bf, BuffStat.CombatSpeed, s.CombatSpeed);
         float mEnc  = BuffSystem.GetModifiedStat(bf, BuffStat.Encumbrance, s.Encumbrance);
         int   I(float v) => (int)MathF.Round(v);
-        float baseProt = s.NaturalProt + s.Armor.BodyProtection;
-        float modProt  = mNat + s.Armor.BodyProtection;
 
         SetCell(r, "st_r0c0", "Hp", $"{s.HP}/{I(mHp)}", BuffColor(mHp, s.MaxHP));
         SetCell(r, "st_r0c1", "Magic Res", I(mMr).ToString(), BuffColor(mMr, s.MagicResist));
         SetCell(r, "st_r0c2", "Morale", s.Morale.ToString());
         SetCell(r, "st_r1c0", "Size", (def?.Size ?? 2).ToString());
-        SetCell(r, "st_r1c1", "Toughness", "-");
+        SetCell(r, "st_r1c1", "Toughness", I(mTgh).ToString(), BuffColor(mTgh, s.Toughness));
         SetCell(r, "st_r1c2", "Magic Power", "-");
         SetCell(r, "st_r2c0", "Strength", I(mStr).ToString(), BuffColor(mStr, s.Strength));
-        SetCell(r, "st_r2c1", "Protection", I(modProt).ToString(), BuffColor(modProt, baseProt));
+        SetCell(r, "st_r2c1", "Protection", s.Armor.BodyProtection.ToString());
         SetCell(r, "st_r2c2", "Shield", s.ShieldProtection.ToString());
         SetCell(r, "st_r3c0", "Attack", I(mAtk).ToString(), BuffColor(mAtk, s.Attack));
         SetCell(r, "st_r3c1", "Defense", I(mDef).ToString(), BuffColor(mDef, s.Defense));
@@ -511,14 +508,14 @@ public class UnitInfoPanel : IModalLayer
     private static string? StatTipKey(string stat) => stat switch
     {
         "Strength" => "strength", "Attack" => "attack", "Defense" => "defense",
-        "MagicResist" => "magicres", "NaturalProt" => "protection",
+        "MagicResist" => "magicres", "Toughness" => "toughness",
         "CombatSpeed" => "speed", "MaxHP" => "hp", "Encumbrance" => "encumbrance",
         _ => null,
     };
 
     private static string StatLabel(string stat) => stat switch
     {
-        "MagicResist" => "Magic Resist", "NaturalProt" => "Protection",
+        "MagicResist" => "Magic Resist",
         "CombatSpeed" => "Speed", "MaxHP" => "Max HP", "MaxMana" => "Max Mana",
         "ManaRegen" => "Mana Regen", "MonsterCap" => "Monster Cap",
         "HumanCap" => "Human Cap", "AllPaths" => "All Paths", _ => stat,
@@ -746,7 +743,7 @@ public class UnitInfoPanel : IModalLayer
         "hp" => BuffStat.MaxHP,
         "magicres" => BuffStat.MagicResist,
         "strength" => BuffStat.Strength,
-        "protection" => BuffStat.NaturalProt,
+        "toughness" => BuffStat.Toughness,
         "attack" => BuffStat.Attack,
         "defense" => BuffStat.Defense,
         "speed" => BuffStat.CombatSpeed,

@@ -337,7 +337,7 @@ public class CharacterStatsUI : IModalLayer
             Row.Section("-- Defense --"),
             new("Body Prot", s.Armor.BodyProtection.ToString(), ValueColor),
             new("Head Prot", s.Armor.HeadProtection.ToString(), ValueColor),
-            MakeBuffedRow("Natural Prot", s.NaturalProt, sim, necroIdx, BuffStat.NaturalProt, buffs),
+            MakeBuffedRow("Toughness", s.Toughness, sim, necroIdx, BuffStat.Toughness, buffs),
             new("Shield Prot", s.ShieldProtection.ToString(), ValueColor),
             new("Shield Parry", s.ShieldParry.ToString(), ValueColor),
             new("Shield Defense", s.ShieldDefense.ToString(), ValueColor),
