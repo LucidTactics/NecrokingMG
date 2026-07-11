@@ -315,6 +315,67 @@ of 2026-07-03; the deferred-issue list behind several of them is
 - Rendering test scenarios: `blend_test`, `godray_render_test`, `BloomDebugScenario`
   (identical-parameter twins exist in C++ for pixel-readback comparison).
 
+## Bloom & HDR intensity — the pass internals (where glow is thresholded/composited)
+
+The scene→bloom→screen chain, concrete files:
+
+- **`Render/Bloom.cs` (`BloomRenderer`)** — the C# pass that owns everything. `Init` loads
+  the four shaders; `CreateTargets` allocates the **`SurfaceFormat.HalfVector4` scene RT**
+  (LDR `Color` fallback) so additive draws exceed 1.0, plus a half-res mip chain (up to
+  `MaxMips=8`, each ½ the previous) + one temp blur RT. `BeginScene` binds+clears the scene
+  RT (Scene phase `OnBegin`). **`EndScene` is the whole post pass**, four steps:
+  1. **Prefilter/extract** → `BloomExtract.fx`, params `BloomThreshold`/`SoftKnee`, into mip[0].
+  2. **Downsample** chain (Opaque LinearClamp blits, `iters = clamp(Iterations,1,mipCount)`).
+  3. **Upsample** chain — additive scatter blend (`ColorSourceBlend=BlendFactor`,
+     `Dest=One`, `BlendFactor=scatter*255`), optional `BloomUpsampleBicubic.fx`; then an
+     **extra 15-tap H/V `GaussianBlur.fx`** on mip[0] (`BuildBlurKernel`, `BlurScale=1.5`)
+     to spread past the mip limit.
+  4. **Composite** → `BloomCombine.fx` binds bloom to `s1`, `outputTarget` = back buffer.
+- **Shaders (`resources/`)**: `BloomExtract.fx` = **max-channel brightness** soft-knee
+  quadratic threshold (`contribution = max(soft, brightness-threshold)/brightness`);
+  `BloomCombine.fx` = **`base.rgb + bloom.rgb * BloomIntensity`** — a plain additive add,
+  **NO tone-mapping** (no Reinhard/ACES anywhere); the HalfVector4 scene is truncated to
+  [0,1] only by the final `Color` back-buffer write, so overbright cores hard-clip to white.
+- **Knobs** = `BloomSettings` in `Data/Registries/GameSettings.cs` (persisted in
+  `user settings/settings.json` under `bloom`): `threshold=0.8`, `softKnee=0.5`,
+  `intensity=1.0`, `scatter=0.7`, `iterations=6`, `bicubicUpsampling=true`. Wired in
+  `GameRenderer.Pipeline.cs` (`_frameBloomSettings`, `BeginScene` at Scene `OnBegin`,
+  `EndScene` at `OnEnd`).
+- **HDR intensity encoding** = `Core/HdrColor.cs`, cap **`MaxHdrIntensity=4f`** (must match
+  `HdrSprite.fx` `MaxIntensity`). Two encoders: `ToHdrVertex` (additive — fade baked into
+  RGB, `intensity/4` in the alpha byte) and `ToHdrVertexAlpha` (alpha mode — `intensity/4`
+  baked into RGB, real fade in alpha). `HdrSprite.fx` decodes both (AlphaMode lerp); scene
+  emissives thus write >1.0 into the HalfVector4 RT and feed bloom. `ToScaledColor` bleaches
+  HDR — **color-picker only**. `HdrIntensity.fx` = god-ray VS/PS (`rgb*max(Intensity,0)`).
+
+### Where each spell/buff glow layer is drawn (blend + intensity per source)
+- **EffectManager one-shots (spell impacts, cast flares)** — `GameRenderer.World.cs`
+  `DrawEffectsFiltered(blendMode)`: per-`Effect` uses `eff.HdrIntensity`/`eff.Tint`/
+  `eff.BlendMode`, encodes via `ToHdrVertexAlpha` (blend 0) or `ToHdrVertex` (blend 1).
+  Submitted in the **`HdrEffects` SpriteQueuePass** (`GameRenderer.Pipeline.cs`
+  `CollectFxItems` → `WorldLayer.EffectsHdrAlpha`/`EffectsHdrAdditive`, materials
+  `Materials.HdrAlpha`/`HdrAdditive`). These DO write true HDR into the scene RT.
+- **BuffVisualSystem (auras/orbitals/lightning/weapon particles)** —
+  `Render/BuffVisualSystem.cs`, a **native-encoding island drawn through the raw Scene
+  batch (AlphaBlend), NOT the HDR additive pass**. Its `EncodeColor(hdr, alpha, blendMode)`
+  additive path uses the A=0 premult trick and **CPU-clamps per channel to 255**
+  (`hdr.R * min(Intensity,4) * alpha`). So buff glows are LDR-capped and only bloom if their
+  clamped RGB clears `threshold` — they cannot overflow the HalfVector4 RT the way
+  `HdrSprite` effects do (relevant if you want buff glows to bloom like spell effects).
+
+### Layered-additive intensity — the clamp gap (for the review ask)
+There is **no per-spell / per-region combined-intensity clamp or tone-map**. Overlapping
+additive layers from one spell each add independently into the scene RT (`base + additive`,
+unbounded up), then extract+`intensity` amplify the sum; the only ceiling is per-layer
+`MaxHdrIntensity=4` at encode time — N overlapping layers still reach ~4N before the final
+[0,1] back-buffer clip whitewashes the core. To "clamp combined intensity within one spell"
+the two natural insertion points are: (a) a **tone-map step** (Reinhard/ACES on `base.rgb`)
+added to `BloomCombine.fx` or a new pre-composite pass in `Bloom.cs` `EndScene`; or (b)
+**intensity budgeting** where a spell spawns its layered `Effect`s (`Render/EffectManager.cs`
+spawn API + the `SpellEffectSystem`/`Game1.Spells.cs` callers). Existing parity notes:
+`todos/bloom_parity.md` (bright-white cores vs soft-wide glow), `todos/rendering_pitfalls.md`
+(C++ ignored per-sublayer HDR intensities, so C++-tuned spells.json values are inflated).
+
 ## Target feature set — what we want the renderer to do
 
 The wishlist that the pass-based redesign (previous section) should be designed
