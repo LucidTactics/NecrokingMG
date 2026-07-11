@@ -483,6 +483,60 @@ instead of the number), `Height` (**world-units height passed to `WorldToScreen`
   inside the world `_g._spriteBatch.Begin(...)` block) and call it from the world section of
   `GameRenderer.Draw.cs`. Use `WorldToScreen` for every endpoint; do not draw in world units.
 
+## Lightning / zap / beam & drain-tendril rasterization (the jagged-polyline draw)
+
+**Where the point list becomes drawn primitives: `Render/LightningRenderer.cs`.** There is
+NO vertex buffer or line-strip mesh — every bolt segment is a **rotated 1×1-pixel
+`SpriteBatch.Draw`** (a stretched-quad sprite), submitted into the shared additive HDR batch.
+This is why at high zoom the bolt reads as a chain of angled rectangles with gaps/seams at
+the joints: each segment is an independent axis-stretched quad rotated about origin
+`(0, 0.5f)` at `points[i]`, with no miter/round join between consecutive quads.
+
+- **Data/sim side** (`Necroking/Game/LightningSystem.cs`, ns `Necroking.GameSystems`):
+  `LightningSystem` holds `_strikes`/`_zaps`/`_beams`/`_drains` lists; `Update` only ages
+  them. `LightningStyle` carries the bolt-shape knobs (`Subdivisions`, `Displacement`,
+  branch params, `CoreColor`/`GlowColor` as `HdrColor`, `CoreWidth`/`GlowWidth`). Drains use
+  `DrainVisualParams` instead. **No point list is stored** — the polyline is regenerated
+  every frame at draw time from endpoints + a per-frame seed.
+- **Submission / batch context**: `LightningRenderer.Draw()` runs inside the callback
+  `_cbFxLightning` in `GameRenderer.Pipeline.cs`, submitted at `WorldLayer.EffectsHdrAdditive`
+  with material `Materials.HdrAdditive` (HdrSprite.fx, additive). It is a **native-encoding
+  island** — it calls the raw `_spriteBatch.Draw` directly with HDR-packed vertex colors, NOT
+  the premult-converting `SpriteScope`. Colors come from `HdrColor.ToHdrVertex(color, fade,
+  intensity)`. Bloom then picks up the >1.0 additive output (see Bloom section).
+- **Point-list generation (midpoint displacement)**: `GenerateBoltPoints(start, end,
+  subdivisions, displacement, ref seed)` — recursive midpoint displacement, `2^subdivisions+1`
+  points, each midpoint offset along the segment perpendicular by `±segLen*displacement` via
+  an LCG `seed`. `GenerateBranches` forks extra polylines off the middle 50%. Endpoints are
+  **screen-space** pixels (already `WorldToScreen`-projected by the four `Draw()` loops).
+- **The two-pass core/glow rasterizer**: `DrawBoltPolylineStatic(batch, pixel, points,
+  coreHdr, glowHdr, coreWidth, glowWidth, coreFade, glowFade)` — loops segments, and for each
+  draws **glow quad first (wide) then core quad (narrow)**, both the same rotated-pixel sprite
+  at different `scale.Y` (width) and different HDR fade. `DrawLightningBoltStatic` is the
+  entry that applies flicker/jitter, draws branches (decayed width) then the main bolt.
+- **Drain tendrils reuse the SAME segment-quad approach** but a different shape generator:
+  `DrawDrainTendrils` → `DrawTendrilStatic` builds an arcing sine-swayed point array
+  (`segments = length/20`) and rasterizes it with the identical glow-then-core rotated-pixel
+  double-draw. So bolts and tendrils share the rasterization *pattern* but each inlines its own
+  segment loop — there is **no single shared polyline utility**; consolidating them (or moving
+  to a connected triangle-strip) means changing both `DrawBoltPolylineStatic` and
+  `DrawTendrilStatic`.
+- **Statics are reused elsewhere**: `LightningRenderer.DrawLightningBoltStatic` /
+  `DrawBoltPolylineStatic` / `DrawTendrilStatic` are `public static` and also called by
+  `Editor/SpellPreview.cs` and the `SpellVisualTestScenario`/`BloomTestScenario` — any
+  strip-rework must keep those call sites (they pass a raw `SpriteBatch` with HdrSprite.fx active).
+- **Not the same as `DrawUtils.DrawLine`**: the rope/bezier overlay helper above
+  (`Render/DrawUtils.cs`) is also a rotated-pixel segment but is straight-alpha screen-space
+  and unrelated to lightning — lightning does its own HDR-encoded draw and does not call it.
+
+**To render a connected strip instead of a chain of quads** the change is localized to
+`Render/LightningRenderer.cs` `DrawBoltPolylineStatic` (and `DrawTendrilStatic` for drains):
+either emit a triangle strip / `DrawUserPrimitives` (a custom vertex path — note C# is
+pixel-shader-only on SpriteBatch's built-in VS, see "Absent entirely → Custom vertex shaders"),
+or keep SpriteBatch but bridge the joints (round-cap glow sprite at each interior point, or
+overlap/miter adjacent quads). The core/glow two-pass and `HdrColor.ToHdrVertex` encoding must
+be preserved so bloom still fires.
+
 ### `Necroking/Render/Flipbook.cs` — flipbook (sprite-sheet frame sequence)
 What lives here: `class Flipbook` — loads a sprite-sheet texture (cols×rows, FPS) and
 maps a frame index to a source `Rectangle`. `LoadFromDef(device, FlipbookDef)` builds one
