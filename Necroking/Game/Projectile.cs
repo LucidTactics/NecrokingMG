@@ -311,6 +311,9 @@ public class ProjectileManager
                 nearbyIDs.Clear();
                 float collisionRadius = MathF.Max(proj.AoeRadius * 0.5f, HitRadius);
                 qt.QueryRadius(proj.Position, collisionRadius, nearbyIDs);
+                // Ensure we deal damage to what we collided with at least.
+                // TODO: Clear up the logic here, this is not good, but at least this way we can see logs of what happened.
+                float aoe_radius = MathF.Max(proj.AoeRadius, HitRadius);
 
                 bool hitSomething = false;
                 foreach (uint nid in nearbyIDs)
@@ -324,10 +327,10 @@ public class ProjectileManager
                     // AOE damage
                     nearbyIDs.Clear();
                     if (proj.NoFriendlyFire)
-                        qt.QueryRadiusByFaction(proj.Position, proj.AoeRadius,
+                        qt.QueryRadiusByFaction(proj.Position, aoe_radius,
                             FactionMaskExt.AllExcept(proj.OwnerFaction), nearbyIDs);
                     else
-                        qt.QueryRadius(proj.Position, proj.AoeRadius, nearbyIDs);
+                        qt.QueryRadius(proj.Position, aoe_radius, nearbyIDs);
                     foreach (uint nid in nearbyIDs)
                     {
                         if (nid == proj.OwnerID) continue;
