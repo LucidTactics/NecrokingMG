@@ -284,21 +284,41 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
     wheel handler.
   - *Zones* — **does not scroll**: the list truncates with a `"... N more"` row at
     `contentY + contentH - 260`.
-- **Existing scrollbar implementations (no single canonical helper — copy-pasted!):**
-  the thin **indicator** (`DrawRect(x+w-6, barY, 5, barH)`, `barH = Math.Max(20, h*h/totalH)`,
-  color `(100,100,140,180)`) exists in `EditorBase.DrawScrollableList` (after its EndClip),
-  the `EditorBase` dropdown overlay, `EditorBase.DrawTextArea`, `UnitEditorWindow` property
-  panel ("outside clip so it's always visible"), and `TextureFileBrowser`. The ONLY
-  **draggable** scrollbar is `SettingsWindow` (track at `panelX+PanelW-18`, 8px thumb,
-  drag state `_scrollbarDragTab`/`_scrollbarDragGrabOffset`, track-click jump, gated on
-  `_ui.IsInputBlocked(0)`, calls `SetMouseOverUI`) — it pairs with the id-keyed
-  `EditorBase.HandlePanelScroll` + `SetPanelContentHeight` (record content height after
-  layout → next frame's wheel clamp; one-frame-stale by design). A shared
-  "draw thin vertical scrollbar" helper belongs in `EditorBase` next to
-  `DrawScrollableList`; MapEditorWindow tabs would call it per list. If made draggable,
-  do the drag **inside the EditorBase helper** using EditorBase's own `_mouse`/`_prevMouse`
-  (SettingsWindow precedent) — MapEditorWindow's own `_prevMouse` is already overwritten
-  during `Draw`, so edge detection hand-rolled in a `Draw<X>Tab` is always-false.
+- **Canonical scrollbar helper now EXISTS: `EditorBase.DrawVScrollbar(x, y, viewH,
+  contentH, scroll)`** — indicator-only (pure draw, no drag), 5px wide, faint track
+  `(30,30,45,120)` + proportional thumb `(100,100,140,180)`, `barH = Max(20,
+  viewH²/contentH)`, ratio clamped so overscroll can't push the thumb past the track,
+  no-op when content fits. Callers: `DrawScrollableList` (after its EndClip) and four
+  `MapEditorWindow` sites (Objects grid + Groups mode, Units grid, ProcGen). **This is the
+  SpellEditorWindow look** — the spell editor draws no bars itself; its list bar comes from
+  `DrawScrollableList` → `DrawVScrollbar` (detail panels are wheel-only via the id-keyed
+  `HandlePanelScroll`, no visible bar).
+- **Remaining hand-rolled copies (unification targets — thumb-only, no track, drifting
+  geometry):** the `EditorBase` dropdown overlay (`DrawDropdownOverlays`, 5px, `Max(12,…)`
+  thumb), `EditorBase.DrawTextArea` (5px, line-based `Max(12,…)`), `UnitEditorWindow`
+  property panel ("outside clip so it's always visible" — **6px wide at `x+w-8`**),
+  `TextureFileBrowser` (**7px at `px+listW-10`**). The ONLY **draggable** scrollbar is
+  `SettingsWindow` (track at `panelX+PanelW-18`, **8px** track+thumb, hot-highlight
+  `AccentColor`/`TextBright`, drag state `_scrollbarDragTab`/`_scrollbarDragGrabOffset`,
+  track-click jump, gated on `_ui.IsInputBlocked(0)`, calls `SetMouseOverUI`) — it pairs
+  with the id-keyed `EditorBase.HandlePanelScroll` + `SetPanelContentHeight` (record
+  content height after layout → next frame's wheel clamp; one-frame-stale by design).
+  If `DrawVScrollbar` is made draggable, do the drag **inside the EditorBase helper**
+  using EditorBase's own `_mouse`/`_prevMouse` (SettingsWindow precedent) —
+  MapEditorWindow's own `_prevMouse` is already overwritten during `Draw`, so edge
+  detection hand-rolled in a `Draw<X>Tab` is always-false.
+- **Wheel-scroll logic census**: canonical = `EditorBase.HandlePanelScroll` (rect +
+  maxScroll overload, or id-keyed panelId+viewH overload backed by `SetPanelContentHeight`;
+  respects `IsInputBlocked`/`_scrollConsumed`, calls `ConsumeScroll`+`SetMouseOverUI`) —
+  used by Spell/Item/Unit/EnvObject/UIEditor detail panels, SettingsWindow,
+  TextureFileBrowser. `DrawScrollableList` has its own inline wheel handler (0.15
+  sensitivity, per-`panelId` `_scrollOffsets` dict, `GetScrollOffset`/`ScrollListToItem`).
+  MapEditorWindow's generic per-tab handler bypasses both (see census above). Runtime UI
+  (non-editor) scrolls rows without bars: `UI/GrimoireOverlay.cs` `_scrollRow` (rebinds
+  widget tiles), `UI/GraveRosterUI.cs` `_scroll` (int rows), `UI/UILayer.cs` `OnScroll`
+  virtual + consume; the widget-def `IsScrollbar`/`ScrollbarProportional` fields (RI20)
+  are authored/serialized (`UIEditorWindow`/`UIDefsIO`) but have no runtime bar-drawing
+  consumer.
 
 **Look/edit here when…** adding a map-editor tab/category, changing brush painting or
 placement spacing, changing what SaveMap persists, building def-picker UI in a tab panel,
