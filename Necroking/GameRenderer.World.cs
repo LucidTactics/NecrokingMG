@@ -361,8 +361,11 @@ partial class GameRenderer
 
             if (proj.Type == ProjectileType.Direct)
             {
-                // Oriented arrow shaft
-                float angle = MathF.Atan2(proj.Velocity.Y * _g._camera.YRatio, proj.Velocity.X);
+                // Oriented arrow shaft — include the height (Z) component so the shaft
+                // tilts with the arc (WorldToScreen projects height up-screen at YRatio).
+                Vec2 arrowVel = proj.VisualVelocity;
+                float angle = MathF.Atan2(
+                    (arrowVel.Y - proj.VelocityZ) * _g._camera.YRatio, arrowVel.X);
                 float len = 12f * _g._camera.Zoom / 32f;
                 _g.Scope.Draw(_g._pixel, sp, null, new Color(200, 180, 120),
                     angle, new Vector2(0, 0.5f), new Vector2(len, 1.5f), SpriteEffects.None, 0f);
@@ -483,8 +486,21 @@ partial class GameRenderer
                 float scale = pixelSize / srcRect.Width;
                 var origin = new Vector2(srcRect.Width / 2f, srcRect.Height / 2f);
 
+                // Face the current 3D travel direction. On-screen velocity is world XY
+                // (VisualVelocity — includes the swirl wobble) plus the height
+                // contribution: WorldToScreen subtracts Height * Zoom * YRatio, so
+                // rising (VelocityZ > 0) moves the sprite up-screen at the same
+                // YRatio foreshortening as world Y.
+                Vec2 visVel = proj.VisualVelocity;
+                var screenVel = new Vector2(
+                    visVel.X,
+                    (visVel.Y - proj.VelocityZ) * _g._camera.YRatio);
+                // fire_loop art has its flame tail at the top of the frame (nose = down,
+                // screen angle +π/2); rotate that nose onto the travel direction.
+                float faceAngle = MathF.Atan2(screenVel.Y, screenVel.X) - MathF.PI / 2f;
+                if (screenVel.LengthSquared() > 1e-6f) screenVel.Normalize();
+
                 // Trail: draw 2 previous frames behind with lower alpha, then main sprite
-                Vec2 velDir = proj.Velocity.Normalized();
                 for (int trail = 2; trail >= 0; trail--)
                 {
                     float trailOffset = trail * 0.4f * _g._camera.Zoom;
@@ -494,14 +510,11 @@ partial class GameRenderer
                     int trailFrame = fb.GetFrameAtTime(proj.Age - trail * 0.05f);
                     Rectangle trailSrc = fb.GetFrameRect(trailFrame);
 
-                    Vector2 trailPos = new Vector2(
-                        sp.X - velDir.X * trailOffset,
-                        sp.Y - velDir.Y * trailOffset * _g._camera.YRatio
-                    );
+                    Vector2 trailPos = sp - screenVel * trailOffset;
 
                     var color = HdrColor.ToHdrVertex(proj.ParticleColor.ToColor(), trailAlpha, proj.ParticleColor.Intensity);
                     _g.Scope.Draw(fb.Texture, trailPos, trailSrc, color,
-                        proj.Age * 2f, origin, scale * trailScale, SpriteEffects.None, 0f);
+                        faceAngle, origin, scale * trailScale, SpriteEffects.None, 0f);
                 }
             }
             else

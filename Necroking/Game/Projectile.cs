@@ -57,6 +57,24 @@ public class Projectile
     /// along the flight direction at impact. 0 = none.</summary>
     public float ImpactForce;
     public float ImpactUpward;
+
+    /// <summary>Instantaneous XY velocity the projectile is *visually* travelling,
+    /// including the swirl wobble's analytic derivative. Swirl displaces Position
+    /// directly each tick without touching <see cref="Velocity"/> (homing,
+    /// detonate-at-target and impact FlightDir all depend on Velocity staying the
+    /// ballistic base), so renderers that orient the sprite along the flight path
+    /// must face this instead.</summary>
+    public Vec2 VisualVelocity
+    {
+        get
+        {
+            if (SwirlFreq <= 0f) return Velocity;
+            var perp = new Vec2(-BaseDirection.Y, BaseDirection.X);
+            float omega = SwirlFreq * 2f * MathF.PI;
+            float swirlVel = MathF.Cos(omega * Age + SwirlPhase) * SwirlAmplitude * omega;
+            return Velocity + perp * swirlVel;
+        }
+    }
 }
 
 public class ImpactEvent
