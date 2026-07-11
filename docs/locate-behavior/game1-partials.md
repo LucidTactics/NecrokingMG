@@ -44,20 +44,41 @@ funnels them through **`_input.Capture(mouse, prevMouse, kb, prevKb)`** — `Nec
 (`Pressed` now && `Released` last frame), `LeftDown`/`LeftReleased`, `ScrollDelta`, and where all
 per-frame consumption flags (`MouseOverUI`, `_mouseConsumed`, …) reset. Every system reads `_input.*`
 instead of calling `Mouse.GetState()` directly.
-**The window-focus gate already exists here** (`Game1.cs` ~lines 2630-2684) using MonoGame's
-`Game.IsActive`:
-- `bool unfocused = !IsActive && _activeScenario == null && LaunchArgs.Scenario == null && !LaunchArgs.Headless;`
-  (scenario/headless runs are exempt so the test harness isn't frozen).
-- **Refocus-click protection is the key trick:** when `unfocused && !keepRunningUnfocused` the method
-  sets `_prevMouse = mouse; _prevKb = kb;` and early-returns *before* `Capture` — so next frame the
-  click that refocused the window is already "held" in prevMouse and its rising edge never fires.
+**The window-focus gate lives here** (the focus-gate block near the top of `Game1.Update`). The focus
+signal is a **polled** `bool windowFocused = Core.WindowChrome.IsForegroundWindow() ?? IsActive;` — NOT
+`Game.IsActive` directly. Everything below uses `windowFocused`:
+- `bool unfocused = !windowFocused && _activeScenario == null && LaunchArgs.Scenario == null && !LaunchArgs.Headless;`
+  (scenario/headless runs are exempt so the test harness isn't frozen). `userInteractingWithWindow` is also
+  driven by `windowFocused`.
+- **Do NOT reintroduce `IsActive` as the focus signal.** MonoGame's `SdlGamePlatform` initialises
+  `IsActive = true` and only flips it on SDL `FocusGained`/`FocusLost` events — so a game **launched while
+  another app already holds foreground focus** never receives either event and `IsActive` stays `true`
+  forever. That made the OS deliver background clicks that the game accepted (clicking menu buttons the user
+  never intended). This is a **persistent** state bug, not just a first-frame race. Full write-up:
+  [docs/known-platform-bugs.md](../known-platform-bugs.md).
+- **The fix:** `Core/WindowChrome.cs` `IsForegroundWindow()` P/Invokes `GetForegroundWindow` +
+  `GetWindowThreadProcessId` and returns `bool?` (`null` off-Windows, so `?? IsActive` keeps the old
+  behaviour on non-Windows / where the API is unavailable). Polling the OS every frame is authoritative
+  regardless of whether SDL ever sent a focus event.
+- **Refocus-click protection:** when `unfocused && !keepRunningUnfocused` the method sets
+  `_prevMouse = mouse; _prevKb = kb;` and early-returns *before* `Capture` — so next frame the click that
+  refocused the window is already "held" in prevMouse and its rising edge never fires. **Accepted edge:**
+  the click that lands *on the game window* to focus it may still register (the OS can grant foreground
+  before that mouse-down is first polled, fabricating a `LeftPressed` edge) — deliberate, the click was
+  aimed at the game. If that ever needs suppressing, the known remedy is a swallow-until-release latch on
+  the `windowFocused` false→true transition feeding the no-buttons `MouseState` into `_input.Capture`
+  (`ConsumeGesture()` alone would NOT suffice — it only clears `PressStartPos` for release-fired EditorBase
+  widgets; the `LeftPressed` edge that menu buttons/world clicks read still fires. Latch precedent:
+  `MapEditorWindow.SuppressClicksUntilRelease()`/`_suppressClicksUntilRelease`, `Editor/MapEditorWindow.cs`.)
+  Because everything downstream reads `_input.LeftPressed/LeftDown`, that one place would cover ALL UI.
 - `keepRunningUnfocused` (dev server or `Settings.General.RunWhenUnfocused`) instead feeds a **neutral**
   MouseState (all buttons `Released`, cursor centred) into `Capture` so background clicks/keys aren't
   consumed while the sim keeps ticking.
 - A parallel `cursorOutside` branch (focused but cursor outside the viewport) strips mouse buttons via a
   no-buttons `MouseState` so out-of-bounds clicks can't command the world.
-Look/edit here when: a click made while the window is unfocused registers in-game; you need to gate
-input on window focus; "run when unfocused" behaviour; where click pressed-this-frame edges come from.
+Look/edit here when: a click made while the window is unfocused registers in-game; **a click that focuses
+the window is also processed as a game click (first-frame click-through)**; you need to gate input on
+window focus; "run when unfocused" behaviour; where click pressed-this-frame edges come from.
 
 #### GameClock — time & pause authority (`Necroking/Core/GameClock.cs`)
 **The single place that answers "what time is flowing, how fast, and what is paused".** `Game1` owns
