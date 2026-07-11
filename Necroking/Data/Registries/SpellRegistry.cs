@@ -247,6 +247,11 @@ public class SpellDef : INamedDef
     [JsonPropertyName("trajectory")] public string Trajectory { get; set; } = "Lob";
 
     [EditorVisible("Category", "Projectile")]
+    [EditorField(Label = "TrajectoryMods", Group = "PROJECTILE", Order = 201)]
+    [EditorCombo("", "Swirly", "Swirly3d")]
+    [JsonPropertyName("trajectoryMods")] public string TrajectoryMods { get; set; } = "";
+
+    [EditorVisible("Category", "Projectile")]
     [EditorField(Label = "Proj Speed", Group = "PROJECTILE", Order = 202, Step = 0.1f, Decimals = 1)]
     [JsonPropertyName("projectileSpeed")] public float ProjectileSpeed { get; set; } = 28.29f;
 

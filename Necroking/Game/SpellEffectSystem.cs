@@ -457,6 +457,17 @@ public static class SpellEffectSystem
         p.SwirlAmplitude = 1.0f + (float)_projRng.NextDouble() * 0.25f;
         p.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
     }
+    
+    private static void ApplySwirl3d(Projectile p)
+    {
+       p.SwirlFreq = 1f + (float)_projRng.NextDouble() * 0.5f;
+       p.SwirlAmplitude = 1.0f + (float)_projRng.NextDouble() * 0.25f;
+       p.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
+       
+       p.SwirlFreq2 = 1f + (float)_projRng.NextDouble() * 0.5f;
+       p.SwirlAmplitude2 = 1.0f + (float)_projRng.NextDouble() * 0.25f;
+       p.SwirlPhase2 = (float)_projRng.NextDouble() * 2f * MathF.PI;
+    }
 
     /// <summary>Spawn a spell projectile and post-configure it: tag it with the spell id
     /// (impact knockback / blight-bomb lookup), apply the def's Trajectory, and copy the
@@ -493,6 +504,15 @@ public static class SpellEffectSystem
         if (spell.Category == "Blight" || spell.DetonateAtTarget) {
             proj.TargetPos = target;
             proj.DetonateAtTarget = true;
+        }
+
+        switch (spell.TrajectoryMods) {
+           case "Swirly":
+              ApplySwirl(proj);
+              break;
+           case "Swirly3d":
+              ApplySwirl3d(proj);
+              break;
         }
 
         switch (traj) {

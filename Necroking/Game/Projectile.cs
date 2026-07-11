@@ -49,6 +49,9 @@ public class Projectile
     public float SwirlFreq;
     public float SwirlAmplitude;
     public float SwirlPhase;
+    public float SwirlFreq2;
+    public float SwirlAmplitude2;
+    public float SwirlPhase2;
     public string PotionID = "";
     public string IconTexturePath = "";
     public bool HitsCorpses;
@@ -72,8 +75,19 @@ public class Projectile
             var perp = new Vec2(-BaseDirection.Y, BaseDirection.X);
             float omega = SwirlFreq * 2f * MathF.PI;
             float swirlVel = MathF.Cos(omega * Age + SwirlPhase) * SwirlAmplitude * omega;
+            
             return Velocity + perp * swirlVel;
         }
+    }
+
+    public float VisualVelocityZ {
+       get {
+          if (SwirlFreq2 <= 0f) return VelocityZ;
+            
+          float omega = SwirlFreq2 * 2f * MathF.PI;
+          float swirlVel = MathF.Cos(omega * Age + SwirlPhase2) * SwirlAmplitude2 * omega;
+          return VelocityZ + swirlVel;
+       }
     }
 }
 
@@ -288,6 +302,12 @@ public class ProjectileManager
                 float prevSwirl = MathF.Sin(proj.SwirlFreq * (proj.Age - dt) * 2f * Pi + proj.SwirlPhase) * proj.SwirlAmplitude;
                 float currSwirl = MathF.Sin(proj.SwirlFreq * proj.Age * 2f * Pi + proj.SwirlPhase) * proj.SwirlAmplitude;
                 proj.Position += perp * (currSwirl - prevSwirl);
+            }
+            if (proj.SwirlFreq2 > 0f)
+            {
+               float prevSwirl = MathF.Sin(proj.SwirlFreq2 * (proj.Age - dt) * 2f * Pi + proj.SwirlPhase2) * proj.SwirlAmplitude2;
+               float currSwirl = MathF.Sin(proj.SwirlFreq2 * proj.Age * 2f * Pi + proj.SwirlPhase2) * proj.SwirlAmplitude2;
+               proj.Height += (currSwirl - prevSwirl);
             }
 
             // Detonate-at-target: burst exactly at the aimed point once the bomb

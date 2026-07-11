@@ -365,7 +365,7 @@ partial class GameRenderer
                 // tilts with the arc (WorldToScreen projects height up-screen at YRatio).
                 Vec2 arrowVel = proj.VisualVelocity;
                 float angle = MathF.Atan2(
-                    (arrowVel.Y - proj.VelocityZ) * _g._camera.YRatio, arrowVel.X);
+                    (arrowVel.Y - proj.VisualVelocityZ) * _g._camera.YRatio, arrowVel.X);
                 float len = 12f * _g._camera.Zoom / 32f;
                 _g.Scope.Draw(_g._pixel, sp, null, new Color(200, 180, 120),
                     angle, new Vector2(0, 0.5f), new Vector2(len, 1.5f), SpriteEffects.None, 0f);
@@ -494,7 +494,7 @@ partial class GameRenderer
                 Vec2 visVel = proj.VisualVelocity;
                 var screenVel = new Vector2(
                     visVel.X,
-                    (visVel.Y - proj.VelocityZ) * _g._camera.YRatio);
+                    (visVel.Y - proj.VisualVelocityZ) * _g._camera.YRatio);
                 // fire_loop art has its flame tail at the top of the frame (nose = down,
                 // screen angle +π/2); rotate that nose onto the travel direction.
                 float faceAngle = MathF.Atan2(screenVel.Y, screenVel.X) - MathF.PI / 2f;
