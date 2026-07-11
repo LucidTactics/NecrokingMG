@@ -1152,6 +1152,8 @@ public class MapEditorWindow
                 break;
             case MapEditorTab.Objects:
                 if (_objectPaintMode && !overPanel) DrawBrushCursor(screenW, screenH);
+                if (!_objectPaintMode && !overPanel && !IsAnyPopupBlocking())
+                    DrawObjectPlacementGhost(screenW, screenH);
                 if (_showCollisions) DrawCollisionOverlay(screenW, screenH);
                 break;
             case MapEditorTab.Roads:
@@ -1167,6 +1169,60 @@ public class MapEditorWindow
                 if (!overPanel) DrawProcGenBrushCursor(screenW, screenH);
                 break;
         }
+    }
+
+    /// <summary>Semi-transparent ghost of the selected object under the cursor
+    /// (Objects tab, single-place mode): grey where CanPlaceObject accepts the
+    /// spot, red where it doesn't — same check and default scale the click-to-
+    /// place path uses. Group selections preview their highest-weight member
+    /// (the actual placement re-rolls per click, so the ghost can't match it).</summary>
+    private void DrawObjectPlacementGhost(int screenW, int screenH)
+    {
+        // Never ResolveObjectDefIndex() here — it re-rolls the weighted random
+        // group pick per call, so the ghost would flicker between group members
+        // every frame.
+        int defIdx = SelectedEnvDefIndex;
+        if (IsEnvGroupSelected)
+        {
+            var members = GetSelectedGroupMembers();
+            if (members.Count == 0) return;
+            defIdx = members[0].defIdx;
+            float bestW = members[0].weight;
+            for (int i = 1; i < members.Count; i++)
+                if (members[i].weight > bestW) { defIdx = members[i].defIdx; bestW = members[i].weight; }
+        }
+        if (defIdx < 0 || defIdx >= _envSystem.DefCount) return;
+
+        var tex = _envSystem.GetDefTexture(defIdx);
+        if (tex == null) return;
+        var def = _envSystem.GetDef(defIdx);
+
+        // MousePos, not the raw MouseState: identical for a real cursor, but it
+        // also honors the dev `mousepos` override so headless drives can test.
+        Vec2 worldPos = _camera.ScreenToWorld(_eb._input.MousePos, screenW, screenH);
+        bool canPlace = _envSystem.CanPlaceObject(defIdx, worldPos.X, worldPos.Y);
+
+        // Animated sheets preview frame 0; placeholder textures must not be sliced.
+        Rectangle? srcRect = null;
+        float frameW = tex.Width, frameH = tex.Height;
+        if (def.IsAnimated && def.AnimTotalFrames > 1 && !_envSystem.IsUsingPlaceholder(defIdx))
+        {
+            var r = def.GetAnimFrameRect(tex.Width, tex.Height, 0);
+            srcRect = r;
+            frameW = r.Width;
+            frameH = r.Height;
+        }
+
+        float worldH = def.SpriteWorldHeight * def.Scale;
+        float scale = worldH * _camera.Zoom / frameH;
+        var origin = new Vector2(def.PivotX * frameW, def.PivotY * frameH);
+        var screenPos = _camera.WorldToScreen(worldPos, 0f, screenW, screenH);
+
+        byte alpha = 76; // ~0.3, matches BuildingMenuUI.DrawGhostPreview
+        Color tint = canPlace
+            ? new Color((byte)140, (byte)140, (byte)140, alpha)
+            : new Color((byte)200, (byte)50, (byte)50, alpha);
+        Scope.Draw(tex, screenPos, srcRect, tint, 0f, origin, scale, SpriteEffects.None, 0f);
     }
 
     public void Draw(int screenW, int screenH)
@@ -4709,6 +4765,29 @@ public class MapEditorWindow
         ActiveTab = MapEditorTab.Zones;
         SelectedZoneIndex = found;
         return $"zone {zones[found].Id} ({zones[found].Name})";
+    }
+
+    /// <summary>Dev-select an env object def on the Objects tab by index, id, or
+    /// name (case-insensitive), for headless driving — the grid click path needs
+    /// real mouse state. Returns null if nothing matched.</summary>
+    public string? DevSelectObjectDef(string token)
+    {
+        int found = -1;
+        if (int.TryParse(token, out int idx) && idx >= 0 && idx < _envSystem.DefCount)
+            found = idx;
+        else
+            for (int i = 0; i < _envSystem.DefCount; i++)
+            {
+                var d = _envSystem.GetDef(i);
+                if (string.Equals(d.Id, token, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(d.Name, token, StringComparison.OrdinalIgnoreCase))
+                { found = i; break; }
+            }
+        if (found < 0) return null;
+        ActiveTab = MapEditorTab.Objects;
+        SelectedEnvDefIndex = found;
+        var def = _envSystem.GetDef(found);
+        return $"object def {def.Id} ({def.Name})";
     }
 
     /// <summary>Deep copy of a zone for the clipboard — Population and Spawns are

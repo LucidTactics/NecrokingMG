@@ -2083,7 +2083,8 @@ public partial class Game1 {
          case MenuState.MapEditor:
             // Zones tab: select a zone by index/id/name so headless drives can
             // exercise the selected-state UI (handles, left village panel).
-            return _mapEditor.DevSelectZone(token);
+            // Falls back to Objects-tab env defs (placement ghost, def props).
+            return _mapEditor.DevSelectZone(token) ?? _mapEditor.DevSelectObjectDef(token);
          default:
             return null;
       }
