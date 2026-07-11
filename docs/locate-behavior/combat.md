@@ -41,15 +41,38 @@ forwards to it so AI and sim share one formula (they previously drifted — 1.5f
   (InCombat set), `~3634` (a secondary engage check).
 - **Special weapon archetypes are dispatched inside the attack-selection loop** by
   `WeaponStats.Archetype`: `WeaponArchetype.Pounce` → **`InitiatePounceWithWeapon(i, ti,
-  w, roundDuration)`** (computes `landingPos` = target position minus a
-  radius-sum+0.2 standoff along the current attacker→target line — **no velocity lead** —
-  then `JumpSystem.BeginPounce(units, i, landingPos, targetId, animMeta, sprite,
-  arcPeak, speedOverride: CombatSpeed*SprintMult)` and stamps `PendingAttack` so the
-  landing resolves melee); `Trample` → `TrampleSystem.BeginCharge`; `Sweep` → stamps a
-  sweep `PendingAttack`. This is the ONLY `BeginPounce` caller — wild-wolf and other AI
+  w, roundDuration)`**; `Trample` → `TrampleSystem.BeginCharge`; `Sweep` → stamps a
+  sweep `PendingAttack`. Range gate for pounce is the **unled** center-to-center distance
+  in `[PounceMinRange, PounceMaxRange]` (weapon fields, `Data/CombatTypes.cs` /
+  `weapons.json` `pounceMinRange`/`pounceMaxRange`/`pounceArcPeak`).
+- **Pounce intercept lead + landing point** (`InitiatePounceWithWeapon`,
+  `Necroking/Game/Simulation.cs`): the landing spot is computed **once, at pounce
+  initiation** (before the JumpTakeoff/crouch anim even starts) and never updated:
+  1. `InterceptUtil.PredictPosition(myPos, targetPos, target.Velocity, pounceSpeed)`
+     (`Necroking/Game/Combat/InterceptUtil.cs` — 2-iteration linear lead; assumes
+     constant target velocity, `pounceSpeed = Locomotion.SprintTopSpeed`).
+  2. `InterceptUtil.ClampLeadOvershoot(myPos, predicted, PounceMaxRange)` — lead may
+     stretch +30% past PounceMaxRange, then pulls back onto that circle.
+  3. `landingPos = predicted − dir(toPredicted) * target.Radius` — the pouncer's center
+     lands on the predicted target's **collision edge** (standoff = target radius,
+     along the approach to the PREDICTED point). Slack at landing = attackerR + 0.5u.
+  Then `JumpSystem.BeginPounce(units, i, landingPos, targetId, animMeta, sprite,
+  weapon.PounceArcPeak, speedOverride: pounceSpeed)` and stamps `PendingAttack` so the
+  landing resolves melee. This is the ONLY `BeginPounce` caller — wild-wolf and other AI
   handlers don't pounce themselves (see `WolfPackHandler.cs` comment: pounce is central).
-  `BeginPounce` (`Necroking/Game/JumpSystem.cs`) derives travel duration itself
-  from `dist / speed` + anim compression.
+- **Pounce timeline** (`Necroking/Game/JumpSystem.cs`, phases on `Unit.JumpPhase`):
+  1=TakeoffApproach (on ground, JumpTakeoff anim; handlers `break` on `JumpPhase != 0`
+  so `PreferredVel` is whatever was last set) → **liftoff at JumpTakeoff's
+  `effect_time_ms`** (`ctrl.JustHitEffectFrame` in `TickTakeoffApproach`; only
+  `JumpStartPos` is recaptured there — `JumpEndPos` stays locked from initiation) →
+  2=Airborne (scripted lerp + parabolic Z) → 3=Landing (JumpLand starts `effect_time`
+  before touchdown) → 4=Recovery. Anim playback is uniformly compressed so total time
+  = `dist/speed`. **Landing hit check** (`FireLandingCallback`): if
+  `dist(lander, target) > attackerR + targetR + PounceLandingHitMargin (0.5u const)`
+  the pounce is a clean miss — `PendingAttack` cleared, `PostAttackTimer` refunded;
+  else `sim.ResolvePendingAttack(idx)`. Anim `effect_time_ms` comes from the sprite's
+  meta JSON via `Render/AnimationMeta.cs` `AnimMetaLoader` (missing effect_time on
+  JumpTakeoff/JumpLand = silent timing bugs; loader logs a warning).
 
 ### `Necroking/Game1.WorldClicks.cs` — the player click → melee order (regression lives here)
 - **`TryAttackClick(mouseWorld, necroIdx)`** — LMB/RMB on an enemy orders the necromancer to
@@ -88,8 +111,11 @@ per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, pr
   `ResolvePendingAttack` ranged branch and legacy `ArcherAttack`) does a one-iteration
   linear lead — `aim += defender.Velocity * (dist / ProjectileManager.ArrowSpeed)` — inline,
   not via any shared helper. It also picks direct-vs-lob (`IsFireLaneClear`) and passes
-  precision to `SpawnArrow`. Pounce (`InitiatePounceWithWeapon`), trample (straight
-  per-frame homing in `TrampleSystem.TickCharge`), and spell target points do NOT lead.
+  precision to `SpawnArrow`. **Pounce now leads too** via the shared
+  `Necroking/Game/Combat/InterceptUtil.cs` (`PredictPosition`/`ClampLeadOvershoot` —
+  the single source for target leading; new launched-at-moving-unit abilities should
+  call it). Trample (straight per-frame homing in `TrampleSystem.TickCharge`) and
+  spell target points do NOT lead.
 - **Projectiles do NOT collide with walls/env objects** — only units (quadtree radius
   query, arrows hit while `0 < Height < 2`), corpses (potions), and the ground. There is
   **no line-of-sight utility in the codebase** (no LoS/raycast helper) — a "lob over

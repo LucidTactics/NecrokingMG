@@ -2245,24 +2245,12 @@ public class Simulation
         predicted = GameSystems.Combat.InterceptUtil.ClampLeadOvershoot(
             _units[i].Position, predicted, weapon.PounceMaxRange);
 
-        // Locked landing spot: the pouncer's center lands ON the predicted
-        // target's collision edge (standoff = target radius, along THIS
-        // attacker's approach). Why exactly the target radius: the landing
-        // hit window is attackerR + targetR + PounceLandingHitMargin, so this
-        // leaves attackerR + margin (~1.0u) of slack for prediction error —
-        // the old melee-range standoff (bothR + 0.2) left only 0.3u and
-        // near-missed constantly vs accelerating deer (logged misses at
-        // dist 1.51-1.59 vs reach 1.50). Not zero: per-direction standoff
-        // spreads simultaneous pouncers around the target's rim instead of
-        // piling every wolf onto the exact center point. Direction is toward
-        // the PREDICTED point — offsetting along the stale attacker→current
-        // vector would land the pouncer sideways of a moving target.
-        Vec2 toTarget = predicted - _units[i].Position;
-        float len = toTarget.Length();
-        float standoff = _units[ti].Radius;
-        Vec2 landingPos = len > 0.01f
-            ? predicted - toTarget * (standoff / len)
-            : predicted;
+        // Landing spot: halfway between the predicted target's collision edge
+        // and its center (standoff + rationale live in JumpSystem.PounceLandingPoint).
+        // Committed here, then re-aimed once at the liftoff instant with the
+        // target's fresh velocity (JumpSystem.RetargetPounceAtLiftoff).
+        Vec2 landingPos = JumpSystem.PounceLandingPoint(
+            _units[i].Position, predicted, _units[ti].Radius);
         JumpSystem.BeginPounce(_units, i, landingPos, _units[ti].Id,
             _animMeta, spriteName, weapon.PounceArcPeak, speedOverride: pounceSpeed);
 

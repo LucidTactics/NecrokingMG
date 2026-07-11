@@ -74,7 +74,7 @@
         "attack": 8,
         "defense": 10,
         "magicResist": 6,
-        "morale": 10,
+        "morale": 50,
         "encumbrance": 0,
         "toughness": 0,
         "combatSpeed": 1.41,
@@ -108,9 +108,9 @@
         "attack": 4,
         "defense": 6,
         "magicResist": 2,
-        "morale": 10,
+        "morale": 5,
         "encumbrance": 2,
-        "toughness": 5,
+        "toughness": 2,
         "combatSpeed": 1.2,
         "drn": 1
       },
@@ -145,11 +145,11 @@
       },
       "stats": {
         "maxHP": 2,
-        "strength": 2,
+        "strength": 1,
         "attack": 2,
-        "defense": 2,
+        "defense": 3,
         "magicResist": 1,
-        "morale": 50,
+        "morale": 5,
         "encumbrance": 2,
         "toughness": 0,
         "combatSpeed": 1.3,
@@ -157,7 +157,7 @@
       },
       "zombieTypeID": "ZombieRat",
       "weapons": [
-        "weapon_claw"
+        "canine_bite"
       ],
       "attackCooldown": 0.8,
       "archetype": "RatPack",
@@ -183,11 +183,11 @@
       },
       "stats": {
         "maxHP": 2,
-        "strength": 2,
+        "strength": 1,
         "attack": 2,
-        "defense": 2,
+        "defense": 3,
         "magicResist": 1,
-        "morale": 10,
+        "morale": 50,
         "encumbrance": 2,
         "toughness": 0,
         "combatSpeed": 1.3,
@@ -196,12 +196,12 @@
       "zombieTypeID": "ZombieRat",
       "undeadCategory": "Monster",
       "weapons": [
-        "weapon_claw"
+        "canine_bite"
       ],
+      "archetype": "HordeMinion",
       "isQuadruped": true,
       "animJogVelOverride": 2,
-      "animRunVelOverride": 3,
-      "archetype": "HordeMinion"
+      "animRunVelOverride": 3
     },
     {
       "id": "ZombieFemaleDeer",
@@ -212,15 +212,15 @@
         "name": "ZombieFemaleDeer"
       },
       "stats": {
-        "maxHP": 10,
+        "maxHP": 7,
         "strength": 4,
         "attack": 4,
         "defense": 6,
         "magicResist": 2,
-        "morale": 10,
+        "morale": 50,
         "encumbrance": 2,
-        "toughness": 4,
-        "combatSpeed": 1.2,
+        "toughness": 2,
+        "combatSpeed": 0.96,
         "drn": 1
       },
       "undeadCategory": "Monster",
@@ -259,14 +259,14 @@
         "name": "MaleDeer"
       },
       "stats": {
-        "maxHP": 10,
+        "maxHP": 7,
         "strength": 4,
         "attack": 4,
         "defense": 6,
-        "magicResist": 3,
+        "magicResist": 2,
         "morale": 10,
         "encumbrance": 2,
-        "toughness": 5,
+        "toughness": 2,
         "combatSpeed": 1.2,
         "drn": 1
       },
@@ -297,19 +297,39 @@
       "ai": "",
       "radius": 0.5,
       "spriteScale": 0.6875,
+      "wadingFractionByDirection": {
+        "n": 0.28404,
+        "e": 0.55,
+        "s": 0.08081722,
+        "w": 0.55,
+        "ne": 0.2951628,
+        "se": 0.4,
+        "sw": 0.4,
+        "nw": 0.3003989
+      },
+      "wadingTopFractionByDirection": {
+        "n": 0,
+        "e": 0,
+        "s": 0.1,
+        "w": 0,
+        "ne": 0,
+        "se": 0.05,
+        "sw": 0.05,
+        "nw": 0
+      },
       "sprite": {
         "atlas": "Animals",
         "name": "Wolf"
       },
       "stats": {
         "maxHP": 8,
-        "strength": 4,
-        "attack": 11,
-        "defense": 13,
+        "strength": 3,
+        "attack": 6,
+        "defense": 7,
         "magicResist": 3,
         "morale": 10,
         "encumbrance": 2,
-        "toughness": 3,
+        "toughness": 2,
         "combatSpeed": 2,
         "drn": 1
       },
@@ -358,17 +378,37 @@
       "size": 3,
       "radius": 0.75,
       "spriteScale": 0.842188,
+      "wadingFractionByDirection": {
+        "n": 0.28404,
+        "e": 0.45697522,
+        "s": 0.176187,
+        "w": 0.47418505,
+        "ne": 0.49697676,
+        "se": 0.4,
+        "sw": 0.4,
+        "nw": 0.51209277
+      },
+      "wadingTopFractionByDirection": {
+        "n": 0,
+        "e": 0,
+        "s": 0.1,
+        "w": 0,
+        "ne": 0,
+        "se": 0,
+        "sw": 0,
+        "nw": 0
+      },
       "sprite": {
         "atlas": "Animals",
         "name": "JuvenileBear"
       },
       "stats": {
         "maxHP": 25,
-        "strength": 14,
+        "strength": 13,
         "attack": 12,
-        "defense": 8,
+        "defense": 7,
         "magicResist": 3,
-        "morale": 10,
+        "morale": 12,
         "encumbrance": 2,
         "toughness": 8,
         "combatSpeed": 0.8,
@@ -405,12 +445,12 @@
           "effectTimeMs": -1
         }
       },
+      "archetype": "AmbushPredator",
       "isQuadruped": true,
       "dutyCycle": 0.5,
       "targetWalkCycle": 1.7,
       "jogSpeedMultiplier": 3,
-      "sprintSpeedMultiplier": 9,
-      "archetype": "AmbushPredator"
+      "sprintSpeedMultiplier": 9
     },
     {
       "id": "GrizzlyBear",
@@ -420,6 +460,26 @@
       "size": 4,
       "radius": 1,
       "spriteScale": 1.185938,
+      "wadingFractionByDirection": {
+        "n": 0.28404,
+        "e": 0.4039863,
+        "s": 0.13186568,
+        "w": 0.38216496,
+        "ne": 0.4534495,
+        "se": 0.35053265,
+        "sw": 0.32063913,
+        "nw": 0.3952614
+      },
+      "wadingTopFractionByDirection": {
+        "n": 0,
+        "e": 0,
+        "s": 0.1,
+        "w": 0,
+        "ne": 0,
+        "se": 0,
+        "sw": 0,
+        "nw": 0
+      },
       "sprite": {
         "atlas": "Animals",
         "name": "GrizzlyBear"
@@ -430,7 +490,7 @@
         "attack": 13,
         "defense": 8,
         "magicResist": 4,
-        "morale": 10,
+        "morale": 14,
         "encumbrance": 2,
         "toughness": 8,
         "combatSpeed": 1.1,
@@ -467,12 +527,12 @@
           "effectTimeMs": -1
         }
       },
+      "archetype": "AmbushPredator",
       "isQuadruped": true,
       "dutyCycle": 0.5,
       "targetWalkCycle": 1.8,
       "jogSpeedMultiplier": 3,
-      "sprintSpeedMultiplier": 9,
-      "archetype": "AmbushPredator"
+      "sprintSpeedMultiplier": 9
     },
     {
       "id": "DireWolf",
@@ -488,17 +548,17 @@
       },
       "stats": {
         "maxHP": 15,
-        "strength": 12,
-        "attack": 14,
-        "defense": 14,
+        "strength": 7,
+        "attack": 12,
+        "defense": 12,
         "magicResist": 3,
         "morale": 10,
         "encumbrance": 2,
         "toughness": 3,
-        "combatSpeed": 3,
+        "combatSpeed": 2.5,
         "drn": 1
       },
-      "zombieTypeID": "ZombieWolf",
+      "zombieTypeID": "ZombieDireWolf",
       "weapons": [
         {
           "id": "canine_bite",
@@ -522,12 +582,12 @@
           "effectTimeMs": -1
         }
       },
+      "archetype": "SoloPredator",
       "isQuadruped": true,
       "dutyCycle": 0.5,
       "targetWalkCycle": 1,
       "jogSpeedMultiplier": 3,
-      "sprintSpeedMultiplier": 9,
-      "archetype": "SoloPredator"
+      "sprintSpeedMultiplier": 9
     },
     {
       "id": "JuvWolf",
@@ -542,17 +602,17 @@
       },
       "stats": {
         "maxHP": 5,
-        "strength": 5,
-        "attack": 9,
-        "defense": 11,
+        "strength": 3,
+        "attack": 4,
+        "defense": 5,
         "magicResist": 3,
         "morale": 10,
         "encumbrance": 2,
-        "toughness": 2,
+        "toughness": 1,
         "combatSpeed": 2,
         "drn": 1
       },
-      "zombieTypeID": "ZombieWolf",
+      "zombieTypeID": "WolfCubZombie",
       "weapons": [
         {
           "id": "canine_bite",
@@ -576,12 +636,12 @@
           "effectTimeMs": -1
         }
       },
+      "archetype": "SoloPredator",
       "isQuadruped": true,
       "dutyCycle": 0.5,
       "targetWalkCycle": 0.6,
       "jogSpeedMultiplier": 3,
-      "sprintSpeedMultiplier": 9,
-      "archetype": "SoloPredator"
+      "sprintSpeedMultiplier": 9
     },
     {
       "id": "ZombieWolf",
@@ -614,13 +674,13 @@
       },
       "stats": {
         "maxHP": 10,
-        "strength": 9,
-        "attack": 8,
-        "defense": 11,
+        "strength": 3,
+        "attack": 6,
+        "defense": 7,
         "magicResist": 3,
-        "morale": 10,
+        "morale": 50,
         "encumbrance": 2,
-        "toughness": 3,
+        "toughness": 2,
         "combatSpeed": 2,
         "drn": 1
       },
@@ -660,13 +720,13 @@
       },
       "stats": {
         "maxHP": 7,
-        "strength": 5,
+        "strength": 3,
         "attack": 4,
-        "defense": 8,
+        "defense": 5,
         "magicResist": 3,
-        "morale": 10,
+        "morale": 50,
         "encumbrance": 2,
-        "toughness": 3,
+        "toughness": 1,
         "combatSpeed": 2,
         "drn": 1
       },
@@ -679,12 +739,12 @@
       "maxAcceleration": 10,
       "maxDeceleration": 45,
       "maxLateralAccel": 30,
+      "archetype": "HordeMinion",
       "isQuadruped": true,
       "dutyCycle": 0.5,
       "targetWalkCycle": 0.5,
       "jogSpeedMultiplier": 3,
-      "sprintSpeedMultiplier": 9,
-      "archetype": "HordeMinion"
+      "sprintSpeedMultiplier": 9
     },
     {
       "id": "ZombieMaleDeer",
@@ -696,15 +756,15 @@
         "name": "ZombieMaleDeer"
       },
       "stats": {
-        "maxHP": 15,
+        "maxHP": 8,
         "strength": 7,
         "attack": 6,
         "defense": 8,
-        "magicResist": 3,
-        "morale": 10,
+        "magicResist": 2,
+        "morale": 50,
         "encumbrance": 2,
-        "toughness": 4,
-        "combatSpeed": 1.2,
+        "toughness": 2,
+        "combatSpeed": 0.96,
         "drn": 1
       },
       "undeadCategory": "Monster",
@@ -755,7 +815,7 @@
         "attack": 10,
         "defense": 8,
         "magicResist": 14,
-        "morale": 10,
+        "morale": 50,
         "encumbrance": 0,
         "toughness": 8,
         "combatSpeed": 5.59,
@@ -1190,6 +1250,9 @@
       "spellID": "god_ray",
       "maxMana": 50,
       "manaRegen": 1,
+      "paths": {
+        "heavens": 1
+      },
       "weapons": [
         "staff"
       ],
@@ -1201,10 +1264,7 @@
       "detectionRange": 15,
       "detectionBreakRange": 22,
       "alertDuration": 1,
-      "alertEscalateRange": 8,
-      "paths": {
-        "heavens": 1
-      }
+      "alertEscalateRange": 8
     },
     {
       "id": "soldier",
@@ -1366,7 +1426,7 @@
         "attack": 10,
         "defense": 11,
         "magicResist": 6,
-        "morale": 10,
+        "morale": 50,
         "encumbrance": 0,
         "toughness": 0,
         "combatSpeed": 4.8,
@@ -1409,7 +1469,7 @@
         "attack": 11,
         "defense": 10,
         "magicResist": 8,
-        "morale": 10,
+        "morale": 50,
         "encumbrance": 0,
         "toughness": 4,
         "combatSpeed": 4.8,
@@ -1454,7 +1514,7 @@
         "attack": 13,
         "defense": 12,
         "magicResist": 10,
-        "morale": 10,
+        "morale": 50,
         "encumbrance": 0,
         "toughness": 8,
         "combatSpeed": 6,
@@ -1489,14 +1549,14 @@
       },
       "stats": {
         "maxHP": 18,
-        "strength": 12,
-        "attack": 11,
-        "defense": 7,
+        "strength": 7,
+        "attack": 6,
+        "defense": 5,
         "magicResist": 2,
         "morale": 10,
         "encumbrance": 2,
         "toughness": 6,
-        "combatSpeed": 0.91,
+        "combatSpeed": 1.3,
         "drn": 1
       },
       "zombieTypeID": "ZombieBoar",
@@ -1513,6 +1573,7 @@
       "maxAcceleration": 5,
       "maxDeceleration": 15,
       "maxLateralAccel": 8,
+      "archetype": "SoloPredator",
       "detectionRange": 14,
       "detectionBreakRange": 22,
       "alertDuration": 0.5,
@@ -1522,8 +1583,7 @@
       "dutyCycle": 0.5,
       "targetWalkCycle": 1,
       "jogSpeedMultiplier": 3,
-      "sprintSpeedMultiplier": 9,
-      "archetype": "SoloPredator"
+      "sprintSpeedMultiplier": 9
     },
     {
       "id": "GreatBoar",
@@ -1539,12 +1599,12 @@
         "name": "GreatBoar"
       },
       "stats": {
-        "maxHP": 30,
-        "strength": 15,
-        "attack": 12,
-        "defense": 6,
+        "maxHP": 20,
+        "strength": 10,
+        "attack": 8,
+        "defense": 5,
         "magicResist": 3,
-        "morale": 10,
+        "morale": 15,
         "encumbrance": 2,
         "toughness": 8,
         "combatSpeed": 1.14,
@@ -1564,6 +1624,7 @@
       "maxAcceleration": 4,
       "maxDeceleration": 12,
       "maxLateralAccel": 6,
+      "archetype": "SoloPredator",
       "detectionRange": 14,
       "detectionBreakRange": 22,
       "alertDuration": 0.5,
@@ -1573,8 +1634,7 @@
       "dutyCycle": 0.5,
       "targetWalkCycle": 1.4,
       "jogSpeedMultiplier": 3,
-      "sprintSpeedMultiplier": 9,
-      "archetype": "SoloPredator"
+      "sprintSpeedMultiplier": 9
     },
     {
       "id": "ZombieJuvenileBear",
@@ -1588,11 +1648,11 @@
       },
       "stats": {
         "maxHP": 25,
-        "strength": 14,
+        "strength": 13,
         "attack": 10,
         "defense": 7,
         "magicResist": 3,
-        "morale": 10,
+        "morale": 50,
         "encumbrance": 2,
         "toughness": 6,
         "combatSpeed": 0.97,
@@ -1644,11 +1704,11 @@
         "attack": 11,
         "defense": 7,
         "magicResist": 4,
-        "morale": 10,
+        "morale": 50,
         "encumbrance": 2,
         "toughness": 6,
         "combatSpeed": 1.1,
-        "drn": 2
+        "drn": 1
       },
       "undeadCategory": "Monster",
       "weapons": [
@@ -1692,14 +1752,14 @@
       },
       "stats": {
         "maxHP": 18,
-        "strength": 12,
-        "attack": 11,
-        "defense": 7,
+        "strength": 7,
+        "attack": 6,
+        "defense": 5,
         "magicResist": 2,
-        "morale": 10,
+        "morale": 50,
         "encumbrance": 2,
         "toughness": 6,
-        "combatSpeed": 0.75,
+        "combatSpeed": 1.3,
         "drn": 1
       },
       "undeadCategory": "Monster",
@@ -1741,12 +1801,12 @@
         "name": "GreatBoar"
       },
       "stats": {
-        "maxHP": 30,
-        "strength": 15,
-        "attack": 12,
-        "defense": 6,
+        "maxHP": 20,
+        "strength": 10,
+        "attack": 8,
+        "defense": 5,
         "magicResist": 3,
-        "morale": 10,
+        "morale": 50,
         "encumbrance": 2,
         "toughness": 8,
         "combatSpeed": 2.5,
@@ -2232,6 +2292,72 @@
       "targetWalkCycle": 0.8,
       "jogSpeedMultiplier": 3,
       "sprintSpeedMultiplier": 5
+    },
+    {
+      "id": "ZombieDireWolf",
+      "name": "Zombie Dire Wolf",
+      "radius": 0.75,
+      "spriteScale": 0.91875,
+      "wadingFractionByDirection": {
+        "n": 0.28404,
+        "e": 0.55,
+        "s": 0.09854565,
+        "w": 0.55,
+        "ne": 0.2930427,
+        "se": 0.4,
+        "sw": 0.4,
+        "nw": 0.3003989
+      },
+      "wadingTopFractionByDirection": {
+        "n": 0,
+        "e": 0,
+        "s": 0.1,
+        "w": 0,
+        "ne": 0,
+        "se": 0.05,
+        "sw": 0.05,
+        "nw": 0
+      },
+      "sprite": {
+        "atlas": "ZombieAnimals1",
+        "name": "ZombieDireWolf"
+      },
+      "stats": {
+        "maxHP": 15,
+        "strength": 7,
+        "attack": 12,
+        "defense": 12,
+        "magicResist": 3,
+        "morale": 50,
+        "encumbrance": 2,
+        "toughness": 3,
+        "combatSpeed": 2.5,
+        "drn": 1
+      },
+      "zombieTypeID": "group_182459_copy",
+      "undeadCategory": "Monster",
+      "weapons": [
+        "canine_bite",
+        "wolf_pounce_tackle"
+      ],
+      "tags": [
+        "wolf",
+        "zombie",
+        "monster"
+      ],
+      "maxAcceleration": 8,
+      "maxDeceleration": 40,
+      "maxLateralAccel": 22,
+      "archetype": "HordeMinion",
+      "detectionRange": 10,
+      "detectionBreakRange": 20,
+      "alertDuration": 0.5,
+      "alertEscalateRange": 8,
+      "isQuadruped": true,
+      "dutyCycle": 0.5,
+      "targetWalkCycle": 1,
+      "jogSpeedMultiplier": 3,
+      "sprintSpeedMultiplier": 9
     }
   ]
 }
