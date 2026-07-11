@@ -32,6 +32,12 @@ public static class LaunchArgs
     /// <summary>Optional unit id selector. Used by debug scenarios like
     /// <c>stride_debug</c> to pick which unit's calibration to visualize.</summary>
     public static string? Unit;
+    /// <summary>Headless maintenance: load every <c>data/*.json</c> registry and
+    /// immediately re-save it, then exit — no window, no GL. Normalizes the
+    /// on-disk JSON to the current serializer formatting (escaping, newlines,
+    /// property order) so a load→save roundtrip is visible in <c>git diff</c>.
+    /// Does NOT touch map/asset files (assets/maps, env_defs, sidecars).</summary>
+    public static bool RoundtripData;
 
     public static void Parse(string[] args)
     {
@@ -67,6 +73,9 @@ public static class LaunchArgs
                     break;
                 case "--unit" when i + 1 < args.Length:
                     Unit = args[++i];
+                    break;
+                case "--roundtrip-data":
+                    RoundtripData = true;
                     break;
                 case "--bgcolor" when i + 1 < args.Length:
                 {
@@ -112,6 +121,51 @@ public static class Program
     /// portions.</summary>
     public static DateTime ProcessStartTime;
 
+    /// <summary>Loads every data/ registry via <see cref="Necroking.Data.GameData"/>
+    /// and re-saves it, reporting which files the roundtrip actually rewrote. Snapshots
+    /// the whole data/ tree before and after so genuinely-reformatted files are listed
+    /// (registry Save skips writing when the serialized text is byte-identical).</summary>
+    static void RoundtripDataFiles()
+    {
+        string dataDir = Necroking.Core.GamePaths.Resolve("data");
+        Console.WriteLine($"[roundtrip-data] data dir: {dataDir}");
+
+        // Snapshot every JSON under data/ so we can report exactly what changed.
+        var before = SnapshotJson(dataDir);
+
+        var gd = new Necroking.Data.GameData();
+        if (!gd.Load()) Console.WriteLine("[roundtrip-data] WARNING: GameData.Load reported a failure (continuing).");
+        if (!gd.Save()) Console.WriteLine("[roundtrip-data] WARNING: GameData.Save reported a failure.");
+
+        var after = SnapshotJson(dataDir);
+        int changed = 0;
+        foreach (var kv in after)
+        {
+            if (!before.TryGetValue(kv.Key, out var old))
+                { Console.WriteLine($"[roundtrip-data]   + {kv.Key} (new)"); changed++; }
+            else if (old != kv.Value)
+                { Console.WriteLine($"[roundtrip-data]   ~ {kv.Key}"); changed++; }
+        }
+        Console.WriteLine(changed == 0
+            ? "[roundtrip-data] done — no files changed (already normalized)."
+            : $"[roundtrip-data] done — {changed} file(s) rewritten.");
+    }
+
+    /// <summary>Maps each data/*.json path (relative to <paramref name="dataDir"/>) to a
+    /// content hash, for before/after change detection.</summary>
+    static System.Collections.Generic.Dictionary<string, string> SnapshotJson(string dataDir)
+    {
+        var map = new System.Collections.Generic.Dictionary<string, string>();
+        if (!Directory.Exists(dataDir)) return map;
+        foreach (var f in Directory.EnumerateFiles(dataDir, "*.json", SearchOption.AllDirectories))
+        {
+            string rel = Path.GetRelativePath(dataDir, f);
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            map[rel] = Convert.ToHexString(sha.ComputeHash(File.ReadAllBytes(f)));
+        }
+        return map;
+    }
+
     [STAThread]
     static void Main(string[] args)
     {
@@ -126,6 +180,16 @@ public static class Program
 
         LaunchArgs.Parse(args);
         Necroking.Core.GamePaths.DetectRoot();
+
+        // Headless data-JSON roundtrip: load + re-save every data/ registry and exit,
+        // without ever building the GL context (GameData is graphics-free). Used to
+        // normalize on-disk formatting to the current serializer settings.
+        if (LaunchArgs.RoundtripData)
+        {
+            RoundtripDataFiles();
+            return;
+        }
+
         // Must run before Game1 creates the GL context — on dual-GPU laptops Windows
         // otherwise routes this OpenGL app to the integrated GPU (see GpuPreference).
         Necroking.Core.GpuPreference.EnsureHighPerformance();
