@@ -117,6 +117,24 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
   **Undo**: accumulate into `_batchPlacedObjects`, push `UndoObjectBatchPlace` on mouse-up
   (`UndoObjectBatchRemove` for the right-drag eraser). `AutoCreateTriggerInstance(newIdx)`
   after every add (RM06).
+- **World-space overlays (brush cursor, collision ellipses, zone rects — and any placement
+  ghost)** draw via `DrawWorldOverlaysForActiveTab(screenW, screenH)`, called at the **top of
+  `Draw()`** — deliberately BEFORE the panel background and OUTSIDE the tab scissor clip
+  (overlays put inside a `Draw<X>Tab` get clipped to the panel rect). It computes `overPanel`
+  itself and switches on `ActiveTab` (Objects case: paint-mode `DrawBrushCursor` +
+  `_showCollisions` → `DrawCollisionOverlay`). World→screen inside the editor =
+  `_camera.WorldToScreen(new Vec2(x, y), 0f, screenW, screenH)`; mouse→world =
+  `_camera.ScreenToWorld(...)`. Textured draws use `Scope` (`Render.SpriteScope`, the full
+  `Draw(tex, pos, srcRect, tint, rot, origin, scale, fx, depth)` overload).
+- **Placement ghost precedent (runtime building menu):** `UI/BuildingMenuUI.cs`
+  `DrawGhostPreview` — semi-transparent def sprite at the cursor, tinted by
+  `_envSystem.CanPlaceObject`: `worldH = def.SpriteWorldHeight * def.Scale`, `scale = worldH *
+  camera.Zoom / tex.Height`, `origin = (PivotX*texW, PivotY*texH)`, tint alpha ~76, plus a
+  `PlacementRadius` circle via `Render.DrawUtils.DrawCircleOutline`. Called from `Game1.cs`
+  (~line 968) during world draw. Copy this math for an editor-side ghost; note it ignores
+  animated-sheet source rects (world draw in `GameRenderer.Units.cs` `DrawSingleObject` uses
+  `def.GetAnimFrameRect` when `def.IsAnimated`) and the editor's final placement scale is
+  `GetRandomPlacementScale` (`ScaleMin..ScaleMax`), which a ghost can't predict exactly.
 - **Editor-wide keyboard shortcuts** (Ctrl+S save / Ctrl+L load / Ctrl+Z undo) sit in one
   block in `Update()` right after `bool ctrlDown = …`, each gated on `!textEditing`
   (`textEditing = _eb.IsKeyboardCaptured`). New global/per-tab chords go here — key edges
