@@ -17,9 +17,11 @@ namespace Necroking.UI;
 /// scalable widget font vs. a SpriteFont pair), captured by <see cref="IBackend"/>
 /// — a small measure+draw adapter, not a framework.
 ///
-/// NOTE: this is the RICH tooltip. For SIMPLE plain-string cursor tooltips see
-/// <c>HUDRenderer.DrawCursorTooltip</c> (auto-size, one accent line) — deliberately
-/// separate; do not merge the two.
+/// NOTE: this is the RICH tooltip renderer. For SIMPLE plain-string tooltips see
+/// <see cref="TooltipSystem"/>'s canonical box — deliberately separate; do not
+/// merge the two. They DO share a scheduler: callers wrap their RichTip.Draw in
+/// <c>Game1.Tooltips.RequestCustom(...)</c> so every tooltip, rich or simple,
+/// is drawn by the same Tooltip-band host — topmost, never clipped or covered.
 /// </summary>
 public static class RichTip
 {

@@ -555,7 +555,9 @@ public class UnitInfoPanel : IModalLayer
         int x = anchor.Center.X + 16, y = anchor.Bottom + 8;
         if (x + 222 > screenW - 4) x = anchor.Center.X - 222 - 8;
         if (y + h > screenH - 4) y = anchor.Y - h - 8;
-        _renderer.DrawWidget(ResourceTooltip.WidgetId, Math.Max(4, x), Math.Max(4, y), BuffTipInst);
+        int dx = Math.Max(4, x), dy = Math.Max(4, y);
+        // Bind stays immediate; the draw defers to the global tooltip queue (topmost).
+        Game1.Tooltips.RequestCustom(_ => _renderer.DrawWidget(ResourceTooltip.WidgetId, dx, dy, BuffTipInst));
     }
 
     /// <summary>Bind the path tooltip: level = base (unit-type native) + buff

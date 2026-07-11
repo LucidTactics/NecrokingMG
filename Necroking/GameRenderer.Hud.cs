@@ -610,14 +610,23 @@ partial class GameRenderer
         _g._hudRenderer.Draw(screenW, screenH, _g._sim, _g._gameData,
             _g._inventory, _g._inventoryUI.IsVisible,
             _g._spellBarState,
-            _g._timeScale, _g._hoveredObjectIdx, _g._envSystem,
-            DrawSpellCategoryIcon, BuildMenuOpenMask(), _g._paused, _g._hoveredCorpseIdx,
-            _g._slotFlash, _g._hoveredBellyUnitId,
-            _g._hoveredUnitIdx, _g._menuState == MenuState.MapEditor, BuildEditorOpenMask(),
+            _g._timeScale,
+            DrawSpellCategoryIcon, BuildMenuOpenMask(), _g._paused,
+            _g._slotFlash, BuildEditorOpenMask(),
             // Top-right button rows are drawn by their own HudTop-band router
             // layers so they sit ABOVE panels/overlays, matching where they
             // take input.
             drawTopRows: false);
+    }
+
+    /// <summary>Cursor tooltips at their z-position (Tooltip band, topmost) —
+    /// see <see cref="Necroking.UI.CursorTooltipLayer"/>.</summary>
+    internal void DrawHudTooltips(int screenW, int screenH)
+    {
+        _g._hudRenderer.DrawCursorTooltips(screenW, screenH, _g._sim, _g._gameData,
+            _g._inventory, _g._hoveredObjectIdx, _g._envSystem,
+            _g._hoveredBellyUnitId, _g._hoveredCorpseIdx, _g._hoveredUnitIdx,
+            _g._menuState == MenuState.MapEditor);
     }
 
     /// <summary>Draw the core-menu button row at its z-position (HudTop band).
@@ -756,9 +765,10 @@ partial class GameRenderer
     }
 
     /// <summary>Hover tooltip for the aggression bar: names the level the cursor is
-    /// over (the one a click would select) and what it does. Called right after the
-    /// token's DrawCircle, which leaves a SpriteBatch open — so we draw into that
-    /// active batch rather than starting our own (a nested Begin would throw).</summary>
+    /// over (the one a click would select) and what it does. Hover-tested here, but
+    /// the actual draw is deferred to the global tooltip queue so higher bands
+    /// (panels, overlays) can never overdraw it. Keeps its warm palette — a
+    /// three-color rich box is exactly what RequestCustom is for.</summary>
     private void DrawAggressionTooltip(int screenW, int screenH,
         Rectangle bar, System.Collections.Generic.List<Rectangle> nodes)
     {
@@ -786,13 +796,16 @@ partial class GameRenderer
         tx = Math.Clamp(tx, 4, Math.Max(4, screenW - w - 4));
         if (ty < 4) ty = bar.Bottom + 6; // flip below if it would clip off the top
 
-        DrawPanel(new Rectangle(tx, ty, w, h), new Color(20, 16, 12, 235), new Color(120, 95, 60));
-        int cy = ty + pad;
-        DrawText(_g._smallFont, title, new Vector2(tx + pad, cy), new Color(255, 210, 130));
-        cy += lineH;
-        DrawText(_g._smallFont, desc, new Vector2(tx + pad, cy), new Color(210, 200, 185));
-        cy += lineH + 4;
-        DrawText(_g._smallFont, hint, new Vector2(tx + pad, cy), new Color(140, 130, 115));
+        Game1.Tooltips.RequestCustom(_ =>
+        {
+            DrawPanel(new Rectangle(tx, ty, w, h), new Color(20, 16, 12, 235), new Color(120, 95, 60));
+            int cy = ty + pad;
+            DrawText(_g._smallFont, title, new Vector2(tx + pad, cy), new Color(255, 210, 130));
+            cy += lineH;
+            DrawText(_g._smallFont, desc, new Vector2(tx + pad, cy), new Color(210, 200, 185));
+            cy += lineH + 4;
+            DrawText(_g._smallFont, hint, new Vector2(tx + pad, cy), new Color(140, 130, 115));
+        });
     }
 
     internal void DrawPauseMenu(int screenW, int screenH)

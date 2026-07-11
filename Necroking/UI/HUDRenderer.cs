@@ -110,9 +110,7 @@ public partial class HUDRenderer
     private static readonly Color DropdownSelectedColor = new(255, 220, 100);
     private static readonly Color DropdownNormalColor = new(200, 200, 220);
     private static readonly Color DropdownHoverBg = new(80, 80, 120, 120);
-    private static readonly Color TooltipBg = new(15, 15, 25, 220);
-    private static readonly Color TooltipBorder = new(100, 100, 160);
-    private static readonly Color TooltipText = new(220, 220, 240);
+    // (Tooltip box colors moved to TooltipSystem — the one canonical style.)
     private static readonly Color ControlHintColor = new(120, 120, 140, 200);
     private static readonly Color InventoryHintColor = new(200, 220, 180);
     private static readonly Color MaterialColor = new(200, 160, 255);
@@ -164,10 +162,9 @@ public partial class HUDRenderer
     public void Draw(int screenW, int screenH, Simulation sim, GameData gameData,
         Inventory inventory, bool inventoryVisible,
         SpellBarState bar,
-        float timeScale, int hoveredObjectIdx, EnvironmentSystem envSystem,
+        float timeScale,
         Action<string, int, int> drawSpellCategoryIcon, int menuOpenMask = 0, bool paused = false,
-        int hoveredCorpseIdx = -1, float[]? slotFlash = null,
-        uint hoveredBellyUnitId = uint.MaxValue, int hoveredUnitIdx = -1, bool editorInspect = false,
+        float[]? slotFlash = null,
         int editorOpenMask = 0, bool drawTopRows = true)
     {
         int necroIdx = FindNecromancer(sim);
@@ -175,6 +172,7 @@ public partial class HUDRenderer
         DrawStatusBars(necroIdx, sim);
 
         // Reset hover-tooltip capture; the spell bar sets it if a filled slot is hovered.
+        // The tooltip itself draws later via DrawCursorTooltips (Tooltip band, topmost).
         _hoverSlotSpell = null;
         _hoverSlotMelee = false;
 
@@ -182,13 +180,6 @@ public partial class HUDRenderer
         DrawSpellBar(screenW, layout.barY, layout.slotW, layout.slotH, layout.centerOffset,
             SpellBarBindings.SlotLabels, bar, sim, gameData, inventory, drawSpellCategoryIcon, slotFlash);
 
-        // Hover tooltip for the spell-bar slot under the cursor.
-        DrawSpellSlotTooltip(gameData, inventory, screenW, screenH);
-
-        DrawObjectTooltip(hoveredObjectIdx, envSystem, sim, gameData, screenW, screenH);
-        DrawBellyTooltip(hoveredBellyUnitId, sim, gameData, screenW, screenH);
-        DrawCorpseTooltip(hoveredCorpseIdx, sim, gameData, screenW, screenH);
-        DrawUnitTooltip(hoveredUnitIdx, sim, gameData, screenW, screenH, editorInspect);
         // Controls hint intentionally omitted — overlapped the FPS/zoom bottom-
         // left readout. Re-enable if we add a menu page for it.
         DrawTimeControls(screenW, screenH, timeScale, gameData, paused);
@@ -199,6 +190,22 @@ public partial class HUDRenderer
         }
         DrawHordeCaps(screenW, sim, gameData);
         DrawCombatLog(screenW, screenH, sim, gameData);
+    }
+
+    /// <summary>Cursor-anchored hover tooltips (spell-bar slot, world object,
+    /// belly, corpse, unit). Drawn from the Tooltip-band CursorTooltipLayer —
+    /// a separate topmost pass — so tooltips layer above every Hud-band widget
+    /// (e.g. the aggression bar). Reads the hover state <see cref="Draw"/>
+    /// captured earlier this frame; bands draw bottom-up, so it's fresh.</summary>
+    public void DrawCursorTooltips(int screenW, int screenH, Simulation sim, GameData gameData,
+        Inventory inventory, int hoveredObjectIdx, EnvironmentSystem envSystem,
+        uint hoveredBellyUnitId, int hoveredCorpseIdx, int hoveredUnitIdx, bool editorInspect)
+    {
+        DrawSpellSlotTooltip(gameData, inventory, screenW, screenH);
+        DrawObjectTooltip(hoveredObjectIdx, envSystem, sim, gameData, screenW, screenH);
+        DrawBellyTooltip(hoveredBellyUnitId, sim, gameData, screenW, screenH);
+        DrawCorpseTooltip(hoveredCorpseIdx, sim, gameData, screenW, screenH);
+        DrawUnitTooltip(hoveredUnitIdx, sim, gameData, screenW, screenH, editorInspect);
     }
 
     // ═══════════════════════════════════════
@@ -807,30 +814,11 @@ public partial class HUDRenderer
         DrawCursorTooltip(lines.ToArray(), screenW, screenH);
     }
 
-    /// <summary>Draw a small text-box tooltip anchored to the cursor, auto-sized to
-    /// the widest line and flipped/clamped to stay on screen.</summary>
+    /// <summary>Cursor-anchored text tooltip — box style, placement, and the
+    /// topmost draw all live in the global <see cref="Game1.Tooltips"/> queue.</summary>
     private void DrawCursorTooltip(string[] lines, int screenW, int screenH)
     {
-        if (_smallFont == null || lines.Length == 0) return;
-        const int lineH = 16;
-        float maxW = 0f;
-        foreach (var l in lines)
-        {
-            float w = _smallFont.MeasureString(l).X;
-            if (w > maxW) maxW = w;
-        }
-        int ttW = (int)maxW, ttH = lines.Length * lineH;
-        int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
-        // Default: above-right of the cursor; flip when it would clip the edge.
-        int ttX = mx + 16, ttY = my - ttH - 12;
-        if (ttX + ttW + 4 > screenW) ttX = mx - ttW - 12;
-        if (ttX < 4) ttX = 4;
-        if (ttY < 4) ttY = my + 20;
-
-        Scope.Draw(_pixel, new Rectangle(ttX - 4, ttY - 4, ttW + 8, ttH + 8), TooltipBg);
-        Scope.Draw(_pixel, new Rectangle(ttX - 4, ttY - 4, ttW + 8, 2), TooltipBorder);
-        for (int i = 0; i < lines.Length; i++)
-            Text(_smallFont, lines[i], new Vector2(ttX, ttY + i * lineH), TooltipText);
+        Game1.Tooltips.RequestLines(lines);
     }
 
     private void DrawControlsHint(int screenH)

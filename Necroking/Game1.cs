@@ -720,6 +720,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// matches the Game1 instance; assigned in the ctor.</summary>
     public static Necroking.UI.PopupManager Popups { get; private set; } = null!;
 
+    /// <summary>Global tooltip service — any UI code (HUD, panels, editors)
+    /// requests a tooltip during Update/Draw and TooltipHostLayer draws the
+    /// queue in the Tooltip band: topmost, after all scissor clips close.
+    /// Static for the same reason as <see cref="Popups"/>; assigned in the ctor.</summary>
+    public static Necroking.UI.TooltipSystem Tooltips { get; private set; } = null!;
+
     /// <summary>The running Game1 instance, for editor components that need a
     /// narrow runtime hook (e.g. the spell editor reloading flipbooks after an
     /// edit) without threading the game through their constructors. Same
@@ -877,6 +883,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     public Game1()
     {
         Popups = _popups;
+        Tooltips = new Necroking.UI.TooltipSystem(this);
         Instance = this;
         _gameRenderer = new GameRenderer(this);
 
@@ -891,6 +898,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _uiRouter.Register(new Necroking.UI.SpellBarLayer(this));
         _uiRouter.Register(new Necroking.UI.TimeControlsLayer(this));
         _uiRouter.Register(new Necroking.UI.AggressionBarLayer(this));
+        // Tooltips live in the Tooltip band (topmost) so they draw over every
+        // other layer: the host runs the HUD cursor-tooltip funnel and then
+        // drains the global Game1.Tooltips queue — see TooltipHostLayer.
+        _uiRouter.Register(new Necroking.UI.TooltipHostLayer(this));
 
         // In-game panels (Panels band). Ids keep the "popup.<Type>" convention
         // the hit registry has always used. Update delegates own each panel's

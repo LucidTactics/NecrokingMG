@@ -131,6 +131,36 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
   editor's own `_placedUnits` list only, never from live sim units. Env *defs* save
   separately via `MapData.SaveEnvDefs("data/env_defs.json")`; zones to the `SaveZones`
   sidecar (see [zones.md](zones.md)).
+- **Units tab = the placeable-unit picker + world place/delete.** All in
+  `MapEditorWindow.cs`: `DrawUnitsTab` (faction-filter combo → patrol combo → place-as-corpse
+  checkbox → the scrolling **text list** of unit defs from `GetFilteredUnitIds()` →
+  placed-count + Clear All), `UpdateUnitsTab` (panel click → `_selectedUnitDefIdx`; world
+  left-click → append `PlacedUnit` + `UndoUnitPlace`; right-drag sweep-delete →
+  `UndoUnitRemove`). **Draw/Update split via cached layout fields**: `DrawUnitsTab` stores
+  `_unitListDrawY`/`_unitListItemH`/`_unitListVisibleCount`; `UpdateUnitsTab` hit-tests with
+  those (one-frame-stale by design — change the layout in Draw and Update follows next frame,
+  but both must agree on geometry). Scroll = the shared `_tabScroll[(int)MapEditorTab.Units]`
+  (wheel handled generically in `Update`; `DrawUnitsTab` clamps the max itself since the
+  generic handler only clamps at 0). **`_selectedUnitDefIdx` indexes the FILTERED list** —
+  reset it to -1 whenever the filter changes (the faction-combo handler already does).
+  `DrawPlacedUnitMarkers` draws world diamonds/crosses (no sprites).
+- **Drawing a unit sprite thumbnail in editor UI** (the unit-editor preview pattern,
+  `UnitEditorWindow.DrawPreviewSprite`): `def.Sprite` (`SpriteRef {AtlasName, SpriteName}`)
+  → `AtlasDefs.ResolveAtlasName` → `Game1._atlases[idx]` (internal, reachable via the
+  editor's `_game`) → `atlas.GetUnit(name)` = `UnitSpriteData`; **`UnitDef.SpriteData` is
+  already pre-resolved at load** (`Game1.LoadContent` sets it for every def), so for a
+  static thumbnail: `def.SpriteData.GetAnim("Idle")` → `AngleFrames` (prefer angle 60 =
+  down-right, fall back to any) → first `Keyframe.Frame` (`SpriteFrame {Rect, PivotX/Y,
+  TextureIndex}`) → `atlas.GetTextureForFrame(frame)` → `_eb.DrawTexture(tex, pos,
+  frame.Rect, …)`. Only the atlas texture lookup still needs the atlas object; the anim
+  data does not. No AnimController needed for a static frame.
+- **No editor grid-of-image-thumbnails picker exists yet** (as of 2026-07): the nearest
+  precedents are UIEditorWindow's RI15 inline 18px texture thumbnails in a *list*, the wall
+  editor's 3x3 *button* grid, and `ReflectionPropertyRenderer.DrawCheckboxGridField`
+  (text checkbox grid). `TextureFileBrowser` is a file list + single preview, not a grid.
+  **No hover-tooltip helper exists in `EditorBase` either** — editors hand-roll
+  (rect + `DrawText` after the hovered content so it draws on top); the runtime
+  `HUDRenderer.DrawCursorTooltip` is private HUD code, not usable from editors.
 - **Def-dropdown precedent**: `DrawZoneSpawnPanel` rows use `_eb.DrawCombo` with cached
   filtered id arrays (`GetZoneForagableIdOptions` filters `_envSystem` defs by `IsForagable`,
   cache invalidated on `DefCount` change) — copy this for any "pick an env def" UI.
@@ -201,8 +231,60 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
   (today ProcGen pushes only `UndoObjectBatchPlace`, no ground). Also call `_onVertexMapChanged`
   once after `PaintProcGen` when any ground changed (mirror `PaintObjectsBatch`).
 
+### Map-editor scrolling & scrollbars (census, 2026-07)
+
+- **Panel geometry** (top of `Draw(screenW, screenH)`): `panelX = screenW - PanelWidth(320) - 10`,
+  `panelY = 10`, `panelH = screenH - 20`. Tab content viewport = `tabContentRect =
+  (panelX, contentY, PanelWidth, contentH)` where `contentY = panelY + TabRowHeight*2 + 2`
+  and `contentH = panelH - TabRowHeight*2 - 2 - 92` (92px bottom bar). The whole tab body is
+  scissor-clipped: `_eb.BeginClip(tabContentRect)` … `_eb.EndClip()` around the
+  `switch (ActiveTab)` in `Draw`.
+- **Scroll state**: `_tabScroll = new float[10]` (indexed by `(int)MapEditorTab`) + the
+  Objects tab's separate `_envListScroll`. **Generic wheel handler** in `Update()`
+  ("--- Scroll per-tab ---" block): `_tabScroll[(int)ActiveTab] -= scrollDelta * 0.2f`,
+  clamped **at 0 only**, gated on `overPanel && !popupBlocking`.
+- **Per-tab census** (how each tab scrolls; viewport = the list area a scrollbar spans):
+  - *Ground* `_tabScroll[0]`, *Grass* `_tabScroll[1]`, *Walls* `_tabScroll[3]`, *Roads*
+    `_tabScroll[4]`, *Regions* `_tabScroll[5]`, *ProcGen* `_tabScroll[9]` — **whole tab body
+    scrolls** (every y = `contentY + … - (int)scroll` in both `Draw<X>Tab` and
+    `Update<X>Tab`); viewport ≈ the full `tabContentRect` below the section header.
+    **No max clamp** (can over-scroll past the end) and **no content height is measured**.
+  - *Objects* `_envListScroll` — the 6-wide thumbnail grid (`ThumbGridCols`). Viewport:
+    `x = _objGridDrawX = panelX + Margin`, `y = _objGridDrawY`, `w = PanelWidth - Margin*2`,
+    `h = listAreaH = contentH - (contentY - contentTop) - 160` (160px reserved for the
+    selected-def property block). Max-clamped in `DrawObjectsTab` (`maxObjScroll`). Has its
+    **own wheel handler** in `UpdateObjectsTab` (the generic handler writes the unused
+    `_tabScroll[2]`). Group mode ("Groups" category) reuses `_envListScroll` as a row list.
+  - *Triggers* `_tabScroll[6]` — defs/instances row lists; draw stops at
+    `contentY + contentH - 300` (property area). ⚠️ **Double-scroll bug**: `UpdateTriggersTab`
+    has its own wheel handler AND the generic one both fire per frame, so tab 6 scrolls at
+    2× rate (0.4/notch).
+  - *Units* `_tabScroll[(int)MapEditorTab.Units]` (=7) — thumbnail grid like Objects.
+    Viewport: `x = _unitGridDrawX = panelX + Margin`, `y = _unitGridDrawY` (below
+    faction/patrol combos + corpse checkbox + label), `h = listH = contentH - (curY -
+    contentY) - 100`. Max-clamped in `DrawUnitsTab` (`maxUnitScroll`). Uses the generic
+    wheel handler.
+  - *Zones* — **does not scroll**: the list truncates with a `"... N more"` row at
+    `contentY + contentH - 260`.
+- **Existing scrollbar implementations (no single canonical helper — copy-pasted!):**
+  the thin **indicator** (`DrawRect(x+w-6, barY, 5, barH)`, `barH = Math.Max(20, h*h/totalH)`,
+  color `(100,100,140,180)`) exists in `EditorBase.DrawScrollableList` (after its EndClip),
+  the `EditorBase` dropdown overlay, `EditorBase.DrawTextArea`, `UnitEditorWindow` property
+  panel ("outside clip so it's always visible"), and `TextureFileBrowser`. The ONLY
+  **draggable** scrollbar is `SettingsWindow` (track at `panelX+PanelW-18`, 8px thumb,
+  drag state `_scrollbarDragTab`/`_scrollbarDragGrabOffset`, track-click jump, gated on
+  `_ui.IsInputBlocked(0)`, calls `SetMouseOverUI`) — it pairs with the id-keyed
+  `EditorBase.HandlePanelScroll` + `SetPanelContentHeight` (record content height after
+  layout → next frame's wheel clamp; one-frame-stale by design). A shared
+  "draw thin vertical scrollbar" helper belongs in `EditorBase` next to
+  `DrawScrollableList`; MapEditorWindow tabs would call it per list. If made draggable,
+  do the drag **inside the EditorBase helper** using EditorBase's own `_mouse`/`_prevMouse`
+  (SettingsWindow precedent) — MapEditorWindow's own `_prevMouse` is already overwritten
+  during `Draw`, so edge detection hand-rolled in a `Draw<X>Tab` is always-false.
+
 **Look/edit here when…** adding a map-editor tab/category, changing brush painting or
 placement spacing, changing what SaveMap persists, building def-picker UI in a tab panel,
+adding scrollbars / changing list scrolling in the map editor (the census above),
 adding a new density/procedural placement brush (ProcGen tab, `PaintProcGen`/`PlaceProcGenPool`),
 or working on **auto-ground** (the `_autoGround*` fields + `StampAutoGround`/`StampGroundPatch`
 + `UndoGroundStroke` bundling).

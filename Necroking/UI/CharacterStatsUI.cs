@@ -600,7 +600,9 @@ public class CharacterStatsUI : IModalLayer
         // with the sheet behind it (desc + label share LabelColor here).
         var backend = new RichTip.FontBackend(_font, rowFont, Scope, _pixel);
         var pal = new RichTip.Palette(new Color(20, 20, 32, 245), PanelBorder, TitleColor, LabelColor, LabelColor);
-        RichTip.Draw(backend, pal, h.Label, null, descLines, rows, mx, my, screenW, screenH, TipW, Pad);
+        // Deferred to the global tooltip queue: drawn in the topmost Tooltip band.
+        Game1.Tooltips.RequestCustom(_ =>
+            RichTip.Draw(backend, pal, h.Label, null, descLines, rows, mx, my, screenW, screenH, TipW, Pad));
     }
 
     /// <summary>Find the closest non-dissolving corpse within range and consume

@@ -301,10 +301,13 @@ public class InventoryUI : IModalLayer
         int sh = screenH > 0 ? screenH : _screenY + _widgetH;
 
         // gapAfterTitle:2 + gapBeforeDesc:4 preserves the item tooltip's subtitle spacing.
-        RichTip.Draw(backend, RichTip.Palette.Default, item.DisplayName,
-            string.IsNullOrEmpty(category) ? null : category,
-            descLines, rows, mx, my, sw, sh, TipW, Pad,
-            gapAfterTitle: 2, gapBeforeDesc: 4);
+        // Deferred to the global tooltip queue: same RichTip box, but drawn in the
+        // topmost Tooltip band so no other panel/overlay can cover it.
+        Game1.Tooltips.RequestCustom(_ =>
+            RichTip.Draw(backend, RichTip.Palette.Default, item.DisplayName,
+                string.IsNullOrEmpty(category) ? null : category,
+                descLines, rows, mx, my, sw, sh, TipW, Pad,
+                gapAfterTitle: 2, gapBeforeDesc: 4));
     }
 
     /// <summary>Check if mouse is over the inventory window (for blocking game input).</summary>

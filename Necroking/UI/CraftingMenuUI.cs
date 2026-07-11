@@ -299,7 +299,9 @@ public class CraftingMenuUI : SideListMenu
         int sw = _lastScreenW > 0 ? _lastScreenW : (_screenX + _widgetW + TipW + 16);
         int sh = _lastScreenH > 0 ? _lastScreenH : _widgetH;
 
-        RichTip.Draw(backend, RichTip.Palette.Default, potion.DisplayName, null,
-            descLines, rows, mx, my, sw, sh, TipW, Pad);
+        // Deferred to the global tooltip queue: drawn in the topmost Tooltip band.
+        Game1.Tooltips.RequestCustom(_ =>
+            RichTip.Draw(backend, RichTip.Palette.Default, potion.DisplayName, null,
+                descLines, rows, mx, my, sw, sh, TipW, Pad));
     }
 }

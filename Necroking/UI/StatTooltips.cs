@@ -108,7 +108,9 @@ public class StatTooltips
                 _boundKey = _hoverKey; _boundValue = false;
             }
             var (x, y) = Place(mx, my, 222, 103, screenW, screenH);
-            r.DrawWidget("StatTooltipWindow", x, y, "stattip");
+            // Binding stays immediate (cached via _boundKey); only the draw is
+            // deferred to the global tooltip queue so it renders topmost.
+            Game1.Tooltips.RequestCustom(_ => r.DrawWidget("StatTooltipWindow", x, y, "stattip"));
         }
         else
         {
@@ -123,7 +125,7 @@ public class StatTooltips
             }
             int h = r.MeasureWidgetHeight(ResourceTooltip.WidgetId, "statcalc");
             var (x, y) = Place(mx, my, 222, h, screenW, screenH);
-            r.DrawWidget(ResourceTooltip.WidgetId, x, y, "statcalc");
+            Game1.Tooltips.RequestCustom(_ => r.DrawWidget(ResourceTooltip.WidgetId, x, y, "statcalc"));
         }
     }
 

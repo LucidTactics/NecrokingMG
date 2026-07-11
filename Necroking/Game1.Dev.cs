@@ -513,6 +513,18 @@ public partial class Game1 {
                break;
             }
 
+            // Set the map editor's active-tab list scroll (px). Headless stand-in
+            // for the mouse wheel — lets screenshots verify mid-row scrolling.
+            case "map_scroll": {
+               if (c.Args.Length < 1) {
+                  c.Complete(Necroking.Dev.DevServer.Error("map_scroll needs: <px>"));
+                  break;
+               }
+               _mapEditor.DevSetScroll(DevFloat(c.Args[0]));
+               c.Complete(Necroking.Dev.DevServer.Ok($"scroll={c.Args[0]}"));
+               break;
+            }
+
             // Show/hide an in-game overlay (inventory, stats, skill book, ...).
             case "overlay": {
                if (c.Args.Length < 1) {
