@@ -165,6 +165,22 @@ per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, pr
   Called from `SpellEffectSystem` cast paths and `Game1.Spells.cs`
   (`TickPendingProjectiles` staggered Quantity>1 shots) — a new per-projectile field set
   here covers every shot.
+- **Over-time volley state (`Quantity>1` spells)**: `PendingProjectileGroup`
+  (struct in `Necroking/Game/SpellEffectSystem.cs`: `SpellID`, `CasterUid`, `Origin`,
+  **`Target`** = the fixed aim point captured at cast, `Remaining`, `Timer`, `Interval`)
+  is added to `Game1._pendingProjectiles` by `SpellEffectSystem.Execute` (Projectile +
+  Blight-bomb cases) and ticked by **`Game1.Spells.cs` `TickPendingProjectiles(dt)`**
+  (called from `Game1.cs` Update ~line 3709 on `WorldDt`, inside the sim gate). Each tick
+  re-resolves the caster by stable uid (`_sim.ResolveUnitID(pg.CasterUid)`; group dropped if
+  dead) and fires from the live `EffectSpawnPos2D` but **at the frozen `pg.Target`** — the
+  aim does NOT update between shots. **To retarget each shot to the cursor:** the group is
+  caster-agnostic, so gate on the player — `casterIdx == FindNecromancer()` (or
+  `_sim.Units[casterIdx].AI == AIBehavior.PlayerControlled`) — then overwrite `pg.Target`
+  with the current cursor world before `SpawnProjectile`. Cursor world = `_camera.ScreenToWorld(_input.MousePos, vpW, vpH)`; **validity** = the `cursorOutside`
+  test in `Game1.Update` (`mouse.X<0 || mouse.Y<0 || mouse.X>=vpW || mouse.Y>=vpH`, ~line
+  2825) — that local isn't visible from `TickPendingProjectiles`, so cache a
+  `_lastValidCursorWorld` Game1 field each focused/in-window frame and only update `pg.Target`
+  when valid (leaving `pg.Target` = last valid / initial cast target = the fallback for free).
 
 ### Projectile RENDERING — `Necroking/GameRenderer.World.cs` (two passes, branches on `Projectile.Type`)
 Where each in-flight projectile is drawn. **Two separate draw methods, split by type:**
