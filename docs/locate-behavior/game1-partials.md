@@ -122,6 +122,28 @@ See also: `Game1.cs` (`StartGame` recreates `_session`; forwarding properties de
 system fields), `World/` (the owned systems), `Necroking/Game1.Dev.cs` (`mem` dev command — managed
 heap + process memory behind a forced compacting GC — and `census`, both for spotting reload leaks).
 
+#### StartGame vs StartScenario reset asymmetry — state bleeds scenario→scenario & scenario→map
+`Game1.StartGame` (`Game1.cs` ~1457) and `Game1.StartScenario` (~2096) are the **two world-entry
+paths**, and they clean up **different subsets** of per-game state — the source of spillover when
+running several scenarios in a row or returning from a scenario to the normal map. They share a
+**duplicated (not extracted) clear block** at the top: `_gameWorldLoaded=false`, `_gameOver=false`,
+`_clock.OnWorldStart()`, then `.Clear()` on `_damageNumbers`, `_unitAnims`, `_corpseAnims`,
+`_effectManager`, `_reanimFx`, `_buffVisuals`, `_tethers`/`_tetherAnchor`/`_tetherDustAccum`.
+**Only `StartGame` additionally resets:** `_pendingProjectiles`, `_foragables` (pickup arcs),
+`_skillBookState.InitFromDefs()` + `_skillLearnToasts`, `_workerSystem.Reset()` (stockpiles/jobs),
+`_grassRenderer.ClearAllFades()`, `_zoneSystem.Clear()`, the grass-field arrays, `_roadSystem.Init()`,
+`_dayNightSystem.Init()`. **Crucially `StartGame` does `_session.Dispose(); _session = new GameSession()`
+(recreating Sim/Ground/Env/Wall/Road), while `StartScenario` REUSES the same session** and manually
+re-inits only `_groundSystem.ClearTypes()`+`Init`, `_envSystem.Init`, `_wallSystem.Init`, `_sim.Init` —
+it **forgets `_session.Road`** (roads bleed into a scenario) plus every Game1-owned collection above.
+**Where a shared reset core should live:** extract the common Game1-field clears into one helper
+(e.g. a new `ResetPerGameState()` in `Game1.cs` or a small `Game1.WorldReset.cs` partial) that BOTH
+call up top; keep the session-lifecycle line (`Dispose`+`new` vs manual re-init) path-specific. The
+durable fix is to also recreate `_session` in `StartScenario` (so Road/Ground/Env/Wall/Sim reset
+uniformly) and migrate the remaining transient Game1 collections toward `GameSession`/`Census()`.
+Look/edit here when: state leaks between scenarios or from a scenario back to the map (leftover
+projectiles/foragables/roads/zones/worker piles/grass fades/skill unlocks).
+
 ### `Necroking/Game1.Animation.cs` — per-frame animation, cast-phase & attack-anim updates
 What lives here: the per-frame animation tick — advancing sprite flipbooks for every unit, driving
 channeled/cast animation state machines, table-craft channel buffs, and keeping spawned effects and
