@@ -73,15 +73,17 @@ public class HordeMinionHandler : IArchetypeHandler
 
     public void OnRoutineExit(ref AIContext ctx, byte oldRoutine, byte newRoutine)
     {
-        // The combat routines own the melee-lock fields. Leaving one must never leak a
-        // queued swing: a PendingAttack that can no longer resolve pins the unit in place
-        // forever (the movement lockout waits on it). PostAttackTimer is deliberately
-        // kept — it plants the unit until the in-progress swing anim finishes, then ticks
-        // to zero on its own (a bounded plant, not a pin).
+        // The combat routines own the melee-lock fields. EngagedTarget must not leak
+        // across routines; PendingAttack and PostAttackTimer are deliberately KEPT —
+        // an in-progress swing finishes planted and resolves (Hit/Miss/Whiff) at its
+        // animation's impact frame, which is guaranteed to land inside the
+        // PostAttackTimer window (and the SwingJanitor in Game1.Animation clears
+        // anything that slips through when that window expires — no pin risk).
+        // Clearing PendingAttack here made escaped-target swings vanish silently:
+        // the anim played but the dice never rolled and nothing was logged.
         if (oldRoutine == RoutineChasing || oldRoutine == RoutineEngaged || oldRoutine == RoutineCommanded)
         {
             ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
-            ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
         }
     }
 

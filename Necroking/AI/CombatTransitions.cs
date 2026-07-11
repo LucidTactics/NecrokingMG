@@ -79,13 +79,15 @@ public static class CombatTransitions
 
         // Alive but moved out of melee range — chase again. Hysteresis (1.2×)
         // prevents flipping at the boundary when a target hovers just at range.
-        // Clear PendingAttack (a queued swing on a now-out-of-range target should
-        // not resolve, and a never-resolving PendingAttack would pin the unit
-        // forever via the movement-lockout). Do NOT clear PostAttackTimer: it keeps
-        // the unit planted until the in-progress swing animation finishes, THEN it
-        // chases — otherwise the one-shot attack anim "bleeds" into the chase and
-        // the unit visibly swings while sliding forward. PostAttackTimer ticks down
-        // on its own, so this is a bounded plant (≈ the anim duration), not a pin.
+        // Keep PendingAttack: the queued swing rides to its animation's impact
+        // frame, where it resolves honestly — Hit/Miss if the target is still
+        // near, a logged Whiff if it escaped (TryResolvePendingAttackAtImpact).
+        // Clearing it here produced silent phantom swings: the anim finished
+        // (PostAttackTimer is kept) but the dice never rolled and nothing was
+        // logged. The old "never-resolving PendingAttack pins the unit" worry is
+        // covered now — the impact frame is guaranteed inside the PostAttackTimer
+        // window, and the SwingJanitor (Game1.Animation) clears anything that
+        // slips through when the window expires.
         int tIdx = SubroutineSteps.ResolveTarget(ref ctx);
         if (tIdx >= 0)
         {
@@ -94,7 +96,6 @@ public static class CombatTransitions
             if (dist > meleeRange * meleeHysteresis)
             {
                 ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
                 ctx.TransitionTo(chasingRoutine);
                 return true;
             }
@@ -110,9 +111,9 @@ public static class CombatTransitions
             {
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
                 ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
-                // Keep PostAttackTimer so an in-progress swing finishes planted
-                // before the unit runs home (see the out-of-melee branch above).
+                // Keep PendingAttack AND PostAttackTimer: the in-progress swing
+                // finishes planted and resolves (Hit/Miss/Whiff) at its impact
+                // frame before the unit runs home (see the out-of-melee branch).
                 ctx.Units[ctx.UnitIndex].InCombat = false;
                 ctx.TransitionTo(returningRoutine);
                 return true;
@@ -156,8 +157,8 @@ public static class CombatTransitions
             {
                 ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
                 ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
-                ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
-                // Keep PostAttackTimer — let the swing finish planted (see StandardEngagedExits).
+                // Keep PendingAttack + PostAttackTimer — the swing finishes planted
+                // and resolves at its impact frame (see StandardEngagedExits).
                 ctx.TransitionTo(returningRoutine);
                 DebugLog.Log("horde_aggro",
                     $"  [unit {ctx.MyId}] leash break while chasing: distToCenter={distToCenter:F1} > leash={leashRadius:F1}");

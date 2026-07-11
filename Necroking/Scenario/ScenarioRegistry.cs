@@ -114,6 +114,7 @@ public static class ScenarioRegistry
         Register("zombie_deer_craft_leash", () => new Scenarios.ZombieDeerCraftLeashScenario());
         Register("combat_anim_review", () => new Scenarios.CombatAnimReviewScenario());
         Register("chase_attack_anim", () => new Scenarios.ChaseAttackAnimScenario());
+        Register("whiff_on_escape", () => new Scenarios.WhiffOnEscapeScenario());
         Register("deer_flee_no_slide", () => new Scenarios.DeerFleeNoSlideScenario());
         Register("log_shadow", () => new Scenarios.LogShadowScenario());
         Register("stride_debug", () => new Scenarios.StrideDebugScenario());

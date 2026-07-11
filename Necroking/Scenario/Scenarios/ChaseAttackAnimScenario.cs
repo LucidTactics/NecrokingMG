@@ -33,7 +33,10 @@ public class ChaseAttackAnimScenario : ScenarioBase
     private bool _fail;
     private string _failReason = "";
 
-    private const float ChaseVelThreshold = 2.0f; // clearly "moving", not a swing-end twitch
+    // Clearly "moving", not a swing-end twitch. Must sit below the zombie deer's
+    // actual chase speed: combatSpeed 0.96 (80% of the living deer per the zombie
+    // speed rule) chases at ~1.7 u/s.
+    private const float ChaseVelThreshold = 1.4f;
     private int _attackWhileMovingFrames;
     private float _worstVelDuringAttack;
     private int _attackFrames;     // frames the attack override was up at all
