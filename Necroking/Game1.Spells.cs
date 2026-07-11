@@ -509,6 +509,14 @@ public partial class Game1 {
             continue;
          }
 
+         // Player volleys chase the live cursor: each follow-up shot re-aims at the
+         // current cursor world position. The cursor only UPDATES the aim point — when
+         // it's invalid this frame (_cursorAimWorld null: unfocused window, cursor
+         // outside the viewport) the group keeps its last valid target. AI volleys
+         // share this list and must not track the player's cursor.
+         if (_cursorAimWorld.HasValue && _sim.Units[casterIdx].AI == AIBehavior.PlayerControlled)
+            pg.Target = _cursorAimWorld.Value;
+
          pg.Timer += dt;
          if (pg.Timer >= pg.Interval) {
             pg.Timer -= pg.Interval;
