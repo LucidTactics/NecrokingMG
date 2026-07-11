@@ -2763,13 +2763,19 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // unfocused (we bail out below in that case) and regardless of menu state.
         _devServer?.Drain(ExecuteDevCommand);
 
-        // IsActive is true even for headless / command-line --scenario runs (the
-        // off-screen window still reports OS focus), so gate those out — otherwise
-        // automated scenario runs would latch this and render ground instead of the
+        // Real OS window focus. MonoGame/SDL's IsActive is event-driven and starts
+        // true: a game launched while another app holds focus never receives a
+        // FocusGained/FocusLost event, so IsActive reports active forever and every
+        // background click would reach the UI. Poll the OS foreground window instead;
+        // off Windows (null) fall back to IsActive. See docs/known-platform-bugs.md.
+        bool windowFocused = Core.WindowChrome.IsForegroundWindow() ?? IsActive;
+
+        // Headless / command-line --scenario runs are gated out — otherwise
+        // automated scenario runs could latch this and render ground instead of the
         // flat scenario background, breaking deterministic screenshots. A scenario
         // started from the in-game menu leaves LaunchArgs.Scenario null, so it still
         // counts as a real user interaction.
-        if (IsActive && !LaunchArgs.Headless && LaunchArgs.Scenario == null) {
+        if (windowFocused && !LaunchArgs.Headless && LaunchArgs.Scenario == null) {
            userInteractingWithWindow = true;
         }
 
@@ -2788,10 +2794,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         var kb = Keyboard.GetState();
         var mouse = Mouse.GetState();
 
-        // Window unfocused or minimized. IsActive is MonoGame's canonical window-focus
-        // flag. Exempt scenario / headless runs — automated runs often lack window focus,
-        // and freezing them would break the test harness.
-        bool unfocused = !IsActive && _activeScenario == null && LaunchArgs.Scenario == null && !LaunchArgs.Headless;
+        // Window unfocused or minimized (polled OS focus, not the unreliable
+        // IsActive — see above). Exempt scenario / headless runs — automated runs
+        // often lack window focus, and freezing them would break the test harness.
+        bool unfocused = !windowFocused && _activeScenario == null && LaunchArgs.Scenario == null && !LaunchArgs.Headless;
 
         // A dev server drives the game while the OS window is unfocused, so it must keep
         // ticking (like "run when unfocused"). But the dev server injects input directly

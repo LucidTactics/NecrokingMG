@@ -28,6 +28,28 @@ public static class WindowChrome
     static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")]
     static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")]
+    static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    /// <summary>
+    /// True when the OS foreground window belongs to this process, false when it
+    /// belongs to another app (or no window has focus), null when the OS can't be
+    /// asked (non-Windows) — callers should fall back to <c>Game.IsActive</c>.
+    /// Poll this every frame instead of trusting <c>Game.IsActive</c>: that flag is
+    /// event-driven and initialised true, so a game launched while another app holds
+    /// focus never receives a FocusGained/FocusLost event and reports active forever
+    /// (docs/known-platform-bugs.md).
+    /// </summary>
+    public static bool? IsForegroundWindow()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return null;
+        IntPtr fg = GetForegroundWindow();
+        if (fg == IntPtr.Zero) return false;
+        GetWindowThreadProcessId(fg, out uint pid);
+        return pid == (uint)Environment.ProcessId;
+    }
 
     /// <summary>
     /// Remove this process's main window from the Windows taskbar by turning it
