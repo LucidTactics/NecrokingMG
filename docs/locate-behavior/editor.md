@@ -425,10 +425,52 @@ model and both save + clone paths.
   are by id so no infinite recursion), but grand-child data only exists as `ChildOverrides`
   on the child, which `CloneChild` does deep-copy.
 
+## Editor entry-click leak — opening an editor by mouse fires its widgets (stale-press edge)
+
+The immediate-mode editors **bypass the router's click-consumption entirely**: `EditorBase`
+widgets read raw `_mouse`/`_prevMouse` snapshots during Draw and never check
+`InputState.IsMouseConsumed` / `UILayer.InputGranted`. Consumption is also per-frame
+(reset in `InputState.Capture`), while `EditorBase.DrawButton` fires **on release**
+(`hovered && released-edge && rect.Contains(_pressStartPos)`) — a multi-frame gesture that
+one-frame consumption can't protect anyway.
+
+**The bug pattern** (spell/unit/item editors opened via the HUD editor-launcher row or the
+pause menu): while no editor is open, `_editorUi.UpdateInput`/`EndDrawFrame` never run, so
+`_drawSnapMouse` (the Draw-snapshot prev-mouse, `EditorBase.EndDrawFrame`) goes stale at
+"released". The opening click is consumed by the router (`EditorLauncherLayer.OnPointer` →
+`Game1.ToggleEditorWindow`), but on the NEXT frame `EditorBase.UpdateInput` runs
+(`Game1.Update`, gated on `_menuState`), computes `_prevMouse = _drawSnapMouse` (stale
+released) vs held button → manufactures a **fresh press edge** and stamps `_pressStartPos`
+at the cursor (still on the launcher button). On physical release, whatever editor top-bar
+button materialized under the cursor fires — the launcher row (`HUDRenderer` `EditorBtnTop`,
+y≈36-60) overlaps the editor top-bar buttons (Save/Buffs/[X], `panelY + 10`), so the entry
+click can hit `[X] → WantsClose` and insta-close the editor. Keyboard entry (F9-F12) has no
+click in flight, so it never triggers.
+
+**The existing cure — `SuppressClicksUntilRelease` — exists only on `MapEditorWindow`**
+(field `_suppressClicksUntilRelease`, cleared when both buttons are up; the comment at its
+declaration describes exactly this stale-`_prevMouse` mechanism). `Game1.ToggleEditorWindow`
+calls it ONLY for the Map case; the Unit/Spell cases just call `_editorUi.ClearActiveField()`.
+Fix direction: generalize the suppress-until-release into `EditorBase` (set on editor open;
+while set, skip the `_pressStartPos` stamp / treat the held button as no-press) and call it
+from all mouse entry points (`ToggleEditorWindow`, pause-menu buttons, dev `ui` verbs).
+Precedent inside EditorBase: `_dropdownHoldingMousePress` already blocks press+release until
+full release after a dropdown/color-picker dismiss.
+
+**Close paths of the full-screen editors** (there is NO outside-click-close): `[X]` button →
+`WantsClose`, polled by `EditorHostLayer.Draw` (`UI/Layers/HostLayers.cs`) right after each
+editor's Draw; ESC → `EditorHostLayer.OnCancel` (Closable); toggling F-key/launcher again.
+
+**Look/edit here when:** an editor opens and instantly closes/saves when opened by mouse,
+an entry click paints/edits on frame one, or you're wiring a new mouse path that opens an
+editor (call the suppress method).
+
 ## Related areas
 - Runtime widget rendering/layout: `UI/RuntimeWidgetRenderer.cs`, `UI/WidgetLayoutUtils.cs`
   (see [ui.md](ui.md) for the runtime overlays/panels that consume widgets).
 - Harmonize/recolor payload: `Editor/HarmonizeSettings.cs`, `Editor/ColorHarmonizer.cs`.
+- Click consumption / router dispatch: [ui.md](ui.md) "THE UIRouter" + "MouseOverUI / UI
+  hit-testing" (`Core/InputState.cs` `ConsumeMouse`, `UI/UILayer.cs` `HandleInput` template).
 
 ## Consolidation update (2026-07-07)
 
