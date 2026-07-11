@@ -172,9 +172,12 @@ public static class MapData
     internal static readonly JsonSerializerOptions EnvDefJson = new()
     {
         WriteIndented = true,
+        NewLine = "\n", // LF, not CRLF — stable diffs across machines/collaborators.
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        // Write &, <, >, + literally instead of & etc. — avoids noisy diffs.
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         Converters = { new Necroking.Core.HdrColorJsonConverter(), new Necroking.Editor.HarmonizeSettingsJsonConverter() },
     };
 

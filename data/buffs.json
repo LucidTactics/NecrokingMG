@@ -687,13 +687,11 @@
     {
       "id": "buff_paralysis_stun",
       "name": "Paralyzed",
-      "duration": 6.0,
-      "effects": [],
+      "duration": 6,
       "incapacitating": true,
       "incapHoldAnim": "Stunned",
       "incapRecoverAnim": "Idle",
-      "incapRecoverTime": 0.0,
-      "incapHoldAtEnd": false
+      "incapRecoverTime": 0
     }
   ]
 }

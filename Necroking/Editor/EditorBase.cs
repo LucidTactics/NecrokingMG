@@ -85,14 +85,16 @@ public class EditorBase
     protected SpriteFont? _smallFont;
     protected SpriteFont? _largeFont;
     internal GraphicsDevice _gd = null!;
-    internal MouseState _mouse;
-    internal MouseState _prevMouse;
-    // Mouse state snapshotted at the END of the previous Draw (see EndDrawFrame).
-    // Immediate-mode widgets measure their press/release edge against this rather
-    // than the previous Update, so a click survives fixed-timestep catch-up (when
-    // several Updates run per Draw on a slow frame). Without it the one-frame edge
-    // is overwritten before the Draw pass reads it and ~6/7 of clicks are dropped.
-    private MouseState _drawSnapMouse;
+    // Live views over the centralized InputState — EditorBase deliberately keeps
+    // NO private mouse history of its own. A private copy only updated while an
+    // editor is open goes stale across close/open; it once replayed the ghost of
+    // the closing click into the freshly opened editor, insta-closing it.
+    // _prevMouse is the previous DRAW's state rather than the previous Update's,
+    // so a click survives fixed-timestep catch-up (several Updates per Draw would
+    // collapse the one-frame edge before the Draw pass reads it — without this
+    // ~6/7 of clicks are dropped on slow frames).
+    internal MouseState _mouse => _input.Mouse;
+    internal MouseState _prevMouse => _input.DrawPrevMouse;
     internal KeyboardState _kb;
     internal KeyboardState _prevKb;
     internal InputState _input = new();
@@ -206,6 +208,10 @@ public class EditorBase
     /// </summary>
     public float GetScrollOffset(string panelId) =>
         _scrollOffsets.TryGetValue(panelId, out float v) ? v : 0f;
+
+    /// <summary>Set/reset a panel's stored scroll offset — e.g. scroll a
+    /// detail panel back to the top when the selection changes.</summary>
+    public void SetScrollOffset(string panelId, float value) => _scrollOffsets[panelId] = value;
 
     // Scissor clipping stack
     private readonly Stack<Rectangle> _scissorStack = new();
@@ -351,8 +357,9 @@ public class EditorBase
     // the button is released, so vertical moves don't hijack a neighbour.
     private string? _activeSliderId;
 
-    // Screen position where the current left press began (see UpdateInput).
-    private Point _pressStartPos = new(-1, -1);
+    // Screen position where the current left press began — owned by InputState
+    // (stamped in Capture, invalidated by ConsumeGesture on UI mode changes).
+    private Point _pressStartPos => _input.PressStartPos;
     // Guards against a shared color picker being drawn twice per frame when
     // nested editors (wall/env inside map editor) each call DrawColorPickerPopup.
     private bool _colorPickerDrawnThisFrame;
@@ -382,16 +389,10 @@ public class EditorBase
     public void UpdateInput(MouseState mouse, MouseState prevMouse, KeyboardState kb, KeyboardState prevKb,
         int screenW, int screenH, GameTime gameTime, InputState? input = null)
     {
-        _mouse = mouse;
-        // Edge detection for widgets happens during Draw, but UpdateInput can run
-        // multiple times per Draw under fixed-timestep catch-up. Measuring against
-        // the previous Update (the passed prevMouse) would collapse a press edge
-        // before Draw sees it, dropping clicks on slow frames. Measure against the
-        // mouse state at the previous Draw instead; EndDrawFrame refreshes it once
-        // per frame. In the common 1-Update-per-Draw case the two are identical, so
-        // existing behavior is unchanged. (prevMouse is still used below for the
-        // dropdown-hold / color-picker dismiss logic, which is per-Update by design.)
-        _prevMouse = _drawSnapMouse;
+        // Mouse state and press/release edges live in InputState now — _mouse /
+        // _prevMouse / _pressStartPos are read-through properties over _input.
+        // (The mouse/prevMouse params are still used below for the dropdown-hold /
+        // color-picker dismiss logic, which is per-Update by design.)
         _kb = kb;
         _prevKb = prevKb;
         if (input != null) _input = input;
@@ -404,13 +405,6 @@ public class EditorBase
         // of the next frame so that game-world click handlers see it.
         if (_mouseOverEditorUI && _input != null)
             _input.MouseOverUI = true;
-
-        // Track where the current press began (measured against the same
-        // draw-snapshot edge the widgets use). DrawButton requires the press to
-        // have STARTED inside its rect before firing on release — pressing in
-        // the world / another widget and dragging onto a button no longer fires it.
-        if (_mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
-            _pressStartPos = new Point(_mouse.X, _mouse.Y);
 
         // Reset per-frame flags
         // If a dropdown is open from last frame, pre-set input layer to block all widgets
@@ -472,16 +466,12 @@ public class EditorBase
     }
 
     /// <summary>
-    /// Snapshot the current mouse state as the reference for next frame's edge
-    /// detection. Call exactly once per Draw, AFTER this editor's widgets have been
-    /// drawn. Pairs with <see cref="UpdateInput"/>'s use of <c>_drawSnapMouse</c> so
-    /// press/release edges are measured against the previous Draw — keeping clicks
-    /// responsive even when several Updates run per Draw (fixed-timestep catch-up on
-    /// a slow frame). See the field comment on <c>_drawSnapMouse</c>.
+    /// End-of-Draw housekeeping. The mouse edge snapshot itself moved to
+    /// <see cref="Necroking.Core.InputState.SnapshotDrawFrame"/>, which
+    /// GameRenderer calls unconditionally every Draw.
     /// </summary>
     public void EndDrawFrame()
     {
-        _drawSnapMouse = _mouse;
         // An open dropdown whose combo wasn't drawn this frame is unreachable
         // (its tab/panel went away) — close it so the pre-raised layer doesn't
         // invisibly block the editor.
@@ -719,19 +709,148 @@ public class EditorBase
 
     // === Scrollable List ===
 
+    // Interactive-scrollbar drag state: which bar (by id) owns the current
+    // left-button drag, and the Y offset within the thumb where it was grabbed.
+    private string? _vscrollDragId;
+    private float _vscrollDragGrabOffset;
+
     /// <summary>The canonical thin vertical scrollbar (indicator-only, 5px wide
     /// with its left edge at x): a faint track spanning the viewport with a
     /// proportional thumb. No-op when the content fits. Pure draw — pair it
-    /// with whatever wheel handler owns the scroll value; the ratio is clamped
-    /// so an overscrolled value can't push the thumb past the track.</summary>
+    /// with whatever wheel handler owns the scroll value. Geometry/palette come
+    /// from <see cref="Necroking.UI.VScrollbar"/> (shared with the scenario menu).</summary>
     public void DrawVScrollbar(int x, int y, int viewH, float contentH, float scroll)
     {
-        if (viewH <= 0 || contentH <= viewH) return;
-        DrawRect(new Rectangle(x, y, 5, viewH), new Color(30, 30, 45, 120));
-        int barH = Math.Max(20, (int)(viewH * (float)viewH / contentH));
-        float ratio = Math.Clamp(scroll / (contentH - viewH), 0f, 1f);
-        int barY = y + (int)(ratio * (viewH - barH));
-        DrawRect(new Rectangle(x, barY, 5, barH), new Color(100, 100, 140, 180));
+        if (Necroking.UI.VScrollbar.Fits(viewH, contentH)) return;
+        DrawRect(Necroking.UI.VScrollbar.TrackRect(x, y, viewH), Necroking.UI.VScrollbar.TrackColor);
+        DrawRect(Necroking.UI.VScrollbar.ThumbRect(x, y, viewH, contentH, scroll), Necroking.UI.VScrollbar.ThumbColor);
+    }
+
+    /// <summary>Hit zone of an interactive scrollbar at (x, y, viewH): the 5px
+    /// bar plus padding so the thumb is easy to grab. Callers whose clickable
+    /// rows extend under the bar column must exclude this rect from their own
+    /// row hit tests (DrawScrollableList does this internally).</summary>
+    public static Rectangle VScrollbarHitRect(int x, int y, int viewH) => Necroking.UI.VScrollbar.HitRect(x, y, viewH);
+
+    /// <summary>Interactive variant of <see cref="DrawVScrollbar(int,int,int,float,float)"/>:
+    /// same canonical look, plus thumb-drag and track-click-jump (thumb centres
+    /// on the cursor) with a generous hit zone (<see cref="VScrollbarHitRect"/>).
+    /// Pass a stable unique id per bar. Returns the updated scroll value clamped
+    /// to [0, contentH - viewH]; returns 0 (drawing nothing) when the content
+    /// fits. Inert while an overlay owns input on the given layer (e.g. an open
+    /// combo dropdown overlapping the bar column).</summary>
+    public float DrawVScrollbar(string id, int x, int y, int viewH, float contentH, float scroll, int layer = 0)
+    {
+        // A mouse-up anywhere ends an in-progress drag (covers releasing off
+        // the bar, or the owning panel disappearing mid-drag).
+        if (_vscrollDragId != null && _mouse.LeftButton != ButtonState.Pressed) _vscrollDragId = null;
+        if (Necroking.UI.VScrollbar.Fits(viewH, contentH)) return 0f;
+
+        scroll = Math.Clamp(scroll, 0f, contentH - viewH);
+
+        var thumbRect = Necroking.UI.VScrollbar.ThumbRect(x, y, viewH, contentH, scroll);
+        var trackHit = Necroking.UI.VScrollbar.HitRect(x, y, viewH);
+        bool overTrack = !IsInputBlocked(EffectiveLayer(layer)) && trackHit.Contains(_mouse.X, _mouse.Y);
+
+        // Grab the thumb, or click the track to jump.
+        if (overTrack && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+        {
+            _vscrollDragId = id;
+            _vscrollDragGrabOffset = thumbRect.Contains(_mouse.X, _mouse.Y) ? _mouse.Y - thumbRect.Y : thumbRect.Height / 2f;
+        }
+
+        // Apply drag: map the thumb-top position back to a scroll offset.
+        if (_vscrollDragId == id)
+        {
+            scroll = Necroking.UI.VScrollbar.ScrollFromDrag(_mouse.Y, _vscrollDragGrabOffset, y, viewH, contentH);
+            thumbRect = Necroking.UI.VScrollbar.ThumbRect(x, y, viewH, contentH, scroll);
+        }
+        if (_vscrollDragId == id || overTrack) SetMouseOverUI();
+
+        bool hot = _vscrollDragId == id || (overTrack && thumbRect.Contains(_mouse.X, _mouse.Y));
+        DrawRect(Necroking.UI.VScrollbar.TrackRect(x, y, viewH), Necroking.UI.VScrollbar.TrackColor);
+        DrawRect(thumbRect, hot ? Necroking.UI.VScrollbar.ThumbHotColor : Necroking.UI.VScrollbar.ThumbColor);
+        return scroll;
+    }
+
+    // === Scroll panel scope ===
+
+    /// <summary>
+    /// Scope for the standard scrollable detail/properties panel: wheel
+    /// scrolling (clamped by last frame's content height), scissor clip,
+    /// content-height measurement, and the canonical draggable scrollbar —
+    /// with the scroll state owned by EditorBase (keyed by panelId, same store
+    /// as DrawScrollableList). Usage:
+    /// <code>
+    ///   var sp = _ui.BeginScrollPanel("env_props", new Rectangle(x, y, w, h), topPad: 8);
+    ///   int curY = sp.ContentY;   // first row Y — scroll already applied
+    ///   ...draw rows, advancing curY...
+    ///   sp.End(curY);             // measure + record + clamp + scrollbar + EndClip
+    /// </code>
+    /// Callers never touch the offset or the height arithmetic (hand-rolled
+    /// copies of that math have double-counted the scroll offset before, which
+    /// turns the draggable bar into a feedback loop). Reset to the top on
+    /// selection change with <see cref="SetScrollOffset"/>(panelId, 0).
+    /// </summary>
+    /// <param name="topPad">Gap above the first row, inside the rect.</param>
+    /// <param name="bottomPad">Extra scrollable space below the last row.</param>
+    /// <param name="wheelEnabled">Pass false to suppress wheel scrolling this
+    /// frame (e.g. while a popup that doesn't block input layers is open above
+    /// this panel — the panel would otherwise consume the wheel first).</param>
+    /// <param name="clip">Scissor-clip the rect until End. Pass false when an
+    /// enclosing scope already clips this exact area (e.g. RegistryCrudPanel's
+    /// detail callback).</param>
+    public ScrollPanel BeginScrollPanel(string panelId, Rectangle rect, int topPad = 4,
+        int bottomPad = 0, int layer = 0, bool wheelEnabled = true, bool clip = true)
+    {
+        if (wheelEnabled)
+        {
+            float scroll = GetScrollOffset(panelId);
+            HandlePanelScroll(rect, ref scroll, panelId, rect.Height, 0.3f, layer);
+            _scrollOffsets[panelId] = scroll;
+        }
+        if (clip) BeginClip(rect);
+        return new ScrollPanel(this, panelId, rect, topPad, bottomPad, layer, clip);
+    }
+
+    /// <summary>Scope returned by <see cref="BeginScrollPanel"/>: draw content
+    /// from <see cref="ContentY"/> downward, then call <see cref="End"/> with
+    /// the final layout cursor.</summary>
+    public readonly struct ScrollPanel
+    {
+        private readonly EditorBase _ui;
+        private readonly string _id;
+        private readonly Rectangle _rect;
+        private readonly int _topPad, _bottomPad, _layer;
+        private readonly bool _clip;
+
+        /// <summary>Y of the first content row (top padding and scroll applied).</summary>
+        public int ContentY { get; }
+
+        internal ScrollPanel(EditorBase ui, string id, Rectangle rect,
+            int topPad, int bottomPad, int layer, bool clip)
+        {
+            _ui = ui; _id = id; _rect = rect;
+            _topPad = topPad; _bottomPad = bottomPad; _layer = layer; _clip = clip;
+            ContentY = rect.Y + topPad - (int)ui.GetScrollOffset(id);
+        }
+
+        /// <summary>Close the scope: ends the clip, records the measured
+        /// content height for next frame's wheel clamp, and draws the
+        /// draggable scrollbar (which also clamps the offset, so a shrinking
+        /// panel can't strand it past the end). <paramref name="contentBottomY"/>
+        /// is the layout cursor after the last row — screen space, i.e. still
+        /// offset by the scroll like <see cref="ContentY"/> was.</summary>
+        public void End(int contentBottomY)
+        {
+            if (_clip) _ui.EndClip();
+            // ContentY already includes -scroll, so this difference is the
+            // pure content height — the ONE place this arithmetic lives.
+            float contentH = (contentBottomY - ContentY) + _topPad + _bottomPad;
+            _ui.SetPanelContentHeight(_id, contentH);
+            _ui._scrollOffsets[_id] = _ui.DrawVScrollbar(_id, _rect.Right - 6, _rect.Y,
+                _rect.Height, contentH, _ui.GetScrollOffset(_id), _layer);
+        }
     }
 
     /// <summary>
@@ -794,6 +913,18 @@ public class EditorBase
         int itemH = ScrollableListItemH;
         int clicked = -1;
 
+        // Visible (post-filter) row count — drives the wheel clamp and the bar.
+        int totalItems = 0;
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (searchFilter == null || items[i].Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
+                totalItems++;
+        }
+        float contentH = totalItems * (float)itemH;
+        float maxScroll = Math.Max(0, contentH - h);
+        // Rows under the scrollbar column must not react to clicks meant for the bar.
+        var sbHit = contentH > h ? VScrollbarHitRect(x + w - 6, y, h) : Rectangle.Empty;
+
         // Handle scroll wheel when hovering
         if (!inputBlocked && !_scrollConsumed && HitTest(clipRect))
         {
@@ -801,16 +932,7 @@ public class EditorBase
             int scrollDelta = _mouse.ScrollWheelValue - _prevMouse.ScrollWheelValue;
             if (scrollDelta != 0)
             {
-                scroll -= scrollDelta * 0.15f;
-                int totalH = 0;
-                for (int i = 0; i < items.Count; i++)
-                {
-                    if (searchFilter != null && !items[i].Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    totalH += itemH;
-                }
-                float maxScroll = Math.Max(0, totalH - h);
-                scroll = Math.Clamp(scroll, 0, maxScroll);
+                scroll = Math.Clamp(scroll - scrollDelta * 0.15f, 0, maxScroll);
                 _scrollOffsets[panelId] = scroll;
                 ConsumeScroll();
             }
@@ -867,7 +989,8 @@ public class EditorBase
             if (iy >= y + h) break;
 
             var itemRect = new Rectangle(x, iy, w, itemH);
-            bool hovered = !inputBlocked && itemRect.Contains(_mouse.X, _mouse.Y) && clipRect.Contains(_mouse.X, _mouse.Y);
+            bool hovered = !inputBlocked && itemRect.Contains(_mouse.X, _mouse.Y) && clipRect.Contains(_mouse.X, _mouse.Y)
+                && !sbHit.Contains(_mouse.X, _mouse.Y);
             if (hovered) SetMouseOverUI();
 
             Color bg;
@@ -887,14 +1010,9 @@ public class EditorBase
 
         EndClip();
 
-        // Scrollbar
-        int totalItems = 0;
-        for (int i = 0; i < items.Count; i++)
-        {
-            if (searchFilter == null || items[i].Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
-                totalItems++;
-        }
-        DrawVScrollbar(x + w - 6, y, h, totalItems * itemH, scroll);
+        // Scrollbar (interactive: draggable thumb + track-click jump)
+        scroll = DrawVScrollbar(panelId, x + w - 6, y, h, contentH, scroll);
+        _scrollOffsets[panelId] = scroll;
 
         // Selecting a different object abandons any in-progress text-field edit.
         // The edit buffer (_inputBuffer) is keyed by a static field id ("wd_id",
@@ -1667,14 +1785,10 @@ public class EditorBase
 
         EndClip();
 
-        // Draw scrollbar indicator if scrollable
+        // Scrollbar indicator if scrollable (item-based scroll converted to pixels)
         if (dd.NeedsScroll)
-        {
-            float scrollRatio = dd.MaxScroll > 0 ? (float)scrollOffset / dd.MaxScroll : 0;
-            int barH = Math.Max(12, itemsDropH * dd.VisibleCount / Math.Max(1, dd.FilteredOptions.Length));
-            int barY = dd.ItemsY + (int)(scrollRatio * (itemsDropH - barH));
-            DrawRect(new Rectangle(inputX + inputW - 6, barY, 5, barH), new Color(100, 100, 140, 180));
-        }
+            DrawVScrollbar(inputX + inputW - 6, dd.ItemsY, itemsDropH,
+                dd.FilteredOptions.Length * ComboItemH, scrollOffset * ComboItemH);
 
         // Consume the pending overlay so nested editors that BOTH call
         // DrawDropdownOverlays (wall/env editor inside the map editor) don't
@@ -1958,14 +2072,8 @@ public class EditorBase
             }
         }
 
-        // Scrollbar
-        if (totalLines > visibleLines)
-        {
-            float scrollRatio = totalLines > visibleLines ? (float)_textAreaScrollOffset / (totalLines - visibleLines) : 0;
-            int barH = Math.Max(12, (h - 4) * visibleLines / totalLines);
-            int barY = y + 2 + (int)(scrollRatio * (h - 4 - barH));
-            DrawRect(new Rectangle(x + w - 6, barY, 5, barH), new Color(100, 100, 140, 180));
-        }
+        // Scrollbar indicator (line-based scroll converted to pixels)
+        DrawVScrollbar(x + w - 6, y + 2, h - 4, totalLines * lineH, _textAreaScrollOffset * lineH);
 
         return isActive ? _inputBuffer : (value ?? "");
     }

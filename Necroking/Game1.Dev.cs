@@ -267,6 +267,24 @@ public partial class Game1 {
                break;
             }
 
+            // Start a coded scenario in the live session — same path as the scenario
+            // menu / --scenario. Lets a driven session test scenario→scenario and
+            // scenario→map transitions without a process restart.
+            case "start_scenario": {
+               if (c.Args.Length < 1) {
+                  c.Complete(Necroking.Dev.DevServer.Error("start_scenario needs: <scenarioName>"));
+                  break;
+               }
+               if (Scenario.ScenarioRegistry.Create(c.Args[0]) == null) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"unknown scenario '{c.Args[0]}'"));
+                  break;
+               }
+               StartScenario(c.Args[0]);
+               _menuState = MenuState.None;
+               c.Complete(Necroking.Dev.DevServer.Ok($"started scenario={c.Args[0]} units={_sim.Units.Count}"));
+               break;
+            }
+
             // Press a main-menu button. Mirrors the click handlers in Update so
             // there's one definition of what each button does. Map loads go
             // through `start_game <map>` instead.
@@ -285,7 +303,7 @@ public partial class Game1 {
                      break;
                   case "scenarios":
                      _menuState = MenuState.ScenarioList;
-                     _scenarioScrollOffset = 0;
+                     _scenarioScrollPx = 0f;
                      c.Complete(Necroking.Dev.DevServer.Ok("opened scenario list"));
                      break;
                   case "main_menu":
@@ -1874,7 +1892,7 @@ public partial class Game1 {
                   "worker_scene", "ui_job_board", "ui_grave_roster [graveObjIdx]",
                   // camera / time / game flow
                   "camera <x> <y> [zoom]", "free_camera [on|off]", "speed <n>", "pause", "resume",
-                  "start_game [map]  (default empty_test)", "menu <new_game|scenarios|main_menu|quit>",
+                  "start_game [map]  (default empty_test)", "start_scenario <name>", "menu <new_game|scenarios|main_menu|quit>",
                   "window <show|hide|toggle>",
                   // rendering & fx
                   "screenshot [name]  opts:{no_ui,no_ground,downsample_to}",
@@ -1920,7 +1938,7 @@ public partial class Game1 {
          case "scenarios":
          case "scenario_list":
             _menuState = MenuState.ScenarioList;
-            _scenarioScrollOffset = 0;
+            _scenarioScrollPx = 0f;
             return true;
       }
 
@@ -2083,7 +2101,8 @@ public partial class Game1 {
          case MenuState.MapEditor:
             // Zones tab: select a zone by index/id/name so headless drives can
             // exercise the selected-state UI (handles, left village panel).
-            return _mapEditor.DevSelectZone(token);
+            // Falls back to Objects-tab env defs (placement ghost, def props).
+            return _mapEditor.DevSelectZone(token) ?? _mapEditor.DevSelectObjectDef(token);
          default:
             return null;
       }

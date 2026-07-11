@@ -40,6 +40,16 @@ public class Inventory
             _slots[i] = InventorySlot.Empty;
     }
 
+    /// <summary>Empty every slot and forget the ever-seen set — the state of a fresh
+    /// playthrough. Per-world reset only; the ever-seen set must otherwise stay
+    /// grow-only (see <see cref="EverSeen"/>).</summary>
+    public void Clear()
+    {
+        for (int i = 0; i < _slots.Length; i++)
+            _slots[i] = InventorySlot.Empty;
+        _everSeen.Clear();
+    }
+
     public InventorySlot GetSlot(int index)
     {
         if (index < 0 || index >= _slots.Length) return InventorySlot.Empty;

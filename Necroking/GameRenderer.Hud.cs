@@ -898,12 +898,12 @@ partial class GameRenderer
     {
         DrawMenuBackdrop(screenW, screenH);
 
+        int titleY = screenH / 20 + 20;
         // Title
         if (_g._largeFont != null)
         {
             string title = "SCENARIOS";
             var titleSize = _g._largeFont.MeasureString(title);
-            int titleY = screenH / 6;
             DrawText(_g._largeFont, title, new Vector2(screenW / 2f - titleSize.X / 2f + 3, titleY + 3), new Color(0, 0, 0, 180));
             DrawText(_g._largeFont, title, new Vector2(screenW / 2f - titleSize.X / 2f, titleY), new Color(180, 220, 100));
         }
@@ -912,34 +912,167 @@ partial class GameRenderer
         {
             string subtitle = "Select a scenario to run";
             var subSize = _g._font.MeasureString(subtitle);
-            DrawText(_g._font, subtitle, new Vector2(screenW / 2f - subSize.X / 2f, screenH / 6 + 35), new Color(140, 140, 160));
+            DrawText(_g._font, subtitle, new Vector2(screenW / 2f - subSize.X / 2f, titleY + 35), new Color(140, 140, 160));
         }
 
-        // Scenario buttons (5-wide grid)
-        GetScenarioGridLayout(screenW, screenH, out int cols, out int btnW, out int btnH, out int btnGap, out int gridX, out int menuY, out int rowsVisible);
+        // Categorized scenario grid (shared layout with the click handler).
+        var view = BuildScenarioMenuLayout(screenW, screenH, _g._scenarioScrollPx);
 
-        var names = new List<string>(ScenarioRegistry.GetNames());
-        names.Reverse(); // Newest first
-        int visibleCount = Math.Min(names.Count - _g._scenarioScrollOffset, rowsVisible * cols);
-        for (int i = 0; i < visibleCount; i++)
+        // Clip the grid to its scroll window so partially-scrolled rows are cut at
+        // the edges (smooth sub-row scroll) rather than spilling into the title /
+        // back-button gaps. Scissor rect is device state; the HudScissor material
+        // enables the scissor test (same mechanism as the editor panels).
+        var device = _g.Scope.GraphicsDevice;
+        var prevScissor = device.ScissorRectangle;
+        device.ScissorRectangle = new Rectangle(0, view.ScrollY, screenW, view.ScrollViewH);
+        _g.Scope.PushMaterial(Materials.HudScissor);
+
+        foreach (var e in view.Entries)
         {
-            int nameIdx = i + _g._scenarioScrollOffset;
-            if (nameIdx >= names.Count) break;
-            int col = i % cols, row = i / cols;
-            int bx = gridX + col * (btnW + btnGap);
-            int by = menuY + row * (btnH + btnGap);
-            DrawMenuButtonAt(names[nameIdx], bx, by, btnW, btnH);
+            if (!e.Visible) continue;
+            if (e.IsHeader)
+                DrawScenarioCategoryHeader(e.Text, e.Rect);
+            else
+                DrawMenuButtonAt(e.Text, e.Rect.X, e.Rect.Y, e.Rect.Width, e.Rect.Height);
         }
 
-        // Back button (centered below the grid)
-        int usedRows = (visibleCount + cols - 1) / cols;
-        int backY = menuY + usedRows * (btnH + btnGap) + 10;
-        int backW = 320;
-        DrawMenuButtonAt("< Back", screenW / 2 - backW / 2, backY, backW, btnH);
+        _g.Scope.PopMaterial();
+        device.ScissorRectangle = prevScissor;
 
-        // Scroll hint
-        if (names.Count > visibleCount + _g._scenarioScrollOffset)
-            DrawText(_g._smallFont, "Scroll for more...", new Vector2(screenW / 2f - 50, screenH - 40), new Color(100, 100, 120));
+        // Back button (centered below the visible grid)
+        DrawMenuButtonAt("< Back", view.BackRect.X, view.BackRect.Y, view.BackRect.Width, view.BackRect.Height);
+
+        // Scrollbar — same canonical look/behaviour as the editor panels (shared
+        // Necroking.UI.VScrollbar geometry). Draw only; input lives in Game1.
+        DrawScenarioScrollbar(view);
+    }
+
+    // Draws the scenario-menu scrollbar using the shared VScrollbar geometry. The
+    // thumb goes "hot" while hovered or being dragged (drag state lives on Game1).
+    private void DrawScenarioScrollbar(ScenarioMenuView view)
+    {
+        if (Necroking.UI.VScrollbar.Fits(view.ScrollViewH, view.ScrollContentH)) return;
+
+        var track = Necroking.UI.VScrollbar.TrackRect(view.ScrollX, view.ScrollY, view.ScrollViewH);
+        var thumb = Necroking.UI.VScrollbar.ThumbRect(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH, _g._scenarioScrollPx);
+
+        int mx = (int)_g._input.MousePos.X, my = (int)_g._input.MousePos.Y;
+        bool overThumb = thumb.Contains(mx, my);
+        bool hot = _g._scenarioScrollDragging || overThumb;
+
+        _g.Scope.Draw(_g._pixel, track, Necroking.UI.VScrollbar.TrackColor);
+        _g.Scope.Draw(_g._pixel, thumb, hot ? Necroking.UI.VScrollbar.ThumbHotColor : Necroking.UI.VScrollbar.ThumbColor);
+    }
+
+    // Draws a category label as a section divider above its scenario buttons.
+    private void DrawScenarioCategoryHeader(string text, Rectangle rect)
+    {
+        if (_g._font == null) return;
+        var color = new Color(180, 220, 130);
+        // Vertically bottom-align the label within the row so it hugs its buttons.
+        var size = _g._font.MeasureString(text);
+        int ty = rect.Y + (int)(rect.Height - size.Y);
+        DrawText(_g._font, text, new Vector2(rect.X + 2, ty), color);
+        // Underline spanning the grid width.
+        int lineY = rect.Y + rect.Height - 2;
+        _g.Scope.Draw(_g._pixel, new Rectangle(rect.X, lineY, rect.Width, 1), new Color(180, 220, 130, 90));
+    }
+
+    // A single laid-out scenario-menu element (category header or scenario button),
+    // already positioned on screen for the current scroll offset.
+    internal struct ScenarioMenuEntry
+    {
+        public bool IsHeader;
+        public string Text;     // category title (header) or scenario name (button)
+        public Rectangle Rect;  // on-screen bounds
+        public bool Visible;    // within the current scroll window
+    }
+
+    // Fully-resolved scenario-menu layout for one frame: the positioned entries, the
+    // back button, and the scrollbar geometry. Drawing (GameRenderer) and hit-testing
+    // (Game1) both build this from the same scroll offset so they never desync. The
+    // scrollbar values are in pixels so they feed the shared Necroking.UI.VScrollbar
+    // helper directly (rows -> pixels via RowStride).
+    internal struct ScenarioMenuView
+    {
+        public List<ScenarioMenuEntry> Entries;
+        public int TotalRows;
+        public int RowsVisible;
+        public int RowStride;
+        public Rectangle BackRect;
+        // Scrollbar column (pixel units): left edge X, top Y, visible height, and
+        // total content height. ScrollContentH <= ScrollViewH means "fits, no bar".
+        public int ScrollX;
+        public int ScrollY;
+        public int ScrollViewH;
+        public float ScrollContentH;
+
+        /// <summary>Clamp a pixel scroll offset to the valid range for this layout.</summary>
+        public float ClampScroll(float scrollPx) => Math.Clamp(scrollPx, 0f, Math.Max(0f, ScrollContentH - ScrollViewH));
+    }
+
+    // Builds the categorized scenario-menu layout for a given scroll offset (in
+    // pixels — smooth, sub-row). Each category emits a header row followed by its
+    // scenario buttons packed into `cols`-wide rows; `scrollPx` slides the whole
+    // layout vertically. Entries partially inside the window are Visible (they're
+    // scissor-clipped at draw time); ClampScroll keeps the last row reachable.
+    internal ScenarioMenuView BuildScenarioMenuLayout(int screenW, int screenH, float scrollPx)
+    {
+        GetScenarioGridLayout(screenW, screenH, out int cols, out int btnW, out int btnH, out int btnGap,
+            out int gridX, out int menuY, out int rowsVisible);
+        int rowStride = btnH + btnGap;
+        int gridW = cols * btnW + (cols - 1) * btnGap;
+        int viewH = rowsVisible * rowStride;
+        int scroll = (int)Math.Round(scrollPx);
+
+        var entries = new List<ScenarioMenuEntry>();
+        int layoutRow = 0;
+
+        foreach (var cat in ScenarioRegistry.GetCategories())
+        {
+            int hy = menuY + layoutRow * rowStride - scroll;
+            entries.Add(new ScenarioMenuEntry
+            {
+                IsHeader = true,
+                Text = cat,
+                Rect = new Rectangle(gridX, hy, gridW, btnH),
+                Visible = hy + btnH > menuY && hy < menuY + viewH,
+            });
+            layoutRow++;
+
+            var scen = ScenarioRegistry.GetNamesInCategory(cat);
+            for (int i = 0; i < scen.Count; i++)
+            {
+                int col = i % cols;
+                int by = menuY + (layoutRow + i / cols) * rowStride - scroll;
+                int bx = gridX + col * (btnW + btnGap);
+                entries.Add(new ScenarioMenuEntry
+                {
+                    IsHeader = false,
+                    Text = scen[i],
+                    Rect = new Rectangle(bx, by, btnW, btnH),
+                    Visible = by + btnH > menuY && by < menuY + viewH,
+                });
+            }
+            layoutRow += (scen.Count + cols - 1) / cols;
+        }
+
+        // Back button fixed just below the visible window so it never scrolls away.
+        int backW = 320;
+        int backY = menuY + viewH + 10;
+
+        return new ScenarioMenuView
+        {
+            Entries = entries,
+            TotalRows = layoutRow,
+            RowsVisible = rowsVisible,
+            RowStride = rowStride,
+            BackRect = new Rectangle(screenW / 2 - backW / 2, backY, backW, btnH),
+            ScrollX = gridX + gridW + 8,
+            ScrollY = menuY,
+            ScrollViewH = viewH,
+            ScrollContentH = layoutRow * rowStride,
+        };
     }
 
     // Shared layout for the scenario grid so click-handling and drawing stay in sync.
@@ -948,7 +1081,7 @@ partial class GameRenderer
         cols = 5;
         btnGap = 12;
         btnH = 45;
-        menuY = screenH / 4 + 60;
+        menuY = screenH / 20 + 80;
         int maxGridW = Math.Min(screenW - 80, 1400);
         btnW = (maxGridW - (cols - 1) * btnGap) / cols;
         int gridW = cols * btnW + (cols - 1) * btnGap;

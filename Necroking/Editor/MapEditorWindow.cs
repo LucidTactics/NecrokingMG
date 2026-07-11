@@ -1152,6 +1152,8 @@ public class MapEditorWindow
                 break;
             case MapEditorTab.Objects:
                 if (_objectPaintMode && !overPanel) DrawBrushCursor(screenW, screenH);
+                if (!_objectPaintMode && !overPanel && !IsAnyPopupBlocking())
+                    DrawObjectPlacementGhost(screenW, screenH);
                 if (_showCollisions) DrawCollisionOverlay(screenW, screenH);
                 break;
             case MapEditorTab.Roads:
@@ -1167,6 +1169,37 @@ public class MapEditorWindow
                 if (!overPanel) DrawProcGenBrushCursor(screenW, screenH);
                 break;
         }
+    }
+
+    /// <summary>Semi-transparent ghost of the selected object under the cursor
+    /// (Objects tab, single-place mode): grey where CanPlaceObject accepts the
+    /// spot, red where it doesn't — same check and default scale the click-to-
+    /// place path uses. Group selections preview their highest-weight member
+    /// (the actual placement re-rolls per click, so the ghost can't match it).</summary>
+    private void DrawObjectPlacementGhost(int screenW, int screenH)
+    {
+        // Never ResolveObjectDefIndex() here — it re-rolls the weighted random
+        // group pick per call, so the ghost would flicker between group members
+        // every frame.
+        int defIdx = SelectedEnvDefIndex;
+        if (IsEnvGroupSelected)
+        {
+            var members = GetSelectedGroupMembers();
+            if (members.Count == 0) return;
+            defIdx = members[0].defIdx;
+            float bestW = members[0].weight;
+            for (int i = 1; i < members.Count; i++)
+                if (members[i].weight > bestW) { defIdx = members[i].defIdx; bestW = members[i].weight; }
+        }
+        if (defIdx < 0 || defIdx >= _envSystem.DefCount) return;
+
+        // MousePos, not the raw MouseState: identical for a real cursor, but it
+        // also honors the dev `mousepos` override so headless drives can test.
+        Vec2 worldPos = _camera.ScreenToWorld(_eb._input.MousePos, screenW, screenH);
+        var screenPos = _camera.WorldToScreen(worldPos, 0f, screenW, screenH);
+        Render.EnvGhostRenderer.Draw(Scope, _envSystem, defIdx, screenPos, _camera.Zoom,
+            _envSystem.CanPlaceObject(defIdx, worldPos.X, worldPos.Y),
+            Render.EnvGhostRenderer.EditorValidTint, _pixel);
     }
 
     public void Draw(int screenW, int screenH)
@@ -2838,7 +2871,8 @@ public class MapEditorWindow
             // its own scroll; groups reuse _envListScroll as a plain row list).
             int groupsContentH = groups.Count * (ButtonHeight + 2);
             _envListScroll = MathF.Min(_envListScroll, Math.Max(0, groupsContentH - listAreaH));
-            _eb.DrawVScrollbar(panelX + PanelWidth - 6, contentY, listAreaH, groupsContentH, _envListScroll);
+            _envListScroll = _eb.DrawVScrollbar("map_envgroups",
+                panelX + PanelWidth - 6, contentY, listAreaH, groupsContentH, _envListScroll);
 
             // Selected group info
             if (IsEnvGroupSelected)
@@ -2922,7 +2956,8 @@ public class MapEditorWindow
             _eb.EndClip();
 
             // Thin scrollbar in the panel's right margin, spanning the grid viewport.
-            _eb.DrawVScrollbar(panelX + PanelWidth - 6, contentY, listAreaH,
+            _envListScroll = _eb.DrawVScrollbar("map_envgrid",
+                panelX + PanelWidth - 6, contentY, listAreaH,
                 totalRows * rowStride, _envListScroll);
 
             // Hover tooltip — queued globally, drawn topmost after the clip closes.
@@ -4711,6 +4746,29 @@ public class MapEditorWindow
         return $"zone {zones[found].Id} ({zones[found].Name})";
     }
 
+    /// <summary>Dev-select an env object def on the Objects tab by index, id, or
+    /// name (case-insensitive), for headless driving — the grid click path needs
+    /// real mouse state. Returns null if nothing matched.</summary>
+    public string? DevSelectObjectDef(string token)
+    {
+        int found = -1;
+        if (int.TryParse(token, out int idx) && idx >= 0 && idx < _envSystem.DefCount)
+            found = idx;
+        else
+            for (int i = 0; i < _envSystem.DefCount; i++)
+            {
+                var d = _envSystem.GetDef(i);
+                if (string.Equals(d.Id, token, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(d.Name, token, StringComparison.OrdinalIgnoreCase))
+                { found = i; break; }
+            }
+        if (found < 0) return null;
+        ActiveTab = MapEditorTab.Objects;
+        SelectedEnvDefIndex = found;
+        var def = _envSystem.GetDef(found);
+        return $"object def {def.Id} ({def.Name})";
+    }
+
     /// <summary>Deep copy of a zone for the clipboard — Population and Spawns are
     /// reference types, so they must be cloned too. Keep in sync when MapZone grows
     /// fields (same rule as LoadZones/SaveZones).</summary>
@@ -5533,7 +5591,8 @@ public class MapEditorWindow
         _eb.EndClip();
 
         // Thin scrollbar in the panel's right margin, spanning the grid viewport.
-        _eb.DrawVScrollbar(panelX + PanelWidth - 6, curY, listH,
+        _tabScroll[(int)MapEditorTab.Units] = _eb.DrawVScrollbar("maptab_unitgrid",
+            panelX + PanelWidth - 6, curY, listH,
             totalRows * rowStride, _tabScroll[(int)MapEditorTab.Units]);
         curY += listH;
 
@@ -5660,19 +5719,22 @@ public class MapEditorWindow
     }
 
     /// <summary>Thin scrollbar at the panel's right edge for a scrolling tab
-    /// body. viewTop = where the scrollable content starts (post-header),
-    /// viewBottom = the tab clip bottom, contentBottom = the bottom of the last
-    /// laid-out row in screen space (i.e. already offset by -scroll). Also
-    /// max-clamps the scroll so the wheel can't run endlessly past the end
-    /// (the generic wheel handler only clamps at 0). Tabs that cull rows with
-    /// an early break under-report contentBottom, so the clamp only ever
-    /// trails the true end — it never blocks reaching it.</summary>
+    /// body (interactive: draggable thumb + track-click jump). viewTop = where
+    /// the scrollable content starts (post-header), viewBottom = the tab clip
+    /// bottom, contentBottom = the bottom of the last laid-out row in screen
+    /// space (i.e. already offset by -scroll). Also max-clamps the scroll so
+    /// the wheel can't run endlessly past the end (the generic wheel handler
+    /// only clamps at 0). Tabs that cull rows with an early break under-report
+    /// contentBottom, so the clamp only ever trails the true end — it never
+    /// blocks reaching it.</summary>
     private void DrawTabScrollbar(int panelX, int viewTop, int viewBottom, int contentBottom, ref float scroll)
     {
         int viewH = viewBottom - viewTop;
         float contentH = contentBottom + scroll - viewTop;
         scroll = Math.Clamp(scroll, 0f, Math.Max(0f, contentH - viewH));
-        _eb?.DrawVScrollbar(panelX + PanelWidth - 6, viewTop, viewH, contentH, scroll);
+        if (_eb != null)
+            scroll = _eb.DrawVScrollbar("maptab_" + (int)ActiveTab,
+                panelX + PanelWidth - 6, viewTop, viewH, contentH, scroll);
     }
 
     /// <summary>Name tooltip above the hovered grid cell, via the global

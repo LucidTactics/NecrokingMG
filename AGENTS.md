@@ -237,7 +237,6 @@ CLAUDE.md. Current contents:
 - [docs/testing-scenarios.md](docs/testing-scenarios.md) — deep reference behind the `test-scenario` skill.
 - [docs/locate-behavior/](docs/locate-behavior/) — the architecture map + finder operating guide behind the `locate-behavior` skill (moved out of `.claude/` so the finder can self-update it without write prompts).
 - [docs/big-refactors.md](docs/big-refactors.md) — how to run large multi-agent (ultracode/Workflow) refactors safely: what goes wrong (a stray `git stash` in the shared working tree corrupted a run), the forbid-git / verify-on-disk discipline, and a pre-flight checklist.
-- [docs/known-platform-bugs.md](docs/known-platform-bugs.md) — framework/OS bugs we've hit + the workaround in use (e.g. MonoGame's `IsActive` is stale when launched unfocused → poll `WindowChrome.IsForegroundWindow()`); check before fixing a symptom that smells like the engine lying.
 - [docs/OutOfContext_Skills/](docs/OutOfContext_Skills/README.md) — heavyweight, **explicitly-user-invoked** procedures deliberately NOT registered as skills (zero per-session context cost). When the user asks to run one (e.g. "re-run the dup review"), open that README's index and follow the procedure.
 
 ## C++ Migration

@@ -49,6 +49,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private GraphicsDeviceManager _graphics;
     internal SpriteBatch _spriteBatch = null!;
 
+    // Sets to true if users is using the window.
+    internal bool userInteractingWithWindow;
+
     /// <summary>Draw surface over the shared SpriteBatch — THE way scene/HUD code
     /// draws. Colors are straight alpha; the open material (Materials.Open)
     /// encodes them. Use <c>Scope.Batch</c> only for colors that are already a
@@ -645,6 +648,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     // Dev cursor override for headless hover testing (set via the `mousepos` dev command).
     private Microsoft.Xna.Framework.Vector2? _devMouseOverride;
+    // Menu state as of the last input capture — detects mode transitions so the
+    // in-flight press gesture can be invalidated (see Update, ConsumeGesture).
+    private MenuState _menuStateAtLastCapture;
     internal int _channelingSlot = -1;
     private readonly TextureCache _itemTextureCache = new();
     internal int _hoveredObjectIdx = -1;
@@ -825,7 +831,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private int _devJobSeq;                        // id counter for batch jobs
     private Vec2? _devWalkTarget;                  // dev "walk_necro" goal; drives WASD-equivalent input, cancelled by any WASD press
     private bool _devWalkSprint;                   // dev "walk_necro" sprint=true opt: hold virtual Shift while auto-walking
-    internal int _scenarioScrollOffset;
+    internal float _scenarioScrollPx;             // scenario-menu scroll, in pixels (smooth, sub-row)
+    internal bool _scenarioScrollDragging;         // dragging the scenario-menu scrollbar thumb
+    private float _scenarioScrollGrabOffset;        // Y within the thumb where the drag started
 
     // --- Tethers / drag ropes (Shift+T target, Shift+R attach) ---
     // A tether connects two endpoints, each a live unit or a corpse. When a unit end is
@@ -886,6 +894,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         Tooltips = new Necroking.UI.TooltipSystem(this);
         Instance = this;
         _gameRenderer = new GameRenderer(this);
+
+        // Editors read mouse state live through the shared InputState (see
+        // EditorBase._mouse) — wire it up before any editor can draw so they
+        // never sit on a stale default instance.
+        _editorUi._input = _input;
+        _uiEditor._input = _input;
 
         // Unified UI layer list (see UI/UIRouter.cs): input dispatches through
         // these top-down in reverse render order, so the topmost visible widget
@@ -965,7 +979,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 {
                     Vec2 mw = _camera.ScreenToWorld(_input.MousePos, c.ScreenW, c.ScreenH);
                     var sp = _renderer.WorldToScreen(mw, 0f, _camera);
-                    _buildingMenuUI.DrawGhostPreview(_spriteBatch, _pixel, mw, sp, _camera, _renderer);
+                    _buildingMenuUI.DrawGhostPreview(_spriteBatch, _pixel, mw, sp, _camera);
                 }
             }, () => ShowUIForDraw && _buildingMenuUI.IsVisible));
         _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _craftingMenu,
@@ -1443,10 +1457,22 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _sim.Workers = _workerSystem;
     }
 
-    private void StartGame(string mapName = "default")
+    /// <summary>
+    /// Shared "forget the old world" core for BOTH world-entry paths — StartGame (map
+    /// load) and StartScenario. Wipes every per-game collection and recreates the
+    /// GameSession so nothing bleeds between runs (scenario→scenario, scenario→map,
+    /// map→map). Path-specific setup (map/scenario init, textures, spellbar, fog)
+    /// stays in the callers. A new per-game collection added to Game1 must be cleared
+    /// here — or better, moved into GameSession so the recreate handles it.
+    /// </summary>
+    private void ResetWorldState()
     {
         _gameWorldLoaded = false;
         _gameOver = false;
+        // Detach any running scenario — otherwise it keeps ticking over the new
+        // world (StartScenario re-installs the new one after this reset) and its
+        // completion handler yanks a freshly-loaded map back to the main menu.
+        _activeScenario = null;
         // Fresh world = fresh clock state: clear pause holders + restore 1x speed so a
         // pause or 8x from the previous session isn't carried in. World age resets with
         // the fresh Simulation below; VisualTime deliberately keeps running (phase).
@@ -1469,6 +1495,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // returning to the main menu and starting a new game wipes prior unlocks.
         _skillBookState.InitFromDefs();
         _skillLearnToasts.Clear();
+        // Fresh playthrough inventory (StartGame re-adds StartingInventory at the end
+        // of its load; scenarios seed their own items).
+        _inventory.Clear();
 
         // Recreate the per-game world state: Dispose() frees the old map's GPU resources
         // (ground/env textures) and the reassignment drops all references to the previous
@@ -1481,9 +1510,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // The new session has a fresh Simulation — re-install the Game1→Sim back-references
         // (reanim / forager / worker) that would otherwise be null on it. Live-reading
         // consumers (lightning/foragable/worker systems) follow _sim automatically.
+        // Collision-dirty callbacks start null on the fresh Env; each caller re-wires
+        // them after its own Sim/Env init.
         WireSimCallbacks();
-        _envSystem.OnCollisionsDirty = null;
-        _envSystem.OnCollisionRegionDirty = null;
         // Reset the worker job system: reload jobs.json, wipe stockpiles + assignments
         // so a fresh game doesn't inherit the previous session's piles or priorities.
         _workerSystem.Reset();
@@ -1491,8 +1520,39 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // across new-games, so without this stale fade values from the previous
         // session would render the grass already-corrupted on map load.
         _grassRenderer.ClearAllFades();
+        // Zones/villages/triggers are map-authored, app-lifetime systems: their loaders
+        // only replace content when the new map provides some, so clear here or a map
+        // without the sidecar — and every scenario — inherits the previous map's.
+        _zoneSystem.Clear();
+        _villageSystem.Clear();
+        _triggerSystem.Clear();
         _roadSystem.Init();
         _dayNightSystem.Init(_gameData.Settings.DayNight);
+
+        // Grass is per-map like zones: clear here so a map without a grassMap
+        // section doesn't inherit the previous map's grass — Save Map would then
+        // bake the stale grid into that map's JSON (this is how testmap.json once
+        // gained default's full 5120x5120 grass layer, +34MB).
+        _grassW = 0; _grassH = 0;
+        _grassMap = Array.Empty<byte>();
+        _grassTypeIds = Array.Empty<string>();
+        _grassTypeNames = Array.Empty<string>();
+        _grassTypeSpritePaths = Array.Empty<string[]>();
+        _grassTypeScales = Array.Empty<float>();
+        _grassTypeDensities = Array.Empty<float>();
+        _grassDefaultTints = Array.Empty<Color>();
+        _grassCorruptedTints = Array.Empty<Color>();
+
+        // Drop the previous world's ground vertex texture so a run that never
+        // recreates one (scenario without ground) doesn't keep the old map's
+        // texture alive on the GPU. Callers rebuild it after their ground init.
+        _groundVertexMapTex?.Dispose();
+        _groundVertexMapTex = null;
+    }
+
+    private void StartGame(string mapName = "default")
+    {
+        ResetWorldState();
 
         // Load flipbooks (shared with the spell editor's live-reload path).
         ReloadFlipbooksFromRegistry();
@@ -1517,22 +1577,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // (no JSON file) so technical-behavior tests don't fight the regular
         // map's content. See the "start_game" dev command (its no-arg default).
         var placedUnits = new List<Data.PlacedUnit>();
-        // Zones are reloaded per map below; clear here so maps without a zones file
-        // (empty_test, missing map) don't inherit the previous map's zones.
-        _zoneSystem.Clear();
-        // Grass is per-map like zones: clear here so a map without a grassMap
-        // section doesn't inherit the previous map's grass — Save Map would then
-        // bake the stale grid into that map's JSON (this is how testmap.json once
-        // gained default's full 5120x5120 grass layer, +34MB).
-        _grassW = 0; _grassH = 0;
-        _grassMap = Array.Empty<byte>();
-        _grassTypeIds = Array.Empty<string>();
-        _grassTypeNames = Array.Empty<string>();
-        _grassTypeSpritePaths = Array.Empty<string[]>();
-        _grassTypeScales = Array.Empty<float>();
-        _grassTypeDensities = Array.Empty<float>();
-        _grassDefaultTints = Array.Empty<Color>();
-        _grassCorruptedTints = Array.Empty<Color>();
         string mapPath = GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}.json");
         if (mapName == "empty_test")
         {
@@ -2091,8 +2135,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             return;
         }
 
-        _activeScenario = scenario;
-
         // UI scenarios need a larger resolution in headless mode
         if (LaunchArgs.Headless && scenario.WantsUI && _graphics.PreferredBackBufferWidth < 800)
         {
@@ -2101,16 +2143,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _graphics.ApplyChanges();
         }
 
-        _gameWorldLoaded = false;
-        _gameOver = false;
-        _clock.OnWorldStart(); // same reset as StartGame: no inherited pause/speed
-        _damageNumbers.Clear();
-        _unitAnims.Clear();
-        _corpseAnims.Clear();
-        _effectManager.Clear();
-        _reanimFx.Clear();
-        _buffVisuals.Clear();
-        _tethers.Clear(); _tetherAnchor = null; _tetherDustAccum.Clear();
+        // Same full wipe as StartGame — recreates the GameSession too, so scenarios
+        // configure fresh Sim/Ground/Env/Wall/Road systems below instead of reusing
+        // (and leaking) the previous run's. Also detaches the previous scenario, so
+        // install the new one only AFTER the reset.
+        ResetWorldState();
+        _activeScenario = scenario;
 
         // Load flipbooks (needed for cloud effects, hit effects, etc.)
         if (_flipbooks.Count == 0)
@@ -2130,9 +2168,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // this for main-game runs; scenarios use this code path instead.
         _wakeSystem.Init(_flipbooks);
 
-        // Init simulation with a grid sized to the scenario's needs
+        // Init simulation with a grid sized to the scenario's needs (the systems are
+        // fresh from ResetWorldState's session recreate — no per-system clearing needed)
         int gridSize = scenario.GridSize;
-        _groundSystem.ClearTypes();
         _groundSystem.Init(gridSize, gridSize);
         _envSystem.Init(gridSize);
         _envSystem.OnCollisionsDirty = () => _sim.RequestPathfinderRebuild();
@@ -2146,6 +2184,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _sim.SetTriggerSystem(_triggerSystem);
         _sim.SetVillageSystem(_villageSystem);
         _sim.SetSkillBook(_skillBookState);
+        // Size the death-fog grid to the scenario world — it's an app-lifetime system,
+        // so without this it keeps the previous map's grid and fog densities.
+        _deathFog.Init(gridSize, gridSize, cellSize: 4);
         _fogOfWar.Init(gridSize, gridSize, GraphicsDevice, Content);
 
         // Ensure spell bar state is initialized for HUD safety
@@ -2163,8 +2204,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             for (int i = 0; i < _spellBarState.Slots.Length && i < scenario.DebugSpells.Length; i++)
                 _spellBarState.Slots[i] = new SpellBarSlot { SpellID = scenario.DebugSpells[i] };
 
-        // Load ground data for scenarios that want it
-        if (scenario.WantsGround)
+        // Load ground data
         {
             _groundSystem.AddGroundType(new World.GroundTypeDef { Id = "grass", Name = "Grass", TexturePath = "assets/Environment/Ground/GroundGrass1.png" });
             _groundSystem.AddGroundType(new World.GroundTypeDef { Id = "dirt", Name = "Dirt", TexturePath = "assets/Environment/Ground/GroundDirt1.png" });
@@ -2269,7 +2309,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _envSystem.LoadTextures(GraphicsDevice);
 
         // Rebuild the vertex map texture if the scenario painted ground in OnInit.
-        if (scenario.WantsGround)
         {
             _groundSystem.LoadTextures(GraphicsDevice);
             _groundVertexMapTex?.Dispose();
@@ -2724,6 +2763,22 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // unfocused (we bail out below in that case) and regardless of menu state.
         _devServer?.Drain(ExecuteDevCommand);
 
+        // Real OS window focus. MonoGame/SDL's IsActive is event-driven and starts
+        // true: a game launched while another app holds focus never receives a
+        // FocusGained/FocusLost event, so IsActive reports active forever and every
+        // background click would reach the UI. Poll the OS foreground window instead;
+        // off Windows (null) fall back to IsActive. See docs/known-platform-bugs.md.
+        bool windowFocused = Core.WindowChrome.IsForegroundWindow() ?? IsActive;
+
+        // Headless / command-line --scenario runs are gated out — otherwise
+        // automated scenario runs could latch this and render ground instead of the
+        // flat scenario background, breaking deterministic screenshots. A scenario
+        // started from the in-game menu leaves LaunchArgs.Scenario null, so it still
+        // counts as a real user interaction.
+        if (windowFocused && !LaunchArgs.Headless && LaunchArgs.Scenario == null) {
+           userInteractingWithWindow = true;
+        }
+
         // Pump multiplayer next, same placement rationale: the connection must
         // stay alive (keepalives, joins, ghost states) while paused, in menus,
         // or unfocused. See Game1.Net.cs / Net/README.md.
@@ -2739,10 +2794,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         var kb = Keyboard.GetState();
         var mouse = Mouse.GetState();
 
-        // Window unfocused or minimized. IsActive is MonoGame's canonical window-focus
-        // flag. Exempt scenario / headless runs — automated runs often lack window focus,
-        // and freezing them would break the test harness.
-        bool unfocused = !IsActive && _activeScenario == null && LaunchArgs.Scenario == null && !LaunchArgs.Headless;
+        // Window unfocused or minimized (polled OS focus, not the unreliable
+        // IsActive — see above). Exempt scenario / headless runs — automated runs
+        // often lack window focus, and freezing them would break the test harness.
+        bool unfocused = !windowFocused && _activeScenario == null && LaunchArgs.Scenario == null && !LaunchArgs.Headless;
 
         // A dev server drives the game while the OS window is unfocused, so it must keep
         // ticking (like "run when unfocused"). But the dev server injects input directly
@@ -2768,6 +2823,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Even while focused, the OS reports clicks whose cursor sits OUTSIDE the window
         // (drag-out, multi-monitor). Those must not cast/command either.
         bool cursorOutside = mouse.X < 0 || mouse.Y < 0 || mouse.X >= vpW || mouse.Y >= vpH;
+
+        // A menu-state transition (editor opened/closed, pause menu, …) means the
+        // in-flight press gesture belonged to the OLD screen — it must not fire a
+        // widget that appeared under the cursor in the new mode. Checked before
+        // Capture so a press starting this very Update is honored, not killed.
+        if (_menuState != _menuStateAtLastCapture)
+        {
+            _input.ConsumeGesture();
+            _menuStateAtLastCapture = _menuState;
+        }
 
         if (unfocused)
         {
@@ -2942,7 +3007,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 if (mouse.X >= menuX && mouse.X < menuX + btnW && mouse.Y >= menuY && mouse.Y < menuY + btnH)
                 {
                     _menuState = MenuState.ScenarioList;
-                    _scenarioScrollOffset = 0;
+                    _scenarioScrollPx = 0f;
                     _prevKb = kb;
                     _prevMouse = mouse;
                     base.Update(gameTime);
@@ -2973,34 +3038,56 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 return;
             }
 
-            // Scroll (one grid row at a time)
+            int screenW2 = GraphicsDevice.Viewport.Width;
+            int screenH2 = GraphicsDevice.Viewport.Height;
+            var view = _gameRenderer.BuildScenarioMenuLayout(screenW2, screenH2, _scenarioScrollPx);
+
+            // Draggable scrollbar — same behaviour as the editor panels (shared
+            // Necroking.UI.VScrollbar). The scroll offset is stored in pixels, so the
+            // thumb math and drag conversion are both pixel-native (smooth, sub-row).
+            if (_scenarioScrollDragging && mouse.LeftButton != ButtonState.Pressed)
+                _scenarioScrollDragging = false;
+
+            bool hasBar = !Necroking.UI.VScrollbar.Fits(view.ScrollViewH, view.ScrollContentH);
+            if (hasBar)
             {
-                int screenW2 = GraphicsDevice.Viewport.Width;
-                int screenH2 = GraphicsDevice.Viewport.Height;
-                _gameRenderer.GetScenarioGridLayout(screenW2, screenH2, out int cols, out _, out _, out _, out _, out _, out _);
-                if (_input.ScrollDelta > 0) _scenarioScrollOffset = Math.Max(0, _scenarioScrollOffset - cols);
-                if (_input.ScrollDelta < 0) _scenarioScrollOffset += cols;
+                var thumb = Necroking.UI.VScrollbar.ThumbRect(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH, _scenarioScrollPx);
+                var hit = Necroking.UI.VScrollbar.HitRect(view.ScrollX, view.ScrollY, view.ScrollViewH);
+
+                // Grab the thumb, or click the track to jump (thumb centres on the cursor).
+                if (_input.LeftPressed && hit.Contains(mouse.X, mouse.Y))
+                {
+                    _scenarioScrollDragging = true;
+                    _scenarioScrollGrabOffset = thumb.Contains(mouse.X, mouse.Y) ? mouse.Y - thumb.Y : thumb.Height / 2f;
+                }
+
+                if (_scenarioScrollDragging)
+                {
+                    float newPx = Necroking.UI.VScrollbar.ScrollFromDrag(mouse.Y, _scenarioScrollGrabOffset,
+                        view.ScrollY, view.ScrollViewH, view.ScrollContentH);
+                    _scenarioScrollPx = view.ClampScroll(newPx);
+                }
             }
 
-            if (_input.LeftPressed)
+            // Wheel scroll (one layout row per notch), clamped to the layout height.
+            if (!_scenarioScrollDragging && _input.ScrollDelta != 0)
             {
-                int screenW2 = GraphicsDevice.Viewport.Width;
-                int screenH2 = GraphicsDevice.Viewport.Height;
-                _gameRenderer.GetScenarioGridLayout(screenW2, screenH2, out int cols, out int btnW, out int btnH, out int btnGap, out int gridX, out int menuY, out int rowsVisible);
+                _scenarioScrollPx += (_input.ScrollDelta > 0 ? -1 : 1) * view.RowStride * 0.5f;
+                _scenarioScrollPx = view.ClampScroll(_scenarioScrollPx);
+            }
 
-                var names = new List<string>(ScenarioRegistry.GetNames());
-                names.Reverse(); // Newest first (must match draw order)
-                int visibleCount = Math.Min(names.Count - _scenarioScrollOffset, rowsVisible * cols);
-                for (int i = 0; i < visibleCount; i++)
+            // Grid / back-button clicks (skipped while dragging the scrollbar).
+            if (_input.LeftPressed && !_scenarioScrollDragging)
+            {
+                // Only clicks inside the scrolled grid window count — a partially
+                // clipped bottom row must not be clickable in the gap below it.
+                bool inGridWindow = mouse.Y >= view.ScrollY && mouse.Y < view.ScrollY + view.ScrollViewH;
+                foreach (var e in view.Entries)
                 {
-                    int nameIdx = i + _scenarioScrollOffset;
-                    if (nameIdx >= names.Count) break;
-                    int col = i % cols, row = i / cols;
-                    int bx = gridX + col * (btnW + btnGap);
-                    int by = menuY + row * (btnH + btnGap);
-                    if (mouse.X >= bx && mouse.X < bx + btnW && mouse.Y >= by && mouse.Y < by + btnH)
+                    if (!e.Visible || e.IsHeader || !inGridWindow) continue;
+                    if (e.Rect.Contains(mouse.X, mouse.Y))
                     {
-                        StartScenario(names[nameIdx]);
+                        StartScenario(e.Text);
                         _prevKb = kb;
                         _prevMouse = mouse;
                         base.Update(gameTime);
@@ -3008,12 +3095,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     }
                 }
 
-                // Back button (centered below the grid)
-                int usedRows = (visibleCount + cols - 1) / cols;
-                int backY = menuY + usedRows * (btnH + btnGap) + 10;
-                int backW = 320;
-                int backX = screenW2 / 2 - backW / 2;
-                if (mouse.X >= backX && mouse.X < backX + backW && mouse.Y >= backY && mouse.Y < backY + btnH)
+                // Back button (fixed below the visible grid)
+                if (view.BackRect.Contains(mouse.X, mouse.Y))
                     _menuState = MenuState.MainMenu;
             }
             _prevKb = kb;
@@ -3480,8 +3563,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
             // --- Ghost mode toggle (G) ---
             if (_input.WasKeyPressed(Keys.G) && necroIdx >= 0)
+            {
                 _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
-
+                ToggleGodMode(necroIdx, force_to_value: _sim.UnitsMut[necroIdx].GhostMode);
+            }
             // --- God mode toggle (Shift+P) ---
             // Cheat / debug toggle. Applies/removes buff_god_mode on the
             // necromancer; the buff's effects (path-9, +caps, +mana, +regen,
@@ -4083,10 +4168,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// necromancer. On apply, also tops mana up to the new effective cap so
     /// the +999 mana effect is felt immediately rather than slowly filling
     /// at the buffed regen rate.</summary>
-    private void ToggleGodMode(int necroIdx)
+    private void ToggleGodMode(int necroIdx, bool? force_to_value=null)
     {
         if (necroIdx < 0 || _gameData == null) return;
         const string godBuffId = "buff_god_mode";
+        if (force_to_value != null && (bool)force_to_value == BuffSystem.HasBuff(_sim.Units, necroIdx, godBuffId)) {
+           return;
+        }
         if (BuffSystem.HasBuff(_sim.Units, necroIdx, godBuffId))
         {
             BuffSystem.RemoveBuff(_sim.UnitsMut, necroIdx, godBuffId);
@@ -4169,6 +4257,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// click-side mirror of F9-F12, shared by the editor-launcher layer.</summary>
     internal void ToggleEditorWindow(int idx)
     {
+        // The click that toggles an editor must not also fire a widget that
+        // appears (or disappears) under the cursor this frame — kill the
+        // in-flight press gesture before switching modes. (The Update-loop
+        // menu-state-transition check covers this one frame later; this call
+        // covers the toggle frame's own Draw.)
+        _input.ConsumeGesture();
         switch (idx)
         {
             case HUDRenderer.EditorUnit:

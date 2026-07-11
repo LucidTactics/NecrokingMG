@@ -50,6 +50,28 @@ CLAUDE.md → "Standard Patterns Reference".)
 - **Draw order at end of an editor's Draw**: panels → own popups →
   `DrawDropdownOverlays()` → `DrawColorPickerPopup()` last. Both are
   double-draw-guarded for nested editors.
+- **Scrollable detail/properties panel — `BeginScrollPanel`/`ScrollPanel.End`**
+  (EditorBase, added 2026-07-11): the ONE way to build a panel of stacked
+  fields that scrolls. `var sp = ui.BeginScrollPanel(id, rect, topPad, bottomPad);
+  int curY = sp.ContentY; …draw rows…; sp.End(curY);` — owns wheel scrolling
+  (id-keyed, clamped by last frame's height), scissor clip (`clip:false` when an
+  enclosing scope already clips, e.g. RegistryCrudPanel's detail callback),
+  content-height measurement, end-clamp, and the canonical draggable scrollbar.
+  Scroll state lives in EditorBase keyed by panel id — reset on selection change
+  with `ui.SetScrollOffset(id, 0)`. NEVER hand-write the
+  `contentH = curY + scroll - y` measurement or a `HandlePanelScroll`+
+  `BeginClip`+`SetPanelContentHeight` sandwich (a hand-rolled copy once
+  double-counted the scroll and broke thumb-dragging).
+- **Scrollbars** — the canonical geometry + palette live in
+  `Necroking/UI/VScrollbar.cs` (static: `Fits`/`TrackRect`/`ThumbRect`/`HitRect`/
+  `ScrollFromDrag`, 5px track+thumb, the Spell-editor look). Callers own input
+  reading + the rect-fill draw. Editor panels use it via `EditorBase.DrawVScrollbar`
+  (indicator + interactive `DrawVScrollbar(id, …)` with thumb-drag + track-click
+  jump); the main-menu scenario grid uses it in `GameRenderer.DrawScenarioScrollbar`
+  + the `MenuState.ScenarioList` block in Game1 (rows→px via `RowStride`). Rows with
+  click targets under the bar column exclude `VScrollbarHitRect`/`VScrollbar.HitRect`
+  from their hit tests (DrawScrollableList does this internally). Never draw a
+  scrollbar with raw `DrawRect`s or re-derive the thumb math — call `VScrollbar`.
 
 ## Combat / gameplay math
 
@@ -162,3 +184,9 @@ Established by the consolidation batches (evidence: docs/consolidation-review/):
 - **Floating damage/text numbers**: `FloatingText` helper (SpellEffectSystem.cs).
 - **World nearest-X queries**: `WorldQuery` (`_sim.Query`) — unit, env-object,
   faction, threat; hand-rolled scans are migration debt.
+- **Placement ghost preview** (env object at cursor, tinted by validity):
+  `Render/EnvGhostRenderer.Draw` — owns frame slicing, pivot/scale math, tint,
+  PlacementRadius circle. Caller owns def choice, the validity check (pass the
+  same one the click path uses), and the valid tint (`BuildValidTint` green /
+  `EditorValidTint` grey; invalid is always `InvalidTint` red). Used by
+  BuildingMenuUI + map editor Objects tab.

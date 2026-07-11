@@ -34,11 +34,14 @@ public static class MapSidecars
         var o = new JsonSerializerOptions
         {
             WriteIndented = true,
+            NewLine = "\n", // LF, not CRLF — stable diffs across machines/collaborators.
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             PropertyNameCaseInsensitive = true,
             // Omits TriggerDef.Condition when null (matching the old saver);
             // all other properties are non-null and always written.
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            // Write &, <, >, + literally instead of & etc. — avoids noisy diffs.
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         };
         // Tolerant ZoneKind converter must precede the generic enum converter so
         // an unknown kind (newer build's file) drops one zone, not the whole file.

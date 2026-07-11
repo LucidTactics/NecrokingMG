@@ -117,6 +117,24 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
   **Undo**: accumulate into `_batchPlacedObjects`, push `UndoObjectBatchPlace` on mouse-up
   (`UndoObjectBatchRemove` for the right-drag eraser). `AutoCreateTriggerInstance(newIdx)`
   after every add (RM06).
+- **World-space overlays (brush cursor, collision ellipses, zone rects — and any placement
+  ghost)** draw via `DrawWorldOverlaysForActiveTab(screenW, screenH)`, called at the **top of
+  `Draw()`** — deliberately BEFORE the panel background and OUTSIDE the tab scissor clip
+  (overlays put inside a `Draw<X>Tab` get clipped to the panel rect). It computes `overPanel`
+  itself and switches on `ActiveTab` (Objects case: paint-mode `DrawBrushCursor` +
+  `_showCollisions` → `DrawCollisionOverlay`). World→screen inside the editor =
+  `_camera.WorldToScreen(new Vec2(x, y), 0f, screenW, screenH)`; mouse→world =
+  `_camera.ScreenToWorld(...)`. Textured draws use `Scope` (`Render.SpriteScope`, the full
+  `Draw(tex, pos, srcRect, tint, rot, origin, scale, fx, depth)` overload).
+- **Placement ghost precedent (runtime building menu):** `UI/BuildingMenuUI.cs`
+  `DrawGhostPreview` — semi-transparent def sprite at the cursor, tinted by
+  `_envSystem.CanPlaceObject`: `worldH = def.SpriteWorldHeight * def.Scale`, `scale = worldH *
+  camera.Zoom / tex.Height`, `origin = (PivotX*texW, PivotY*texH)`, tint alpha ~76, plus a
+  `PlacementRadius` circle via `Render.DrawUtils.DrawCircleOutline`. Called from `Game1.cs`
+  (~line 968) during world draw. Copy this math for an editor-side ghost; note it ignores
+  animated-sheet source rects (world draw in `GameRenderer.Units.cs` `DrawSingleObject` uses
+  `def.GetAnimFrameRect` when `def.IsAnimated`) and the editor's final placement scale is
+  `GetRandomPlacementScale` (`ScaleMin..ScaleMax`), which a ghost can't predict exactly.
 - **Editor-wide keyboard shortcuts** (Ctrl+S save / Ctrl+L load / Ctrl+Z undo) sit in one
   block in `Update()` right after `bool ctrlDown = …`, each gated on `!textEditing`
   (`textEditing = _eb.IsKeyboardCaptured`). New global/per-tab chords go here — key edges
@@ -266,21 +284,41 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
     wheel handler.
   - *Zones* — **does not scroll**: the list truncates with a `"... N more"` row at
     `contentY + contentH - 260`.
-- **Existing scrollbar implementations (no single canonical helper — copy-pasted!):**
-  the thin **indicator** (`DrawRect(x+w-6, barY, 5, barH)`, `barH = Math.Max(20, h*h/totalH)`,
-  color `(100,100,140,180)`) exists in `EditorBase.DrawScrollableList` (after its EndClip),
-  the `EditorBase` dropdown overlay, `EditorBase.DrawTextArea`, `UnitEditorWindow` property
-  panel ("outside clip so it's always visible"), and `TextureFileBrowser`. The ONLY
-  **draggable** scrollbar is `SettingsWindow` (track at `panelX+PanelW-18`, 8px thumb,
-  drag state `_scrollbarDragTab`/`_scrollbarDragGrabOffset`, track-click jump, gated on
-  `_ui.IsInputBlocked(0)`, calls `SetMouseOverUI`) — it pairs with the id-keyed
-  `EditorBase.HandlePanelScroll` + `SetPanelContentHeight` (record content height after
-  layout → next frame's wheel clamp; one-frame-stale by design). A shared
-  "draw thin vertical scrollbar" helper belongs in `EditorBase` next to
-  `DrawScrollableList`; MapEditorWindow tabs would call it per list. If made draggable,
-  do the drag **inside the EditorBase helper** using EditorBase's own `_mouse`/`_prevMouse`
-  (SettingsWindow precedent) — MapEditorWindow's own `_prevMouse` is already overwritten
-  during `Draw`, so edge detection hand-rolled in a `Draw<X>Tab` is always-false.
+- **Canonical scrollbar helper now EXISTS: `EditorBase.DrawVScrollbar(x, y, viewH,
+  contentH, scroll)`** — indicator-only (pure draw, no drag), 5px wide, faint track
+  `(30,30,45,120)` + proportional thumb `(100,100,140,180)`, `barH = Max(20,
+  viewH²/contentH)`, ratio clamped so overscroll can't push the thumb past the track,
+  no-op when content fits. Callers: `DrawScrollableList` (after its EndClip) and four
+  `MapEditorWindow` sites (Objects grid + Groups mode, Units grid, ProcGen). **This is the
+  SpellEditorWindow look** — the spell editor draws no bars itself; its list bar comes from
+  `DrawScrollableList` → `DrawVScrollbar` (detail panels are wheel-only via the id-keyed
+  `HandlePanelScroll`, no visible bar).
+- **Remaining hand-rolled copies (unification targets — thumb-only, no track, drifting
+  geometry):** the `EditorBase` dropdown overlay (`DrawDropdownOverlays`, 5px, `Max(12,…)`
+  thumb), `EditorBase.DrawTextArea` (5px, line-based `Max(12,…)`), `UnitEditorWindow`
+  property panel ("outside clip so it's always visible" — **6px wide at `x+w-8`**),
+  `TextureFileBrowser` (**7px at `px+listW-10`**). The ONLY **draggable** scrollbar is
+  `SettingsWindow` (track at `panelX+PanelW-18`, **8px** track+thumb, hot-highlight
+  `AccentColor`/`TextBright`, drag state `_scrollbarDragTab`/`_scrollbarDragGrabOffset`,
+  track-click jump, gated on `_ui.IsInputBlocked(0)`, calls `SetMouseOverUI`) — it pairs
+  with the id-keyed `EditorBase.HandlePanelScroll` + `SetPanelContentHeight` (record
+  content height after layout → next frame's wheel clamp; one-frame-stale by design).
+  If `DrawVScrollbar` is made draggable, do the drag **inside the EditorBase helper**
+  using EditorBase's own `_mouse`/`_prevMouse` (SettingsWindow precedent) —
+  MapEditorWindow's own `_prevMouse` is already overwritten during `Draw`, so edge
+  detection hand-rolled in a `Draw<X>Tab` is always-false.
+- **Wheel-scroll logic census**: canonical = `EditorBase.HandlePanelScroll` (rect +
+  maxScroll overload, or id-keyed panelId+viewH overload backed by `SetPanelContentHeight`;
+  respects `IsInputBlocked`/`_scrollConsumed`, calls `ConsumeScroll`+`SetMouseOverUI`) —
+  used by Spell/Item/Unit/EnvObject/UIEditor detail panels, SettingsWindow,
+  TextureFileBrowser. `DrawScrollableList` has its own inline wheel handler (0.15
+  sensitivity, per-`panelId` `_scrollOffsets` dict, `GetScrollOffset`/`ScrollListToItem`).
+  MapEditorWindow's generic per-tab handler bypasses both (see census above). Runtime UI
+  (non-editor) scrolls rows without bars: `UI/GrimoireOverlay.cs` `_scrollRow` (rebinds
+  widget tiles), `UI/GraveRosterUI.cs` `_scroll` (int rows), `UI/UILayer.cs` `OnScroll`
+  virtual + consume; the widget-def `IsScrollbar`/`ScrollbarProportional` fields (RI20)
+  are authored/serialized (`UIEditorWindow`/`UIDefsIO`) but have no runtime bar-drawing
+  consumer.
 
 **Look/edit here when…** adding a map-editor tab/category, changing brush painting or
 placement spacing, changing what SaveMap persists, building def-picker UI in a tab panel,
@@ -387,10 +425,65 @@ model and both save + clone paths.
   are by id so no infinite recursion), but grand-child data only exists as `ChildOverrides`
   on the child, which `CloneChild` does deep-copy.
 
+## Editor entry-click ghost-replay — a mouse-opened editor replayed the previous close click (FIXED 2026-07)
+
+The immediate-mode editors **bypass the router's click-consumption entirely**: `EditorBase`
+widgets read mouse state during Draw and never check `InputState.IsMouseConsumed` /
+`UILayer.InputGranted`. `EditorBase.DrawButton` fires **on release**
+(`hovered && released-edge && rect.Contains(_pressStartPos)`) — a multi-frame gesture that
+per-frame consumption never protected anyway.
+
+**The bug (root-caused, now fixed):** the insta-close only ever happened on the **2nd+**
+mouse-open of an editor. Closing an editor via its `[X]` flips `_menuState` **mid-Draw**,
+which skipped the gated `EndDrawFrame`, freezing `EditorBase`'s (then-private)
+`_mouse`/`_prevMouse`/`_pressStartPos` as a **complete ghost of the closing click**
+(released@X-position / prev pressed / press-start inside the `[X]` rect). On the next
+launcher-click open, `_editorUi.UpdateInput` hadn't run that frame (menuState was still
+`None` at `Game1.cs:3281`), so the first Draw used the frozen ghost and `DrawButton`
+**replayed the old `[X]` click** — same stale hit-test position = the X's own rect — closing
+the editor the frame it opened. First open was safe (frozen state = default); **F10 was safe**
+because it sets `_menuState` *before* line 3281, so `UpdateInput` ran with fresh mouse.
+
+**The fix (implemented, builds, drive-verified — this is now reality):** `EditorBase` keeps
+**no private mouse history at all**. `Necroking/Core/InputState.cs` owns everything:
+- `DrawPrevMouse` — snapshotted once per Draw by `InputState.SnapshotDrawFrame()`, called
+  **unconditionally** at the end of `GameRenderer.DrawHudBlock` (`GameRenderer.Draw.cs`) — so
+  it can never freeze stale the way the old gated `EndDrawFrame` did.
+- `PressStartPos` — stamped in `InputState.Capture` on the physical `LeftPressed` edge.
+- `ConsumeGesture()` — invalidates the in-flight press (`PressStartPos = (-1,-1)`), so
+  `DrawButton`'s `rect.Contains(_pressStartPos)` test fails until the next physical press.
+
+`EditorBase._mouse`/`_prevMouse`/`_pressStartPos` are now **read-through properties over
+`_input`** (`_prevMouse => _input.DrawPrevMouse`, `_pressStartPos => _input.PressStartPos`);
+`EditorBase.EndDrawFrame` keeps only the dropdown reconcile. Both `_editorUi` and `_uiEditor`
+are wired to Game1's central `InputState` in the `Game1` ctor. The gesture is invalidated on
+**any `_menuState` transition**: `Game1.Update` compares `_menuState` against
+`_menuStateAtLastCapture` (field ~`Game1.cs:650`) *before* `_input.Capture` (~line 2785) and
+calls `ConsumeGesture()`; `ToggleEditorWindow` (~line 4196) also calls it for same-frame
+coverage.
+
+**Do NOT reintroduce the old band-aid.** `MapEditorWindow.SuppressClicksUntilRelease` still
+exists but only for the map editor's own canvas paint logic — it is **no longer the model to
+generalize**. The earlier "generalize SuppressClicksUntilRelease into EditorBase"
+recommendation was superseded by the `InputState` consolidation above; centralize any new
+mouse-history need in `InputState`, not in per-editor flags.
+
+**Close paths of the full-screen editors** (there is NO outside-click-close): `[X]` button →
+`WantsClose`, polled by `EditorHostLayer.Draw` (`UI/Layers/HostLayers.cs`) right after each
+editor's Draw; ESC → `EditorHostLayer.OnCancel` (Closable); toggling F-key/launcher again.
+Note the `[X]`-flips-`_menuState`-mid-Draw shape is what made this class of bug possible.
+
+**Look/edit here when:** an editor opens and instantly closes/saves when opened by mouse, an
+entry click paints/edits on frame one, or you're wiring a new mouse path that opens/closes an
+editor — invalidate the gesture via `InputState.ConsumeGesture()` (as `ToggleEditorWindow`
+and the `_menuState`-transition check already do), don't add a per-editor suppress flag.
+
 ## Related areas
 - Runtime widget rendering/layout: `UI/RuntimeWidgetRenderer.cs`, `UI/WidgetLayoutUtils.cs`
   (see [ui.md](ui.md) for the runtime overlays/panels that consume widgets).
 - Harmonize/recolor payload: `Editor/HarmonizeSettings.cs`, `Editor/ColorHarmonizer.cs`.
+- Click consumption / router dispatch: [ui.md](ui.md) "THE UIRouter" + "MouseOverUI / UI
+  hit-testing" (`Core/InputState.cs` `ConsumeMouse`, `UI/UILayer.cs` `HandleInput` template).
 
 ## Consolidation update (2026-07-07)
 

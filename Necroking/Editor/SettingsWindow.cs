@@ -27,8 +27,6 @@ public class SettingsWindow
 
     // Scrollbar drag state: which tab's thumb is being dragged (-1 = none) and
     // the pixel offset between the cursor and the thumb top captured at grab time.
-    private int _scrollbarDragTab = -1;
-    private float _scrollbarDragGrabOffset;
 
     // Stable per-tab scroll ids for EditorBase.HandlePanelScroll's content-height
     // cache (which clamps to the end before drawing, avoiding overshoot snap-back).
@@ -236,59 +234,12 @@ public class SettingsWindow
 
         _ui.EndClip();
 
-        // Draggable scrollbar when content overflows. A mouse-up anywhere ends an
-        // in-progress drag (covers releasing off the bar, or after a tab switch).
-        var sbMouse = _ui.GetMouseState();
-        if (sbMouse.LeftButton != ButtonState.Pressed) _scrollbarDragTab = -1;
-
+        // Canonical draggable scrollbar (shared EditorBase implementation);
+        // no-op (and resets scroll to 0) when the content fits.
         if (totalContentHeight > contentH)
         {
-            int sbX = panelX + PanelW - 18;
-            int sbY = contentY;
-            int sbH = contentH;
-
-            float thumbFraction = (float)contentH / totalContentHeight;
-            int thumbH = Math.Max(20, (int)(sbH * thumbFraction));
-            int travel = sbH - thumbH;
-
-            // Current thumb rect (before any drag this frame) for hit-testing.
-            float curFraction = maxScroll > 0 ? _tabScroll[tabIdx] / maxScroll : 0f;
-            int thumbY = sbY + (int)(curFraction * travel);
-            var thumbRect = new Rectangle(sbX, thumbY, 8, thumbH);
-            var trackHit = new Rectangle(sbX - 2, sbY, 12, sbH); // slightly generous hit area
-
-            var prevMouse = _ui.GetPrevMouseState();
-            bool justPressed = sbMouse.LeftButton == ButtonState.Pressed
-                            && prevMouse.LeftButton == ButtonState.Released;
-
-            // Grab the thumb, or click the track to jump (thumb centres on cursor).
-            // Inert while an overlay owns input (e.g. an open combo dropdown whose
-            // list overlaps this scrollbar column) so its click doesn't also grab
-            // and jump the scroll underneath.
-            if (justPressed && !_ui.IsInputBlocked(0) && trackHit.Contains(sbMouse.X, sbMouse.Y))
-            {
-                _scrollbarDragTab = tabIdx;
-                _scrollbarDragGrabOffset = thumbRect.Contains(sbMouse.X, sbMouse.Y)
-                    ? sbMouse.Y - thumbY
-                    : thumbH / 2f;
-                _ui.SetMouseOverUI();
-            }
-
-            // Apply drag: map the thumb-top position back to a scroll offset.
-            if (_scrollbarDragTab == tabIdx)
-            {
-                float newThumbTop = sbMouse.Y - _scrollbarDragGrabOffset - sbY;
-                float frac = travel > 0 ? Math.Clamp(newThumbTop / travel, 0f, 1f) : 0f;
-                _tabScroll[tabIdx] = frac * maxScroll;
-                _ui.SetMouseOverUI();
-            }
-
-            // Draw track + thumb (recompute position after a possible drag).
-            float drawFraction = maxScroll > 0 ? _tabScroll[tabIdx] / maxScroll : 0f;
-            thumbY = sbY + (int)(drawFraction * travel);
-            bool hot = _scrollbarDragTab == tabIdx || thumbRect.Contains(sbMouse.X, sbMouse.Y);
-            _ui.DrawRect(new Rectangle(sbX, sbY, 8, sbH), new Color(30, 30, 50));
-            _ui.DrawRect(new Rectangle(sbX, thumbY, 8, thumbH), hot ? EditorBase.TextBright : EditorBase.AccentColor);
+            _tabScroll[tabIdx] = _ui.DrawVScrollbar(TabScrollIds[tabIdx],
+                panelX + PanelW - 15, contentY, contentH, totalContentHeight, _tabScroll[tabIdx]);
         }
 
         // Back button at bottom

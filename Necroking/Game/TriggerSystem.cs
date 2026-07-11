@@ -47,6 +47,21 @@ public class TriggerSystem
     public void SetPatrolRoutes(List<PatrolRoute> routes) { _patrolRoutes = routes; }
     public void SetEnvironmentSystem(EnvironmentSystem? env) { _envSystem = env; }
 
+    /// <summary>Drop all map-authored trigger content (regions, patrol routes, defs,
+    /// instances) plus runtime state. LoadTriggers only replaces these when a sidecar
+    /// file exists, so without this a map with no triggers file — or a scenario —
+    /// would keep running the previous map's triggers.</summary>
+    public void Clear()
+    {
+        _regions = new List<TriggerRegion>();
+        _patrolRoutes = new List<PatrolRoute>();
+        _triggers = new List<TriggerDef>();
+        _instances = new List<TriggerInstance>();
+        _runtimeState.Clear();
+        _pendingSpawns.Clear();
+        RebuildLookups();
+    }
+
     public IReadOnlyList<TriggerRegion> Regions => _regions;
     public IReadOnlyList<TriggerDef> Triggers => _triggers;
     public IReadOnlyList<TriggerInstance> Instances => _instances;
