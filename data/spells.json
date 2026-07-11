@@ -109,7 +109,6 @@
       "primaryLevel": 1,
       "cooldown": 1,
       "damage": 3,
-      "gravityScale": 0.25,
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
         "fps": 3,
@@ -129,6 +128,7 @@
       "quantity": 10,
       "trajectory": "Swirly",
       "projectileSpeed": 28.3,
+      "gravityScale": 0.25,
       "precisionBonus": -5,
       "projectileDelay": 0.08,
       "projectileFlipbook": {
@@ -160,7 +160,6 @@
       "primaryLevel": 1,
       "cooldown": 1,
       "damage": 3,
-      "gravityScale": 0.25,
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
         "fps": 3,
@@ -180,6 +179,7 @@
       "quantity": 10,
       "trajectory": "HomingSwirly",
       "projectileSpeed": 28.3,
+      "gravityScale": 0.25,
       "precisionBonus": -5,
       "projectileDelay": 0.08,
       "projectileFlipbook": {
