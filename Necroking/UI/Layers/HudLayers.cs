@@ -191,6 +191,37 @@ public sealed class AggressionBarLayer : UILayer
     }
 }
 
+/// <summary>Draw-only seat for the cursor-anchored hover tooltips (spell-bar
+/// slot, world object, belly, corpse, unit) in the Tooltip band — the topmost
+/// band — so a tooltip is never covered by another HUD widget (the aggression
+/// bar used to draw over the spell-slot tooltip when both sat in the Hud band).
+/// Hover state is captured during the Hud-band draw (HudChromeLayer); bands
+/// draw bottom-up, so it's fresh by the time this layer runs. Same cursor
+/// parking as HudChromeLayer: cursor-anchored tooltips must not pop up under
+/// (or over) a covering panel.</summary>
+public sealed class CursorTooltipLayer : UILayer
+{
+    private readonly Game1 _g;
+    public CursorTooltipLayer(Game1 g) { _g = g; Band = UIBand.Tooltip; }
+
+    public override string Id => "hud.cursor_tooltips";
+    public override bool Visible => false;                    // draw-only
+    public override bool VisibleForDraw => _g.ShowUIForDraw;  // same gate as HudChromeLayer
+    public override bool ContainsMouse(int mx, int my, in UICtx ctx) => false;
+    public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { }
+
+    public override void Draw(in UICtx ctx)
+    {
+        var hover = _g._uiRouter.HoverLayer;
+        bool hudOwnsCursor = hover == null || hover.Band <= UIBand.Hud;
+        var input = _g._input;
+        var pos = input.MousePos;
+        if (!hudOwnsCursor) input.MousePos = new Microsoft.Xna.Framework.Vector2(-10000, -10000);
+        _g._gameRenderer.DrawHudTooltips(ctx.ScreenW, ctx.ScreenH);
+        if (!hudOwnsCursor) input.MousePos = pos;
+    }
+}
+
 /// <summary>Top-right core-menu button row (inventory/crafting/building/
 /// grimoire/skills/character). Lives in the HudTop band — above panels and
 /// blocking overlays like the skill book, below toasts — which is the

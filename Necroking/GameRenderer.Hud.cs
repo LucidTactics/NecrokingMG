@@ -610,14 +610,23 @@ partial class GameRenderer
         _g._hudRenderer.Draw(screenW, screenH, _g._sim, _g._gameData,
             _g._inventory, _g._inventoryUI.IsVisible,
             _g._spellBarState,
-            _g._timeScale, _g._hoveredObjectIdx, _g._envSystem,
-            DrawSpellCategoryIcon, BuildMenuOpenMask(), _g._paused, _g._hoveredCorpseIdx,
-            _g._slotFlash, _g._hoveredBellyUnitId,
-            _g._hoveredUnitIdx, _g._menuState == MenuState.MapEditor, BuildEditorOpenMask(),
+            _g._timeScale,
+            DrawSpellCategoryIcon, BuildMenuOpenMask(), _g._paused,
+            _g._slotFlash, BuildEditorOpenMask(),
             // Top-right button rows are drawn by their own HudTop-band router
             // layers so they sit ABOVE panels/overlays, matching where they
             // take input.
             drawTopRows: false);
+    }
+
+    /// <summary>Cursor tooltips at their z-position (Tooltip band, topmost) —
+    /// see <see cref="Necroking.UI.CursorTooltipLayer"/>.</summary>
+    internal void DrawHudTooltips(int screenW, int screenH)
+    {
+        _g._hudRenderer.DrawCursorTooltips(screenW, screenH, _g._sim, _g._gameData,
+            _g._inventory, _g._hoveredObjectIdx, _g._envSystem,
+            _g._hoveredBellyUnitId, _g._hoveredCorpseIdx, _g._hoveredUnitIdx,
+            _g._menuState == MenuState.MapEditor);
     }
 
     /// <summary>Draw the core-menu button row at its z-position (HudTop band).

@@ -164,10 +164,9 @@ public partial class HUDRenderer
     public void Draw(int screenW, int screenH, Simulation sim, GameData gameData,
         Inventory inventory, bool inventoryVisible,
         SpellBarState bar,
-        float timeScale, int hoveredObjectIdx, EnvironmentSystem envSystem,
+        float timeScale,
         Action<string, int, int> drawSpellCategoryIcon, int menuOpenMask = 0, bool paused = false,
-        int hoveredCorpseIdx = -1, float[]? slotFlash = null,
-        uint hoveredBellyUnitId = uint.MaxValue, int hoveredUnitIdx = -1, bool editorInspect = false,
+        float[]? slotFlash = null,
         int editorOpenMask = 0, bool drawTopRows = true)
     {
         int necroIdx = FindNecromancer(sim);
@@ -175,6 +174,7 @@ public partial class HUDRenderer
         DrawStatusBars(necroIdx, sim);
 
         // Reset hover-tooltip capture; the spell bar sets it if a filled slot is hovered.
+        // The tooltip itself draws later via DrawCursorTooltips (Tooltip band, topmost).
         _hoverSlotSpell = null;
         _hoverSlotMelee = false;
 
@@ -182,13 +182,6 @@ public partial class HUDRenderer
         DrawSpellBar(screenW, layout.barY, layout.slotW, layout.slotH, layout.centerOffset,
             SpellBarBindings.SlotLabels, bar, sim, gameData, inventory, drawSpellCategoryIcon, slotFlash);
 
-        // Hover tooltip for the spell-bar slot under the cursor.
-        DrawSpellSlotTooltip(gameData, inventory, screenW, screenH);
-
-        DrawObjectTooltip(hoveredObjectIdx, envSystem, sim, gameData, screenW, screenH);
-        DrawBellyTooltip(hoveredBellyUnitId, sim, gameData, screenW, screenH);
-        DrawCorpseTooltip(hoveredCorpseIdx, sim, gameData, screenW, screenH);
-        DrawUnitTooltip(hoveredUnitIdx, sim, gameData, screenW, screenH, editorInspect);
         // Controls hint intentionally omitted — overlapped the FPS/zoom bottom-
         // left readout. Re-enable if we add a menu page for it.
         DrawTimeControls(screenW, screenH, timeScale, gameData, paused);
@@ -199,6 +192,22 @@ public partial class HUDRenderer
         }
         DrawHordeCaps(screenW, sim, gameData);
         DrawCombatLog(screenW, screenH, sim, gameData);
+    }
+
+    /// <summary>Cursor-anchored hover tooltips (spell-bar slot, world object,
+    /// belly, corpse, unit). Drawn from the Tooltip-band CursorTooltipLayer —
+    /// a separate topmost pass — so tooltips layer above every Hud-band widget
+    /// (e.g. the aggression bar). Reads the hover state <see cref="Draw"/>
+    /// captured earlier this frame; bands draw bottom-up, so it's fresh.</summary>
+    public void DrawCursorTooltips(int screenW, int screenH, Simulation sim, GameData gameData,
+        Inventory inventory, int hoveredObjectIdx, EnvironmentSystem envSystem,
+        uint hoveredBellyUnitId, int hoveredCorpseIdx, int hoveredUnitIdx, bool editorInspect)
+    {
+        DrawSpellSlotTooltip(gameData, inventory, screenW, screenH);
+        DrawObjectTooltip(hoveredObjectIdx, envSystem, sim, gameData, screenW, screenH);
+        DrawBellyTooltip(hoveredBellyUnitId, sim, gameData, screenW, screenH);
+        DrawCorpseTooltip(hoveredCorpseIdx, sim, gameData, screenW, screenH);
+        DrawUnitTooltip(hoveredUnitIdx, sim, gameData, screenW, screenH, editorInspect);
     }
 
     // ═══════════════════════════════════════

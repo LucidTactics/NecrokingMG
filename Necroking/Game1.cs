@@ -891,6 +891,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _uiRouter.Register(new Necroking.UI.SpellBarLayer(this));
         _uiRouter.Register(new Necroking.UI.TimeControlsLayer(this));
         _uiRouter.Register(new Necroking.UI.AggressionBarLayer(this));
+        // Cursor tooltips live in the Tooltip band (topmost) so they draw over
+        // every other HUD widget — see CursorTooltipLayer.
+        _uiRouter.Register(new Necroking.UI.CursorTooltipLayer(this));
 
         // In-game panels (Panels band). Ids keep the "popup.<Type>" convention
         // the hit registry has always used. Update delegates own each panel's
