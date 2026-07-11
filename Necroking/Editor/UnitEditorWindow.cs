@@ -856,7 +856,12 @@ public class UnitEditorWindow
         drawY = DrawLocomotionCalibrationSection(def, drawX, drawY, contentW);
         drawY += 16;
 
-        _maxPropHeight = (drawY - startDrawY) + (int)_propScrollOffset;
+        // startDrawY already includes -_propScrollOffset, so this difference IS
+        // the full content height. (It used to add the scroll offset back on
+        // top, inflating the measured height by the current scroll — harmless
+        // for the old indicator-only bar, but a feedback loop once the bar
+        // became draggable: dragging grew the range it was dragging within.)
+        _maxPropHeight = drawY - startDrawY;
 
         _ui.EndClip(); // RU40: end scissor clip
 
