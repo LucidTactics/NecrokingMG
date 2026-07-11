@@ -1137,6 +1137,27 @@ public partial class Game1 {
                break;
             }
 
+            // Knock units back with a physics impulse (InPhysics launch) — e.g. to
+            // test channel/cast interrupts. Direction is +X unless dx/dy opts given.
+            case "impulse": {   // window.dev('impulse',['necro','20','8'])
+               if (c.Args.Length < 2) {
+                  c.Complete(Necroking.Dev.DevServer.Error("impulse needs: <selector> <force> [up]"));
+                  break;
+               }
+               float impUp = c.Args.Length >= 3 ? DevFloat(c.Args[c.Args.Length - 1]) : 4f;
+               int forceArg = c.Args.Length >= 3 ? c.Args.Length - 2 : c.Args.Length - 1;
+               float impForce = DevFloat(c.Args[forceArg]);
+               var impDir = new Vec2(
+                  c.Opt("dx") is string sdx ? DevFloat(sdx) : 1f,
+                  c.Opt("dy") is string sdy ? DevFloat(sdy) : 0f);
+               var impIdxs = DevResolveUnits(string.Join(" ", c.Args, 0, forceArg));
+               int impN = 0;
+               foreach (int i in impIdxs)
+                  if (_sim.Physics.ApplyImpulse(_sim.UnitsMut, i, impDir, impForce, impUp)) impN++;
+               c.Complete(Necroking.Dev.DevServer.Ok($"launched {impN}/{impIdxs.Count} unit(s)"));
+               break;
+            }
+
             // Flag units so dying reanimates them — exercises the on-death composite reanim path.
             case "zombify": {   // window.dev('zombify',['human']) then kill -> full reanim effect
                var zidxs = DevResolveUnits(c.Args.Length > 0 ? string.Join(" ", c.Args) : "all");
@@ -1657,6 +1678,11 @@ public partial class Game1 {
 
                var target = new Vec2(DevFloat(c.Args[1]), DevFloat(c.Args[2]));
                var res = DispatchSpellCast(c.Args[0], necroIdx, 0, target);
+               // hold=<secs>: keep a Beam/Drain channel alive as if the slot key
+               // stayed held (dev casts have no physical key to hold).
+               string? holdOpt = c.Opt("hold");
+               if (res == Necroking.GameSystems.CastResult.Success && holdOpt != null)
+                  _devChannelHoldTimer = DevFloat(holdOpt);
                string detail = $"cast {c.Args[0]} -> {res}";
                // Path failure must NOT read as a mana failure — name the path(s) the
                // necromancer still needs so the reason is unambiguous.

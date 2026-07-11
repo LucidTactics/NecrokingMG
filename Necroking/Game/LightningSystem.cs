@@ -257,6 +257,18 @@ public class LightningSystem
             var b = _beams[i];
             b.Elapsed += dt;
             if (b.MaxDuration > 0 && b.Elapsed >= b.MaxDuration) b.Alive = false;
+            // A channel is only as alive as its endpoints: a caster that dies or
+            // gets disabled (stun/knockdown/knockback/paralysis/jump) drops the
+            // beam, and a dead target does too (the beam is drawn caster→target).
+            // This is the core channel-interrupt rule — it covers the player and
+            // AI casters alike; their slot/timer bookkeeping syncs off the beam
+            // disappearing (Game1's channel-hold block / Unit.ChannelTimer here).
+            if (units != null && !ChannelSourceValid(units, b.CasterID)) b.Alive = false;
+            if (units != null && b.Alive)
+            {
+                int ti = UnitUtil.ResolveUnitIndex(units, b.TargetID);
+                if (ti < 0 || !units[ti].Alive) b.Alive = false;
+            }
             if (!b.Alive) _beams.RemoveAt(i);
         }
 
@@ -266,8 +278,32 @@ public class LightningSystem
             var d = _drains[i];
             d.Elapsed += dt;
             if (d.MaxDuration > 0 && d.Elapsed >= d.MaxDuration) d.Alive = false;
+            // Same caster/target channel-interrupt rule as beams. Corpse-targeted
+            // drains (TargetCorpseIdx >= 0) skip the unit-target aliveness check.
+            if (units != null && !ChannelSourceValid(units, d.CasterID)) d.Alive = false;
+            if (units != null && d.Alive && d.TargetCorpseIdx < 0)
+            {
+                int ti = UnitUtil.ResolveUnitIndex(units, d.TargetID);
+                if (ti < 0 || !units[ti].Alive) d.Alive = false;
+            }
             if (!d.Alive) _drains.RemoveAt(i);
         }
+    }
+
+    /// <summary>True while the caster can keep sustaining its channel. As a side
+    /// effect, zeroes a broken caster's ChannelTimer so an AI caster whose handler
+    /// is skipped while it's disabled (UpdateAI skips Incap/InPhysics units) doesn't
+    /// wake up still "channeling" a beam that no longer exists.</summary>
+    private static bool ChannelSourceValid(UnitArrays units, uint casterID)
+    {
+        int ci = UnitUtil.ResolveUnitIndex(units, casterID);
+        if (ci < 0 || !units[ci].Alive) return false;
+        if (units[ci].IsChannelBroken())
+        {
+            units[ci].ChannelTimer = 0f;
+            return false;
+        }
+        return true;
     }
 
     public void CancelBeamsForCaster(uint casterID)

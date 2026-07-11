@@ -1009,6 +1009,11 @@ public class Simulation
     // sprint ramp decays at half rate so cast-weaving doesn't eat the whole ramp.
     // Game1 owns the pending-cast lifecycle and syncs this flag every frame
     // (declaratively — no lifecycle bugs when the cast ends on any of its paths).
+    // The two channels are independent: _necroCastPlant gates MOVEMENT (brake +
+    // ignored input), _necroCastAimAngle owns FACING whenever non-NaN. Normal
+    // casts set both; a Beam/Drain hold-channel with ChannelStopsMovement off
+    // sets only the aim (active=false, angle set) so the caster may walk while
+    // still facing its channel target.
     private bool _necroCastPlant;
     private float _necroCastAimAngle = float.NaN;
     public bool NecroCastPlant => _necroCastPlant;

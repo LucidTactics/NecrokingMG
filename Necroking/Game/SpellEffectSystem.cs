@@ -154,7 +154,7 @@ public static class SpellEffectSystem
                     sim.Lightning.SpawnBeam(casterUid, units[beamTarget].Id,
                         spell.Id, spell.Damage, spell.BeamTickRate, spell.BeamRetargetRadius,
                         spell.BuildBeamStyle());
-                    StartChannel(game, units, casterIdx, slot, spell);
+                    StartChannel(game, units, casterIdx, slot, spell, units[beamTarget].Position);
                 }
                 break;
             }
@@ -168,7 +168,7 @@ public static class SpellEffectSystem
                         spell.Id, spell.Damage, spell.DrainTickRate, spell.DrainHealPercent,
                         spell.DrainCorpseHP, spell.DrainReversed, spell.DrainMaxDuration,
                         spell.BuildDrainVisuals());
-                    StartChannel(game, units, casterIdx, slot, spell);
+                    StartChannel(game, units, casterIdx, slot, spell, units[drainTarget].Position);
                 }
                 break;
             }
@@ -247,18 +247,34 @@ public static class SpellEffectSystem
     /// channel-hold block); AI casts (slot &lt; 0) run on a per-unit timer that the
     /// caster's archetype handler ticks down and cancels — an AI has no key to
     /// release. Drains prefer their own max duration so the channel matches the
-    /// visual; CastTime is the generic fallback knob.</summary>
-    private static void StartChannel(Game1 game, UnitArrays units, int casterIdx, int slot, SpellDef spell)
+    /// visual; CastTime is the generic fallback knob. <paramref name="targetPos"/>
+    /// (the channel target's position) seeds the player's locked cast facing —
+    /// kept if the target later becomes unresolvable.</summary>
+    private static void StartChannel(Game1 game, UnitArrays units, int casterIdx, int slot, SpellDef spell,
+        Vec2 targetPos)
     {
         if (slot >= 0)
         {
             game._channelingSlot = slot;
+            game._channelingSpellID = spell.Id;
+            var aim = targetPos - units[casterIdx].Position;
+            game._channelAimAngleDeg = aim.LengthSq() > 0.0001f
+                ? MathF.Atan2(aim.Y, aim.X) * 180f / MathF.PI
+                : units[casterIdx].FacingAngle;
             return;
         }
         float duration = spell.Category == "Drain" && spell.DrainMaxDuration > 0f
             ? spell.DrainMaxDuration
             : (spell.CastTime > 0f ? spell.CastTime : 4f);
         units[casterIdx].ChannelTimer = duration;
+
+        // Hold the casting pose for the channel: Spell1 plays to its effect frame
+        // and pins there (Game1's anim pass keys the pin off ChannelTimer > 0),
+        // releasing into the natural wind-down when the channel ends. OneShot —
+        // auto-clears once the wind-down finishes, and a knockdown's priority-3
+        // hold preempts it cleanly.
+        Render.AnimResolver.SetOverride(units[casterIdx],
+            Render.AnimRequest.Combat(Render.AnimState.Spell1));
     }
 
     /// <summary>
