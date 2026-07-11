@@ -3566,6 +3566,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             {
                 _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
                 ToggleGodMode(necroIdx, force_to_value: _sim.UnitsMut[necroIdx].GhostMode);
+                // Also flip the top-left debug readout (projectile counts etc).
+                _hudRenderer.ShowDebugPanel = _sim.UnitsMut[necroIdx].GhostMode;
             }
             // --- God mode toggle (Shift+P) ---
             // Cheat / debug toggle. Applies/removes buff_god_mode on the

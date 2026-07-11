@@ -142,6 +142,12 @@ public partial class HUDRenderer
     private SpellDef? _hoverSlotSpell;
     private bool _hoverSlotMelee;
 
+    /// <summary>When set, the top-left player stat bars are replaced by a
+    /// programmer-style debug readout (projectile/potion/arrow counts by enum
+    /// category). Toggled by the same G key that toggles ghost/god mode
+    /// (see Game1's Ghost-mode toggle). Runtime-only, not persisted.</summary>
+    public bool ShowDebugPanel;
+
     public void Init(SpriteBatch batch, Texture2D pixel, SpriteFont? font, SpriteFont? smallFont,
         UI.RuntimeWidgetRenderer? widgets = null)
     {
@@ -169,7 +175,10 @@ public partial class HUDRenderer
     {
         int necroIdx = FindNecromancer(sim);
 
-        DrawStatusBars(necroIdx, sim);
+        if (ShowDebugPanel)
+            DrawDebugPanel(sim);
+        else
+            DrawStatusBars(necroIdx, sim);
 
         // Reset hover-tooltip capture; the spell bar sets it if a filled slot is hovered.
         // The tooltip itself draws later via DrawCursorTooltips (Tooltip band, topmost).
@@ -391,6 +400,77 @@ public partial class HUDRenderer
 
         if (necroIdx >= 0) DrawStatBar(hpRect, hpFrac, HpFillA, HpFillB, hpLabel);
         DrawStatBar(manaRect, manaFrac, ManaFillA, ManaFillB, manaLabel);
+    }
+
+    // ═══════════════════════════════════════
+    //  Debug Panel (top-left, replaces stat bars when ShowDebugPanel)
+    // ═══════════════════════════════════════
+
+    private static readonly Color DebugPanelBg = new(10, 12, 16, 210);
+    private static readonly Color DebugPanelBorder = new(80, 200, 120, 220);
+    private static readonly Color DebugHeaderColor = new(120, 230, 160);
+    private static readonly Color DebugKeyColor = new(150, 170, 190);
+    private static readonly Color DebugValColor = new(230, 240, 200);
+
+    /// <summary>Programmer-style debug readout drawn top-left in place of the
+    /// player stat bars. For now: live projectile counts broken down by the
+    /// <see cref="ProjectileType"/> enum category (Arrow / Fireball / Potion).
+    /// Styled like the text tooltip panel (dark box + thin accent border).</summary>
+    private void DrawDebugPanel(Simulation sim)
+    {
+        if (_smallFont == null) return;
+
+        // Count live projectiles per enum category.
+        var names = Enum.GetNames<ProjectileType>();
+        var counts = new int[names.Length];
+        int total = 0;
+        foreach (var proj in sim.Projectiles.Projectiles)
+        {
+            counts[(int)proj.Type]++;
+            total++;
+        }
+
+        // Build the "key: value" lines.
+        var lines = new List<(string key, string val)>
+        {
+            ("Projectiles", total.ToString()),
+        };
+        for (int i = 0; i < names.Length; i++)
+            lines.Add(("  " + names[i], counts[i].ToString()));
+
+        // Layout: measure widest key/value so the two columns align.
+        const int padX = 8, padY = 6, lineH = 15, colGap = 16;
+        const string header = "DEBUG";
+        float keyW = _smallFont.MeasureString(header).X;
+        float valW = 0f;
+        foreach (var (key, val) in lines)
+        {
+            keyW = MathF.Max(keyW, _smallFont.MeasureString(key).X);
+            valW = MathF.Max(valW, _smallFont.MeasureString(val).X);
+        }
+
+        int boxW = padX * 2 + (int)keyW + colGap + (int)valW;
+        int boxH = padY * 2 + lineH * (lines.Count + 1); // +1 for header
+        var box = new Rectangle(BarX, 30, boxW, boxH);
+
+        // Panel background + thin accent border (text-tooltip style).
+        Scope.Draw(_pixel, box, DebugPanelBg);
+        Scope.Draw(_pixel, new Rectangle(box.X, box.Y, box.Width, 1), DebugPanelBorder);
+        Scope.Draw(_pixel, new Rectangle(box.X, box.Bottom - 1, box.Width, 1), DebugPanelBorder);
+        Scope.Draw(_pixel, new Rectangle(box.X, box.Y, 1, box.Height), DebugPanelBorder);
+        Scope.Draw(_pixel, new Rectangle(box.Right - 1, box.Y, 1, box.Height), DebugPanelBorder);
+
+        int tx = box.X + padX;
+        int valX = box.Right - padX - (int)valW;
+        int ty = box.Y + padY;
+        Text(_smallFont, header, new Vector2(tx, ty), DebugHeaderColor);
+        ty += lineH;
+        foreach (var (key, val) in lines)
+        {
+            Text(_smallFont, key, new Vector2(tx, ty), DebugKeyColor);
+            Text(_smallFont, val, new Vector2(valX, ty), DebugValColor);
+            ty += lineH;
+        }
     }
 
 
