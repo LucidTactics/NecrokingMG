@@ -139,12 +139,16 @@ public class ProjectileManager
     /// <paramref name="gravity"/>: θ = ½·asin(min(d·g/v², 1)). Optional clamp —
     /// arrow volleys use [10°, 45°] so short lobs still arc visibly. Pass a scaled
     /// <paramref name="gravity"/> (Gravity·GravityScale) so the arc still lands on target
-    /// when a projectile's gravity is tuned.</summary>
+    /// when a projectile's gravity is tuned.
+    /// <paramref name="preferLob"/> returns the higher arc, WIP, this needs more work since
+    /// realistic high arcs feel bad!</summary>
     public static float SolveLobTheta(float dist, float speed,
-        float minTheta = 0f, float maxTheta = Pi / 2f, float gravity = Gravity)
+        float minTheta = 0f, float maxTheta = Pi / 2f, float gravity = Gravity, bool preferLob=false)
     {
         float sinTwoTheta = MathF.Min(dist * gravity / (speed * speed), 1f);
-        return MathUtil.Clamp(0.5f * MathF.Asin(sinTwoTheta), minTheta, maxTheta);
+        float res = MathUtil.Clamp(0.5f * MathF.Asin(sinTwoTheta), minTheta, maxTheta);
+        if (preferLob) return Pi / 2f - res;
+        return res;
     }
 
     /// <summary>Split a launch (dir, speed, theta) into the planar Velocity and
@@ -171,10 +175,9 @@ public class ProjectileManager
     /// </summary>
     public void SpawnArrow(Vec2 from, Vec2 target, Faction faction, uint owner, int damage,
                            bool volley, int precision, string weaponName = "", float spawnHeight = 0.6f,
-                           float gravityScale = 1f)
+                           float gravityScale = 1f, float speed = ArrowSpeed)
     {
         PrepAim(from, target, out var dir, out float dist);
-        float speed = ArrowSpeed;
 
         var p = new Projectile
         {
@@ -211,11 +214,10 @@ public class ProjectileManager
     /// </summary>
     public void SpawnFireball(Vec2 from, Vec2 target, Faction faction, uint owner,
                               int damage, float aoeRadius, string weaponName = "", float spawnHeight = 0.6f,
-                              float gravityScale = 1f)
+                              float gravityScale = 1f, float speed = MagicSpeed, bool IsLob=false)
     {
         PrepAim(from, target, out var dir, out float dist);
-        float speed = MagicSpeed;
-        var (vel, velZ) = BallisticVelocity(dir, speed, SolveLobTheta(dist, speed, gravity: Gravity * gravityScale));
+        var (vel, velZ) = BallisticVelocity(dir, speed, SolveLobTheta(dist, speed, gravity: Gravity * gravityScale, preferLob: IsLob));
 
         _projectiles.Add(new Projectile
         {

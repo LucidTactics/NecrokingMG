@@ -1642,7 +1642,7 @@
       "school": "Evocation",
       "tileTemplate": "evocation",
       "icon": "assets/UI/Icons/Spells/nether_darts.png",
-      "range": 30,
+      "range": 120,
       "manaCost": 4,
       "primaryPath": "death",
       "primaryLevel": 1,
@@ -1666,7 +1666,8 @@
         "duration": -1
       },
       "quantity": 10,
-      "projectileSpeed": 28.3,
+      "projectileSpeed": 45,
+      "gravityScale": 1.5,
       "precisionBonus": -5,
       "projectileDelay": 0.08,
       "projectileSpread": 2,
