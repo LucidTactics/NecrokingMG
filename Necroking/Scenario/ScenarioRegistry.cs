@@ -6,6 +6,7 @@ namespace Necroking.Scenario;
 public static class ScenarioRegistry
 {
     private static readonly Dictionary<string, Func<ScenarioBase>> _creators = new();
+    private static readonly List<string> name_list = new();
 
     static ScenarioRegistry()
     {
@@ -139,6 +140,7 @@ public static class ScenarioRegistry
     public static void Register(string name, Func<ScenarioBase> creator)
     {
         _creators[name] = creator;
+        name_list.Add(name);
     }
 
     public static ScenarioBase? Create(string name)
@@ -146,5 +148,5 @@ public static class ScenarioRegistry
         return _creators.TryGetValue(name, out var creator) ? creator() : null;
     }
 
-    public static IEnumerable<string> GetNames() => _creators.Keys;
+    public static IEnumerable<string> GetNames() => name_list;
 }
