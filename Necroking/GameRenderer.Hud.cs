@@ -898,12 +898,12 @@ partial class GameRenderer
     {
         DrawMenuBackdrop(screenW, screenH);
 
+        int titleY = screenH / 20 + 20;
         // Title
         if (_g._largeFont != null)
         {
             string title = "SCENARIOS";
             var titleSize = _g._largeFont.MeasureString(title);
-            int titleY = screenH / 6;
             DrawText(_g._largeFont, title, new Vector2(screenW / 2f - titleSize.X / 2f + 3, titleY + 3), new Color(0, 0, 0, 180));
             DrawText(_g._largeFont, title, new Vector2(screenW / 2f - titleSize.X / 2f, titleY), new Color(180, 220, 100));
         }
@@ -912,7 +912,7 @@ partial class GameRenderer
         {
             string subtitle = "Select a scenario to run";
             var subSize = _g._font.MeasureString(subtitle);
-            DrawText(_g._font, subtitle, new Vector2(screenW / 2f - subSize.X / 2f, screenH / 6 + 35), new Color(140, 140, 160));
+            DrawText(_g._font, subtitle, new Vector2(screenW / 2f - subSize.X / 2f, titleY + 35), new Color(140, 140, 160));
         }
 
         // Categorized scenario grid (shared layout with the click handler).
@@ -1066,7 +1066,7 @@ partial class GameRenderer
         cols = 5;
         btnGap = 12;
         btnH = 45;
-        menuY = screenH / 4 + 60;
+        menuY = screenH / 20 + 80;
         int maxGridW = Math.Min(screenW - 80, 1400);
         btnW = (maxGridW - (cols - 1) * btnGap) / cols;
         int gridW = cols * btnW + (cols - 1) * btnGap;

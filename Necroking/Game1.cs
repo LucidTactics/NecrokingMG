@@ -1454,10 +1454,22 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _sim.Workers = _workerSystem;
     }
 
-    private void StartGame(string mapName = "default")
+    /// <summary>
+    /// Shared "forget the old world" core for BOTH world-entry paths — StartGame (map
+    /// load) and StartScenario. Wipes every per-game collection and recreates the
+    /// GameSession so nothing bleeds between runs (scenario→scenario, scenario→map,
+    /// map→map). Path-specific setup (map/scenario init, textures, spellbar, fog)
+    /// stays in the callers. A new per-game collection added to Game1 must be cleared
+    /// here — or better, moved into GameSession so the recreate handles it.
+    /// </summary>
+    private void ResetWorldState()
     {
         _gameWorldLoaded = false;
         _gameOver = false;
+        // Detach any running scenario — otherwise it keeps ticking over the new
+        // world (StartScenario re-installs the new one after this reset) and its
+        // completion handler yanks a freshly-loaded map back to the main menu.
+        _activeScenario = null;
         // Fresh world = fresh clock state: clear pause holders + restore 1x speed so a
         // pause or 8x from the previous session isn't carried in. World age resets with
         // the fresh Simulation below; VisualTime deliberately keeps running (phase).
@@ -1480,6 +1492,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // returning to the main menu and starting a new game wipes prior unlocks.
         _skillBookState.InitFromDefs();
         _skillLearnToasts.Clear();
+        // Fresh playthrough inventory (StartGame re-adds StartingInventory at the end
+        // of its load; scenarios seed their own items).
+        _inventory.Clear();
 
         // Recreate the per-game world state: Dispose() frees the old map's GPU resources
         // (ground/env textures) and the reassignment drops all references to the previous
@@ -1492,9 +1507,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // The new session has a fresh Simulation — re-install the Game1→Sim back-references
         // (reanim / forager / worker) that would otherwise be null on it. Live-reading
         // consumers (lightning/foragable/worker systems) follow _sim automatically.
+        // Collision-dirty callbacks start null on the fresh Env; each caller re-wires
+        // them after its own Sim/Env init.
         WireSimCallbacks();
-        _envSystem.OnCollisionsDirty = null;
-        _envSystem.OnCollisionRegionDirty = null;
         // Reset the worker job system: reload jobs.json, wipe stockpiles + assignments
         // so a fresh game doesn't inherit the previous session's piles or priorities.
         _workerSystem.Reset();
@@ -1502,8 +1517,39 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // across new-games, so without this stale fade values from the previous
         // session would render the grass already-corrupted on map load.
         _grassRenderer.ClearAllFades();
+        // Zones/villages/triggers are map-authored, app-lifetime systems: their loaders
+        // only replace content when the new map provides some, so clear here or a map
+        // without the sidecar — and every scenario — inherits the previous map's.
+        _zoneSystem.Clear();
+        _villageSystem.Clear();
+        _triggerSystem.Clear();
         _roadSystem.Init();
         _dayNightSystem.Init(_gameData.Settings.DayNight);
+
+        // Grass is per-map like zones: clear here so a map without a grassMap
+        // section doesn't inherit the previous map's grass — Save Map would then
+        // bake the stale grid into that map's JSON (this is how testmap.json once
+        // gained default's full 5120x5120 grass layer, +34MB).
+        _grassW = 0; _grassH = 0;
+        _grassMap = Array.Empty<byte>();
+        _grassTypeIds = Array.Empty<string>();
+        _grassTypeNames = Array.Empty<string>();
+        _grassTypeSpritePaths = Array.Empty<string[]>();
+        _grassTypeScales = Array.Empty<float>();
+        _grassTypeDensities = Array.Empty<float>();
+        _grassDefaultTints = Array.Empty<Color>();
+        _grassCorruptedTints = Array.Empty<Color>();
+
+        // Drop the previous world's ground vertex texture so a run that never
+        // recreates one (scenario without ground) doesn't keep the old map's
+        // texture alive on the GPU. Callers rebuild it after their ground init.
+        _groundVertexMapTex?.Dispose();
+        _groundVertexMapTex = null;
+    }
+
+    private void StartGame(string mapName = "default")
+    {
+        ResetWorldState();
 
         // Load flipbooks (shared with the spell editor's live-reload path).
         ReloadFlipbooksFromRegistry();
@@ -1528,22 +1574,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // (no JSON file) so technical-behavior tests don't fight the regular
         // map's content. See the "start_game" dev command (its no-arg default).
         var placedUnits = new List<Data.PlacedUnit>();
-        // Zones are reloaded per map below; clear here so maps without a zones file
-        // (empty_test, missing map) don't inherit the previous map's zones.
-        _zoneSystem.Clear();
-        // Grass is per-map like zones: clear here so a map without a grassMap
-        // section doesn't inherit the previous map's grass — Save Map would then
-        // bake the stale grid into that map's JSON (this is how testmap.json once
-        // gained default's full 5120x5120 grass layer, +34MB).
-        _grassW = 0; _grassH = 0;
-        _grassMap = Array.Empty<byte>();
-        _grassTypeIds = Array.Empty<string>();
-        _grassTypeNames = Array.Empty<string>();
-        _grassTypeSpritePaths = Array.Empty<string[]>();
-        _grassTypeScales = Array.Empty<float>();
-        _grassTypeDensities = Array.Empty<float>();
-        _grassDefaultTints = Array.Empty<Color>();
-        _grassCorruptedTints = Array.Empty<Color>();
         string mapPath = GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}.json");
         if (mapName == "empty_test")
         {
@@ -2102,8 +2132,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             return;
         }
 
-        _activeScenario = scenario;
-
         // UI scenarios need a larger resolution in headless mode
         if (LaunchArgs.Headless && scenario.WantsUI && _graphics.PreferredBackBufferWidth < 800)
         {
@@ -2112,16 +2140,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _graphics.ApplyChanges();
         }
 
-        _gameWorldLoaded = false;
-        _gameOver = false;
-        _clock.OnWorldStart(); // same reset as StartGame: no inherited pause/speed
-        _damageNumbers.Clear();
-        _unitAnims.Clear();
-        _corpseAnims.Clear();
-        _effectManager.Clear();
-        _reanimFx.Clear();
-        _buffVisuals.Clear();
-        _tethers.Clear(); _tetherAnchor = null; _tetherDustAccum.Clear();
+        // Same full wipe as StartGame — recreates the GameSession too, so scenarios
+        // configure fresh Sim/Ground/Env/Wall/Road systems below instead of reusing
+        // (and leaking) the previous run's. Also detaches the previous scenario, so
+        // install the new one only AFTER the reset.
+        ResetWorldState();
+        _activeScenario = scenario;
 
         // Load flipbooks (needed for cloud effects, hit effects, etc.)
         if (_flipbooks.Count == 0)
@@ -2141,9 +2165,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // this for main-game runs; scenarios use this code path instead.
         _wakeSystem.Init(_flipbooks);
 
-        // Init simulation with a grid sized to the scenario's needs
+        // Init simulation with a grid sized to the scenario's needs (the systems are
+        // fresh from ResetWorldState's session recreate — no per-system clearing needed)
         int gridSize = scenario.GridSize;
-        _groundSystem.ClearTypes();
         _groundSystem.Init(gridSize, gridSize);
         _envSystem.Init(gridSize);
         _envSystem.OnCollisionsDirty = () => _sim.RequestPathfinderRebuild();
@@ -2157,6 +2181,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _sim.SetTriggerSystem(_triggerSystem);
         _sim.SetVillageSystem(_villageSystem);
         _sim.SetSkillBook(_skillBookState);
+        // Size the death-fog grid to the scenario world — it's an app-lifetime system,
+        // so without this it keeps the previous map's grid and fog densities.
+        _deathFog.Init(gridSize, gridSize, cellSize: 4);
         _fogOfWar.Init(gridSize, gridSize, GraphicsDevice, Content);
 
         // Ensure spell bar state is initialized for HUD safety
