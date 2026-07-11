@@ -264,8 +264,24 @@ public class SpellDef : INamedDef
     [EditorField(Label = "Proj Delay", Group = "PROJECTILE", Order = 205, Step = 0.01f, Decimals = 2)]
     [JsonPropertyName("projectileDelay")] public float ProjectileDelay { get; set; }
 
+    // Barrage spread: each shot in a Quantity>1 volley lands at a uniform-random point
+    // within this radius of the aim, scattering evenly over the disc (π·r² area). 0 =
+    // every shot on the exact aim point (the default single-target behavior).
     [EditorVisible("Category", "Projectile")]
-    [EditorField(Label = "Projectile Effect", Group = "PROJECTILE", Order = 206)]
+    [EditorField(Label = "Spread Radius", Group = "PROJECTILE", Order = 206, Step = 0.1f, Decimals = 1)]
+    [JsonPropertyName("projectileSpread")] public float ProjectileSpread { get; set; }
+
+    // When the PLAYER casts a multi-shot volley, follow-up shots re-aim at the live
+    // cursor each shot (the cursor updates the aim; an invalid cursor holds the last
+    // valid point). Turn OFF for barrages so the volley scatters around the ORIGINAL
+    // cast point instead of homing the whole spread onto the cursor. No effect on AI
+    // casts (they never track the player's cursor).
+    [EditorVisible("Category", "Projectile")]
+    [EditorField(Label = "Track Cursor (player)", Group = "PROJECTILE", Order = 207)]
+    [JsonPropertyName("tracksCursor")] public bool TracksCursor { get; set; } = true;
+
+    [EditorVisible("Category", "Projectile")]
+    [EditorField(Label = "Projectile Effect", Group = "PROJECTILE", Order = 208)]
     [JsonPropertyName("projectileFlipbook")] public FlipbookRef? ProjectileFlipbook { get; set; }
 
     // ============ BUFF / DEBUFF ============

@@ -116,7 +116,8 @@ public static class SpellEffectSystem
         switch (spell.Category)
         {
             case "Projectile":
-                SpawnProjectile(spell, sim.Projectiles, effectOrigin, target, casterUid,
+                SpawnProjectile(spell, sim.Projectiles, effectOrigin,
+                    VolleyAimPoint(spell, target, game._rng), casterUid,
                     effectOriginH, casterFaction);
                 if (spell.Quantity > 1)
                 {
@@ -437,6 +438,16 @@ public static class SpellEffectSystem
     // Swirl-trajectory jitter. Pre-existing cosmetic nondeterminism: the sim has no
     // shared RNG (events seed their own), and the swirl only affects the visual arc.
     private static readonly Random _projRng = new();
+
+    /// <summary>Per-shot aim point for a projectile volley: the base target jittered by a
+    /// uniform-over-area offset within <see cref="SpellDef.ProjectileSpread"/> (0 → the
+    /// exact target, no spread). Barrage spells set a spread so their shots scatter evenly
+    /// across the disc instead of stacking on one point. The GROUP stores the un-jittered
+    /// base target, so every shot (and any cursor retarget) re-samples fresh.</summary>
+    public static Vec2 VolleyAimPoint(SpellDef spell, Vec2 baseTarget, Random rng)
+        => spell.ProjectileSpread > 0f
+            ? baseTarget + MathUtil.RandomInDisc(rng, spell.ProjectileSpread)
+            : baseTarget;
 
     /// <summary>Randomize the swirl params (freq/amplitude/phase) on a projectile —
     /// shared by the Swirly and HomingSwirly trajectories.</summary>

@@ -509,12 +509,16 @@ public partial class Game1 {
             continue;
          }
 
+         var spell = _gameData.Spells.Get(pg.SpellID);
+
          // Player volleys chase the live cursor: each follow-up shot re-aims at the
          // current cursor world position. The cursor only UPDATES the aim point — when
          // it's invalid this frame (_cursorAimWorld null: unfocused window, cursor
          // outside the viewport) the group keeps its last valid target. AI volleys
-         // share this list and must not track the player's cursor.
-         if (_cursorAimWorld.HasValue && _sim.Units[casterIdx].AI == AIBehavior.PlayerControlled)
+         // share this list and must not track the player's cursor. Barrages opt out
+         // (TracksCursor=false) so the whole spread doesn't home onto the cursor.
+         if (_cursorAimWorld.HasValue && spell != null && spell.TracksCursor
+             && _sim.Units[casterIdx].AI == AIBehavior.PlayerControlled)
             pg.Target = _cursorAimWorld.Value;
 
          pg.Timer += dt;
@@ -522,10 +526,12 @@ public partial class Game1 {
             pg.Timer -= pg.Interval;
             pg.Remaining--;
 
-            var spell = _gameData.Spells.Get(pg.SpellID);
             if (spell != null) {
+               // Re-sample the spread around the group's base target for THIS shot, so
+               // a barrage scatters evenly over its disc instead of retracing one line.
+               var shotTarget = GameSystems.SpellEffectSystem.VolleyAimPoint(spell, pg.Target, _rng);
                GameSystems.SpellEffectSystem.SpawnProjectile(spell, _sim.Projectiles,
-                  _sim.Units[casterIdx].EffectSpawnPos2D, pg.Target, pg.CasterUid,
+                  _sim.Units[casterIdx].EffectSpawnPos2D, shotTarget, pg.CasterUid,
                   _sim.Units[casterIdx].EffectSpawnHeight, _sim.Units[casterIdx].Faction);
             }
 
