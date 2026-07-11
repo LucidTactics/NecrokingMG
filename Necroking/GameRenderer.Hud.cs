@@ -916,10 +916,9 @@ partial class GameRenderer
         }
 
         // Categorized scenario grid (shared layout with the click handler).
-        var entries = BuildScenarioMenuLayout(screenW, screenH, _g._scenarioScrollOffset,
-            out int totalRows, out int rowsVisible, out Rectangle backRect);
+        var view = BuildScenarioMenuLayout(screenW, screenH, _g._scenarioScrollOffset);
 
-        foreach (var e in entries)
+        foreach (var e in view.Entries)
         {
             if (!e.Visible) continue;
             if (e.IsHeader)
@@ -929,11 +928,29 @@ partial class GameRenderer
         }
 
         // Back button (centered below the visible grid)
-        DrawMenuButtonAt("< Back", backRect.X, backRect.Y, backRect.Width, backRect.Height);
+        DrawMenuButtonAt("< Back", view.BackRect.X, view.BackRect.Y, view.BackRect.Width, view.BackRect.Height);
 
-        // Scroll hint
-        if (totalRows > rowsVisible)
-            DrawText(_g._smallFont, "Scroll for more...", new Vector2(screenW / 2f - 50, screenH - 40), new Color(100, 100, 120));
+        // Scrollbar — same canonical look/behaviour as the editor panels (shared
+        // Necroking.UI.VScrollbar geometry). Draw only; input lives in Game1.
+        DrawScenarioScrollbar(view);
+    }
+
+    // Draws the scenario-menu scrollbar using the shared VScrollbar geometry. The
+    // thumb goes "hot" while hovered or being dragged (drag state lives on Game1).
+    private void DrawScenarioScrollbar(ScenarioMenuView view)
+    {
+        float scroll = _g._scenarioScrollOffset * (float)view.RowStride;
+        if (Necroking.UI.VScrollbar.Fits(view.ScrollViewH, view.ScrollContentH)) return;
+
+        var track = Necroking.UI.VScrollbar.TrackRect(view.ScrollX, view.ScrollY, view.ScrollViewH);
+        var thumb = Necroking.UI.VScrollbar.ThumbRect(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH, scroll);
+
+        int mx = (int)_g._input.MousePos.X, my = (int)_g._input.MousePos.Y;
+        bool overThumb = thumb.Contains(mx, my);
+        bool hot = _g._scenarioScrollDragging || overThumb;
+
+        _g.Scope.Draw(_g._pixel, track, Necroking.UI.VScrollbar.TrackColor);
+        _g.Scope.Draw(_g._pixel, thumb, hot ? Necroking.UI.VScrollbar.ThumbHotColor : Necroking.UI.VScrollbar.ThumbColor);
     }
 
     // Draws a category label as a section divider above its scenario buttons.
@@ -960,15 +977,36 @@ partial class GameRenderer
         public bool Visible;    // within the current scroll window
     }
 
+    // Fully-resolved scenario-menu layout for one frame: the positioned entries, the
+    // back button, and the scrollbar geometry. Drawing (GameRenderer) and hit-testing
+    // (Game1) both build this from the same scroll offset so they never desync. The
+    // scrollbar values are in pixels so they feed the shared Necroking.UI.VScrollbar
+    // helper directly (rows -> pixels via RowStride).
+    internal struct ScenarioMenuView
+    {
+        public List<ScenarioMenuEntry> Entries;
+        public int TotalRows;
+        public int RowsVisible;
+        public int RowStride;
+        public Rectangle BackRect;
+        // Scrollbar column (pixel units): left edge X, top Y, visible height, and
+        // total content height. ScrollContentH <= ScrollViewH means "fits, no bar".
+        public int ScrollX;
+        public int ScrollY;
+        public int ScrollViewH;
+        public float ScrollContentH;
+
+        /// <summary>Clamp a row offset to the valid scroll range for this layout.</summary>
+        public int ClampScroll(int scrollRow) => Math.Clamp(scrollRow, 0, Math.Max(0, TotalRows - RowsVisible));
+    }
+
     // Builds the categorized scenario-menu layout for a given scroll offset (in rows).
-    // Both DrawScenarioList and the click handler in Game1 consume this so drawing and
-    // hit-testing stay in sync. Each category emits a header row followed by its scenario
-    // buttons packed into `cols`-wide rows. `scrollRow` scrolls the whole layout vertically.
-    internal List<ScenarioMenuEntry> BuildScenarioMenuLayout(int screenW, int screenH, int scrollRow,
-        out int totalRows, out int rowsVisible, out Rectangle backRect)
+    // Each category emits a header row followed by its scenario buttons packed into
+    // `cols`-wide rows. `scrollRow` scrolls the whole layout vertically.
+    internal ScenarioMenuView BuildScenarioMenuLayout(int screenW, int screenH, int scrollRow)
     {
         GetScenarioGridLayout(screenW, screenH, out int cols, out int btnW, out int btnH, out int btnGap,
-            out int gridX, out int menuY, out rowsVisible);
+            out int gridX, out int menuY, out int rowsVisible);
         int rowStride = btnH + btnGap;
         int gridW = cols * btnW + (cols - 1) * btnGap;
 
@@ -1004,14 +1042,22 @@ partial class GameRenderer
             layoutRow += (scen.Count + cols - 1) / cols;
         }
 
-        totalRows = layoutRow;
-
         // Back button fixed just below the visible window so it never scrolls away.
         int backW = 320;
         int backY = menuY + rowsVisible * rowStride + 10;
-        backRect = new Rectangle(screenW / 2 - backW / 2, backY, backW, btnH);
 
-        return entries;
+        return new ScenarioMenuView
+        {
+            Entries = entries,
+            TotalRows = layoutRow,
+            RowsVisible = rowsVisible,
+            RowStride = rowStride,
+            BackRect = new Rectangle(screenW / 2 - backW / 2, backY, backW, btnH),
+            ScrollX = gridX + gridW + 8,
+            ScrollY = menuY,
+            ScrollViewH = rowsVisible * rowStride,
+            ScrollContentH = layoutRow * rowStride,
+        };
     }
 
     // Shared layout for the scenario grid so click-handling and drawing stay in sync.

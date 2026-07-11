@@ -62,12 +62,16 @@ CLAUDE.md → "Standard Patterns Reference".)
   `contentH = curY + scroll - y` measurement or a `HandlePanelScroll`+
   `BeginClip`+`SetPanelContentHeight` sandwich (a hand-rolled copy once
   double-counted the scroll and broke thumb-dragging).
-- **Scrollbars** — every editor scrollbar is `EditorBase.DrawVScrollbar`
-  (5px track+thumb, the Spell-editor look). Interactive overload
-  `DrawVScrollbar(id, …)` adds thumb-drag + track-click jump and returns the
-  new offset; rows with click targets under the bar column exclude
-  `VScrollbarHitRect` from their hit tests (DrawScrollableList does this
-  internally). Never draw a scrollbar with raw `DrawRect`s.
+- **Scrollbars** — the canonical geometry + palette live in
+  `Necroking/UI/VScrollbar.cs` (static: `Fits`/`TrackRect`/`ThumbRect`/`HitRect`/
+  `ScrollFromDrag`, 5px track+thumb, the Spell-editor look). Callers own input
+  reading + the rect-fill draw. Editor panels use it via `EditorBase.DrawVScrollbar`
+  (indicator + interactive `DrawVScrollbar(id, …)` with thumb-drag + track-click
+  jump); the main-menu scenario grid uses it in `GameRenderer.DrawScenarioScrollbar`
+  + the `MenuState.ScenarioList` block in Game1 (rows→px via `RowStride`). Rows with
+  click targets under the bar column exclude `VScrollbarHitRect`/`VScrollbar.HitRect`
+  from their hit tests (DrawScrollableList does this internally). Never draw a
+  scrollbar with raw `DrawRect`s or re-derive the thumb math — call `VScrollbar`.
 
 ## Combat / gameplay math
 

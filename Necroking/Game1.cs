@@ -828,7 +828,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private int _devJobSeq;                        // id counter for batch jobs
     private Vec2? _devWalkTarget;                  // dev "walk_necro" goal; drives WASD-equivalent input, cancelled by any WASD press
     private bool _devWalkSprint;                   // dev "walk_necro" sprint=true opt: hold virtual Shift while auto-walking
-    internal int _scenarioScrollOffset;
+    internal int _scenarioScrollOffset;           // scenario-menu scroll, in layout rows
+    internal bool _scenarioScrollDragging;         // dragging the scenario-menu scrollbar thumb
+    private float _scenarioScrollGrabOffset;        // Y within the thumb where the drag started
 
     // --- Tethers / drag ropes (Shift+T target, Shift+R attach) ---
     // A tether connects two endpoints, each a live unit or a corpse. When a unit end is
@@ -2994,24 +2996,47 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
             int screenW2 = GraphicsDevice.Viewport.Width;
             int screenH2 = GraphicsDevice.Viewport.Height;
+            var view = _gameRenderer.BuildScenarioMenuLayout(screenW2, screenH2, _scenarioScrollOffset);
 
-            // Scroll (a few layout rows at a time), clamped to the layout height.
-            if (_input.ScrollDelta != 0)
+            // Draggable scrollbar — same behaviour as the editor panels (shared
+            // Necroking.UI.VScrollbar). Thumb math runs in pixels (row * RowStride);
+            // the resulting offset is converted back to whole layout rows.
+            if (_scenarioScrollDragging && mouse.LeftButton != ButtonState.Pressed)
+                _scenarioScrollDragging = false;
+
+            bool hasBar = !Necroking.UI.VScrollbar.Fits(view.ScrollViewH, view.ScrollContentH);
+            if (hasBar)
             {
-                _gameRenderer.BuildScenarioMenuLayout(screenW2, screenH2, _scenarioScrollOffset,
-                    out int totalRows, out int rowsVisible, out _);
-                int maxScroll = Math.Max(0, totalRows - rowsVisible);
-                if (_input.ScrollDelta > 0) _scenarioScrollOffset -= 3;
-                if (_input.ScrollDelta < 0) _scenarioScrollOffset += 3;
-                _scenarioScrollOffset = Math.Clamp(_scenarioScrollOffset, 0, maxScroll);
+                float scrollPx = _scenarioScrollOffset * (float)view.RowStride;
+                var thumb = Necroking.UI.VScrollbar.ThumbRect(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH, scrollPx);
+                var hit = Necroking.UI.VScrollbar.HitRect(view.ScrollX, view.ScrollY, view.ScrollViewH);
+
+                // Grab the thumb, or click the track to jump (thumb centres on the cursor).
+                if (_input.LeftPressed && hit.Contains(mouse.X, mouse.Y))
+                {
+                    _scenarioScrollDragging = true;
+                    _scenarioScrollGrabOffset = thumb.Contains(mouse.X, mouse.Y) ? mouse.Y - thumb.Y : thumb.Height / 2f;
+                }
+
+                if (_scenarioScrollDragging)
+                {
+                    float newPx = Necroking.UI.VScrollbar.ScrollFromDrag(mouse.Y, _scenarioScrollGrabOffset,
+                        view.ScrollY, view.ScrollViewH, view.ScrollContentH);
+                    _scenarioScrollOffset = view.ClampScroll((int)Math.Round(newPx / view.RowStride));
+                }
             }
 
-            if (_input.LeftPressed)
+            // Wheel scroll (a few layout rows at a time), clamped to the layout height.
+            if (!_scenarioScrollDragging && _input.ScrollDelta != 0)
             {
-                var entries = _gameRenderer.BuildScenarioMenuLayout(screenW2, screenH2, _scenarioScrollOffset,
-                    out _, out _, out Rectangle backRect);
+                _scenarioScrollOffset += _input.ScrollDelta > 0 ? -3 : 3;
+                _scenarioScrollOffset = view.ClampScroll(_scenarioScrollOffset);
+            }
 
-                foreach (var e in entries)
+            // Grid / back-button clicks (skipped while dragging the scrollbar).
+            if (_input.LeftPressed && !_scenarioScrollDragging)
+            {
+                foreach (var e in view.Entries)
                 {
                     if (!e.Visible || e.IsHeader) continue;
                     if (e.Rect.Contains(mouse.X, mouse.Y))
@@ -3025,7 +3050,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 }
 
                 // Back button (fixed below the visible grid)
-                if (backRect.Contains(mouse.X, mouse.Y))
+                if (view.BackRect.Contains(mouse.X, mouse.Y))
                     _menuState = MenuState.MainMenu;
             }
             _prevKb = kb;

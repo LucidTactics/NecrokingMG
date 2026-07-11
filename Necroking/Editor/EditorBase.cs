@@ -709,13 +709,6 @@ public class EditorBase
 
     // === Scrollable List ===
 
-    // Canonical scrollbar palette — every editor scrollbar uses these.
-    private static readonly Color ScrollTrackColor = new(30, 30, 45, 120);
-    private static readonly Color ScrollThumbColor = new(100, 100, 140, 180);
-    private static readonly Color ScrollThumbHotColor = new(140, 140, 185, 220);
-    private const int ScrollbarW = 5;
-    private const int ScrollbarMinThumbH = 20;
-
     // Interactive-scrollbar drag state: which bar (by id) owns the current
     // left-button drag, and the Y offset within the thumb where it was grabbed.
     private string? _vscrollDragId;
@@ -724,23 +717,20 @@ public class EditorBase
     /// <summary>The canonical thin vertical scrollbar (indicator-only, 5px wide
     /// with its left edge at x): a faint track spanning the viewport with a
     /// proportional thumb. No-op when the content fits. Pure draw — pair it
-    /// with whatever wheel handler owns the scroll value; the ratio is clamped
-    /// so an overscrolled value can't push the thumb past the track.</summary>
+    /// with whatever wheel handler owns the scroll value. Geometry/palette come
+    /// from <see cref="Necroking.UI.VScrollbar"/> (shared with the scenario menu).</summary>
     public void DrawVScrollbar(int x, int y, int viewH, float contentH, float scroll)
     {
-        if (viewH <= 0 || contentH <= viewH) return;
-        DrawRect(new Rectangle(x, y, ScrollbarW, viewH), ScrollTrackColor);
-        int barH = Math.Max(ScrollbarMinThumbH, (int)(viewH * (float)viewH / contentH));
-        float ratio = Math.Clamp(scroll / (contentH - viewH), 0f, 1f);
-        int barY = y + (int)(ratio * (viewH - barH));
-        DrawRect(new Rectangle(x, barY, ScrollbarW, barH), ScrollThumbColor);
+        if (Necroking.UI.VScrollbar.Fits(viewH, contentH)) return;
+        DrawRect(Necroking.UI.VScrollbar.TrackRect(x, y, viewH), Necroking.UI.VScrollbar.TrackColor);
+        DrawRect(Necroking.UI.VScrollbar.ThumbRect(x, y, viewH, contentH, scroll), Necroking.UI.VScrollbar.ThumbColor);
     }
 
     /// <summary>Hit zone of an interactive scrollbar at (x, y, viewH): the 5px
     /// bar plus padding so the thumb is easy to grab. Callers whose clickable
     /// rows extend under the bar column must exclude this rect from their own
     /// row hit tests (DrawScrollableList does this internally).</summary>
-    public static Rectangle VScrollbarHitRect(int x, int y, int viewH) => new(x - 4, y, ScrollbarW + 8, viewH);
+    public static Rectangle VScrollbarHitRect(int x, int y, int viewH) => Necroking.UI.VScrollbar.HitRect(x, y, viewH);
 
     /// <summary>Interactive variant of <see cref="DrawVScrollbar(int,int,int,float,float)"/>:
     /// same canonical look, plus thumb-drag and track-click-jump (thumb centres
@@ -754,37 +744,32 @@ public class EditorBase
         // A mouse-up anywhere ends an in-progress drag (covers releasing off
         // the bar, or the owning panel disappearing mid-drag).
         if (_vscrollDragId != null && _mouse.LeftButton != ButtonState.Pressed) _vscrollDragId = null;
-        if (viewH <= 0 || contentH <= viewH) return 0f;
+        if (Necroking.UI.VScrollbar.Fits(viewH, contentH)) return 0f;
 
-        float maxScroll = contentH - viewH;
-        scroll = Math.Clamp(scroll, 0f, maxScroll);
+        scroll = Math.Clamp(scroll, 0f, contentH - viewH);
 
-        int barH = Math.Max(ScrollbarMinThumbH, (int)(viewH * (float)viewH / contentH));
-        int travel = viewH - barH;
-        int barY = y + (int)(scroll / maxScroll * travel);
-        var thumbRect = new Rectangle(x, barY, ScrollbarW, barH);
-        var trackHit = VScrollbarHitRect(x, y, viewH);
+        var thumbRect = Necroking.UI.VScrollbar.ThumbRect(x, y, viewH, contentH, scroll);
+        var trackHit = Necroking.UI.VScrollbar.HitRect(x, y, viewH);
         bool overTrack = !IsInputBlocked(EffectiveLayer(layer)) && trackHit.Contains(_mouse.X, _mouse.Y);
 
         // Grab the thumb, or click the track to jump.
         if (overTrack && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
         {
             _vscrollDragId = id;
-            _vscrollDragGrabOffset = thumbRect.Contains(_mouse.X, _mouse.Y) ? _mouse.Y - barY : barH / 2f;
+            _vscrollDragGrabOffset = thumbRect.Contains(_mouse.X, _mouse.Y) ? _mouse.Y - thumbRect.Y : thumbRect.Height / 2f;
         }
 
         // Apply drag: map the thumb-top position back to a scroll offset.
         if (_vscrollDragId == id)
         {
-            float frac = travel > 0 ? Math.Clamp((_mouse.Y - _vscrollDragGrabOffset - y) / travel, 0f, 1f) : 0f;
-            scroll = frac * maxScroll;
-            barY = y + (int)(frac * travel);
+            scroll = Necroking.UI.VScrollbar.ScrollFromDrag(_mouse.Y, _vscrollDragGrabOffset, y, viewH, contentH);
+            thumbRect = Necroking.UI.VScrollbar.ThumbRect(x, y, viewH, contentH, scroll);
         }
         if (_vscrollDragId == id || overTrack) SetMouseOverUI();
 
         bool hot = _vscrollDragId == id || (overTrack && thumbRect.Contains(_mouse.X, _mouse.Y));
-        DrawRect(new Rectangle(x, y, ScrollbarW, viewH), ScrollTrackColor);
-        DrawRect(new Rectangle(x, barY, ScrollbarW, barH), hot ? ScrollThumbHotColor : ScrollThumbColor);
+        DrawRect(Necroking.UI.VScrollbar.TrackRect(x, y, viewH), Necroking.UI.VScrollbar.TrackColor);
+        DrawRect(thumbRect, hot ? Necroking.UI.VScrollbar.ThumbHotColor : Necroking.UI.VScrollbar.ThumbColor);
         return scroll;
     }
 
