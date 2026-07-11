@@ -2871,7 +2871,8 @@ public class MapEditorWindow
             // its own scroll; groups reuse _envListScroll as a plain row list).
             int groupsContentH = groups.Count * (ButtonHeight + 2);
             _envListScroll = MathF.Min(_envListScroll, Math.Max(0, groupsContentH - listAreaH));
-            _eb.DrawVScrollbar(panelX + PanelWidth - 6, contentY, listAreaH, groupsContentH, _envListScroll);
+            _envListScroll = _eb.DrawVScrollbar("map_envgroups",
+                panelX + PanelWidth - 6, contentY, listAreaH, groupsContentH, _envListScroll);
 
             // Selected group info
             if (IsEnvGroupSelected)
@@ -2955,7 +2956,8 @@ public class MapEditorWindow
             _eb.EndClip();
 
             // Thin scrollbar in the panel's right margin, spanning the grid viewport.
-            _eb.DrawVScrollbar(panelX + PanelWidth - 6, contentY, listAreaH,
+            _envListScroll = _eb.DrawVScrollbar("map_envgrid",
+                panelX + PanelWidth - 6, contentY, listAreaH,
                 totalRows * rowStride, _envListScroll);
 
             // Hover tooltip — queued globally, drawn topmost after the clip closes.
@@ -5589,7 +5591,8 @@ public class MapEditorWindow
         _eb.EndClip();
 
         // Thin scrollbar in the panel's right margin, spanning the grid viewport.
-        _eb.DrawVScrollbar(panelX + PanelWidth - 6, curY, listH,
+        _tabScroll[(int)MapEditorTab.Units] = _eb.DrawVScrollbar("maptab_unitgrid",
+            panelX + PanelWidth - 6, curY, listH,
             totalRows * rowStride, _tabScroll[(int)MapEditorTab.Units]);
         curY += listH;
 
@@ -5716,19 +5719,22 @@ public class MapEditorWindow
     }
 
     /// <summary>Thin scrollbar at the panel's right edge for a scrolling tab
-    /// body. viewTop = where the scrollable content starts (post-header),
-    /// viewBottom = the tab clip bottom, contentBottom = the bottom of the last
-    /// laid-out row in screen space (i.e. already offset by -scroll). Also
-    /// max-clamps the scroll so the wheel can't run endlessly past the end
-    /// (the generic wheel handler only clamps at 0). Tabs that cull rows with
-    /// an early break under-report contentBottom, so the clamp only ever
-    /// trails the true end — it never blocks reaching it.</summary>
+    /// body (interactive: draggable thumb + track-click jump). viewTop = where
+    /// the scrollable content starts (post-header), viewBottom = the tab clip
+    /// bottom, contentBottom = the bottom of the last laid-out row in screen
+    /// space (i.e. already offset by -scroll). Also max-clamps the scroll so
+    /// the wheel can't run endlessly past the end (the generic wheel handler
+    /// only clamps at 0). Tabs that cull rows with an early break under-report
+    /// contentBottom, so the clamp only ever trails the true end — it never
+    /// blocks reaching it.</summary>
     private void DrawTabScrollbar(int panelX, int viewTop, int viewBottom, int contentBottom, ref float scroll)
     {
         int viewH = viewBottom - viewTop;
         float contentH = contentBottom + scroll - viewTop;
         scroll = Math.Clamp(scroll, 0f, Math.Max(0f, contentH - viewH));
-        _eb?.DrawVScrollbar(panelX + PanelWidth - 6, viewTop, viewH, contentH, scroll);
+        if (_eb != null)
+            scroll = _eb.DrawVScrollbar("maptab_" + (int)ActiveTab,
+                panelX + PanelWidth - 6, viewTop, viewH, contentH, scroll);
     }
 
     /// <summary>Name tooltip above the hovered grid cell, via the global
