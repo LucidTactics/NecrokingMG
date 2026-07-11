@@ -137,9 +137,10 @@ public class UnitStats
     /// chip damage, leaks vs big hits. Armor bypass mechanics (piercing/AP/
     /// armor-defeating/AN) reduce it by the same fraction as armor.</summary>
     public int Toughness { get; set; }
-    /// <summary>Dice tier for every roll this unit makes (attack/damage as attacker,
-    /// defense/protection as defender, morale, knockdown, MR): 1=d3, 2=d6,
-    /// 3=d6 exploding once, 4=d6 open-ended. See UnitUtil.RollDRN.</summary>
+    /// <summary>Dice tier for this unit's rolls EXCEPT hit resolution: damage as
+    /// attacker, protection as defender, morale, knockdown, MR. Attack-vs-defense
+    /// hit rolls always use tier 4 for both sides (see UnitUtil.RollDRN).
+    /// 1=d3, 2=d6, 3=d6 exploding once, 4=d6 open-ended.</summary>
     public int Drn { get; set; } = 2;
     public float CombatSpeed { get; set; } = 8.0f;
 
