@@ -166,6 +166,44 @@ per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, pr
   (`TickPendingProjectiles` staggered Quantity>1 shots) — a new per-projectile field set
   here covers every shot.
 
+### Projectile RENDERING — `Necroking/GameRenderer.World.cs` (two passes, branches on `Projectile.Type`)
+Where each in-flight projectile is drawn. **Two separate draw methods, split by type:**
+- **`DrawProjectiles()`** (normal alpha pass) handles **Arrow** and **Potion**; **skips
+  Fireball** (`continue`). Both branches are fog-of-war gated (`_fogOfWar.IsVisible`).
+  - **Arrow branch is HARDCODED** — a two-quad `_pixel` draw: an oriented shaft
+    (`new Color(200,180,120)`, oriented by `Atan2(Velocity.Y*YRatio, Velocity.X)`) + a
+    darker arrowhead. **It reads NONE of the per-projectile visual fields** — not
+    `FlipbookID`, not `ParticleColor`, not `IconTexturePath`. So a spell-launched
+    arrow-type projectile (see below) that carries a `FlipbookID` still renders as the
+    generic pixel arrow. **This is the gap to fix for per-spell arrow visuals.**
+  - **Potion branch** draws `_g.GetItemTextureByPath(proj.IconTexturePath)` (tumbling item
+    icon), fallback colored dot — the one type that already keys visuals off a per-projectile
+    field.
+  - Unknown types → `DebugLog.Log("render", ...)` and skip (never throws from the draw loop).
+- **`DrawProjectilesHdr()`** (additive HDR pass) handles **only Fireball** — this is the one
+  branch that already renders `proj.FlipbookID` (via `_g._flipbooks.TryGetValue(fbId, ...)`,
+  animated by `fb.GetFrameAtTime(proj.Age)`), tinted by `proj.ParticleColor` (`HdrColor.ToHdrVertex`),
+  scaled by `proj.ParticleScale`, with a 2-frame velocity-aligned trail.
+
+**How the visual fields get ONTO the projectile:** `SpellEffectSystem.SpawnProjectile`
+(`Necroking/Game/SpellEffectSystem.cs`, the chokepoint) copies `spell.ProjectileFlipbook`
+→ `proj.FlipbookID/ParticleScale/ParticleColor` and `spell.HitEffectFlipbook` → the
+`HitEffect*` fields. AoE spells (`AoeRadius>0`) spawn as **Fireball** (so their flipbook
+shows); **single-target/zero-AoE spells spawn as Arrow** (the "fire single-target spells as
+arrows" commit) — and the Arrow draw branch ignores `FlipbookID`, so their configured
+`ProjectileFlipbook` is silently dropped. `FlipbookRef` (`SpellRegistry.cs`) fields:
+`FlipbookID`, `FPS`, `Scale`, `Color` (HdrColor), `Rotation`, `BlendMode` (Alpha/Additive),
+`Alignment` (Ground/Upright), `Duration`.
+
+**Where the fix goes:** the Arrow branch of `DrawProjectiles()` in
+`Necroking/GameRenderer.World.cs`. When `proj.FlipbookID` is set and loaded, render the
+flipbook oriented along `proj.Velocity` (reuse the `DrawProjectilesHdr` flipbook lookup +
+`ParticleColor`/`ParticleScale` logic, honoring `FlipbookRef.Alignment`/`BlendMode`) and
+fall back to the hardcoded pixel arrow only when no flipbook is set. If Additive/HDR is
+wanted for the dart, route flipbook-carrying arrows through `DrawProjectilesHdr` instead
+(mind the `Type != Fireball` guards in BOTH methods). No sim/spawn change is needed — the
+data already reaches the projectile; only the Arrow draw branch consumes too little of it.
+
 ### `Necroking/Game/PhysicsSystem.cs` — impulse knockback (units only)
 The 2.5D "popcorn" physics: a unit hit by an impulse enters `InPhysics` (AI/ORCA
 suspended, `AIControl.Interrupt` fired, Fall anim forced), flies with gravity/drag,
