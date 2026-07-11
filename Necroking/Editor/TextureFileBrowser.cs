@@ -238,6 +238,11 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
 
         bool blocked = ui.IsInputBlocked(ui.EffectiveLayer(0));
 
+        // Rows under the scrollbar column must not react to clicks meant for the bar.
+        var sbHit = totalItemH > contentH
+            ? EditorBase.VScrollbarHitRect(px + listW - 8, contentY, contentH)
+            : Rectangle.Empty;
+
         // Draw entries with clipping
         ui.BeginClip(contentRect);
 
@@ -251,7 +256,7 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
             if (iy >= contentY + contentH) break;
 
             var itemRect = new Rectangle(px + 2, iy, listW - 4, ItemH);
-            bool hovered = !blocked && ui.HitTest(itemRect);
+            bool hovered = !blocked && ui.HitTest(itemRect) && !sbHit.Contains(mouse.X, mouse.Y);
 
             bool isSelected = !entry.IsDirectory && entry.FullPath.Replace('\\', '/') == _selectedFile;
             if (isSelected)
@@ -294,14 +299,9 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
 
         ui.EndClip();
 
-        // Scrollbar — inside the list column, not under the preview panel.
+        // Scrollbar — inside the list column, not under the preview panel (draggable).
         if (totalItemH > contentH)
-        {
-            float scrollRatio = _scrollOffset / (totalItemH - contentH);
-            int barH = Math.Max(20, contentH * contentH / totalItemH);
-            int barY = contentY + (int)(scrollRatio * (contentH - barH));
-            ui.DrawRect(new Rectangle(px + listW - 10, barY, 7, barH), new Color(100, 100, 140, 180));
-        }
+            _scrollOffset = ui.DrawVScrollbar("texbrowser_files", px + listW - 8, contentY, contentH, totalItemH, _scrollOffset);
 
         // Preview panel (right side)
         int previewX = px + listW;

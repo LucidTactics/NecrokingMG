@@ -860,14 +860,11 @@ public class UnitEditorWindow
 
         _ui.EndClip(); // RU40: end scissor clip
 
-        // --- Scrollbar (outside clip so it's always visible) ---
+        // --- Scrollbar (outside clip so it's always visible; draggable) ---
+        // contentH includes the same +40 bottom padding the wheel clamp allows,
+        // so the draggable range matches the wheel range exactly.
         if (_maxPropHeight > h)
-        {
-            float scrollRatio = _propScrollOffset / (_maxPropHeight - h);
-            int barH = Math.Max(20, h * h / (int)_maxPropHeight);
-            int barY = y + (int)(scrollRatio * (h - barH));
-            _ui.DrawRect(new Rectangle(x + w - 8, barY, 6, barH), new Color(100, 100, 140, 180));
-        }
+            _propScrollOffset = _ui.DrawVScrollbar("unit_props", x + w - 7, y, h, _maxPropHeight + 40, _propScrollOffset);
     }
 
     // =========================================================================

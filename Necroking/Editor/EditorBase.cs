@@ -719,6 +719,18 @@ public class EditorBase
 
     // === Scrollable List ===
 
+    // Canonical scrollbar palette — every editor scrollbar uses these.
+    private static readonly Color ScrollTrackColor = new(30, 30, 45, 120);
+    private static readonly Color ScrollThumbColor = new(100, 100, 140, 180);
+    private static readonly Color ScrollThumbHotColor = new(140, 140, 185, 220);
+    private const int ScrollbarW = 5;
+    private const int ScrollbarMinThumbH = 20;
+
+    // Interactive-scrollbar drag state: which bar (by id) owns the current
+    // left-button drag, and the Y offset within the thumb where it was grabbed.
+    private string? _vscrollDragId;
+    private float _vscrollDragGrabOffset;
+
     /// <summary>The canonical thin vertical scrollbar (indicator-only, 5px wide
     /// with its left edge at x): a faint track spanning the viewport with a
     /// proportional thumb. No-op when the content fits. Pure draw — pair it
@@ -727,11 +739,63 @@ public class EditorBase
     public void DrawVScrollbar(int x, int y, int viewH, float contentH, float scroll)
     {
         if (viewH <= 0 || contentH <= viewH) return;
-        DrawRect(new Rectangle(x, y, 5, viewH), new Color(30, 30, 45, 120));
-        int barH = Math.Max(20, (int)(viewH * (float)viewH / contentH));
+        DrawRect(new Rectangle(x, y, ScrollbarW, viewH), ScrollTrackColor);
+        int barH = Math.Max(ScrollbarMinThumbH, (int)(viewH * (float)viewH / contentH));
         float ratio = Math.Clamp(scroll / (contentH - viewH), 0f, 1f);
         int barY = y + (int)(ratio * (viewH - barH));
-        DrawRect(new Rectangle(x, barY, 5, barH), new Color(100, 100, 140, 180));
+        DrawRect(new Rectangle(x, barY, ScrollbarW, barH), ScrollThumbColor);
+    }
+
+    /// <summary>Hit zone of an interactive scrollbar at (x, y, viewH): the 5px
+    /// bar plus padding so the thumb is easy to grab. Callers whose clickable
+    /// rows extend under the bar column must exclude this rect from their own
+    /// row hit tests (DrawScrollableList does this internally).</summary>
+    public static Rectangle VScrollbarHitRect(int x, int y, int viewH) => new(x - 4, y, ScrollbarW + 8, viewH);
+
+    /// <summary>Interactive variant of <see cref="DrawVScrollbar(int,int,int,float,float)"/>:
+    /// same canonical look, plus thumb-drag and track-click-jump (thumb centres
+    /// on the cursor) with a generous hit zone (<see cref="VScrollbarHitRect"/>).
+    /// Pass a stable unique id per bar. Returns the updated scroll value clamped
+    /// to [0, contentH - viewH]; returns 0 (drawing nothing) when the content
+    /// fits. Inert while an overlay owns input on the given layer (e.g. an open
+    /// combo dropdown overlapping the bar column).</summary>
+    public float DrawVScrollbar(string id, int x, int y, int viewH, float contentH, float scroll, int layer = 0)
+    {
+        // A mouse-up anywhere ends an in-progress drag (covers releasing off
+        // the bar, or the owning panel disappearing mid-drag).
+        if (_vscrollDragId != null && _mouse.LeftButton != ButtonState.Pressed) _vscrollDragId = null;
+        if (viewH <= 0 || contentH <= viewH) return 0f;
+
+        float maxScroll = contentH - viewH;
+        scroll = Math.Clamp(scroll, 0f, maxScroll);
+
+        int barH = Math.Max(ScrollbarMinThumbH, (int)(viewH * (float)viewH / contentH));
+        int travel = viewH - barH;
+        int barY = y + (int)(scroll / maxScroll * travel);
+        var thumbRect = new Rectangle(x, barY, ScrollbarW, barH);
+        var trackHit = VScrollbarHitRect(x, y, viewH);
+        bool overTrack = !IsInputBlocked(EffectiveLayer(layer)) && trackHit.Contains(_mouse.X, _mouse.Y);
+
+        // Grab the thumb, or click the track to jump.
+        if (overTrack && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+        {
+            _vscrollDragId = id;
+            _vscrollDragGrabOffset = thumbRect.Contains(_mouse.X, _mouse.Y) ? _mouse.Y - barY : barH / 2f;
+        }
+
+        // Apply drag: map the thumb-top position back to a scroll offset.
+        if (_vscrollDragId == id)
+        {
+            float frac = travel > 0 ? Math.Clamp((_mouse.Y - _vscrollDragGrabOffset - y) / travel, 0f, 1f) : 0f;
+            scroll = frac * maxScroll;
+            barY = y + (int)(frac * travel);
+        }
+        if (_vscrollDragId == id || overTrack) SetMouseOverUI();
+
+        bool hot = _vscrollDragId == id || (overTrack && thumbRect.Contains(_mouse.X, _mouse.Y));
+        DrawRect(new Rectangle(x, y, ScrollbarW, viewH), ScrollTrackColor);
+        DrawRect(new Rectangle(x, barY, ScrollbarW, barH), hot ? ScrollThumbHotColor : ScrollThumbColor);
+        return scroll;
     }
 
     /// <summary>
@@ -794,6 +858,18 @@ public class EditorBase
         int itemH = ScrollableListItemH;
         int clicked = -1;
 
+        // Visible (post-filter) row count — drives the wheel clamp and the bar.
+        int totalItems = 0;
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (searchFilter == null || items[i].Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
+                totalItems++;
+        }
+        float contentH = totalItems * (float)itemH;
+        float maxScroll = Math.Max(0, contentH - h);
+        // Rows under the scrollbar column must not react to clicks meant for the bar.
+        var sbHit = contentH > h ? VScrollbarHitRect(x + w - 6, y, h) : Rectangle.Empty;
+
         // Handle scroll wheel when hovering
         if (!inputBlocked && !_scrollConsumed && HitTest(clipRect))
         {
@@ -801,16 +877,7 @@ public class EditorBase
             int scrollDelta = _mouse.ScrollWheelValue - _prevMouse.ScrollWheelValue;
             if (scrollDelta != 0)
             {
-                scroll -= scrollDelta * 0.15f;
-                int totalH = 0;
-                for (int i = 0; i < items.Count; i++)
-                {
-                    if (searchFilter != null && !items[i].Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    totalH += itemH;
-                }
-                float maxScroll = Math.Max(0, totalH - h);
-                scroll = Math.Clamp(scroll, 0, maxScroll);
+                scroll = Math.Clamp(scroll - scrollDelta * 0.15f, 0, maxScroll);
                 _scrollOffsets[panelId] = scroll;
                 ConsumeScroll();
             }
@@ -867,7 +934,8 @@ public class EditorBase
             if (iy >= y + h) break;
 
             var itemRect = new Rectangle(x, iy, w, itemH);
-            bool hovered = !inputBlocked && itemRect.Contains(_mouse.X, _mouse.Y) && clipRect.Contains(_mouse.X, _mouse.Y);
+            bool hovered = !inputBlocked && itemRect.Contains(_mouse.X, _mouse.Y) && clipRect.Contains(_mouse.X, _mouse.Y)
+                && !sbHit.Contains(_mouse.X, _mouse.Y);
             if (hovered) SetMouseOverUI();
 
             Color bg;
@@ -887,14 +955,9 @@ public class EditorBase
 
         EndClip();
 
-        // Scrollbar
-        int totalItems = 0;
-        for (int i = 0; i < items.Count; i++)
-        {
-            if (searchFilter == null || items[i].Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
-                totalItems++;
-        }
-        DrawVScrollbar(x + w - 6, y, h, totalItems * itemH, scroll);
+        // Scrollbar (interactive: draggable thumb + track-click jump)
+        scroll = DrawVScrollbar(panelId, x + w - 6, y, h, contentH, scroll);
+        _scrollOffsets[panelId] = scroll;
 
         // Selecting a different object abandons any in-progress text-field edit.
         // The edit buffer (_inputBuffer) is keyed by a static field id ("wd_id",
@@ -1667,14 +1730,10 @@ public class EditorBase
 
         EndClip();
 
-        // Draw scrollbar indicator if scrollable
+        // Scrollbar indicator if scrollable (item-based scroll converted to pixels)
         if (dd.NeedsScroll)
-        {
-            float scrollRatio = dd.MaxScroll > 0 ? (float)scrollOffset / dd.MaxScroll : 0;
-            int barH = Math.Max(12, itemsDropH * dd.VisibleCount / Math.Max(1, dd.FilteredOptions.Length));
-            int barY = dd.ItemsY + (int)(scrollRatio * (itemsDropH - barH));
-            DrawRect(new Rectangle(inputX + inputW - 6, barY, 5, barH), new Color(100, 100, 140, 180));
-        }
+            DrawVScrollbar(inputX + inputW - 6, dd.ItemsY, itemsDropH,
+                dd.FilteredOptions.Length * ComboItemH, scrollOffset * ComboItemH);
 
         // Consume the pending overlay so nested editors that BOTH call
         // DrawDropdownOverlays (wall/env editor inside the map editor) don't
@@ -1958,14 +2017,8 @@ public class EditorBase
             }
         }
 
-        // Scrollbar
-        if (totalLines > visibleLines)
-        {
-            float scrollRatio = totalLines > visibleLines ? (float)_textAreaScrollOffset / (totalLines - visibleLines) : 0;
-            int barH = Math.Max(12, (h - 4) * visibleLines / totalLines);
-            int barY = y + 2 + (int)(scrollRatio * (h - 4 - barH));
-            DrawRect(new Rectangle(x + w - 6, barY, 5, barH), new Color(100, 100, 140, 180));
-        }
+        // Scrollbar indicator (line-based scroll converted to pixels)
+        DrawVScrollbar(x + w - 6, y + 2, h - 4, totalLines * lineH, _textAreaScrollOffset * lineH);
 
         return isActive ? _inputBuffer : (value ?? "");
     }
