@@ -1182,6 +1182,11 @@ public class MapEditorWindow
         // overlays everywhere except inside the panel itself.)
         DrawWorldOverlaysForActiveTab(screenW, screenH);
 
+        // Placed unit markers are world content too (visible on all tabs):
+        // they must draw BEFORE the panel so a marker whose screen position
+        // falls behind the side panel doesn't paint on top of the UI.
+        DrawPlacedUnitMarkers(screenW, screenH);
+
         // Panel background
         Scope.Draw(_pixel, new Rectangle(panelX, panelY, PanelWidth, panelH), BgColor);
 
@@ -1246,9 +1251,6 @@ public class MapEditorWindow
         // it) and above the zone overlays drawn at the top of this method.
         if (ActiveTab == MapEditorTab.Zones)
             DrawZoneLeftPanel(screenW, screenH);
-
-        // Always draw placed unit markers (visible on all tabs)
-        DrawPlacedUnitMarkers(screenW, screenH);
 
         // Bottom bar: map filename, Save/Load buttons, undo info, status message
         int bottomH = 90; // height of the bottom section
