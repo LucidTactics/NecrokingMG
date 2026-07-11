@@ -1666,6 +1666,7 @@
         "duration": -1
       },
       "quantity": 10,
+      "trajectory": "HighLob",
       "projectileSpeed": 45,
       "gravityScale": 1.5,
       "precisionBonus": -5,

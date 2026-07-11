@@ -245,8 +245,9 @@ public class BloomTestScenario : ScenarioBase
             var necroPos = sim.Units[necroIdx].Position;
             float angle = _elapsed * 1.5f;
             var target = new Vec2(14f + MathF.Cos(angle) * 8f, 10f + MathF.Sin(angle) * 6f);
-            sim.Projectiles.SpawnFireball(necroPos, target, Faction.Undead,
-                sim.Units[necroIdx].Id, 0, 1.5f, "Fireball");
+            sim.Projectiles.Spawn(necroPos, target, Faction.Undead, sim.Units[necroIdx].Id,
+                ProjectileType.Explosive, damage: 0, ProjectileManager.MagicSpeed, lob: true,
+                aoeRadius: 1.5f, weaponName: "Fireball");
         }
     }
 

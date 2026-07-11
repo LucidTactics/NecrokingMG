@@ -335,14 +335,14 @@ partial class GameRenderer
     }
 
     /// <summary>True when this projectile renders in the additive HDR pass
-    /// (DrawProjectilesHdr) instead of the plain alpha pass: fireballs always, and
-    /// any arrow-type projectile carrying a loaded projectile flipbook — spells fired
-    /// as arrows are magic darts and use their SpellDef's ProjectileFlipbook visuals,
-    /// not the hardcoded arrow shaft. An arrow whose flipbook is missing/unloaded
-    /// falls back to the classic arrow rendering rather than a fireball glow.</summary>
+    /// (DrawProjectilesHdr) instead of the plain alpha pass: explosives always, and
+    /// any Direct projectile carrying a loaded projectile flipbook — spells fired
+    /// as Direct are magic darts and use their SpellDef's ProjectileFlipbook visuals,
+    /// not the hardcoded arrow shaft. A Direct projectile whose flipbook is missing/
+    /// unloaded falls back to the classic arrow rendering rather than a fireball glow.</summary>
     private bool RendersInHdrPass(Projectile proj)
-        => proj.Type == ProjectileType.Fireball
-        || (proj.Type == ProjectileType.Arrow
+        => proj.Type == ProjectileType.Explosive
+        || (proj.Type == ProjectileType.Direct
             && !string.IsNullOrEmpty(proj.FlipbookID)
             && _g._flipbooks.TryGetValue(proj.FlipbookID, out var fb) && fb.IsLoaded);
 
@@ -351,7 +351,7 @@ partial class GameRenderer
         foreach (var proj in _g._sim.Projectiles.Projectiles)
         {
             if (!proj.Alive) continue;
-            // Fireballs and flipbook-carrying spell arrows are drawn in the additive
+            // Explosives and flipbook-carrying magic darts are drawn in the additive
             // HDR pass (DrawProjectilesHdr)
             if (RendersInHdrPass(proj)) continue;
             // Fog of war: hide projectile if its current tile isn't visible.
@@ -359,7 +359,7 @@ partial class GameRenderer
 
             var sp = _g._renderer.WorldToScreen(proj.Position, proj.Height, _g._camera);
 
-            if (proj.Type == ProjectileType.Arrow)
+            if (proj.Type == ProjectileType.Direct)
             {
                 // Oriented arrow shaft
                 float angle = MathF.Atan2(proj.Velocity.Y * _g._camera.YRatio, proj.Velocity.X);

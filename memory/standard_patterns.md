@@ -84,7 +84,7 @@ CLAUDE.md → "Standard Patterns Reference".)
   ballistics (FireArrowAt) and pounce (InitiatePounceWithWeapon). Any spell
   launching something at a moving unit calls this — never re-derive the
   intercept inline. Leading happens in the CALLER; position consumers
-  (SpawnArrow, BeginPounce) take the already-led point.
+  (ProjectileManager.Spawn, BeginPounce) take the already-led point.
 - **Melee engage range** — `GameSystems.Combat.MeleeRangeUtil.Compute`
   (single source for "am I close enough to melee", sim + AI handlers).
 - **World queries (nearest / under-cursor / in-radius) — `_sim.Query`**

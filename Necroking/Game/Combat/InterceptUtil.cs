@@ -8,8 +8,8 @@ namespace Necroking.GameSystems.Combat;
 /// pounce landing pick (InitiatePounceWithWeapon); any spell that launches
 /// something at a moving unit should call this rather than re-deriving the
 /// intercept math. Leading belongs in the CALLER (where target velocity is
-/// legitimately known) — position consumers like SpawnArrow / BeginPounce
-/// take the already-led point by design.
+/// legitimately known) — position consumers like ProjectileManager.Spawn /
+/// BeginPounce take the already-led point by design.
 /// </summary>
 public static class InterceptUtil
 {

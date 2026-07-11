@@ -363,8 +363,9 @@ public class SpellVisualTestScenario : ScenarioBase
 
     private void CastProjectile(Simulation sim, string spellID, Vec2 target)
     {
-        sim.Projectiles.SpawnFireball(_necroPos, target, Faction.Undead, _necroUid,
-            18, 4f, "Nether Blast");
+        sim.Projectiles.Spawn(_necroPos, target, Faction.Undead, _necroUid,
+            ProjectileType.Explosive, damage: 18, ProjectileManager.MagicSpeed, lob: true,
+            aoeRadius: 4f, weaponName: "Nether Blast");
         DebugLog.Log(ScenarioLog, $"Fired projectile '{spellID}' toward ({target.X:F1}, {target.Y:F1})");
     }
 

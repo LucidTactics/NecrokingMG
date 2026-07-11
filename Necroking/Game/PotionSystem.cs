@@ -61,32 +61,31 @@ public static class PotionSystem
 
         // Throw projectile — arc starts at the thrower's animation-driven hand tip.
         uint necroUid = units[necroIdx].Id;
-        projectiles.SpawnPotionLob(necroPos, mouseWorld, units[necroIdx].Faction, necroUid,
-            potionId, potion.ProjectileScale, spawnHeight: units[necroIdx].EffectSpawnHeight);
+        float speed = ProjectileManager.MagicSpeed * 0.7f; // potions are slower than spell shots
+        var proj = projectiles.Spawn(necroPos, mouseWorld, units[necroIdx].Faction, necroUid,
+            ProjectileType.Potion, damage: 0, speed, lob: true, aoeRadius: 1.0f,
+            spawnHeight: units[necroIdx].EffectSpawnHeight);
 
-        // Set visuals on the spawned projectile
-        var projs = projectiles.Projectiles;
-        if (projs.Count > 0)
+        // Potion payload + visuals
+        proj.PotionID = potionId;
+        proj.ParticleScale = potion.ProjectileScale;
+        // Set icon texture path for potion sprite rendering
+        proj.IconTexturePath = potion.Icon;
+        proj.HitsCorpses = potion.HitsCorpses;
+        proj.PotionTargetType = potion.TargetType;
+        if (potion.ProjectileFlipbook != null)
         {
-            var lastProj = projs[projs.Count - 1];
-            // Set icon texture path for potion sprite rendering
-            lastProj.IconTexturePath = potion.Icon;
-            lastProj.HitsCorpses = potion.HitsCorpses;
-            lastProj.PotionTargetType = potion.TargetType;
-            if (potion.ProjectileFlipbook != null)
-            {
-                lastProj.FlipbookID = potion.ProjectileFlipbook.FlipbookID;
-                lastProj.ParticleScale = potion.ProjectileFlipbook.Scale;
-                lastProj.ParticleColor = potion.ProjectileFlipbook.Color;
-            }
-            if (potion.HitEffectFlipbook != null)
-            {
-                lastProj.HitEffectFlipbookID = potion.HitEffectFlipbook.FlipbookID;
-                lastProj.HitEffectScale = potion.HitEffectFlipbook.Scale;
-                lastProj.HitEffectColor = potion.HitEffectFlipbook.Color;
-                lastProj.HitEffectBlendMode = potion.HitEffectFlipbook.BlendMode == "Additive" ? 1 : 0;
-                lastProj.HitEffectAlignment = potion.HitEffectFlipbook.Alignment == "Upright" ? 1 : 0;
-            }
+            proj.FlipbookID = potion.ProjectileFlipbook.FlipbookID;
+            proj.ParticleScale = potion.ProjectileFlipbook.Scale;
+            proj.ParticleColor = potion.ProjectileFlipbook.Color;
+        }
+        if (potion.HitEffectFlipbook != null)
+        {
+            proj.HitEffectFlipbookID = potion.HitEffectFlipbook.FlipbookID;
+            proj.HitEffectScale = potion.HitEffectFlipbook.Scale;
+            proj.HitEffectColor = potion.HitEffectFlipbook.Color;
+            proj.HitEffectBlendMode = potion.HitEffectFlipbook.BlendMode == "Additive" ? 1 : 0;
+            proj.HitEffectAlignment = potion.HitEffectFlipbook.Alignment == "Upright" ? 1 : 0;
         }
 
         inventory.RemoveItem(potion.ItemID, 1);

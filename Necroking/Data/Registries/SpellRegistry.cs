@@ -243,7 +243,7 @@ public class SpellDef : INamedDef
 
     [EditorVisible("Category", "Projectile")]
     [EditorField(Label = "Trajectory", Group = "PROJECTILE", Order = 201)]
-    [EditorCombo("Lob", "DirectFire", "Homing", "Swirly", "HomingSwirly")]
+    [EditorCombo("Lob", "HighLob", "DirectFire", "Homing", "Swirly", "HomingSwirly")]
     [JsonPropertyName("trajectory")] public string Trajectory { get; set; } = "Lob";
 
     [EditorVisible("Category", "Projectile")]

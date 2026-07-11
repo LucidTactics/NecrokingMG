@@ -826,7 +826,7 @@ public class Simulation
                     // Plain arrows resolve Dominions-style (dodge roll + hit-location
                     // armor); spell projectiles auto-hit but run the standard damage
                     // pipeline (armor + toughness, honoring the spell's AN/DN flags).
-                    if (hit.ProjectileType == ProjectileType.Arrow
+                    if (hit.ProjectileType == ProjectileType.Direct
                         && string.IsNullOrEmpty(hit.SpellID) && hit.Precision > 0)
                         ResolveArrowHit(hit, casterIdx);
                     else if (spellDef != null)
@@ -2474,8 +2474,9 @@ public class Simulation
         float dist = (aim - from).Length();
 
         bool direct = dist <= directRange && IsFireLaneClear(attackerIdx, aim);
-        _projectiles.SpawnArrow(from, aim, _units[attackerIdx].Faction, _units[attackerIdx].Id,
-            damage, volley: !direct, precision, weaponName,
+        _projectiles.Spawn(from, aim, _units[attackerIdx].Faction, _units[attackerIdx].Id,
+            ProjectileType.Direct, damage, ProjectileManager.ArrowSpeed, lob: !direct,
+            precision: precision, weaponName: weaponName,
             spawnHeight: _units[attackerIdx].EffectSpawnHeight);
     }
 

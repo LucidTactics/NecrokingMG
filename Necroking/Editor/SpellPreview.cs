@@ -978,6 +978,13 @@ public class SpellPreview
                 p.VelocityZ = speed * MathF.Sin(theta);
                 break;
             }
+            case "HighLob":
+            {
+                float theta = ProjectileManager.SolveLobTheta(dist, speed, preferLob: true);
+                p.Velocity = dir * speed * MathF.Cos(theta);
+                p.VelocityZ = speed * MathF.Sin(theta);
+                break;
+            }
             case "DirectFire":
             {
                 float theta = ProjectileManager.DirectFireTheta;

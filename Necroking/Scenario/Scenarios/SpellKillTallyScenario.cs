@@ -77,8 +77,9 @@ public class SpellKillTallyScenario : ScenarioBase
             {
                 var from = units[ci].Position;
                 var to = units[di].Position;
-                sim.Projectiles.SpawnFireball(from, to, Faction.Undead, _casterID,
-                    damage: 1000, aoeRadius: 2.0f, weaponName: "TestBolt");
+                sim.Projectiles.Spawn(from, to, Faction.Undead, _casterID,
+                    ProjectileType.Explosive, damage: 1000, ProjectileManager.MagicSpeed,
+                    lob: true, aoeRadius: 2.0f, weaponName: "TestBolt");
                 _fired = true;
                 DebugLog.Log(ScenarioLog, $"t={_t:F2}s: fired fireball from caster {_casterID} at deer {_deerID} (dmg=1000, aoe=2.0)");
             }

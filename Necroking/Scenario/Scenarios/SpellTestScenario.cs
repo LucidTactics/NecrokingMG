@@ -71,8 +71,9 @@ public class SpellTestScenario : ScenarioBase
                     var targetPos = _enemyPositions[_castIndex];
                     uint necroUid = sim.Units[necroIdx].Id;
 
-                    sim.Projectiles.SpawnFireball(necroPos, targetPos, Faction.Undead, necroUid,
-                        25, 1.5f, "Fireball");
+                    sim.Projectiles.Spawn(necroPos, targetPos, Faction.Undead, necroUid,
+                        ProjectileType.Explosive, damage: 25, ProjectileManager.MagicSpeed,
+                        lob: true, aoeRadius: 1.5f, weaponName: "Fireball");
                     _projectilesFired++;
                     DebugLog.Log(ScenarioLog, $"Cast fireball #{_projectilesFired} at enemy {_castIndex} pos=({targetPos.X:F1}, {targetPos.Y:F1})");
                 }

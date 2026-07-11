@@ -18,7 +18,7 @@ public class Projectile
     /// flat. The launch solve is fed the SAME scaled gravity, so a lob still lands on its
     /// target — only the arc shape changes.</summary>
     public float GravityScale = 1f;
-    public ProjectileType Type = ProjectileType.Arrow;
+    public ProjectileType Type = ProjectileType.Direct;
     public Faction OwnerFaction = Faction.Human;
     public uint OwnerID = GameConstants.InvalidUnit;
     public int Damage;
@@ -84,7 +84,7 @@ public class ProjectileHit
     public Faction OwnerFaction = Faction.Human;
     public int Precision;
     public string WeaponName = "";
-    public ProjectileType ProjectileType = ProjectileType.Arrow;
+    public ProjectileType ProjectileType = ProjectileType.Direct;
     public string PotionID = "";
     public Vec2 ImpactPos;
     public int CorpseHitIdx = -1;
@@ -104,8 +104,8 @@ public class ProjectileManager
     public const float Gravity = 13.89f;
 
     private const float UnitHitHeight = 2.0f;
-    private const float FireballHitHeight = 5.0f;
-    private const float FireballArmTime = 0.15f;
+    private const float ExplosiveHitHeight = 5.0f;
+    private const float ExplosiveArmTime = 0.15f;
     private const float HitRadius = 0.6f;
     private const float PotionHitRadius = 1.0f;
     private const float PotionHitHeight = 3.0f;
@@ -166,28 +166,37 @@ public class ProjectileManager
     }
 
     /// <summary>
-    /// Spawn an arrow projectile. <paramref name="spawnHeight"/> is the arrow's
-    /// starting world-unit height above the ground — pass the attacker's
-    /// <c>Unit.EffectSpawnHeight</c> (set by <c>UpdateEffectSpawnPositions</c> from
-    /// the weapon-tip anim point) so the arc starts at the bow tip rather than a
-    /// generic body offset. The 0.6 default is the "no weapon-tip data" fallback
-    /// and should only be used by tests / non-unit sources.
+    /// Spawn a projectile — the single entry point for every projectile in the game
+    /// (unit arrows, spell shots, potion lobs, dev fireballs). What it does on contact
+    /// is <paramref name="type"/> (see <see cref="ProjectileType"/>); how it flies is
+    /// <paramref name="lob"/>: false = flat direct fire at <see cref="DirectFireTheta"/>,
+    /// true = ballistic arc solved to land on the target. A Direct lob (arrow volley)
+    /// additionally scatters around the target (worse <paramref name="precision"/> =
+    /// wider) and clamps the arc to [10°, 45°] so short lobs still rise visibly over
+    /// allies' heads; an Explosive/Potion lob flies the exact min-energy arc, or the
+    /// high arc when <paramref name="preferHighArc"/> is set.
+    /// <paramref name="spawnHeight"/> is the starting world-unit height above ground —
+    /// pass the shooter's <c>Unit.EffectSpawnHeight</c> (set by
+    /// <c>UpdateEffectSpawnPositions</c> from the weapon-tip anim point) so the arc
+    /// starts at the bow tip / staff / throwing hand. The 0.6 default is the "no
+    /// weapon-tip data" fallback and should only be used by tests / non-unit sources.
+    /// Returns the spawned projectile so callers can post-configure it (SpellID,
+    /// flipbooks, homing, potion payload, ...).
     /// </summary>
-    public void SpawnArrow(Vec2 from, Vec2 target, Faction faction, uint owner, int damage,
-                           bool volley, int precision, string weaponName = "", float spawnHeight = 0.6f,
-                           float gravityScale = 1f, float speed = ArrowSpeed)
+    public Projectile Spawn(Vec2 from, Vec2 target, Faction faction, uint owner,
+                            ProjectileType type, int damage, float speed, bool lob,
+                            float aoeRadius = 0f, int precision = 0, string weaponName = "",
+                            float spawnHeight = 0.6f, float gravityScale = 1f,
+                            bool preferHighArc = false)
     {
         PrepAim(from, target, out var dir, out float dist);
 
-        var p = new Projectile
+        float theta;
+        if (!lob)
         {
-            Position = from, Height = spawnHeight, Type = ProjectileType.Arrow,
-            OwnerFaction = faction, OwnerID = owner, Damage = damage,
-            Precision = precision, WeaponName = weaponName, IsLob = volley,
-            GravityScale = gravityScale
-        };
-
-        if (volley)
+            theta = DirectFireTheta;
+        }
+        else if (type == ProjectileType.Direct)
         {
             float precFactor = MathF.Sqrt(precision / 10f);
             float scatterRadius = (dist / 40f) * 3f / MathF.Max(precFactor, 0.1f);
@@ -196,64 +205,25 @@ public class ProjectileManager
             target += new Vec2(MathF.Cos(scatterAngle), MathF.Sin(scatterAngle)) * scatterDist;
             dir = (target - from).Normalized();
             dist = (target - from).Length();
-
-            float theta = SolveLobTheta(dist, speed, 10f * Deg2Rad, 45f * Deg2Rad, Gravity * gravityScale);
-            (p.Velocity, p.VelocityZ) = BallisticVelocity(dir, speed, theta);
+            theta = SolveLobTheta(dist, speed, 10f * Deg2Rad, 45f * Deg2Rad, Gravity * gravityScale);
         }
         else
         {
-            (p.Velocity, p.VelocityZ) = BallisticVelocity(dir, speed, DirectFireTheta);
+            theta = SolveLobTheta(dist, speed, gravity: Gravity * gravityScale, preferLob: preferHighArc);
         }
 
-        _projectiles.Add(p);
-    }
-
-    /// <summary>
-    /// Spawn a fireball projectile. See SpawnArrow for the spawnHeight convention —
-    /// use the caster's <c>Unit.EffectSpawnHeight</c> for animation-accurate origin.
-    /// </summary>
-    public void SpawnFireball(Vec2 from, Vec2 target, Faction faction, uint owner,
-                              int damage, float aoeRadius, string weaponName = "", float spawnHeight = 0.6f,
-                              float gravityScale = 1f, float speed = MagicSpeed, bool IsLob=false)
-    {
-        PrepAim(from, target, out var dir, out float dist);
-        var (vel, velZ) = BallisticVelocity(dir, speed, SolveLobTheta(dist, speed, gravity: Gravity * gravityScale, preferLob: IsLob));
-
-        _projectiles.Add(new Projectile
+        var p = new Projectile
         {
-            Position = from, Height = spawnHeight, Type = ProjectileType.Fireball,
+            Position = from, Height = spawnHeight, Type = type,
             OwnerFaction = faction, OwnerID = owner, Damage = damage,
-            AoeRadius = aoeRadius, WeaponName = weaponName,
-            NoFriendlyFire = false, IsLob = true,
-            Velocity = vel,
-            VelocityZ = velZ,
-            GravityScale = gravityScale
-        });
-    }
-
-    /// <summary>
-    /// Spawn a potion-lob projectile. See SpawnArrow for the spawnHeight convention —
-    /// use the thrower's <c>Unit.EffectSpawnHeight</c> so the arc starts at the throwing hand.
-    /// </summary>
-    public void SpawnPotionLob(Vec2 from, Vec2 target, Faction faction, uint owner,
-                               string potionId, float scale = 0.5f, float spawnHeight = 0.6f,
-                               float gravityScale = 1f)
-    {
-        PrepAim(from, target, out var dir, out float dist);
-        float speed = MagicSpeed * 0.7f; // potions are slower than fireballs
-        var (vel, velZ) = BallisticVelocity(dir, speed, SolveLobTheta(dist, speed, gravity: Gravity * gravityScale));
-
-        _projectiles.Add(new Projectile
-        {
-            Position = from, Height = spawnHeight, Type = ProjectileType.Potion,
-            OwnerFaction = faction, OwnerID = owner, Damage = 0,
-            AoeRadius = 1.0f, PotionID = potionId,
-            NoFriendlyFire = false, IsLob = true,
-            ParticleScale = scale,
-            Velocity = vel,
-            VelocityZ = velZ,
-            GravityScale = gravityScale
-        });
+            AoeRadius = aoeRadius, Precision = precision, WeaponName = weaponName,
+            // A Direct shot respects factions; explosions and potion splashes hit everyone.
+            NoFriendlyFire = type == ProjectileType.Direct,
+            IsLob = lob, GravityScale = gravityScale, BaseDirection = dir
+        };
+        (p.Velocity, p.VelocityZ) = BallisticVelocity(dir, speed, theta);
+        _projectiles.Add(p);
+        return p;
     }
 
     public void Update(float dt, UnitArrays units, Quadtree qt) => Update(dt, units, qt, null);
@@ -306,7 +276,7 @@ public class ProjectileManager
             // crosses its target's horizontal position, rather than overshooting to
             // wherever the ballistic arc meets the ground (short lobs launched from
             // staff height otherwise sail well past where you clicked).
-            if (proj.Alive && proj.DetonateAtTarget && proj.Age > FireballArmTime)
+            if (proj.Alive && proj.DetonateAtTarget && proj.Age > ExplosiveArmTime)
             {
                 var toTarget = proj.TargetPos - proj.Position;
                 if (proj.Velocity.LengthSq() > 1e-4f && toTarget.Dot(proj.Velocity) <= 0f)
@@ -319,9 +289,9 @@ public class ProjectileManager
                 }
             }
 
-            // Fireball in-flight collision
-            if (proj.Alive && proj.Type == ProjectileType.Fireball &&
-                proj.Age > FireballArmTime && proj.Height < FireballHitHeight)
+            // Explosive in-flight collision
+            if (proj.Alive && proj.Type == ProjectileType.Explosive &&
+                proj.Age > ExplosiveArmTime && proj.Height < ExplosiveHitHeight)
             {
                 nearbyIDs.Clear();
                 float collisionRadius = MathF.Max(proj.AoeRadius * 0.5f, HitRadius);
@@ -358,8 +328,8 @@ public class ProjectileManager
                 }
             }
 
-            // Arrow in-flight collision
-            if (proj.Alive && proj.Type == ProjectileType.Arrow && proj.Height < UnitHitHeight && proj.Height > 0f)
+            // Direct-hit in-flight collision (arrows, magic darts)
+            if (proj.Alive && proj.Type == ProjectileType.Direct && proj.Height < UnitHitHeight && proj.Height > 0f)
             {
                 nearbyIDs.Clear();
                 if (proj.NoFriendlyFire)
@@ -493,7 +463,7 @@ public class ProjectileManager
                         if (d < bestDist) { bestDist = d; bestIdx = idx; }
                     }
                     if (bestIdx >= 0)
-                        _hits.Add(new ProjectileHit { UnitIdx = bestIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type, SpellID = proj.SpellID, ImpactPos = proj.Position, HitLocation = proj.Type == ProjectileType.Arrow ? RollArrowHitLocation(proj.IsLob) : HitLocation.Chest, FlightDir = proj.Velocity, ImpactForce = proj.ImpactForce, ImpactUpward = proj.ImpactUpward });
+                        _hits.Add(new ProjectileHit { UnitIdx = bestIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type, SpellID = proj.SpellID, ImpactPos = proj.Position, HitLocation = proj.Type == ProjectileType.Direct ? RollArrowHitLocation(proj.IsLob) : HitLocation.Chest, FlightDir = proj.Velocity, ImpactForce = proj.ImpactForce, ImpactUpward = proj.ImpactUpward });
                 }
                 _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = proj.AoeRadius, SpellID = proj.SpellID, HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale, HitEffectBlendMode = proj.HitEffectBlendMode, HitEffectAlignment = proj.HitEffectAlignment });
                 proj.Alive = false;

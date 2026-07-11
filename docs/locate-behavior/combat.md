@@ -94,24 +94,30 @@ forwards to it so AI and sim share one formula (they previously drifted — 1.5f
   non-Undead unit within `maxRange` of `worldPos`; squared-distance, no path/LoS.
 
 ### Ranged / projectiles — `Necroking/Game/Projectile.cs` (namespace `Necroking.GameSystems`)
-**`ProjectileManager`** owns all projectiles (arrows, fireballs, potion lobs): spawn API +
+**`ProjectileManager`** owns all projectiles (arrows, spell shots, potion lobs): spawn API +
 per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, produces
 `Hits`/`Impacts` lists consumed by `Simulation`).
-- **`SpawnArrow(from, target, faction, owner, damage, volley, precision, weaponName,
-  spawnHeight)`** — `volley:false` = near-flat 5° direct shot; **`volley:true` = ballistic
-  lob**: solves launch angle from `dist*Gravity/speed²`, clamped 10°–45°, plus
-  precision-scaled scatter (`Projectile.IsLob`). So **arcing shots already exist** — the
-  choice is made by the CALLER (`Simulation.ResolvePendingAttack` ranged branch uses
-  `volley = dist > maxRange*0.4f`). `spawnHeight` should be the attacker's
-  `Unit.EffectSpawnHeight` (bow-tip anim point).
-- `SpawnFireball` / `SpawnPotionLob` — always-lobbed variants; `DetonateAtTarget` bursts
+- **ONE spawn entry point**: **`Spawn(from, target, faction, owner, type, damage, speed,
+  lob, aoeRadius, precision, weaponName, spawnHeight, gravityScale, preferHighArc)`**
+  returns the spawned `Projectile` for post-configuration (SpellID, flipbooks, homing,
+  potion payload). `ProjectileType` is behavior-named: **`Direct`** strikes the first unit
+  it touches along its flight path (arrows, magic darts), **`Explosive`** bursts on
+  proximity/ground with AoE, **`Potion`** delivers a potion payload to the closest
+  unit/corpse. `lob:false` = near-flat 5° direct shot; `lob:true` = ballistic arc solved
+  from `dist*Gravity/speed²`. A **Direct lob** (arrow volley) also gets precision-scaled
+  scatter + a 10°–45° arc clamp; an Explosive/Potion lob flies the exact min-energy arc
+  (or the mortar-style high arc with `preferHighArc`, spell `Trajectory` `"HighLob"`).
+  `NoFriendlyFire` derives from type (Direct respects factions; Explosive/Potion hit
+  everyone). Arc choice is made by the CALLER (`Simulation.FireArrowAt` uses
+  `lob = !(dist <= directRange && IsFireLaneClear)`). `spawnHeight` should be the
+  attacker's `Unit.EffectSpawnHeight` (bow-tip anim point). `DetonateAtTarget` bursts
   exactly at the aimed point instead of overshooting.
 - **Target leading exists in ONE place**: `Simulation.FireArrowAt(attackerIdx, defenderIdx,
   weaponIdx)` (the single arrow-ballistics chokepoint called by both the
   `ResolvePendingAttack` ranged branch and legacy `ArcherAttack`) does a one-iteration
   linear lead — `aim += defender.Velocity * (dist / ProjectileManager.ArrowSpeed)` — inline,
   not via any shared helper. It also picks direct-vs-lob (`IsFireLaneClear`) and passes
-  precision to `SpawnArrow`. **Pounce now leads too** via the shared
+  precision to `ProjectileManager.Spawn`. **Pounce now leads too** via the shared
   `Necroking/Game/Combat/InterceptUtil.cs` (`PredictPosition`/`ClampLeadOvershoot` —
   the single source for target leading; new launched-at-moving-unit abilities should
   call it). Trample (straight per-frame homing in `TrampleSystem.TickCharge`) and
@@ -124,8 +130,8 @@ per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, pr
   `PendingAttack` + `PendingWeaponIdx/PendingWeaponIsRanged/PendingRangedTarget` →
   anim hit frame → `ResolvePendingAttack` ranged branch (`isRanged ||
   Archetype == ArcherUnit`): re-resolves the target by stored ID, reads
-  `Stats.RangedDmg/RangedRange[weaponIdx]`, calls `SpawnArrow`. **No range/LoS re-check at
-  resolve** (same stamp-time-gating rule as melee).
+  `Stats.RangedDmg/RangedRange[weaponIdx]`, calls `ProjectileManager.Spawn` (via
+  `FireArrowAt`). **No range/LoS re-check at resolve** (same stamp-time-gating rule as melee).
 - **Legacy path**: `AIBehavior.ArcherAttack` in `Simulation.UpdateAI` (`~line 1046`)
   spawns arrows directly (no anim sync) for archetype-less units — don't extend it; new
   ranged behavior belongs in `RangedUnitHandler`.
@@ -156,12 +162,14 @@ per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, pr
   all launch at a fixed 5° and still take full gravity, so their max flat-ground travel is
   ≈ `speed²·sin(10°)/Gravity` + spawn-height bonus — ~19–20u at speed 28.3. Raising a
   spell's `range` past that makes the cast legal but the projectile lands/detonates midway.
-  Only `Lob` (the `SpawnFireball` default) solves the launch angle from the actual distance
-  (`asin(dist·Gravity/speed²)`, silently clamped when `dist > speed²/Gravity`).
+  Only `Lob`/`HighLob` (`Lob` is the trajectory default) solve the launch angle from the
+  actual distance (`asin(dist·Gravity/speed²)`, silently clamped when
+  `dist > speed²/Gravity`; `HighLob` takes the mirrored high arc).
 - **Spell-projectile spawn/config chokepoint**: `SpellEffectSystem.SpawnProjectile(spell,
   projectiles, origin, target, ownerUid, spawnHeight, casterFaction)` — calls
-  `SpawnFireball` then post-configures the last projectile from the `SpellDef` (SpellID
-  tag, Trajectory Direct/Swirly/Homing/Lob, DetonateAtTarget for Blight, flipbooks).
+  `ProjectileManager.Spawn` (Explosive when `AoeRadius > 0`, else Direct) and
+  post-configures the returned projectile from the `SpellDef` (SpellID tag, homing/swirl
+  trajectories, DetonateAtTarget for Blight, flipbooks).
   Called from `SpellEffectSystem` cast paths and `Game1.Spells.cs`
   (`TickPendingProjectiles` staggered Quantity>1 shots) — a new per-projectile field set
   here covers every shot.

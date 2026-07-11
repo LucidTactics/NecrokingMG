@@ -43,7 +43,14 @@ public enum AIBehavior : byte
     Caster,   // migrated to CasterUnit archetype; kept so old def "ai" strings parse harmlessly
 }
 
-public enum ProjectileType : byte { Arrow, Fireball, Potion }
+/// <summary>
+/// What a projectile does when it reaches something — named for behavior, not visuals.
+/// Direct strikes the first unit it touches along its flight path (arrows, magic darts);
+/// Explosive bursts on proximity/ground impact and deals AoE damage; Potion delivers a
+/// potion payload to the closest unit/corpse where it lands. How it flies (flat vs lob)
+/// is the separate <c>lob</c> argument to <c>ProjectileManager.Spawn</c>.
+/// </summary>
+public enum ProjectileType : byte { Direct, Explosive, Potion }
 public enum HitLocation : byte { Head, Arms, Chest, Legs, Feet }
 
 /// <summary>
@@ -64,7 +71,7 @@ public enum Affliction : byte
 
 public enum SpellCategory : byte { Projectile, Buff, Debuff, Summon, Strike, Beam, Drain, Command, Toggle }
 public enum AOEType : byte { Single, AOE, Chain }
-public enum Trajectory : byte { Lob, DirectFire, Homing, Swirly, HomingSwirly }
+public enum Trajectory : byte { Lob, DirectFire, Homing, Swirly, HomingSwirly, HighLob }
 public enum SummonTargetReq : byte { None, Corpse, UnitType, CorpseAOE }
 public enum SummonMode : byte { Spawn, Transform }
 public enum StrikeVisual : byte { Lightning, GodRay }

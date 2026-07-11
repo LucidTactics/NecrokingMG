@@ -17,7 +17,6 @@ public class WeaponDef : INamedDef
     [JsonPropertyName("cooldown")] public float Cooldown { get; set; }
     [JsonPropertyName("rangedDamage")] public int RangedDamage { get; set; }
     [JsonPropertyName("precision")] public int Precision { get; set; }
-    [JsonPropertyName("projectileType")] public string ProjectileType { get; set; } = "Arrow";
     [JsonPropertyName("bonuses")] public List<string> Bonuses { get; set; } = new();
     /// <summary>
     /// Animation name to play when this weapon is used. Examples: "Attack1", "Attack2",
