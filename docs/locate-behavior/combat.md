@@ -204,10 +204,29 @@ Where each in-flight projectile is drawn. **Two separate draw methods, split by 
     icon), fallback colored dot — the one type that already keys visuals off a per-projectile
     field.
   - Unknown types → `DebugLog.Log("render", ...)` and skip (never throws from the draw loop).
-- **`DrawProjectilesHdr()`** (additive HDR pass) handles **only Fireball** — this is the one
-  branch that already renders `proj.FlipbookID` (via `_g._flipbooks.TryGetValue(fbId, ...)`,
-  animated by `fb.GetFrameAtTime(proj.Age)`), tinted by `proj.ParticleColor` (`HdrColor.ToHdrVertex`),
-  scaled by `proj.ParticleScale`, with a 2-frame velocity-aligned trail.
+- **`DrawProjectilesHdr()`** (additive HDR pass) renders `proj.FlipbookID` (via
+  `_g._flipbooks.TryGetValue(fbId, ...)`, animated by `fb.GetFrameAtTime(proj.Age)`), tinted
+  by `proj.ParticleColor` (`HdrColor.ToHdrVertex`), scaled by `proj.ParticleScale`, with a
+  2-frame trail (main + 2 fading previous frames). Pass membership = `RendersInHdrPass(proj)`
+  (Explosive always, or a **Direct** projectile carrying a loaded flipbook — this is the path
+  spell "magic dart"/barrage projectiles take).
+  - **TRAIL / TAIL ORIENTATION does NOT follow the trajectory** (the "trail doesn't face
+    travel direction" bug). Two separate defects, both in this method's flipbook branch
+    (`Necroking/GameRenderer.World.cs`, ~lines 486–505):
+    1. **Sprite rotation is a constant age-spin, not velocity-facing** — every trail frame is
+       drawn with rotation `proj.Age * 2f`, so the dart just spins regardless of heading.
+    2. **The trail offset is XY-only, ignoring the vertical (Z) arc** — `velDir =
+       proj.Velocity.Normalized()` (world XY), and the trail sits at
+       `sp.Y - velDir.Y * trailOffset * YRatio`. On a lobbed/`HighLob` arc most of the
+       on-screen vertical motion comes from **`proj.VelocityZ`** (height), which this omits.
+  - **Fix:** compute the SCREEN-space travel direction including Z. From `Camera25D.WorldToScreen`
+    (`sy = worldY*Zoom*YRatio − worldHeight*Zoom*YRatio`), screen velocity is
+    `dx = Velocity.X`, `dy = (Velocity.Y − VelocityZ) * YRatio`. So
+    `faceAngle = Atan2((proj.Velocity.Y − proj.VelocityZ) * _g._camera.YRatio, proj.Velocity.X)` —
+    use it as the draw rotation and normalize `(dx,dy)` for the trail-offset direction. The
+    hardcoded arrow-shaft angle in `DrawProjectiles()` (~line 365,
+    `Atan2(Velocity.Y*YRatio, Velocity.X)`) has the **same Z-ignoring bug** for flipbook-less
+    Direct arrows on arcs.
 
 **How the visual fields get ONTO the projectile:** `SpellEffectSystem.SpawnProjectile`
 (`Necroking/Game/SpellEffectSystem.cs`, the chokepoint) copies `spell.ProjectileFlipbook`
