@@ -915,31 +915,103 @@ partial class GameRenderer
             DrawText(_g._font, subtitle, new Vector2(screenW / 2f - subSize.X / 2f, screenH / 6 + 35), new Color(140, 140, 160));
         }
 
-        // Scenario buttons (5-wide grid)
-        GetScenarioGridLayout(screenW, screenH, out int cols, out int btnW, out int btnH, out int btnGap, out int gridX, out int menuY, out int rowsVisible);
+        // Categorized scenario grid (shared layout with the click handler).
+        var entries = BuildScenarioMenuLayout(screenW, screenH, _g._scenarioScrollOffset,
+            out int totalRows, out int rowsVisible, out Rectangle backRect);
 
-        var names = new List<string>(ScenarioRegistry.GetNames());
-        names.Reverse(); // Newest first
-        int visibleCount = Math.Min(names.Count - _g._scenarioScrollOffset, rowsVisible * cols);
-        for (int i = 0; i < visibleCount; i++)
+        foreach (var e in entries)
         {
-            int nameIdx = i + _g._scenarioScrollOffset;
-            if (nameIdx >= names.Count) break;
-            int col = i % cols, row = i / cols;
-            int bx = gridX + col * (btnW + btnGap);
-            int by = menuY + row * (btnH + btnGap);
-            DrawMenuButtonAt(names[nameIdx], bx, by, btnW, btnH);
+            if (!e.Visible) continue;
+            if (e.IsHeader)
+                DrawScenarioCategoryHeader(e.Text, e.Rect);
+            else
+                DrawMenuButtonAt(e.Text, e.Rect.X, e.Rect.Y, e.Rect.Width, e.Rect.Height);
         }
 
-        // Back button (centered below the grid)
-        int usedRows = (visibleCount + cols - 1) / cols;
-        int backY = menuY + usedRows * (btnH + btnGap) + 10;
-        int backW = 320;
-        DrawMenuButtonAt("< Back", screenW / 2 - backW / 2, backY, backW, btnH);
+        // Back button (centered below the visible grid)
+        DrawMenuButtonAt("< Back", backRect.X, backRect.Y, backRect.Width, backRect.Height);
 
         // Scroll hint
-        if (names.Count > visibleCount + _g._scenarioScrollOffset)
+        if (totalRows > rowsVisible)
             DrawText(_g._smallFont, "Scroll for more...", new Vector2(screenW / 2f - 50, screenH - 40), new Color(100, 100, 120));
+    }
+
+    // Draws a category label as a section divider above its scenario buttons.
+    private void DrawScenarioCategoryHeader(string text, Rectangle rect)
+    {
+        if (_g._font == null) return;
+        var color = new Color(180, 220, 130);
+        // Vertically bottom-align the label within the row so it hugs its buttons.
+        var size = _g._font.MeasureString(text);
+        int ty = rect.Y + (int)(rect.Height - size.Y);
+        DrawText(_g._font, text, new Vector2(rect.X + 2, ty), color);
+        // Underline spanning the grid width.
+        int lineY = rect.Y + rect.Height - 2;
+        _g.Scope.Draw(_g._pixel, new Rectangle(rect.X, lineY, rect.Width, 1), new Color(180, 220, 130, 90));
+    }
+
+    // A single laid-out scenario-menu element (category header or scenario button),
+    // already positioned on screen for the current scroll offset.
+    internal struct ScenarioMenuEntry
+    {
+        public bool IsHeader;
+        public string Text;     // category title (header) or scenario name (button)
+        public Rectangle Rect;  // on-screen bounds
+        public bool Visible;    // within the current scroll window
+    }
+
+    // Builds the categorized scenario-menu layout for a given scroll offset (in rows).
+    // Both DrawScenarioList and the click handler in Game1 consume this so drawing and
+    // hit-testing stay in sync. Each category emits a header row followed by its scenario
+    // buttons packed into `cols`-wide rows. `scrollRow` scrolls the whole layout vertically.
+    internal List<ScenarioMenuEntry> BuildScenarioMenuLayout(int screenW, int screenH, int scrollRow,
+        out int totalRows, out int rowsVisible, out Rectangle backRect)
+    {
+        GetScenarioGridLayout(screenW, screenH, out int cols, out int btnW, out int btnH, out int btnGap,
+            out int gridX, out int menuY, out rowsVisible);
+        int rowStride = btnH + btnGap;
+        int gridW = cols * btnW + (cols - 1) * btnGap;
+
+        var entries = new List<ScenarioMenuEntry>();
+        int layoutRow = 0;
+
+        foreach (var cat in ScenarioRegistry.GetCategories())
+        {
+            int headerRel = layoutRow - scrollRow;
+            entries.Add(new ScenarioMenuEntry
+            {
+                IsHeader = true,
+                Text = cat,
+                Rect = new Rectangle(gridX, menuY + headerRel * rowStride, gridW, btnH),
+                Visible = headerRel >= 0 && headerRel < rowsVisible,
+            });
+            layoutRow++;
+
+            var scen = ScenarioRegistry.GetNamesInCategory(cat);
+            for (int i = 0; i < scen.Count; i++)
+            {
+                int col = i % cols;
+                int rel = (layoutRow + i / cols) - scrollRow;
+                int bx = gridX + col * (btnW + btnGap);
+                entries.Add(new ScenarioMenuEntry
+                {
+                    IsHeader = false,
+                    Text = scen[i],
+                    Rect = new Rectangle(bx, menuY + rel * rowStride, btnW, btnH),
+                    Visible = rel >= 0 && rel < rowsVisible,
+                });
+            }
+            layoutRow += (scen.Count + cols - 1) / cols;
+        }
+
+        totalRows = layoutRow;
+
+        // Back button fixed just below the visible window so it never scrolls away.
+        int backW = 320;
+        int backY = menuY + rowsVisible * rowStride + 10;
+        backRect = new Rectangle(screenW / 2 - backW / 2, backY, backW, btnH);
+
+        return entries;
     }
 
     // Shared layout for the scenario grid so click-handling and drawing stay in sync.

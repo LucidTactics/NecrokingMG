@@ -2992,34 +2992,31 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 return;
             }
 
-            // Scroll (one grid row at a time)
+            int screenW2 = GraphicsDevice.Viewport.Width;
+            int screenH2 = GraphicsDevice.Viewport.Height;
+
+            // Scroll (a few layout rows at a time), clamped to the layout height.
+            if (_input.ScrollDelta != 0)
             {
-                int screenW2 = GraphicsDevice.Viewport.Width;
-                int screenH2 = GraphicsDevice.Viewport.Height;
-                _gameRenderer.GetScenarioGridLayout(screenW2, screenH2, out int cols, out _, out _, out _, out _, out _, out _);
-                if (_input.ScrollDelta > 0) _scenarioScrollOffset = Math.Max(0, _scenarioScrollOffset - cols);
-                if (_input.ScrollDelta < 0) _scenarioScrollOffset += cols;
+                _gameRenderer.BuildScenarioMenuLayout(screenW2, screenH2, _scenarioScrollOffset,
+                    out int totalRows, out int rowsVisible, out _);
+                int maxScroll = Math.Max(0, totalRows - rowsVisible);
+                if (_input.ScrollDelta > 0) _scenarioScrollOffset -= 3;
+                if (_input.ScrollDelta < 0) _scenarioScrollOffset += 3;
+                _scenarioScrollOffset = Math.Clamp(_scenarioScrollOffset, 0, maxScroll);
             }
 
             if (_input.LeftPressed)
             {
-                int screenW2 = GraphicsDevice.Viewport.Width;
-                int screenH2 = GraphicsDevice.Viewport.Height;
-                _gameRenderer.GetScenarioGridLayout(screenW2, screenH2, out int cols, out int btnW, out int btnH, out int btnGap, out int gridX, out int menuY, out int rowsVisible);
+                var entries = _gameRenderer.BuildScenarioMenuLayout(screenW2, screenH2, _scenarioScrollOffset,
+                    out _, out _, out Rectangle backRect);
 
-                var names = new List<string>(ScenarioRegistry.GetNames());
-                names.Reverse(); // Newest first (must match draw order)
-                int visibleCount = Math.Min(names.Count - _scenarioScrollOffset, rowsVisible * cols);
-                for (int i = 0; i < visibleCount; i++)
+                foreach (var e in entries)
                 {
-                    int nameIdx = i + _scenarioScrollOffset;
-                    if (nameIdx >= names.Count) break;
-                    int col = i % cols, row = i / cols;
-                    int bx = gridX + col * (btnW + btnGap);
-                    int by = menuY + row * (btnH + btnGap);
-                    if (mouse.X >= bx && mouse.X < bx + btnW && mouse.Y >= by && mouse.Y < by + btnH)
+                    if (!e.Visible || e.IsHeader) continue;
+                    if (e.Rect.Contains(mouse.X, mouse.Y))
                     {
-                        StartScenario(names[nameIdx]);
+                        StartScenario(e.Text);
                         _prevKb = kb;
                         _prevMouse = mouse;
                         base.Update(gameTime);
@@ -3027,12 +3024,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     }
                 }
 
-                // Back button (centered below the grid)
-                int usedRows = (visibleCount + cols - 1) / cols;
-                int backY = menuY + usedRows * (btnH + btnGap) + 10;
-                int backW = 320;
-                int backX = screenW2 / 2 - backW / 2;
-                if (mouse.X >= backX && mouse.X < backX + backW && mouse.Y >= backY && mouse.Y < backY + btnH)
+                // Back button (fixed below the visible grid)
+                if (backRect.Contains(mouse.X, mouse.Y))
                     _menuState = MenuState.MainMenu;
             }
             _prevKb = kb;
