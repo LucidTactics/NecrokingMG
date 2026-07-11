@@ -243,12 +243,24 @@ public class SpellDef : INamedDef
 
     [EditorVisible("Category", "Projectile")]
     [EditorField(Label = "Trajectory", Group = "PROJECTILE", Order = 201)]
-    [EditorCombo("Lob", "DirectFire", "Homing", "Swirly", "HomingSwirly")]
+    [EditorCombo("Lob", "HighLob", "DirectFire", "Homing", "Swirly", "HomingSwirly")]
     [JsonPropertyName("trajectory")] public string Trajectory { get; set; } = "Lob";
+
+    [EditorVisible("Category", "Projectile")]
+    [EditorField(Label = "TrajectoryMods", Group = "PROJECTILE", Order = 201)]
+    [EditorCombo("", "Swirly", "Swirly3d")]
+    [JsonPropertyName("trajectoryMods")] public string TrajectoryMods { get; set; } = "";
 
     [EditorVisible("Category", "Projectile")]
     [EditorField(Label = "Proj Speed", Group = "PROJECTILE", Order = 202, Step = 0.1f, Decimals = 1)]
     [JsonPropertyName("projectileSpeed")] public float ProjectileSpeed { get; set; } = 28.29f;
+
+    // Multiplier on gravity for this projectile: 1 = normal, <1 floats/flattens the arc,
+    // >1 steepens it, 0 = flies dead flat. The launch solve uses the same scaled gravity,
+    // so a lob still lands on target — only the arc shape (and airtime) changes.
+    [EditorVisible("Category", "Projectile")]
+    [EditorField(Label = "Gravity Scale", Group = "PROJECTILE", Order = 209, Step = 0.1f, Decimals = 2)]
+    [JsonPropertyName("gravityScale")] public float GravityScale { get; set; } = 1f;
 
     [EditorVisible("Category", "Projectile")]
     [EditorField(Label = "Precision Bonus", Group = "PROJECTILE", Order = 203)]
@@ -264,8 +276,24 @@ public class SpellDef : INamedDef
     [EditorField(Label = "Proj Delay", Group = "PROJECTILE", Order = 205, Step = 0.01f, Decimals = 2)]
     [JsonPropertyName("projectileDelay")] public float ProjectileDelay { get; set; }
 
+    // Barrage spread: each shot in a Quantity>1 volley lands at a uniform-random point
+    // within this radius of the aim, scattering evenly over the disc (π·r² area). 0 =
+    // every shot on the exact aim point (the default single-target behavior).
     [EditorVisible("Category", "Projectile")]
-    [EditorField(Label = "Projectile Effect", Group = "PROJECTILE", Order = 206)]
+    [EditorField(Label = "Spread Radius", Group = "PROJECTILE", Order = 206, Step = 0.1f, Decimals = 1)]
+    [JsonPropertyName("projectileSpread")] public float ProjectileSpread { get; set; }
+
+    // When the PLAYER casts a multi-shot volley, follow-up shots re-aim at the live
+    // cursor each shot (the cursor updates the aim; an invalid cursor holds the last
+    // valid point). Turn OFF for barrages so the volley scatters around the ORIGINAL
+    // cast point instead of homing the whole spread onto the cursor. No effect on AI
+    // casts (they never track the player's cursor).
+    [EditorVisible("Category", "Projectile")]
+    [EditorField(Label = "Track Cursor (player)", Group = "PROJECTILE", Order = 207)]
+    [JsonPropertyName("tracksCursor")] public bool TracksCursor { get; set; } = true;
+
+    [EditorVisible("Category", "Projectile")]
+    [EditorField(Label = "Projectile Effect", Group = "PROJECTILE", Order = 208)]
     [JsonPropertyName("projectileFlipbook")] public FlipbookRef? ProjectileFlipbook { get; set; }
 
     // ============ BUFF / DEBUFF ============

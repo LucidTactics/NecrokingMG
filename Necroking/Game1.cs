@@ -806,6 +806,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     // Pending projectiles (multi-projectile delay)
     internal readonly List<GameSystems.PendingProjectileGroup> _pendingProjectiles = new();
+    // Cursor aim point for player volleys, refreshed each running frame; null when the
+    // cursor can't be trusted (window unfocused, cursor outside the viewport) so
+    // TickPendingProjectiles keeps each group's last valid target instead.
+    Vec2? _cursorAimWorld;
 
     // Editors
     internal MapEditorWindow _mapEditor = new();
@@ -3477,6 +3481,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // --- Player input ---
             Vec2 mouseWorld = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), screenW, screenH);
 
+            // Publish the cursor as a volley aim point only while it's trustworthy;
+            // otherwise player volleys hold their last valid target (see
+            // TickPendingProjectiles).
+            _cursorAimWorld = (!unfocused && !cursorOutside) ? mouseWorld : (Vec2?)null;
+
             if (necroIdx >= 0)
             {
                 // WASD movement
@@ -3587,6 +3596,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             {
                 _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
                 ToggleGodMode(necroIdx, force_to_value: _sim.UnitsMut[necroIdx].GhostMode);
+                // Also flip the top-left debug readout (projectile counts etc).
+                _hudRenderer.ShowDebugPanel = _sim.UnitsMut[necroIdx].GhostMode;
             }
             // --- God mode toggle (Shift+P) ---
             // Cheat / debug toggle. Applies/removes buff_god_mode on the

@@ -76,6 +76,7 @@ public class SpellPreview
         public HdrColor ProjectileColor;
         public float Scale;
         public string FlipbookID;
+        public float GravityScale;
     }
 
     // Strike state
@@ -917,6 +918,14 @@ public class SpellPreview
             prev = cur;
         }
     }
+    /// <summary>Randomize the swirl params (freq/amplitude/phase) on a projectile —
+    /// shared by the Swirly and HomingSwirly trajectories.</summary>
+    private static void ApplySwirl(ref PreviewProjectile p)
+    {
+       p.SwirlFreq = 1f + (float)RandUnit() * 0.5f;
+       p.SwirlAmplitude = 1.0f + (float)RandUnit() * 0.25f;
+       p.SwirlPhase = (float)RandUnit() * 2f * MathF.PI;
+    }
 
     // ========================================
     // Spawning
@@ -966,6 +975,19 @@ public class SpellPreview
             p.BaseDirection = dir;
         }
 
+        p.GravityScale = spell.GravityScale;
+
+        switch (spell.TrajectoryMods) {
+           case "Swirly": {
+              ApplySwirl(ref p);
+           }
+              break;
+           case "Swirly3d": {
+              ApplySwirl(ref p);
+           }
+              break;
+        }
+
         switch (spell.Trajectory)
         {
             // Trajectory theta comes from the shared ProjectileManager solver; the
@@ -974,6 +996,13 @@ public class SpellPreview
             case "Lob":
             {
                 float theta = ProjectileManager.SolveLobTheta(dist, speed);
+                p.Velocity = dir * speed * MathF.Cos(theta);
+                p.VelocityZ = speed * MathF.Sin(theta);
+                break;
+            }
+            case "HighLob":
+            {
+                float theta = ProjectileManager.SolveLobTheta(dist, speed, preferLob: true);
                 p.Velocity = dir * speed * MathF.Cos(theta);
                 p.VelocityZ = speed * MathF.Sin(theta);
                 break;
@@ -999,9 +1028,8 @@ public class SpellPreview
                 float theta = ProjectileManager.DirectFireTheta;
                 p.Velocity = dir * speed * MathF.Cos(theta);
                 p.VelocityZ = speed * MathF.Sin(theta);
-                p.SwirlFreq = 3f + RandUnit() * 5f;
-                p.SwirlAmplitude = 0.5f + RandUnit() * 1.5f;
-                p.SwirlPhase = RandUnit() * 2f * PI;
+                
+                ApplySwirl(ref p);
                 break;
             }
             case "HomingSwirly":
@@ -1011,9 +1039,7 @@ public class SpellPreview
                 p.VelocityZ = speed * MathF.Sin(theta);
                 p.TargetPos = new Vector2(TargetX, 0);
                 p.HomingStrength = 5f;
-                p.SwirlFreq = 3f + RandUnit() * 5f;
-                p.SwirlAmplitude = 0.5f + RandUnit() * 1.5f;
-                p.SwirlPhase = RandUnit() * 2f * PI;
+                ApplySwirl(ref p);
                 break;
             }
         }
@@ -1033,7 +1059,7 @@ public class SpellPreview
 
             p.Position += p.Velocity * dt;
             p.Height += p.VelocityZ * dt;
-            p.VelocityZ -= ProjGravity * dt;
+            p.VelocityZ -= ProjGravity * dt * p.GravityScale;
             p.Age += dt;
 
             // Homing

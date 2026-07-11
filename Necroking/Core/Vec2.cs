@@ -116,4 +116,17 @@ public static class MathUtil
     /// way around, radians.</summary>
     public static float LerpAngleRad(float from, float to, float t)
         => from + AngleDeltaRad(from, to) * t;
+
+    /// <summary>A point drawn uniformly over the AREA of a disc of the given radius,
+    /// centered on the origin. Uniform-by-area needs <c>r = radius·√u</c> (not
+    /// <c>radius·u</c>, which would clump samples toward the center); the angle is
+    /// uniform. Add the result to a center point to scatter shots/spawns evenly across
+    /// a circle. <paramref name="radius"/> ≤ 0 returns <see cref="Vec2.Zero"/>.</summary>
+    public static Vec2 RandomInDisc(Random rng, float radius)
+    {
+        if (radius <= 0f) return Vec2.Zero;
+        float r = radius * MathF.Sqrt((float)rng.NextDouble());
+        float theta = (float)rng.NextDouble() * 2f * MathF.PI;
+        return new Vec2(r * MathF.Cos(theta), r * MathF.Sin(theta));
+    }
 }

@@ -826,16 +826,37 @@ public class Simulation
                     // Plain arrows resolve Dominions-style (dodge roll + hit-location
                     // armor); spell projectiles auto-hit but run the standard damage
                     // pipeline (armor + toughness, honoring the spell's AN/DN flags).
-                    if (hit.ProjectileType == ProjectileType.Arrow
+                    if (hit.ProjectileType == ProjectileType.Direct
                         && string.IsNullOrEmpty(hit.SpellID) && hit.Precision > 0)
                         ResolveArrowHit(hit, casterIdx);
                     else if (spellDef != null)
+                    {
+                        // Spell projectiles auto-hit and run through DamageSystem, which
+                        // doesn't fill a roll breakdown — log a NoteOnly line so the
+                        // impact is at least visible in the combat log (Damage is the
+                        // pre-mitigation amount handed to Apply).
+                        _combatLog.AddEntry(new CombatLogEntry
+                        {
+                            Outcome = CombatLogOutcome.NoteOnly,
+                            Timestamp = _gameTime,
+                            Note = $"{spellDef.DisplayName} hit {GetUnitDisplayName(hit.UnitIdx)} ({hit.Damage} dmg)",
+                        });
                         GameSystems.DamageSystem.Apply(_units, hit.UnitIdx, hit.Damage,
                             GameSystems.DamageType.Physical,
                             GameSystems.SpellEffectSystem.SpellDamageFlags(spellDef),
                             _damageEvents, casterIdx);
+                    }
                     else
+                    {
+                        // No spellDef: a dev fireball (flat damage, no spell record).
+                        _combatLog.AddEntry(new CombatLogEntry
+                        {
+                            Outcome = CombatLogOutcome.NoteOnly,
+                            Timestamp = _gameTime,
+                            Note = $"Unattributed projectile hit {GetUnitDisplayName(hit.UnitIdx)} ({hit.Damage} dmg)",
+                        });
                         DealDamage(hit.UnitIdx, hit.Damage, casterIdx); // dev fireball: flat
+                    }
                 }
             }
         }
@@ -2458,8 +2479,9 @@ public class Simulation
         float dist = (aim - from).Length();
 
         bool direct = dist <= directRange && IsFireLaneClear(attackerIdx, aim);
-        _projectiles.SpawnArrow(from, aim, _units[attackerIdx].Faction, _units[attackerIdx].Id,
-            damage, volley: !direct, precision, weaponName,
+        _projectiles.Spawn(from, aim, _units[attackerIdx].Faction, _units[attackerIdx].Id,
+            ProjectileType.Direct, damage, ProjectileManager.ArrowSpeed, lob: !direct,
+            precision: precision, weaponName: weaponName,
             spawnHeight: _units[attackerIdx].EffectSpawnHeight);
     }
 
@@ -2480,15 +2502,39 @@ public class Simulation
         int atkDrn = attackerIdx >= 0 && attackerIdx < _units.Count
             ? _units[attackerIdx].Stats.Drn : 2;
 
-        // Hit resolution rolls tier-4 dice for both sides (same rule as melee);
-        // the damage/prot rolls below keep each unit's own Drn tier.
-        int atkRoll = hit.Precision + UnitUtil.RollDRN(4);
-        int defRoll = Math.Max(defStats.Defense / 2 - _units[defenderIdx].Harassment, 0)
-                    + defStats.ShieldParry * 2 + UnitUtil.RollDRN(4);
+        // Hit resolution rolls tier-4 dice for both sides (same rule as melee); the
+        // damage/prot rolls below keep each unit's own Drn tier. Roll order preserved
+        // (shared RNG in RollDRN): attack, defense, then — on a hit — protection and
+        // damage. Split out so each roll's DRN component can be recorded in the log.
+        int harassment = _units[defenderIdx].Harassment;
+        int atkDrnRoll = UnitUtil.RollDRN(4);
+        int defBase = Math.Max(defStats.Defense / 2 - harassment, 0) + defStats.ShieldParry * 2;
+        int defDrnRoll = UnitUtil.RollDRN(4);
+        int atkRoll = hit.Precision + atkDrnRoll;
+        int defRoll = defBase + defDrnRoll;
+
+        // Ranged impacts reuse the melee combat-log schema so they appear in the same
+        // panel. Precision stands in for the attack stat; an arrow has no shield-parry
+        // stage beyond the defense roll, so DamageBase/Prot map straight across.
+        var logEntry = new CombatLogEntry
+        {
+            Timestamp = _gameTime,
+            AttackerName = GetUnitDisplayName(attackerIdx),
+            DefenderName = GetUnitDisplayName(defenderIdx),
+            AttackerFaction = attackerIdx >= 0 && attackerIdx < _units.Count ? FactionChar(attackerIdx) : '?',
+            DefenderFaction = FactionChar(defenderIdx),
+            WeaponName = hit.WeaponName,
+            AttackBase = hit.Precision,
+            AttackDRN = atkDrnRoll,
+            DefenseBase = defBase,
+            DefenseDRN = defDrnRoll,
+            HarassmentPenalty = harassment,
+        };
+
         if (atkRoll < defRoll)
         {
-            DebugLog.Log("combat", $"[Ranged] {hit.WeaponName} deflected by #{defenderIdx}: " +
-                $"prec {hit.Precision}+DRN={atkRoll} vs def {defRoll}");
+            logEntry.Outcome = CombatLogOutcome.Miss;
+            _combatLog.AddEntry(logEntry);
             return;
         }
 
@@ -2499,12 +2545,24 @@ public class Simulation
         float protStat = armorProt * 0.85f;
         float toughness = BuffSystem.GetModifiedStat(_units, defenderIdx,
             BuffStat.Toughness, defStats.Toughness) * 0.85f;
-        int prot = (int)protStat + UnitUtil.RollDRN(defStats.Drn);
-        int netDmg = DamageSystem.MitigateByToughness(
-            hit.Damage + UnitUtil.RollDRN(atkDrn) - prot, toughness);
+        int protDrnRoll = UnitUtil.RollDRN(defStats.Drn);
+        int prot = (int)protStat + protDrnRoll;
+        int dmgDrnRoll = UnitUtil.RollDRN(atkDrn);
+        int postArmor = hit.Damage + dmgDrnRoll - prot;
+        int netDmg = DamageSystem.MitigateByToughness(postArmor, toughness);
+        int toughnessMit = Math.Max(0, postArmor) - netDmg;
 
-        DebugLog.Log("combat", $"[Ranged] {hit.WeaponName} hits #{defenderIdx} " +
-            $"{hit.HitLocation}: dmg {hit.Damage} vs prot {prot} → {netDmg} net");
+        logEntry.Outcome = CombatLogOutcome.Hit;
+        logEntry.HitLoc = hit.HitLocation;
+        logEntry.HitLocationName = hit.HitLocation.ToString();
+        logEntry.DamageBase = hit.Damage;
+        logEntry.DamageDRN = dmgDrnRoll;
+        logEntry.ProtBase = (int)protStat;
+        logEntry.ProtDRN = protDrnRoll;
+        logEntry.ToughnessMit = toughnessMit;
+        logEntry.NetDamage = netDmg;
+        _combatLog.AddEntry(logEntry);
+
         if (netDmg > 0)
             DealDamage(defenderIdx, netDmg, attackerIdx);
     }

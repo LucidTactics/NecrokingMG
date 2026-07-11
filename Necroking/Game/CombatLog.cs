@@ -8,7 +8,7 @@ namespace Necroking.GameSystems;
 // attack being queued and its animation's impact frame. Distinct from Miss
 // (dice rolled, defense won) so chase whiffs are visible in the log instead
 // of the swing vanishing silently.
-public enum CombatLogOutcome : byte { Hit, Miss, Blocked, Whiff }
+public enum CombatLogOutcome : byte { Hit, Miss, Blocked, Whiff, NoteOnly }
 
 public class CombatLogEntry
 {
@@ -66,6 +66,15 @@ public class CombatLog
     private static void WriteEntryToFile(CombatLogEntry e)
     {
         string time = FormatTime(e.Timestamp);
+
+        // NoteOnly: a free-text event (e.g. a spell projectile impact) with no
+        // attacker/defender or roll breakdown — print just the note, no header.
+        if (e.Outcome == CombatLogOutcome.NoteOnly)
+        {
+            DebugLog.Log(Tag, $"{time}  {e.Note}");
+            return;
+        }
+
         string outcome = e.Outcome.ToString();
 
         // Header: attack roll summary

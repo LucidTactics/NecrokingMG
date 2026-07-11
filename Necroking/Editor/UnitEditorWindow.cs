@@ -2897,12 +2897,6 @@ public class UnitEditorWindow
             if (newPrec != w.Precision) { w.Precision = newPrec; _unsavedChanges = true; }
             curY += RowH;
 
-            // Projectile Type dropdown
-            string[] projTypes = Enum.GetNames<ProjectileType>();
-            string newProjType = _ui.DrawCombo("w_projtype", "Projectile", w.ProjectileType, projTypes, x, curY, ww);
-            if (newProjType != w.ProjectileType) { w.ProjectileType = newProjType; _unsavedChanges = true; }
-            curY += RowH;
-
             // Also show melee stats (weapons can have both)
             int newDmg2 = _ui.DrawIntField("w_dmg2", "Melee Damage", w.Damage, x, curY, ww);
             if (newDmg2 != w.Damage) { w.Damage = newDmg2; _unsavedChanges = true; }

@@ -116,7 +116,8 @@ public static class SpellEffectSystem
         switch (spell.Category)
         {
             case "Projectile":
-                SpawnProjectile(spell, sim.Projectiles, effectOrigin, target, casterUid,
+                SpawnProjectile(spell, sim.Projectiles, effectOrigin,
+                    VolleyAimPoint(spell, target, game._rng), casterUid,
                     effectOriginH, casterFaction);
                 if (spell.Quantity > 1)
                 {
@@ -454,13 +455,34 @@ public static class SpellEffectSystem
     // shared RNG (events seed their own), and the swirl only affects the visual arc.
     private static readonly Random _projRng = new();
 
+    /// <summary>Per-shot aim point for a projectile volley: the base target jittered by a
+    /// uniform-over-area offset within <see cref="SpellDef.ProjectileSpread"/> (0 → the
+    /// exact target, no spread). Barrage spells set a spread so their shots scatter evenly
+    /// across the disc instead of stacking on one point. The GROUP stores the un-jittered
+    /// base target, so every shot (and any cursor retarget) re-samples fresh.</summary>
+    public static Vec2 VolleyAimPoint(SpellDef spell, Vec2 baseTarget, Random rng)
+        => spell.ProjectileSpread > 0f
+            ? baseTarget + MathUtil.RandomInDisc(rng, spell.ProjectileSpread)
+            : baseTarget;
+
     /// <summary>Randomize the swirl params (freq/amplitude/phase) on a projectile —
     /// shared by the Swirly and HomingSwirly trajectories.</summary>
     private static void ApplySwirl(Projectile p)
     {
-        p.SwirlFreq = 3f + (float)_projRng.NextDouble() * 5f;
-        p.SwirlAmplitude = 0.5f + (float)_projRng.NextDouble() * 1.5f;
+        p.SwirlFreq = 1f + (float)_projRng.NextDouble() * 0.5f;
+        p.SwirlAmplitude = 1.0f + (float)_projRng.NextDouble() * 0.25f;
         p.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
+    }
+    
+    private static void ApplySwirl3d(Projectile p)
+    {
+       p.SwirlFreq = 1f + (float)_projRng.NextDouble() * 0.5f;
+       p.SwirlAmplitude = 1.0f + (float)_projRng.NextDouble() * 0.25f;
+       p.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
+       
+       p.SwirlFreq2 = 1f + (float)_projRng.NextDouble() * 0.5f;
+       p.SwirlAmplitude2 = 1.0f + (float)_projRng.NextDouble() * 0.25f;
+       p.SwirlPhase2 = (float)_projRng.NextDouble() * 2f * MathF.PI;
     }
 
     /// <summary>Spawn a spell projectile and post-configure it: tag it with the spell id
@@ -470,70 +492,73 @@ public static class SpellEffectSystem
     public static void SpawnProjectile(SpellDef spell, ProjectileManager projectiles,
         Vec2 origin, Vec2 target, uint ownerUid, float spawnHeight, Faction casterFaction)
     {
-        projectiles.SpawnFireball(origin, target,
-            casterFaction, ownerUid, spell.Damage, spell.AoeRadius, spell.DisplayName,
-            spawnHeight: spawnHeight);
-        var projs = projectiles.Projectiles;
-        if (projs.Count > 0) {
-            var lastProj = projs[projs.Count - 1];
+        // AOE spells fly as Explosive and burst on impact; a single-target (zero-AOE)
+        // spell flies as Direct instead, so it actually strikes its target rather
+        // than relying on a zero-radius explosion happening to reach it. The +10
+        // precision keeps these magic darts reliable — conceptually they home in,
+        // unlike a physically-fired arrow that can be dodged.
+        // Lob flies the min-energy ballistic arc, HighLob the mortar-style high arc;
+        // every other trajectory is a flat direct-fire launch.
+        var traj = Enum.TryParse<Trajectory>(spell.Trajectory, true, out var t) ? t : Trajectory.Lob;
+        bool lob = traj == Trajectory.Lob || traj == Trajectory.HighLob;
+        float speed = spell.ProjectileSpeed > 0 ? spell.ProjectileSpeed : ProjectileManager.MagicSpeed;
+        var proj = projectiles.Spawn(origin, target, casterFaction, ownerUid,
+            spell.AoeRadius > 0f ? ProjectileType.Explosive : ProjectileType.Direct,
+            spell.Damage, speed, lob,
+            aoeRadius: spell.AoeRadius, precision: spell.PrecisionBonus + 10,
+            weaponName: spell.DisplayName, spawnHeight: spawnHeight,
+            gravityScale: spell.GravityScale, preferHighArc: traj == Trajectory.HighLob);
 
-            // Tag projectile with spell ID for physics knockback lookup on impact
-            lastProj.SpellID = spell.Id;
-            lastProj.ImpactForce = spell.ImpactForce;
-            lastProj.ImpactUpward = spell.ImpactUpward;
+        // Tag projectile with spell ID for physics knockback lookup on impact
+        proj.SpellID = spell.Id;
+        proj.ImpactForce = spell.ImpactForce;
+        proj.ImpactUpward = spell.ImpactUpward;
 
-            // Blight bombs must burst exactly where the player clicked, not wherever
-            // the ballistic arc happens to land. Forward the aimed point and flag the
-            // projectile so it detonates on overshoot. Other spells opt in via the def.
-            if (spell.Category == "Blight" || spell.DetonateAtTarget) {
-                lastProj.TargetPos = target;
-                lastProj.DetonateAtTarget = true;
-            }
+        // Blight bombs must burst exactly where the player clicked, not wherever
+        // the ballistic arc happens to land. Forward the aimed point and flag the
+        // projectile so it detonates on overshoot. Other spells opt in via the def.
+        if (spell.Category == "Blight" || spell.DetonateAtTarget) {
+            proj.TargetPos = target;
+            proj.DetonateAtTarget = true;
+        }
 
-            // Apply trajectory type. Lob keeps SpawnFireball's arc; every other
-            // trajectory is a flat direct-fire launch through the ONE shared
-            // solver (the four cases used to re-paste the 5° solve, and it
-            // pointlessly overwrote SpawnFireball's lob solve four ways).
-            var traj = Enum.TryParse<Trajectory>(spell.Trajectory, true, out var t) ? t : Trajectory.Lob;
-            if (traj != Trajectory.Lob) {
-                var dir = (target - origin).Normalized();
-                float speed = spell.ProjectileSpeed > 0 ? spell.ProjectileSpeed : ProjectileManager.MagicSpeed;
-                (lastProj.Velocity, lastProj.VelocityZ) =
-                    ProjectileManager.BallisticVelocity(dir, speed, ProjectileManager.DirectFireTheta);
-                lastProj.BaseDirection = dir;
-                lastProj.IsLob = false;
-            }
+        switch (spell.TrajectoryMods) {
+           case "Swirly":
+              ApplySwirl(proj);
+              break;
+           case "Swirly3d":
+              ApplySwirl3d(proj);
+              break;
+        }
 
-            switch (traj) {
-                case Trajectory.Swirly:
-                    ApplySwirl(lastProj);
-                    break;
-                case Trajectory.Homing:
-                    lastProj.TargetPos = target;
-                    lastProj.HomingStrength = 5f;
-                    break;
-                case Trajectory.HomingSwirly:
-                    lastProj.TargetPos = target;
-                    lastProj.HomingStrength = 5f;
-                    ApplySwirl(lastProj);
-                    break;
-                // DirectFire needs nothing beyond the shared launch above;
-                // Lob is the default from SpawnFireball — no changes needed.
-            }
+        switch (traj) {
+            case Trajectory.Swirly:
+                ApplySwirl(proj);
+                break;
+            case Trajectory.Homing:
+                proj.TargetPos = target;
+                proj.HomingStrength = 5f;
+                break;
+            case Trajectory.HomingSwirly:
+                proj.TargetPos = target;
+                proj.HomingStrength = 5f;
+                ApplySwirl(proj);
+                break;
+            // DirectFire, Lob and HighLob need nothing beyond the launch solve in Spawn.
+        }
 
-            if (spell.ProjectileFlipbook != null) {
-                lastProj.FlipbookID = spell.ProjectileFlipbook.FlipbookID;
-                lastProj.ParticleScale = spell.ProjectileFlipbook.Scale;
-                lastProj.ParticleColor = spell.ProjectileFlipbook.Color;
-            }
+        if (spell.ProjectileFlipbook != null) {
+            proj.FlipbookID = spell.ProjectileFlipbook.FlipbookID;
+            proj.ParticleScale = spell.ProjectileFlipbook.Scale;
+            proj.ParticleColor = spell.ProjectileFlipbook.Color;
+        }
 
-            if (spell.HitEffectFlipbook != null) {
-                lastProj.HitEffectFlipbookID = spell.HitEffectFlipbook.FlipbookID;
-                lastProj.HitEffectScale = spell.HitEffectFlipbook.Scale;
-                lastProj.HitEffectColor = spell.HitEffectFlipbook.Color;
-                lastProj.HitEffectBlendMode = spell.HitEffectFlipbook.BlendMode == "Additive" ? 1 : 0;
-                lastProj.HitEffectAlignment = spell.HitEffectFlipbook.Alignment == "Upright" ? 1 : 0;
-            }
+        if (spell.HitEffectFlipbook != null) {
+            proj.HitEffectFlipbookID = spell.HitEffectFlipbook.FlipbookID;
+            proj.HitEffectScale = spell.HitEffectFlipbook.Scale;
+            proj.HitEffectColor = spell.HitEffectFlipbook.Color;
+            proj.HitEffectBlendMode = spell.HitEffectFlipbook.BlendMode == "Additive" ? 1 : 0;
+            proj.HitEffectAlignment = spell.HitEffectFlipbook.Alignment == "Upright" ? 1 : 0;
         }
     }
 

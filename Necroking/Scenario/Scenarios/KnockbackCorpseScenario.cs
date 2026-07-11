@@ -70,12 +70,12 @@ public class KnockbackCorpseScenario : ScenarioBase
                         var from = sim.Units[necroIdx].Position;
                         DebugLog.Log(ScenarioLog, $"Firing nether_blast_kb from ({from.X:F1},{from.Y:F1}) to ({_clusterCenter.X:F1},{_clusterCenter.Y:F1})");
 
-                        // Spawn fireball with high damage and tag with nether_blast_kb for knockback
-                        sim.Projectiles.SpawnFireball(from, _clusterCenter, Faction.Undead,
-                            sim.Units[necroIdx].Id, 100, 4f, "Nether Blast KB");
-                        var projs = sim.Projectiles.Projectiles;
-                        if (projs.Count > 0)
-                            projs[projs.Count - 1].SpellID = "nether_blast_kb";
+                        // Spawn explosive with high damage and tag with nether_blast_kb for knockback
+                        var proj = sim.Projectiles.Spawn(from, _clusterCenter, Faction.Undead,
+                            sim.Units[necroIdx].Id, ProjectileType.Explosive, damage: 100,
+                            ProjectileManager.MagicSpeed, lob: true, aoeRadius: 4f,
+                            weaponName: "Nether Blast KB");
+                        proj.SpellID = "nether_blast_kb";
                     }
                     _phase = 1;
                     _phaseTimer = 0.5f; // wait for projectile to arrive

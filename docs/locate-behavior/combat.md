@@ -94,24 +94,30 @@ forwards to it so AI and sim share one formula (they previously drifted — 1.5f
   non-Undead unit within `maxRange` of `worldPos`; squared-distance, no path/LoS.
 
 ### Ranged / projectiles — `Necroking/Game/Projectile.cs` (namespace `Necroking.GameSystems`)
-**`ProjectileManager`** owns all projectiles (arrows, fireballs, potion lobs): spawn API +
+**`ProjectileManager`** owns all projectiles (arrows, spell shots, potion lobs): spawn API +
 per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, produces
 `Hits`/`Impacts` lists consumed by `Simulation`).
-- **`SpawnArrow(from, target, faction, owner, damage, volley, precision, weaponName,
-  spawnHeight)`** — `volley:false` = near-flat 5° direct shot; **`volley:true` = ballistic
-  lob**: solves launch angle from `dist*Gravity/speed²`, clamped 10°–45°, plus
-  precision-scaled scatter (`Projectile.IsLob`). So **arcing shots already exist** — the
-  choice is made by the CALLER (`Simulation.ResolvePendingAttack` ranged branch uses
-  `volley = dist > maxRange*0.4f`). `spawnHeight` should be the attacker's
-  `Unit.EffectSpawnHeight` (bow-tip anim point).
-- `SpawnFireball` / `SpawnPotionLob` — always-lobbed variants; `DetonateAtTarget` bursts
+- **ONE spawn entry point**: **`Spawn(from, target, faction, owner, type, damage, speed,
+  lob, aoeRadius, precision, weaponName, spawnHeight, gravityScale, preferHighArc)`**
+  returns the spawned `Projectile` for post-configuration (SpellID, flipbooks, homing,
+  potion payload). `ProjectileType` is behavior-named: **`Direct`** strikes the first unit
+  it touches along its flight path (arrows, magic darts), **`Explosive`** bursts on
+  proximity/ground with AoE, **`Potion`** delivers a potion payload to the closest
+  unit/corpse. `lob:false` = near-flat 5° direct shot; `lob:true` = ballistic arc solved
+  from `dist*Gravity/speed²`. A **Direct lob** (arrow volley) also gets precision-scaled
+  scatter + a 10°–45° arc clamp; an Explosive/Potion lob flies the exact min-energy arc
+  (or the mortar-style high arc with `preferHighArc`, spell `Trajectory` `"HighLob"`).
+  `NoFriendlyFire` derives from type (Direct respects factions; Explosive/Potion hit
+  everyone). Arc choice is made by the CALLER (`Simulation.FireArrowAt` uses
+  `lob = !(dist <= directRange && IsFireLaneClear)`). `spawnHeight` should be the
+  attacker's `Unit.EffectSpawnHeight` (bow-tip anim point). `DetonateAtTarget` bursts
   exactly at the aimed point instead of overshooting.
 - **Target leading exists in ONE place**: `Simulation.FireArrowAt(attackerIdx, defenderIdx,
   weaponIdx)` (the single arrow-ballistics chokepoint called by both the
   `ResolvePendingAttack` ranged branch and legacy `ArcherAttack`) does a one-iteration
   linear lead — `aim += defender.Velocity * (dist / ProjectileManager.ArrowSpeed)` — inline,
   not via any shared helper. It also picks direct-vs-lob (`IsFireLaneClear`) and passes
-  precision to `SpawnArrow`. **Pounce now leads too** via the shared
+  precision to `ProjectileManager.Spawn`. **Pounce now leads too** via the shared
   `Necroking/Game/Combat/InterceptUtil.cs` (`PredictPosition`/`ClampLeadOvershoot` —
   the single source for target leading; new launched-at-moving-unit abilities should
   call it). Trample (straight per-frame homing in `TrampleSystem.TickCharge`) and
@@ -124,8 +130,8 @@ per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, pr
   `PendingAttack` + `PendingWeaponIdx/PendingWeaponIsRanged/PendingRangedTarget` →
   anim hit frame → `ResolvePendingAttack` ranged branch (`isRanged ||
   Archetype == ArcherUnit`): re-resolves the target by stored ID, reads
-  `Stats.RangedDmg/RangedRange[weaponIdx]`, calls `SpawnArrow`. **No range/LoS re-check at
-  resolve** (same stamp-time-gating rule as melee).
+  `Stats.RangedDmg/RangedRange[weaponIdx]`, calls `ProjectileManager.Spawn` (via
+  `FireArrowAt`). **No range/LoS re-check at resolve** (same stamp-time-gating rule as melee).
 - **Legacy path**: `AIBehavior.ArcherAttack` in `Simulation.UpdateAI` (`~line 1046`)
   spawns arrows directly (no anim sync) for archetype-less units — don't extend it; new
   ranged behavior belongs in `RangedUnitHandler`.
@@ -156,15 +162,90 @@ per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, pr
   all launch at a fixed 5° and still take full gravity, so their max flat-ground travel is
   ≈ `speed²·sin(10°)/Gravity` + spawn-height bonus — ~19–20u at speed 28.3. Raising a
   spell's `range` past that makes the cast legal but the projectile lands/detonates midway.
-  Only `Lob` (the `SpawnFireball` default) solves the launch angle from the actual distance
-  (`asin(dist·Gravity/speed²)`, silently clamped when `dist > speed²/Gravity`).
+  Only `Lob`/`HighLob` (`Lob` is the trajectory default) solve the launch angle from the
+  actual distance (`asin(dist·Gravity/speed²)`, silently clamped when
+  `dist > speed²/Gravity`; `HighLob` takes the mirrored high arc).
 - **Spell-projectile spawn/config chokepoint**: `SpellEffectSystem.SpawnProjectile(spell,
   projectiles, origin, target, ownerUid, spawnHeight, casterFaction)` — calls
-  `SpawnFireball` then post-configures the last projectile from the `SpellDef` (SpellID
-  tag, Trajectory Direct/Swirly/Homing/Lob, DetonateAtTarget for Blight, flipbooks).
+  `ProjectileManager.Spawn` (Explosive when `AoeRadius > 0`, else Direct) and
+  post-configures the returned projectile from the `SpellDef` (SpellID tag, homing/swirl
+  trajectories, DetonateAtTarget for Blight, flipbooks).
   Called from `SpellEffectSystem` cast paths and `Game1.Spells.cs`
   (`TickPendingProjectiles` staggered Quantity>1 shots) — a new per-projectile field set
   here covers every shot.
+- **Over-time volley state (`Quantity>1` spells)**: `PendingProjectileGroup`
+  (struct in `Necroking/Game/SpellEffectSystem.cs`: `SpellID`, `CasterUid`, `Origin`,
+  **`Target`** = the fixed aim point captured at cast, `Remaining`, `Timer`, `Interval`)
+  is added to `Game1._pendingProjectiles` by `SpellEffectSystem.Execute` (Projectile +
+  Blight-bomb cases) and ticked by **`Game1.Spells.cs` `TickPendingProjectiles(dt)`**
+  (called from `Game1.cs` Update ~line 3709 on `WorldDt`, inside the sim gate). Each tick
+  re-resolves the caster by stable uid (`_sim.ResolveUnitID(pg.CasterUid)`; group dropped if
+  dead) and fires from the live `EffectSpawnPos2D` but **at the frozen `pg.Target`** — the
+  aim does NOT update between shots. **To retarget each shot to the cursor:** the group is
+  caster-agnostic, so gate on the player — `casterIdx == FindNecromancer()` (or
+  `_sim.Units[casterIdx].AI == AIBehavior.PlayerControlled`) — then overwrite `pg.Target`
+  with the current cursor world before `SpawnProjectile`. Cursor world = `_camera.ScreenToWorld(_input.MousePos, vpW, vpH)`; **validity** = the `cursorOutside`
+  test in `Game1.Update` (`mouse.X<0 || mouse.Y<0 || mouse.X>=vpW || mouse.Y>=vpH`, ~line
+  2825) — that local isn't visible from `TickPendingProjectiles`, so cache a
+  `_lastValidCursorWorld` Game1 field each focused/in-window frame and only update `pg.Target`
+  when valid (leaving `pg.Target` = last valid / initial cast target = the fallback for free).
+
+### Projectile RENDERING — `Necroking/GameRenderer.World.cs` (two passes, branches on `Projectile.Type`)
+Where each in-flight projectile is drawn. **Two separate draw methods, split by type:**
+- **`DrawProjectiles()`** (normal alpha pass) handles **Arrow** and **Potion**; **skips
+  Fireball** (`continue`). Both branches are fog-of-war gated (`_fogOfWar.IsVisible`).
+  - **Arrow branch is HARDCODED** — a two-quad `_pixel` draw: an oriented shaft
+    (`new Color(200,180,120)`, oriented by `Atan2(Velocity.Y*YRatio, Velocity.X)`) + a
+    darker arrowhead. **It reads NONE of the per-projectile visual fields** — not
+    `FlipbookID`, not `ParticleColor`, not `IconTexturePath`. So a spell-launched
+    arrow-type projectile (see below) that carries a `FlipbookID` still renders as the
+    generic pixel arrow. **This is the gap to fix for per-spell arrow visuals.**
+  - **Potion branch** draws `_g.GetItemTextureByPath(proj.IconTexturePath)` (tumbling item
+    icon), fallback colored dot — the one type that already keys visuals off a per-projectile
+    field.
+  - Unknown types → `DebugLog.Log("render", ...)` and skip (never throws from the draw loop).
+- **`DrawProjectilesHdr()`** (additive HDR pass) renders `proj.FlipbookID` (via
+  `_g._flipbooks.TryGetValue(fbId, ...)`, animated by `fb.GetFrameAtTime(proj.Age)`), tinted
+  by `proj.ParticleColor` (`HdrColor.ToHdrVertex`), scaled by `proj.ParticleScale`, with a
+  2-frame trail (main + 2 fading previous frames). Pass membership = `RendersInHdrPass(proj)`
+  (Explosive always, or a **Direct** projectile carrying a loaded flipbook — this is the path
+  spell "magic dart"/barrage projectiles take).
+  - **TRAIL / TAIL ORIENTATION does NOT follow the trajectory** (the "trail doesn't face
+    travel direction" bug). Two separate defects, both in this method's flipbook branch
+    (`Necroking/GameRenderer.World.cs`, ~lines 486–505):
+    1. **Sprite rotation is a constant age-spin, not velocity-facing** — every trail frame is
+       drawn with rotation `proj.Age * 2f`, so the dart just spins regardless of heading.
+    2. **The trail offset is XY-only, ignoring the vertical (Z) arc** — `velDir =
+       proj.Velocity.Normalized()` (world XY), and the trail sits at
+       `sp.Y - velDir.Y * trailOffset * YRatio`. On a lobbed/`HighLob` arc most of the
+       on-screen vertical motion comes from **`proj.VelocityZ`** (height), which this omits.
+  - **Fix:** compute the SCREEN-space travel direction including Z. From `Camera25D.WorldToScreen`
+    (`sy = worldY*Zoom*YRatio − worldHeight*Zoom*YRatio`), screen velocity is
+    `dx = Velocity.X`, `dy = (Velocity.Y − VelocityZ) * YRatio`. So
+    `faceAngle = Atan2((proj.Velocity.Y − proj.VelocityZ) * _g._camera.YRatio, proj.Velocity.X)` —
+    use it as the draw rotation and normalize `(dx,dy)` for the trail-offset direction. The
+    hardcoded arrow-shaft angle in `DrawProjectiles()` (~line 365,
+    `Atan2(Velocity.Y*YRatio, Velocity.X)`) has the **same Z-ignoring bug** for flipbook-less
+    Direct arrows on arcs.
+
+**How the visual fields get ONTO the projectile:** `SpellEffectSystem.SpawnProjectile`
+(`Necroking/Game/SpellEffectSystem.cs`, the chokepoint) copies `spell.ProjectileFlipbook`
+→ `proj.FlipbookID/ParticleScale/ParticleColor` and `spell.HitEffectFlipbook` → the
+`HitEffect*` fields. AoE spells (`AoeRadius>0`) spawn as **Fireball** (so their flipbook
+shows); **single-target/zero-AoE spells spawn as Arrow** (the "fire single-target spells as
+arrows" commit) — and the Arrow draw branch ignores `FlipbookID`, so their configured
+`ProjectileFlipbook` is silently dropped. `FlipbookRef` (`SpellRegistry.cs`) fields:
+`FlipbookID`, `FPS`, `Scale`, `Color` (HdrColor), `Rotation`, `BlendMode` (Alpha/Additive),
+`Alignment` (Ground/Upright), `Duration`.
+
+**Where the fix goes:** the Arrow branch of `DrawProjectiles()` in
+`Necroking/GameRenderer.World.cs`. When `proj.FlipbookID` is set and loaded, render the
+flipbook oriented along `proj.Velocity` (reuse the `DrawProjectilesHdr` flipbook lookup +
+`ParticleColor`/`ParticleScale` logic, honoring `FlipbookRef.Alignment`/`BlendMode`) and
+fall back to the hardcoded pixel arrow only when no flipbook is set. If Additive/HDR is
+wanted for the dart, route flipbook-carrying arrows through `DrawProjectilesHdr` instead
+(mind the `Type != Fireball` guards in BOTH methods). No sim/spawn change is needed — the
+data already reaches the projectile; only the Arrow draw branch consumes too little of it.
 
 ### `Necroking/Game/PhysicsSystem.cs` — impulse knockback (units only)
 The 2.5D "popcorn" physics: a unit hit by an impulse enters `InPhysics` (AI/ORCA

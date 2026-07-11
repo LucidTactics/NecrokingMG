@@ -1801,7 +1801,9 @@ public partial class Game1 {
                int ni = _sim.NecromancerIndex;
                Vec2 from = ni >= 0 ? _sim.Units[ni].Position : target + new Vec2(-6f, 0f);
                uint owner = ni >= 0 ? _sim.Units[ni].Id : 0u;
-               _sim.Projectiles.SpawnFireball(from, target, Faction.Undead, owner, dmg, radius, name);
+               _sim.Projectiles.Spawn(from, target, Faction.Undead, owner,
+                  ProjectileType.Explosive, dmg, GameSystems.ProjectileManager.MagicSpeed, lob: true,
+                  aoeRadius: radius, weaponName: name);
                c.Complete(Necroking.Dev.DevServer.Ok(
                   $"fireball from ({from.X:F1},{from.Y:F1}) -> ({target.X:F1},{target.Y:F1}) dmg={dmg} r={radius}"));
                break;
