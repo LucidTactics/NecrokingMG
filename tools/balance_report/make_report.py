@@ -87,8 +87,9 @@ def cell_for(r, c):
 
 
 def bucket(cell):
-    """CSS class from the count ratio. Positive log = column needed more
-    bodies = row unit stronger = blue; negative = amber."""
+    """CSS class: the WINNER's axis color (blue = row unit wins, amber = column
+    unit wins — matching the axis label colors), intensity = how lopsided the
+    body-count ratio is. The winner is the side that needs fewer bodies."""
     if cell is None:
         return "miss"
     if cell["res"] == "stalemate":
@@ -98,8 +99,12 @@ def bucket(cell):
         return "y3" if cell["count_r"] > cell["count_c"] else "b3"
     v = math.log2(cell["count_c"] / cell["count_r"])
     a = abs(v)
-    if a < 0.263:  # under ~1.2x either way
-        return "n0"
+    if a < 0.263:  # counts within ~1.2x — tint by win rate if it's off-center
+        p = cell["win_r"]
+        if p is None or 0.4 <= p <= 0.6:
+            return "n0"
+        step = "2" if abs(p - 0.5) > 0.25 else "1"
+        return ("b" if p > 0.5 else "y") + step
     step = "1" if a < 1.0 else ("2" if a < 1.585 else "3")
     return ("b" if v > 0 else "y") + step
 
@@ -191,6 +196,7 @@ html = f"""<!doctype html>
   --b1: #b7d3f6; --b2: #6da7ec; --b3: #2a78d6;
   --y1: #f5e2ae; --y2: #f0c159; --y3: #eda100;
   --ink-on-3: #ffffff;
+  --row-ink: #1c5cab; --col-ink: #a86e00;
 }}
 @media (prefers-color-scheme: dark) {{
   :root {{
@@ -200,6 +206,7 @@ html = f"""<!doctype html>
     --b1: #1d3a61; --b2: #1c5cab; --b3: #3987e5;
     --y1: #4a3a10; --y2: #8a6200; --y3: #c98500;
     --ink-on-3: #0b0b0b;
+    --row-ink: #6da7ec; --col-ink: #eda100;
   }}
 }}
 * {{ box-sizing: border-box; }}
@@ -216,6 +223,8 @@ table.matrix {{ border-collapse: separate; border-spacing: 2px; }}
   width: 84px; padding: 4px 2px; }}
 .colhead img {{ max-width: 56px; max-height: 44px; image-rendering: pixelated; }}
 .colhead span, .rowhead span {{ font-size: 11px; line-height: 1.15; text-align: center; }}
+.colhead span {{ color: var(--col-ink); font-weight: 700; }}
+.rowhead span {{ color: var(--row-ink); font-weight: 700; }}
 .rowhead .hr {{ display: flex; align-items: center; gap: 8px; padding: 2px 8px 2px 2px;
   max-width: 170px; }}
 .rowhead img {{ max-width: 56px; max-height: 40px; image-rendering: pixelated; }}
@@ -249,9 +258,11 @@ table.detail th {{ color: var(--ink2); }}
 </style></head>
 <body>
 <h1>Animal Zombie Balance Matrix</h1>
-<p class="sub">How many <b>row</b> units does it take to beat {base} <b>column</b> units
-about half the time? Generated {run.get('generated', '?')} &middot; band 40&ndash;60% win rate
-&middot; up to {run.get('maxTrials', '?')} trials per count.</p>
+<p class="sub">What body counts make a <b style="color:var(--row-ink)">row</b>-unit vs
+<b style="color:var(--col-ink)">column</b>-unit fight a coin flip? Cell shows the ~50% matchup
+(row count v column count) &mdash; whoever needs fewer bodies is winning, and the cell wears
+their color. Generated {run.get('generated', '?')} &middot; band 40&ndash;60% win rate &middot;
+up to {run.get('maxTrials', '?')} trials per count.</p>
 {partial}
 <div class="wrap">
 <table class="matrix">
@@ -259,25 +270,27 @@ about half the time? Generated {run.get('generated', '?')} &middot; band 40&ndas
 {''.join(matrix_rows)}
 </table>
 <div class="legend">
-  <div class="sw" style="background:var(--y3)"></div>
-  <div class="sw" style="background:var(--y2)"></div>
-  <div class="sw" style="background:var(--y1)"></div>
-  <span>row needs 3x+ / 2&ndash;3x / up to 2x more bodies</span>
+  <span>Cell color = who wins (the side that needs fewer bodies), matching the axis label colors.</span>
+  <div class="sw" style="background:var(--b3); margin-left:10px"></div>
+  <div class="sw" style="background:var(--b2)"></div>
+  <div class="sw" style="background:var(--b1)"></div>
+  <span><b style="color:var(--row-ink)">row unit wins</b> by 3x+ / 2&ndash;3x / under 2x</span>
   <div class="sw" style="background:var(--n0); margin-left:14px"></div>
   <span>even (~1:1)</span>
-  <div class="sw" style="background:var(--b1); margin-left:14px"></div>
-  <div class="sw" style="background:var(--b2)"></div>
-  <div class="sw" style="background:var(--b3)"></div>
-  <span>column needs up to 2x / 2&ndash;3x / 3x+ more bodies &rarr; row unit is stronger</span>
+  <div class="sw" style="background:var(--y1); margin-left:14px"></div>
+  <div class="sw" style="background:var(--y2)"></div>
+  <div class="sw" style="background:var(--y3)"></div>
+  <span><b style="color:var(--col-ink)">column unit wins</b> by under 2x / 2&ndash;3x / 3x+</span>
 </div>
 </div>
 <p class="note"><b>Method.</b> Every fight is a clean arena duel on an empty map: both sides
 spawn as leash-less attack-closest units (no horde AI, no routing/morale — both sides forced
 fearless), melee swings resolve instantly (no animation windup, symmetric for both sides).
 Spawn side, spawn order, and faction assignment alternate across trials to cancel systematic
-biases. The searched side's count is bracketed and bisected until the win rate lands in
-40&ndash;60%; "Nv5+" (deep color, "can't win") means the weaker side still lost every fight
-at 6x numbers, where the search caps out.</p>
+biases. The search keeps armies small: first the winner's squad shrinks (5&rarr;4&rarr;3, loser
+at 5), then the loser's count is bracketed and bisected at winner=3 (up to 15), winner=2 (up
+to 25), and winner=1 (up to 30) until the win rate lands in 40&ndash;60%. "N+" with "can't
+win" means the losing side lost every fight even at 30-to-1.</p>
 <h2>All measured pairs (table view)</h2>
 <table class="detail">
 <tr><th>Unit A</th><th>Unit B</th><th>~50% counts</th><th>A win rate</th>

@@ -17,9 +17,11 @@ namespace Necroking.Scenario.Scenarios;
 ///
 /// Algorithm per pair: evaluate BASE v BASE first (mirror pairs stop there —
 /// they double as a harness sanity check, expected ~50%). If the baseline is
-/// outside the 40–60% band, hold the stronger side at BASE and search the
-/// weaker side's count upward (Lanchester-seeded guess, then bracket+bisect on
-/// integers, capped at MAXCOUNT). Trials per count use early stopping: clearly
+/// outside the 40–60% band, first SHRINK the winner's squad (5 -> 4 -> 3 with
+/// the loser at 5), then grow the loser at winner=3 (bracket+bisect, cap 15),
+/// then winner=2 (loser re-searched up or down, cap 25), then winner=1 (cap
+/// 30). "cap" = the loser lost every fight at 30-to-1. Keeps armies small and
+/// measures ratios up to 30x. Trials per count use early stopping: clearly
 /// lopsided counts are abandoned after a few fights.
 ///
 /// Results are re-written to log/balance_results.json after every completed
@@ -30,7 +32,6 @@ namespace Necroking.Scenario.Scenarios;
 ///   NECRO_BALANCE_UNITS   comma-separated unit def ids (default: animal zombies)
 ///   NECRO_BALANCE_BASE    stronger-side squad size (default 5)
 ///   NECRO_BALANCE_TRIALS  max trials per count-config (default 20)
-///   NECRO_BALANCE_MAXCOUNT search cap for the weaker side (default 30)
 ///   NECRO_BALANCE_FIGHT_TIMEOUT game-seconds before a fight is a draw (default 90)
 ///
 /// Run: bin/Debug/Necroking.exe --scenario balance_matrix --headless --speed 30 --timeout 3600
@@ -53,7 +54,6 @@ public class BalanceMatrixScenario : ScenarioBase
         "ZombieGreatBoar",
     };
     private int _base = 5;
-    private int _maxCount = 30;
     private int _maxTrials = 20;
     private int _minTrials = 10;
     private float _fightTimeout = 90f;
@@ -106,11 +106,17 @@ public class BalanceMatrixScenario : ScenarioBase
     private int _pairIndex;
     private int _totalFights;
 
-    // per-pair search state
+    // per-pair search state. Search shape (user-specified): shrink the WINNER's
+    // squad first (5 -> 4 -> 3, loser stays 5), then grow the loser at winner=3
+    // (up to 15), then drop winner to 2 and re-search the loser (up to 25), then
+    // winner=1 (up to 30). Keeps armies small and reaches ratios up to 30:1.
     private PairResult _pr = new();
     private bool _baselineDone;
-    private bool _searchB;               // true → B is the weaker side being scaled up
-    private int _lo, _hi, _curr;
+    private bool _winnerIsA;             // stronger side, decided by the 5v5 baseline
+    private int _wCount;                 // winner-side count of the config just evaluated
+    private int _lCount;                 // loser-side count of the config just evaluated
+    private bool _growPhase;             // false = shrinking winner; true = grow/bisect loser
+    private int _lo, _hi;                // loser-count bracket at current _wCount (_hi -1 = unknown)
 
     // current config + fight state
     private ConfigResult _cfg = new();
@@ -132,13 +138,12 @@ public class BalanceMatrixScenario : ScenarioBase
             _roster = envUnits.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         _base = EnvInt("NECRO_BALANCE_BASE", _base);
         _maxTrials = EnvInt("NECRO_BALANCE_TRIALS", _maxTrials);
-        _maxCount = EnvInt("NECRO_BALANCE_MAXCOUNT", _maxCount);
         _fightTimeout = EnvInt("NECRO_BALANCE_FIGHT_TIMEOUT", (int)_fightTimeout);
         _speed = EnvInt("NECRO_BALANCE_SPEED", _speed);
         _minTrials = Math.Min(_minTrials, _maxTrials);
 
         DebugLog.Log(ScenarioLog, $"=== Balance Matrix: {_roster.Length} units, base={_base}, " +
-            $"maxTrials={_maxTrials}, maxCount={_maxCount}, fightTimeout={_fightTimeout}s ===");
+            $"maxTrials={_maxTrials}, fightTimeout={_fightTimeout}s ===");
 
         foreach (var id in _roster)
         {
@@ -361,6 +366,11 @@ public class BalanceMatrixScenario : ScenarioBase
         return true;
     }
 
+    /// <summary>Loser-side count ceiling at each winner-side count.</summary>
+    private static int LoserCap(int w) => w switch { 3 => 15, 2 => 25, 1 => 30, _ => 5 };
+
+    private static int NextGrow(int l, int cap) => Math.Min(cap, l + Math.Max(1, l * 2 / 5));
+
     private void Advance(Simulation sim)
     {
         if (ConfigNeedsMoreTrials())
@@ -373,10 +383,12 @@ public class BalanceMatrixScenario : ScenarioBase
         float p = WinFracA(_cfg);
         if (p < 0f)
         {
-            // every trial was a draw — nothing will separate these two
+            // every trial was a draw — nothing will separate these two at this ratio
             FinishPair("stalemate", _cfg);
+            return;
         }
-        else if (!_baselineDone)
+
+        if (!_baselineDone)
         {
             _baselineDone = true;
             var (ia, ib) = _pairs[_pairIndex];
@@ -386,74 +398,116 @@ public class BalanceMatrixScenario : ScenarioBase
             }
             else
             {
-                // stronger side stays at _base; weaker side count gets searched
-                _searchB = p > BandHi; // A won too much → scale B up
-                float q = Math.Clamp(_searchB ? p : 1f - p, 0.65f, 0.95f);
-                float mult = MathF.Sqrt(q / (1f - q)); // Lanchester-ish first guess
-                _lo = _base;
+                _winnerIsA = p > BandHi;
+                _wCount = _base;
+                _lCount = _base;
+                _growPhase = false;
+                StartConfig(_wCount - 1, _base); // start by shrinking the winner
+            }
+            return;
+        }
+
+        // Winner's win fraction at the config just evaluated.
+        float pW = _winnerIsA ? p : 1f - p;
+        if (pW >= BandLo && pW <= BandHi)
+        {
+            FinishPair("band", _cfg);
+            return;
+        }
+
+        if (!_growPhase)
+        {
+            // Shrinking the winner (loser fixed at _base).
+            if (pW < BandLo)
+            {
+                // Overshot: the old loser wins at (w,5) but lost at (w+1,5) —
+                // adjacent configs straddle 50%, pick whichever measured closer.
+                FinishPair("closest", ClosestConfig());
+            }
+            else if (_wCount > 3)
+            {
+                StartConfig(_wCount - 1, _base);
+            }
+            else
+            {
+                // Winner still dominates at 3v5 — start growing the loser.
+                _growPhase = true;
+                _lo = _lCount;
                 _hi = -1;
-                _curr = Math.Clamp((int)MathF.Round(_base * mult), _base + 1, _maxCount);
-                StartConfig(_curr);
+                StartConfig(_wCount, NextGrow(_lCount, LoserCap(_wCount)));
             }
         }
         else
         {
-            float pWeak = _searchB ? 1f - p : p;
-            if (pWeak >= BandLo && pWeak <= BandHi)
+            // Growing/bisecting the loser at fixed winner count.
+            int cap = LoserCap(_wCount);
+            if (pW > BandHi) // loser still loses at _lCount
             {
-                FinishPair("band", _cfg);
-            }
-            else if (pWeak < BandLo) // weaker side still loses at _curr
-            {
-                _lo = _curr;
-                if (_hi < 0)
+                _lo = _lCount;
+                if (_hi > 0)
                 {
-                    if (_curr >= _maxCount) { FinishPair("cap", _cfg); return; }
-                    _curr = Math.Min(_maxCount, _curr + Math.Max(1, _curr * 2 / 5));
-                    StartConfig(_curr);
+                    BisectLoser();
                 }
-                else Bisect();
+                else if (_lCount >= cap)
+                {
+                    // Loser maxed out at this winner count — drop the winner.
+                    if (_wCount > 1)
+                    {
+                        _wCount--;
+                        _lo = _wCount; // equal counts = assumed loser floor
+                        _hi = -1;
+                        StartConfig(_wCount, _lCount); // re-probe; may go up or down from here
+                    }
+                    else
+                    {
+                        FinishPair("cap", _cfg); // 30 v 1 and still losing
+                    }
+                }
+                else
+                {
+                    StartConfig(_wCount, NextGrow(_lCount, cap));
+                }
             }
-            else // weaker side now wins too much
+            else // loser now wins too much
             {
-                _hi = _curr;
-                Bisect();
+                _hi = _lCount;
+                BisectLoser();
             }
         }
     }
 
-    private void Bisect()
+    private void BisectLoser()
     {
         int next = (_lo + _hi) / 2;
         if (next <= _lo)
-        {
-            // adjacent bracket — pick whichever evaluated config sat closest to 50%
-            ConfigResult best = _cfg;
-            float bestDist = float.MaxValue;
-            foreach (var c in _pr.Configs)
-            {
-                int weakCount = _searchB ? c.CountB : c.CountA;
-                if (weakCount != _lo && weakCount != _hi) continue;
-                float wp = WinFracA(c);
-                if (wp < 0f) continue;
-                float d = Math.Abs(wp - 0.5f);
-                if (d < bestDist) { bestDist = d; best = c; }
-            }
-            FinishPair("closest", best);
-        }
+            FinishPair("closest", ClosestConfig());
         else
-        {
-            _curr = next;
-            StartConfig(_curr);
-        }
+            StartConfig(_wCount, next);
     }
 
-    private void StartConfig(int weakCount)
+    /// <summary>The evaluated config whose decisive win rate sat closest to 50%.</summary>
+    private ConfigResult ClosestConfig()
     {
+        ConfigResult best = _cfg;
+        float bestDist = float.MaxValue;
+        foreach (var c in _pr.Configs)
+        {
+            float wp = WinFracA(c);
+            if (wp < 0f) continue;
+            float d = Math.Abs(wp - 0.5f);
+            if (d < bestDist) { bestDist = d; best = c; }
+        }
+        return best;
+    }
+
+    private void StartConfig(int winnerCount, int loserCount)
+    {
+        _wCount = winnerCount;
+        _lCount = loserCount;
         _cfg = new ConfigResult
         {
-            CountA = _searchB ? _base : weakCount,
-            CountB = _searchB ? weakCount : _base,
+            CountA = _winnerIsA ? winnerCount : loserCount,
+            CountB = _winnerIsA ? loserCount : winnerCount,
         };
         _trialIndex = 0;
         _state = State.SpawnFight;
@@ -480,10 +534,11 @@ public class BalanceMatrixScenario : ScenarioBase
         _pr = new PairResult { UnitA = _roster[ia], UnitB = _roster[ib] };
         _run.Pairs.Add(_pr);
         _baselineDone = false;
-        _searchB = false;
+        _growPhase = false;
+        _winnerIsA = false;
         DebugLog.Log(ScenarioLog, $"=== Pair {_pairIndex + 1}/{_pairs.Count}: {_pr.UnitA} vs {_pr.UnitB} " +
             $"(fights so far: {_totalFights}) ===");
-        StartConfig(_base); // baseline: base v base (_searchB is false → both sides get _base)
+        StartConfig(_base, _base); // baseline: equal counts, winner not yet known
     }
 
     private void FinishPair(string resolution, ConfigResult final)

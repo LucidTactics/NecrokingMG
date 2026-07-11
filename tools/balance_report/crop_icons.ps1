@@ -47,7 +47,10 @@ foreach ($id in $results.units) {
         $atlasCache[$atlas] = [System.Drawing.Bitmap]::FromFile((Join-Path $root "assets/Sprites/$atlas.png"))
     }
     $bmp = $atlasCache[$atlas]
-    $crop = $bmp.Clone([System.Drawing.Rectangle]::new($x, $y, $w, $h), $bmp.PixelFormat)
+    # spritemeta rect Y is bottom-left origin (like its pivots — see
+    # GameRenderer.Corpses.cs pivot note); System.Drawing wants top-left.
+    $topY = $bmp.Height - $y - $h
+    $crop = $bmp.Clone([System.Drawing.Rectangle]::new($x, $topY, $w, $h), $bmp.PixelFormat)
     $file = Join-Path $outPath "$id.png"
     $crop.Save($file, [System.Drawing.Imaging.ImageFormat]::Png)
     $crop.Dispose()
