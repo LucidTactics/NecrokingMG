@@ -916,7 +916,16 @@ partial class GameRenderer
         }
 
         // Categorized scenario grid (shared layout with the click handler).
-        var view = BuildScenarioMenuLayout(screenW, screenH, _g._scenarioScrollOffset);
+        var view = BuildScenarioMenuLayout(screenW, screenH, _g._scenarioScrollPx);
+
+        // Clip the grid to its scroll window so partially-scrolled rows are cut at
+        // the edges (smooth sub-row scroll) rather than spilling into the title /
+        // back-button gaps. Scissor rect is device state; the HudScissor material
+        // enables the scissor test (same mechanism as the editor panels).
+        var device = _g.Scope.GraphicsDevice;
+        var prevScissor = device.ScissorRectangle;
+        device.ScissorRectangle = new Rectangle(0, view.ScrollY, screenW, view.ScrollViewH);
+        _g.Scope.PushMaterial(Materials.HudScissor);
 
         foreach (var e in view.Entries)
         {
@@ -926,6 +935,9 @@ partial class GameRenderer
             else
                 DrawMenuButtonAt(e.Text, e.Rect.X, e.Rect.Y, e.Rect.Width, e.Rect.Height);
         }
+
+        _g.Scope.PopMaterial();
+        device.ScissorRectangle = prevScissor;
 
         // Back button (centered below the visible grid)
         DrawMenuButtonAt("< Back", view.BackRect.X, view.BackRect.Y, view.BackRect.Width, view.BackRect.Height);
@@ -939,11 +951,10 @@ partial class GameRenderer
     // thumb goes "hot" while hovered or being dragged (drag state lives on Game1).
     private void DrawScenarioScrollbar(ScenarioMenuView view)
     {
-        float scroll = _g._scenarioScrollOffset * (float)view.RowStride;
         if (Necroking.UI.VScrollbar.Fits(view.ScrollViewH, view.ScrollContentH)) return;
 
         var track = Necroking.UI.VScrollbar.TrackRect(view.ScrollX, view.ScrollY, view.ScrollViewH);
-        var thumb = Necroking.UI.VScrollbar.ThumbRect(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH, scroll);
+        var thumb = Necroking.UI.VScrollbar.ThumbRect(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH, _g._scenarioScrollPx);
 
         int mx = (int)_g._input.MousePos.X, my = (int)_g._input.MousePos.Y;
         bool overThumb = thumb.Contains(mx, my);
@@ -996,32 +1007,36 @@ partial class GameRenderer
         public int ScrollViewH;
         public float ScrollContentH;
 
-        /// <summary>Clamp a row offset to the valid scroll range for this layout.</summary>
-        public int ClampScroll(int scrollRow) => Math.Clamp(scrollRow, 0, Math.Max(0, TotalRows - RowsVisible));
+        /// <summary>Clamp a pixel scroll offset to the valid range for this layout.</summary>
+        public float ClampScroll(float scrollPx) => Math.Clamp(scrollPx, 0f, Math.Max(0f, ScrollContentH - ScrollViewH));
     }
 
-    // Builds the categorized scenario-menu layout for a given scroll offset (in rows).
-    // Each category emits a header row followed by its scenario buttons packed into
-    // `cols`-wide rows. `scrollRow` scrolls the whole layout vertically.
-    internal ScenarioMenuView BuildScenarioMenuLayout(int screenW, int screenH, int scrollRow)
+    // Builds the categorized scenario-menu layout for a given scroll offset (in
+    // pixels — smooth, sub-row). Each category emits a header row followed by its
+    // scenario buttons packed into `cols`-wide rows; `scrollPx` slides the whole
+    // layout vertically. Entries partially inside the window are Visible (they're
+    // scissor-clipped at draw time); ClampScroll keeps the last row reachable.
+    internal ScenarioMenuView BuildScenarioMenuLayout(int screenW, int screenH, float scrollPx)
     {
         GetScenarioGridLayout(screenW, screenH, out int cols, out int btnW, out int btnH, out int btnGap,
             out int gridX, out int menuY, out int rowsVisible);
         int rowStride = btnH + btnGap;
         int gridW = cols * btnW + (cols - 1) * btnGap;
+        int viewH = rowsVisible * rowStride;
+        int scroll = (int)Math.Round(scrollPx);
 
         var entries = new List<ScenarioMenuEntry>();
         int layoutRow = 0;
 
         foreach (var cat in ScenarioRegistry.GetCategories())
         {
-            int headerRel = layoutRow - scrollRow;
+            int hy = menuY + layoutRow * rowStride - scroll;
             entries.Add(new ScenarioMenuEntry
             {
                 IsHeader = true,
                 Text = cat,
-                Rect = new Rectangle(gridX, menuY + headerRel * rowStride, gridW, btnH),
-                Visible = headerRel >= 0 && headerRel < rowsVisible,
+                Rect = new Rectangle(gridX, hy, gridW, btnH),
+                Visible = hy + btnH > menuY && hy < menuY + viewH,
             });
             layoutRow++;
 
@@ -1029,14 +1044,14 @@ partial class GameRenderer
             for (int i = 0; i < scen.Count; i++)
             {
                 int col = i % cols;
-                int rel = (layoutRow + i / cols) - scrollRow;
+                int by = menuY + (layoutRow + i / cols) * rowStride - scroll;
                 int bx = gridX + col * (btnW + btnGap);
                 entries.Add(new ScenarioMenuEntry
                 {
                     IsHeader = false,
                     Text = scen[i],
-                    Rect = new Rectangle(bx, menuY + rel * rowStride, btnW, btnH),
-                    Visible = rel >= 0 && rel < rowsVisible,
+                    Rect = new Rectangle(bx, by, btnW, btnH),
+                    Visible = by + btnH > menuY && by < menuY + viewH,
                 });
             }
             layoutRow += (scen.Count + cols - 1) / cols;
@@ -1044,7 +1059,7 @@ partial class GameRenderer
 
         // Back button fixed just below the visible window so it never scrolls away.
         int backW = 320;
-        int backY = menuY + rowsVisible * rowStride + 10;
+        int backY = menuY + viewH + 10;
 
         return new ScenarioMenuView
         {
@@ -1055,7 +1070,7 @@ partial class GameRenderer
             BackRect = new Rectangle(screenW / 2 - backW / 2, backY, backW, btnH),
             ScrollX = gridX + gridW + 8,
             ScrollY = menuY,
-            ScrollViewH = rowsVisible * rowStride,
+            ScrollViewH = viewH,
             ScrollContentH = layoutRow * rowStride,
         };
     }

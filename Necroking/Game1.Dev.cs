@@ -303,7 +303,7 @@ public partial class Game1 {
                      break;
                   case "scenarios":
                      _menuState = MenuState.ScenarioList;
-                     _scenarioScrollOffset = 0;
+                     _scenarioScrollPx = 0f;
                      c.Complete(Necroking.Dev.DevServer.Ok("opened scenario list"));
                      break;
                   case "main_menu":
@@ -1938,7 +1938,7 @@ public partial class Game1 {
          case "scenarios":
          case "scenario_list":
             _menuState = MenuState.ScenarioList;
-            _scenarioScrollOffset = 0;
+            _scenarioScrollPx = 0f;
             return true;
       }
 

@@ -828,7 +828,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private int _devJobSeq;                        // id counter for batch jobs
     private Vec2? _devWalkTarget;                  // dev "walk_necro" goal; drives WASD-equivalent input, cancelled by any WASD press
     private bool _devWalkSprint;                   // dev "walk_necro" sprint=true opt: hold virtual Shift while auto-walking
-    internal int _scenarioScrollOffset;           // scenario-menu scroll, in layout rows
+    internal float _scenarioScrollPx;             // scenario-menu scroll, in pixels (smooth, sub-row)
     internal bool _scenarioScrollDragging;         // dragging the scenario-menu scrollbar thumb
     private float _scenarioScrollGrabOffset;        // Y within the thumb where the drag started
 
@@ -2990,7 +2990,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 if (mouse.X >= menuX && mouse.X < menuX + btnW && mouse.Y >= menuY && mouse.Y < menuY + btnH)
                 {
                     _menuState = MenuState.ScenarioList;
-                    _scenarioScrollOffset = 0;
+                    _scenarioScrollPx = 0f;
                     _prevKb = kb;
                     _prevMouse = mouse;
                     base.Update(gameTime);
@@ -3023,19 +3023,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
             int screenW2 = GraphicsDevice.Viewport.Width;
             int screenH2 = GraphicsDevice.Viewport.Height;
-            var view = _gameRenderer.BuildScenarioMenuLayout(screenW2, screenH2, _scenarioScrollOffset);
+            var view = _gameRenderer.BuildScenarioMenuLayout(screenW2, screenH2, _scenarioScrollPx);
 
             // Draggable scrollbar — same behaviour as the editor panels (shared
-            // Necroking.UI.VScrollbar). Thumb math runs in pixels (row * RowStride);
-            // the resulting offset is converted back to whole layout rows.
+            // Necroking.UI.VScrollbar). The scroll offset is stored in pixels, so the
+            // thumb math and drag conversion are both pixel-native (smooth, sub-row).
             if (_scenarioScrollDragging && mouse.LeftButton != ButtonState.Pressed)
                 _scenarioScrollDragging = false;
 
             bool hasBar = !Necroking.UI.VScrollbar.Fits(view.ScrollViewH, view.ScrollContentH);
             if (hasBar)
             {
-                float scrollPx = _scenarioScrollOffset * (float)view.RowStride;
-                var thumb = Necroking.UI.VScrollbar.ThumbRect(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH, scrollPx);
+                var thumb = Necroking.UI.VScrollbar.ThumbRect(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH, _scenarioScrollPx);
                 var hit = Necroking.UI.VScrollbar.HitRect(view.ScrollX, view.ScrollY, view.ScrollViewH);
 
                 // Grab the thumb, or click the track to jump (thumb centres on the cursor).
@@ -3049,23 +3048,26 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 {
                     float newPx = Necroking.UI.VScrollbar.ScrollFromDrag(mouse.Y, _scenarioScrollGrabOffset,
                         view.ScrollY, view.ScrollViewH, view.ScrollContentH);
-                    _scenarioScrollOffset = view.ClampScroll((int)Math.Round(newPx / view.RowStride));
+                    _scenarioScrollPx = view.ClampScroll(newPx);
                 }
             }
 
-            // Wheel scroll (a few layout rows at a time), clamped to the layout height.
+            // Wheel scroll (one layout row per notch), clamped to the layout height.
             if (!_scenarioScrollDragging && _input.ScrollDelta != 0)
             {
-                _scenarioScrollOffset += _input.ScrollDelta > 0 ? -3 : 3;
-                _scenarioScrollOffset = view.ClampScroll(_scenarioScrollOffset);
+                _scenarioScrollPx += (_input.ScrollDelta > 0 ? -1 : 1) * view.RowStride * 0.5f;
+                _scenarioScrollPx = view.ClampScroll(_scenarioScrollPx);
             }
 
             // Grid / back-button clicks (skipped while dragging the scrollbar).
             if (_input.LeftPressed && !_scenarioScrollDragging)
             {
+                // Only clicks inside the scrolled grid window count — a partially
+                // clipped bottom row must not be clickable in the gap below it.
+                bool inGridWindow = mouse.Y >= view.ScrollY && mouse.Y < view.ScrollY + view.ScrollViewH;
                 foreach (var e in view.Entries)
                 {
-                    if (!e.Visible || e.IsHeader) continue;
+                    if (!e.Visible || e.IsHeader || !inGridWindow) continue;
                     if (e.Rect.Contains(mouse.X, mouse.Y))
                     {
                         StartScenario(e.Text);
