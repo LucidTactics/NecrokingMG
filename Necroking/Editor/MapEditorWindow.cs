@@ -271,13 +271,13 @@ public class MapEditorWindow
     private int _unitGridDrawY;
     private int _unitGridCellW;
     private int _unitGridCellH;
-    private int _unitGridRowsVisible;
+    private int _unitGridViewH; // grid viewport height in px (scroll is continuous, not row-stepped)
     // Objects-tab thumbnail grid (same scheme)
     private int _objGridDrawX;
     private int _objGridDrawY;
     private int _objGridCellW;
     private int _objGridCellH;
-    private int _objGridRowsVisible;
+    private int _objGridViewH;
 
     // When the editor is entered via a mouse click (e.g. the pause-menu "Map
     // Editor" button), that same click would otherwise bubble straight into the
@@ -2273,11 +2273,14 @@ public class MapEditorWindow
                 int rowStride = _objGridCellH + ThumbGridGap;
                 int relX = mouse.X - _objGridDrawX;
                 int relY = mouse.Y - _objGridDrawY;
-                if (relX >= 0 && relY >= 0 && relY < _objGridRowsVisible * rowStride
-                    && relX % colStride < _objGridCellW && relY % rowStride < _objGridCellH)
+                // Content-space Y: the grid scrolls continuously (by pixels),
+                // so add the raw scroll before the row math.
+                int conY = relY + (int)_envListScroll;
+                if (relX >= 0 && relY >= 0 && relY < _objGridViewH
+                    && relX % colStride < _objGridCellW && conY % rowStride < _objGridCellH)
                 {
                     int col = relX / colStride;
-                    int row = relY / rowStride + (int)(_envListScroll / rowStride);
+                    int row = conY / rowStride;
                     int i = row * ThumbGridCols + col;
                     if (col < ThumbGridCols && i >= 0 && i < filteredDefs.Count)
                         SelectedEnvDefIndex = filteredDefs[i];
@@ -2864,30 +2867,37 @@ public class MapEditorWindow
             int cellH = cellW;
             int rowStride = cellH + ThumbGridGap;
             int totalRows = (filteredDefs.Count + ThumbGridCols - 1) / ThumbGridCols;
-            int visibleRows = Math.Max(1, listAreaH / rowStride);
 
             // Clamp the wheel-driven scroll to the end of the grid (the wheel
-            // handler in Update only clamps at 0).
-            float maxObjScroll = Math.Max(0, (totalRows - visibleRows) * rowStride);
+            // handler in Update only clamps at 0). Pixel-exact so the grid
+            // scrolls continuously with the wheel, not a row at a time.
+            float maxObjScroll = Math.Max(0, totalRows * rowStride - listAreaH);
             _envListScroll = Math.Clamp(_envListScroll, 0, maxObjScroll);
-            int firstRow = (int)(_envListScroll / rowStride);
+            int scrollPx = (int)_envListScroll;
+            int firstRow = scrollPx / rowStride;
+            int subRowOff = scrollPx % rowStride; // partial-row offset — rows glide, clip catches the spill
 
             // Cache for Update hit-testing
             _objGridDrawX = gridX;
             _objGridDrawY = contentY;
             _objGridCellW = cellW;
             _objGridCellH = cellH;
-            _objGridRowsVisible = visibleRows;
+            _objGridViewH = listAreaH;
 
             // MousePos, not raw .Mouse: the mousepos dev override patches only
             // MousePos, and with a real mouse the two are identical.
             int mx = (int)_eb._input.MousePos.X, my = (int)_eb._input.MousePos.Y;
             int hoveredIdx = -1;
             Rectangle hoveredCell = default;
-            for (int r = 0; r < visibleRows; r++)
+            // Nested clip: partially-scrolled rows must not bleed above the
+            // grid or into the selected-def properties below it.
+            _eb.BeginClip(new Rectangle(gridX, contentY, gridW, listAreaH));
+            for (int r = 0; ; r++)
             {
                 int row = firstRow + r;
                 if (row >= totalRows) break;
+                int cellY = contentY + r * rowStride - subRowOff;
+                if (cellY >= contentY + listAreaH) break;
                 for (int c = 0; c < ThumbGridCols; c++)
                 {
                     int i = row * ThumbGridCols + c;
@@ -2895,9 +2905,9 @@ public class MapEditorWindow
 
                     int defIdx = filteredDefs[i];
                     var def = _envSystem.GetDef(defIdx);
-                    var cell = new Rectangle(gridX + c * (cellW + ThumbGridGap), contentY + r * rowStride, cellW, cellH);
+                    var cell = new Rectangle(gridX + c * (cellW + ThumbGridGap), cellY, cellW, cellH);
                     bool selected = defIdx == SelectedEnvDefIndex;
-                    bool hovered = cell.Contains(mx, my);
+                    bool hovered = cell.Contains(mx, my) && my >= contentY && my < contentY + listAreaH;
                     if (hovered) { hoveredIdx = i; hoveredCell = cell; }
 
                     Scope.Draw(_pixel, cell, selected ? new Color(60, 60, 100, 220)
@@ -2909,6 +2919,7 @@ public class MapEditorWindow
                         _eb.DrawBorder(cell, new Color(120, 120, 170));
                 }
             }
+            _eb.EndClip();
 
             // Thin scrollbar in the panel's right margin, spanning the grid viewport.
             _eb.DrawVScrollbar(panelX + PanelWidth - 6, contentY, listAreaH,
@@ -5345,11 +5356,15 @@ public class MapEditorWindow
             int rowStride = _unitGridCellH + ThumbGridGap;
             int relX = mouse.X - _unitGridDrawX;
             int relY = mouse.Y - _unitGridDrawY;
-            if (relX >= 0 && relY >= 0 && relY < _unitGridRowsVisible * rowStride
-                && relX % colStride < _unitGridCellW && relY % rowStride < _unitGridCellH)
+            // Content-space Y: the grid scrolls continuously (by pixels), so
+            // add the raw scroll before the row math — quantizing the scroll
+            // to rows would misalign clicks when scrolled mid-row.
+            int conY = relY + (int)_tabScroll[(int)MapEditorTab.Units];
+            if (relX >= 0 && relY >= 0 && relY < _unitGridViewH
+                && relX % colStride < _unitGridCellW && conY % rowStride < _unitGridCellH)
             {
                 int col = relX / colStride;
-                int row = relY / rowStride + (int)(_tabScroll[(int)MapEditorTab.Units] / rowStride);
+                int row = conY / rowStride;
                 int idx = row * ThumbGridCols + col;
                 if (col < ThumbGridCols && idx >= 0 && idx < unitIds.Count)
                     _selectedUnitDefIdx = idx;
@@ -5464,39 +5479,46 @@ public class MapEditorWindow
         int cellH = cellW;
         int rowStride = cellH + ThumbGridGap;
         int totalRows = (unitIds.Count + ThumbGridCols - 1) / ThumbGridCols;
-        int visibleRows = Math.Max(1, listH / rowStride);
 
         // Clamp the wheel-driven scroll to the end of the grid (the generic
-        // wheel handler in Update only clamps at 0).
-        float maxUnitScroll = Math.Max(0, (totalRows - visibleRows) * rowStride);
+        // wheel handler in Update only clamps at 0). Pixel-exact so the grid
+        // scrolls continuously with the wheel, not a row at a time.
+        float maxUnitScroll = Math.Max(0, totalRows * rowStride - listH);
         _tabScroll[(int)MapEditorTab.Units] = Math.Clamp(_tabScroll[(int)MapEditorTab.Units], 0, maxUnitScroll);
-        int firstRow = (int)(_tabScroll[(int)MapEditorTab.Units] / rowStride);
+        int scrollPx = (int)_tabScroll[(int)MapEditorTab.Units];
+        int firstRow = scrollPx / rowStride;
+        int subRowOff = scrollPx % rowStride; // partial-row offset — rows glide, clip catches the spill
 
         // Cache for Update hit-testing
         _unitGridDrawX = x;
         _unitGridDrawY = curY;
         _unitGridCellW = cellW;
         _unitGridCellH = cellH;
-        _unitGridRowsVisible = visibleRows;
+        _unitGridViewH = listH;
 
         // MousePos, not raw .Mouse: the mousepos dev override patches only
         // MousePos, and with a real mouse the two are identical.
         int mx = (int)_eb._input.MousePos.X, my = (int)_eb._input.MousePos.Y;
         int hoveredIdx = -1;
         Rectangle hoveredCell = default;
-        for (int r = 0; r < visibleRows; r++)
+        // Nested clip: partially-scrolled rows must not bleed above the grid
+        // or into the placed-units section below it.
+        _eb.BeginClip(new Rectangle(x, curY, w, listH));
+        for (int r = 0; ; r++)
         {
             int row = firstRow + r;
             if (row >= totalRows) break;
+            int cellY = curY + r * rowStride - subRowOff;
+            if (cellY >= curY + listH) break;
             for (int c = 0; c < ThumbGridCols; c++)
             {
                 int idx = row * ThumbGridCols + c;
                 if (idx >= unitIds.Count) break;
 
-                var cell = new Rectangle(x + c * (cellW + ThumbGridGap), curY + r * rowStride, cellW, cellH);
+                var cell = new Rectangle(x + c * (cellW + ThumbGridGap), cellY, cellW, cellH);
                 var def = _gameData.Units.Get(unitIds[idx]);
                 bool selected = idx == _selectedUnitDefIdx;
-                bool hovered = cell.Contains(mx, my);
+                bool hovered = cell.Contains(mx, my) && my >= curY && my < curY + listH;
                 if (hovered) { hoveredIdx = idx; hoveredCell = cell; }
 
                 Scope.Draw(_pixel, cell, selected ? new Color(60, 60, 100, 220)
@@ -5508,6 +5530,7 @@ public class MapEditorWindow
                     _eb.DrawBorder(cell, new Color(120, 120, 170));
             }
         }
+        _eb.EndClip();
 
         // Thin scrollbar in the panel's right margin, spanning the grid viewport.
         _eb.DrawVScrollbar(panelX + PanelWidth - 6, curY, listH,
@@ -5625,6 +5648,15 @@ public class MapEditorWindow
         scale = Math.Min(scale, 3f); // don't blow tiny sprites up into pixel mush
         _eb!.DrawTexture(tex, new Vector2(cell.Center.X, cell.Center.Y), rect, Color.White,
             0f, new Vector2(rect.Width / 2f, rect.Height / 2f), scale, SpriteEffects.None);
+    }
+
+    /// <summary>Dev-command hook ("map_scroll"): set the active tab's list
+    /// scroll in pixels, standing in for the mouse wheel in headless runs.
+    /// The next Draw clamps it like any wheel input.</summary>
+    public void DevSetScroll(float px)
+    {
+        if (ActiveTab == MapEditorTab.Objects) _envListScroll = Math.Max(0, px);
+        else _tabScroll[(int)ActiveTab] = Math.Max(0, px);
     }
 
     /// <summary>Thin scrollbar at the panel's right edge for a scrolling tab
