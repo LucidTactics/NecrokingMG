@@ -156,6 +156,34 @@ _pendingCastAnim` struct in `Game1.cs`, near `IsChanneledCast`/`GetChannelStates
   Separate held-key channel state: `_channelingSlot` (beam/drain spells, cancelled on key
   release in `Game1.cs` Update).
 
+### Beam/Drain hold-channel (`_channelingSlot`) — a SEPARATE machine that holds NO anim
+`Beam`/`Drain` spells (e.g. `lightning_beam`) are NOT the `ImbueGround`/`Raise` channel
+above. Their lifecycle:
+- **Start**: `lightning_beam` has `castingBuffID` but no `castAnim`, so `DispatchSpellCast`
+  takes the *deferred single-shot* branch — plays **Spell1 once** (the wind-up the caster
+  is stuck in), fires the effect on the Spell1 action frame → `SpellEffectSystem.Execute`
+  Beam case → `sim.Lightning.SpawnBeam(...)` + `StartChannel(...)`. `StartChannel` (player
+  `slot>=0`) just sets `game._channelingSlot = slot`; AI (`slot<0`) sets `Unit.ChannelTimer`.
+- **No held pose**: after the Spell1 effect frame, `_pendingCastAnim` clears and the caster
+  falls back to Idle/locomotion — **nothing holds a casting frame for the beam duration**
+  (the user's "returns to idle" symptom). To hold a frame you must drive the controller
+  directly off `_channelingSlot` (mirror how `UpdateChanneledCast` pins Imbue), since the
+  beam channel has no `_pendingCastAnim` entry and no anim state today.
+- **Tick/end**: `LightningSystem.Update` (`Necroking/Game/LightningSystem.cs`, ticked from
+  `Simulation.Tick` "Lightning" phase) only advances `Elapsed` and kills the beam on
+  `MaxDuration`. Player release: `Game1.cs` Update `--- Beam/drain channel-hold ---` block
+  calls `CancelBeamsForCaster`/`CancelDrainsForCaster` when `!SpellBarBindings.IsSlotHeld`.
+  AI: `CasterUnitHandler.CancelChannel`. **`lightning_beam` sets no `beamMaxDuration`, so it
+  ONLY ends on key-release.**
+- **Beam/Drain deal NO per-tick damage today**: `ActiveBeam.DamagePerTick`/`TickRate`/
+  `RetargetRadius`/`DamageAccumulator` are stored but the `LightningSystem.Update` beam &
+  drain loops never apply damage or retarget (only `Strike` pushes `LightningDamage`). Any
+  "robust channel" work that expects the beam to hurt must wire this up.
+- SpellDef beam/drain fields (`BeamTickRate`, `BeamMaxDuration`, `BeamRetargetRadius`,
+  `DrainMaxDuration`, `DrainBreakRange`, …) live in `Data/Registries/SpellRegistry.cs`
+  (`[EditorVisible("Category","Beam"/"Drain")]`); add a `channelStopsMovement`-style field
+  there and default it on for Beam/Drain.
+
 ## Interruption / lock / cooldown mechanisms that exist
 
 - Priority lanes + same-priority "must have started" replacement gate (AnimResolver).
