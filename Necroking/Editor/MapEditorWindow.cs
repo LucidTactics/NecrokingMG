@@ -2896,11 +2896,11 @@ public class MapEditorWindow
                 }
             }
 
-            // Hover tooltip — drawn after the whole grid so it layers on top.
+            // Hover tooltip — queued globally, drawn topmost after the clip closes.
             if (hoveredIdx >= 0 && hoveredIdx < filteredDefs.Count)
             {
                 var hovDef = _envSystem.GetDef(filteredDefs[hoveredIdx]);
-                DrawGridCellTooltip($"[{hovDef.Category}] {hovDef.Name}", hoveredCell, screenW);
+                DrawGridCellTooltip($"[{hovDef.Category}] {hovDef.Name}", hoveredCell);
             }
 
             // Selected def properties
@@ -5482,12 +5482,12 @@ public class MapEditorWindow
         }
         curY += listH;
 
-        // Hover tooltip — drawn after the whole grid so it layers on top.
+        // Hover tooltip — queued globally, drawn topmost after the clip closes.
         if (hoveredIdx >= 0 && hoveredIdx < unitIds.Count)
         {
             var def = _gameData.Units.Get(unitIds[hoveredIdx]);
             string tip = def != null ? $"{def.DisplayName} [{def.Faction}]" : unitIds[hoveredIdx];
-            DrawGridCellTooltip(tip, hoveredCell, screenW);
+            DrawGridCellTooltip(tip, hoveredCell);
         }
 
         // Placed units count
@@ -5595,21 +5595,16 @@ public class MapEditorWindow
             0f, new Vector2(rect.Width / 2f, rect.Height / 2f), scale, SpriteEffects.None);
     }
 
-    /// <summary>Name tooltip above the hovered grid cell (flips below when
-    /// clipped at the top; clamped horizontally to the screen).</summary>
-    private void DrawGridCellTooltip(string text, Rectangle anchorCell, int screenW)
+    /// <summary>Name tooltip above the hovered grid cell, via the global
+    /// tooltip queue so it draws topmost and OUTSIDE the tab's BeginClip
+    /// scissor (drawn inline it was hardware-clipped to the panel). Suppressed
+    /// while a popup/dropdown/color-picker covers the grid — the Tooltip band
+    /// draws above the Popup band, so an inline request would paint over them.</summary>
+    private void DrawGridCellTooltip(string text, Rectangle anchorCell)
     {
-        if (_eb == null) return;
-        var size = _eb.MeasureText(text, _smallFont);
-        const int pad = 4;
-        int tw = (int)size.X + pad * 2, th = (int)size.Y + pad * 2;
-        int tx = Math.Clamp(anchorCell.X + anchorCell.Width / 2 - tw / 2, 2, screenW - tw - 2);
-        int ty = anchorCell.Y - th - 2;
-        if (ty < 2) ty = anchorCell.Bottom + 2;
-        var box = new Rectangle(tx, ty, tw, th);
-        Scope.Draw(_pixel, box, new Color(15, 15, 25, 235));
-        _eb.DrawBorder(box, new Color(90, 90, 130));
-        _eb.DrawText(text, new Vector2(tx + pad, ty + pad), EditorBase.TextBright, _smallFont);
+        if (!Game1.Popups.IsEmpty || (_eb != null && (_eb.IsColorPickerOpen || _eb.IsDropdownOpen)))
+            return;
+        Game1.Tooltips.RequestText(text, anchorCell);
     }
 
     private void DrawPlacedUnitMarkers(int screenW, int screenH)

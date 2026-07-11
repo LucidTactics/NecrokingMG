@@ -191,27 +191,34 @@ public sealed class AggressionBarLayer : UILayer
     }
 }
 
-/// <summary>Draw-only seat for the cursor-anchored hover tooltips (spell-bar
-/// slot, world object, belly, corpse, unit) in the Tooltip band — the topmost
-/// band — so a tooltip is never covered by another HUD widget (the aggression
+/// <summary>The one topmost tooltip seat (Tooltip band). Two jobs each frame:
+/// run the HUD cursor-tooltip funnel (spell-bar slot, world object, belly,
+/// corpse, unit — hover state captured during the Hud-band draw, fresh because
+/// bands draw bottom-up), then drain the global <see cref="Game1.Tooltips"/>
+/// request queue that any layer (panels, editors — even inside a scissor clip)
+/// filled during its own Update/Draw. Being last in the band order is what
+/// makes every tooltip render unclipped and over everything (the aggression
 /// bar used to draw over the spell-slot tooltip when both sat in the Hud band).
-/// Hover state is captured during the Hud-band draw (HudChromeLayer); bands
-/// draw bottom-up, so it's fresh by the time this layer runs. Same cursor
-/// parking as HudChromeLayer: cursor-anchored tooltips must not pop up under
-/// (or over) a covering panel.</summary>
-public sealed class CursorTooltipLayer : UILayer
+/// Same cursor parking as HudChromeLayer: cursor-anchored tooltips must not
+/// pop up under (or over) a covering panel.</summary>
+public sealed class TooltipHostLayer : UILayer
 {
     private readonly Game1 _g;
-    public CursorTooltipLayer(Game1 g) { _g = g; Band = UIBand.Tooltip; }
+    public TooltipHostLayer(Game1 g) { _g = g; Band = UIBand.Tooltip; }
 
-    public override string Id => "hud.cursor_tooltips";
-    public override bool Visible => false;                    // draw-only
-    public override bool VisibleForDraw => _g.ShowUIForDraw;  // same gate as HudChromeLayer
+    public override string Id => "tooltip.host";
+    public override bool Visible => false;   // draw-only
+    // Always drawn (unlike HudChromeLayer's ShowUIForDraw gate): the global
+    // queue must be drained-or-cleared EVERY frame or requests would go stale
+    // and bleed into later frames / no-UI screenshots.
+    public override bool VisibleForDraw => true;
     public override bool ContainsMouse(int mx, int my, in UICtx ctx) => false;
     public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { }
 
     public override void Draw(in UICtx ctx)
     {
+        if (!_g.ShowUIForDraw) { Game1.Tooltips.Clear(); return; }
+
         var hover = _g._uiRouter.HoverLayer;
         bool hudOwnsCursor = hover == null || hover.Band <= UIBand.Hud;
         var input = _g._input;
@@ -219,6 +226,9 @@ public sealed class CursorTooltipLayer : UILayer
         if (!hudOwnsCursor) input.MousePos = new Microsoft.Xna.Framework.Vector2(-10000, -10000);
         _g._gameRenderer.DrawHudTooltips(ctx.ScreenW, ctx.ScreenH);
         if (!hudOwnsCursor) input.MousePos = pos;
+
+        // Drain the global queue last — later requests draw on top.
+        Game1.Tooltips.DrawAndClear(in ctx);
     }
 }
 
