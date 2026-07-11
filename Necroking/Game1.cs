@@ -49,6 +49,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private GraphicsDeviceManager _graphics;
     internal SpriteBatch _spriteBatch = null!;
 
+    // Sets to true if users is using the window.
+    internal bool userInteractingWithWindow;
+
     /// <summary>Draw surface over the shared SpriteBatch — THE way scene/HUD code
     /// draws. Colors are straight alpha; the open material (Materials.Open)
     /// encodes them. Use <c>Scope.Batch</c> only for colors that are already a
@@ -2201,8 +2204,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             for (int i = 0; i < _spellBarState.Slots.Length && i < scenario.DebugSpells.Length; i++)
                 _spellBarState.Slots[i] = new SpellBarSlot { SpellID = scenario.DebugSpells[i] };
 
-        // Load ground data for scenarios that want it
-        if (scenario.WantsGround)
+        // Load ground data
         {
             _groundSystem.AddGroundType(new World.GroundTypeDef { Id = "grass", Name = "Grass", TexturePath = "assets/Environment/Ground/GroundGrass1.png" });
             _groundSystem.AddGroundType(new World.GroundTypeDef { Id = "dirt", Name = "Dirt", TexturePath = "assets/Environment/Ground/GroundDirt1.png" });
@@ -2307,7 +2309,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _envSystem.LoadTextures(GraphicsDevice);
 
         // Rebuild the vertex map texture if the scenario painted ground in OnInit.
-        if (scenario.WantsGround)
         {
             _groundSystem.LoadTextures(GraphicsDevice);
             _groundVertexMapTex?.Dispose();
@@ -2761,6 +2762,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Drain dev-server commands first so they run even if the window is
         // unfocused (we bail out below in that case) and regardless of menu state.
         _devServer?.Drain(ExecuteDevCommand);
+
+        // IsActive is true even for headless / command-line --scenario runs (the
+        // off-screen window still reports OS focus), so gate those out — otherwise
+        // automated scenario runs would latch this and render ground instead of the
+        // flat scenario background, breaking deterministic screenshots. A scenario
+        // started from the in-game menu leaves LaunchArgs.Scenario null, so it still
+        // counts as a real user interaction.
+        if (IsActive && !LaunchArgs.Headless && LaunchArgs.Scenario == null) {
+           userInteractingWithWindow = true;
+        }
 
         // Pump multiplayer next, same placement rationale: the connection must
         // stay alive (keepalives, joins, ghost states) while paused, in menus,
