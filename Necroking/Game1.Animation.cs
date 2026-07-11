@@ -599,33 +599,12 @@ public partial class Game1
                     float spd = (animDur > cycle && cycle > 0f) ? animDur / cycle : 1f;
                     AnimResolver.SetOverride(_sim.UnitsMut[i], AnimRequest.Combat(atkState, spd));
                 }
-                else if (_sim.Units[i].InCombat && _sim.Units[i].AttackCooldown > 0f
-                    && !_sim.Units[i].Fleeing && !_sim.Units[i].Routing)
-                {
-                    // (Fleeing/routing units skip the pre-roll: they're exempt from
-                    // the InCombat movement plant, so a windup here would play while
-                    // running — the exact sliding artifact the movement gate forbids.)
-                    // Pre-roll: start attack animation early so its effect_time lines up
-                    // with the end of the cooldown. Use the FIRST non-pounce weapon's
-                    // anim (most units have one melee weapon; wolves have Bite then Pounce
-                    // and Bite is the in-melee attack).
-                    int preRollWeaponIdx = 0;
-                    for (int w = 0; w < _sim.Units[i].Stats.MeleeWeapons.Count; w++)
-                    {
-                        if (_sim.Units[i].Stats.MeleeWeapons[w].Archetype != Data.WeaponArchetype.Pounce)
-                        { preRollWeaponIdx = w; break; }
-                    }
-                    var preRollState = ResolvePendingAttackAnim(_sim.Units[i].Stats,
-                        preRollWeaponIdx, false, _sim.Units[i].Archetype);
-                    float cooldownRemaining = _sim.Units[i].AttackCooldown;
-                    float effectTime = animData.Ctrl.GetEffectTimeSeconds(preRollState);
-                    float animDur = animData.Ctrl.GetTotalDurationSeconds(preRollState);
-                    float cycle = ComputeWeaponCycleSeconds(i, preRollWeaponIdx);
-                    float spd = (animDur > cycle && cycle > 0f) ? animDur / cycle : 1f;
-                    float preRollTime = effectTime > 0f ? effectTime / spd : 0f;
-                    if (preRollTime > 0f && cooldownRemaining <= preRollTime)
-                        AnimResolver.SetOverride(_sim.UnitsMut[i], AnimRequest.Combat(preRollState, spd));
-                }
+                // (No speculative pre-roll here: attack anims start ONLY when a
+                // swing is actually queued (PendingAttack above). The old pre-roll
+                // played the windup early so effect_time aligned with cooldown end,
+                // but nothing guaranteed an attack would stamp — against a fleeing
+                // target it produced constant phantom windups: full swing anim, no
+                // dice. Animation ⇔ committed attack, one-to-one.)
 
                 // Cancel a stale attack swing that would otherwise "bleed" into a chase:
                 // once the unit is actually moving and no longer attacking (no pending
@@ -716,19 +695,10 @@ public partial class Game1
             else if (_sim.Units[i].PostAttackTimer > 0f)
                 targetState = AnimState.Block;
             else if (_sim.Units[i].InCombat && _sim.Units[i].AttackCooldown > 0f)
-            {
-                float cooldownRemaining = _sim.Units[i].AttackCooldown;
-                float effectTime = animData.Ctrl.GetEffectTimeSeconds(AnimState.Attack1);
-                float animDur = animData.Ctrl.GetTotalDurationSeconds(AnimState.Attack1);
-                float cycle = ComputeWeaponCycleSeconds(i, 0);
-                float speed = (animDur > cycle && cycle > 0f) ? animDur / cycle : 1f;
-                float preRollTime = effectTime > 0f ? effectTime / speed : 0f;
-
-                if (preRollTime > 0f && cooldownRemaining <= preRollTime)
-                    targetState = AnimState.Attack1;
-                else
-                    targetState = AnimState.Block;
-            }
+                // Combat stance between swings. (No speculative Attack1 pre-roll —
+                // attack anims start only when PendingAttack stamps, same rule as
+                // the archetype path: animation ⇔ committed attack.)
+                targetState = AnimState.Block;
             else if (_sim.Units[i].GhostMode)
                 targetState = AnimState.Hover;
             else
@@ -845,8 +815,31 @@ public partial class Game1
                 }
                 else if (hasPendingAttack)
                 {
-                    _sim.ResolvePendingAttack(i);
+                    // Impact integrity: only the unit's actual attack anim may
+                    // deliver the queued swing. Without this state check, the
+                    // 50%-of-clip fallback edge (which fires for ANY state,
+                    // including Run loops) could resolve a lingering
+                    // PendingAttack invisibly mid-locomotion.
+                    var expectedAtkState = ResolvePendingAttackAnim(_sim.Units[i].Stats,
+                        _sim.Units[i].PendingWeaponIdx, _sim.Units[i].PendingWeaponIsRanged,
+                        _sim.Units[i].Archetype);
+                    if (animData.Ctrl.CurrentState == expectedAtkState)
+                        _sim.TryResolvePendingAttackAtImpact(i);
                 }
+            }
+
+            // Janitor: a queued swing whose window expired without its anim ever
+            // delivering the impact frame (preempted by knockdown, physics, a
+            // forced state, ...) is dead — clear it so it can't resolve during
+            // some later unrelated anim. Jump-phase units never reach here
+            // (pounce resolves at landing, which may outlive PostAttackTimer).
+            if (!_sim.Units[i].PendingAttack.IsNone && _sim.Units[i].PostAttackTimer <= 0f)
+            {
+                DebugLog.Log("combat",
+                    $"[SwingJanitor] unit#{i} queued swing expired unresolved " +
+                    $"(state={animData.Ctrl.CurrentState}, weaponIdx={_sim.Units[i].PendingWeaponIdx}) — cleared");
+                _sim.UnitsMut[i].PendingAttack = CombatTarget.None;
+                _sim.UnitsMut[i].PendingWeaponIdx = -1;
             }
 
             _unitAnims[uid] = animData;

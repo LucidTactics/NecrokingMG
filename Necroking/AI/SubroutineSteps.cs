@@ -244,9 +244,18 @@ public static class SubroutineSteps
             ctx.Units[ctx.UnitIndex].EngagedTarget = ctx.Units[ctx.UnitIndex].Target;
     }
 
-    public static bool AttackTarget_CooldownStarted(ref AIContext ctx, float minTime = 0.2f)
+    /// <summary>True once this attack fired AND its swing finished resolving.
+    /// AttackCooldown > 0 means the attack was initiated (it's stamped at queue
+    /// time, not at the hit), but damage only rolls at the anim's effect frame,
+    /// inside the PostAttackTimer window — exiting to a disengage step before
+    /// that window closes lets Disengage's per-tick PendingAttack clear silently
+    /// cancel the swing (anim plays, dice never roll: the "phantom no-damage
+    /// retreat"). Canonical exit gate for hit-and-run handlers.</summary>
+    public static bool AttackTarget_SwingFinished(ref AIContext ctx, float minTime = 0.2f)
     {
-        return ctx.Units[ctx.UnitIndex].AttackCooldown > 0 && ctx.SubroutineTimer > minTime;
+        return ctx.Units[ctx.UnitIndex].AttackCooldown > 0f
+            && ctx.Units[ctx.UnitIndex].PostAttackTimer <= 0f
+            && ctx.SubroutineTimer > minTime;
     }
 
     /// <summary>Clear engagement, back away from target.</summary>

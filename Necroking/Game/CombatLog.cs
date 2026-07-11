@@ -4,7 +4,11 @@ using Necroking.Data;
 
 namespace Necroking.GameSystems;
 
-public enum CombatLogOutcome : byte { Hit, Miss, Blocked }
+// Whiff = the swing never rolled dice: the target escaped reach between the
+// attack being queued and its animation's impact frame. Distinct from Miss
+// (dice rolled, defense won) so chase whiffs are visible in the log instead
+// of the swing vanishing silently.
+public enum CombatLogOutcome : byte { Hit, Miss, Blocked, Whiff }
 
 public class CombatLogEntry
 {
@@ -24,6 +28,9 @@ public class CombatLogEntry
     public int NetDamage;
     public HitLocation HitLoc;
     public string HitLocationName = "";
+    /// <summary>Free-text detail line (used by Whiff: dist vs reach). Printed
+    /// instead of the roll breakdown when the dice never ran.</summary>
+    public string Note = "";
 }
 
 public class CombatLog
@@ -63,6 +70,14 @@ public class CombatLog
 
         // Header: attack roll summary
         DebugLog.Log(Tag, $"{time}  {e.AttackerName}({e.AttackerFaction}) attacks {e.DefenderName}({e.DefenderFaction}) with {e.WeaponName} -> {outcome}");
+
+        // Whiff: the dice never ran — print the reach note, not a roll breakdown.
+        if (e.Outcome == CombatLogOutcome.Whiff)
+        {
+            if (!string.IsNullOrEmpty(e.Note))
+                DebugLog.Log(Tag, $"         {e.Note}");
+            return;
+        }
 
         // Detail lines (indented to align past "MM:SS  ")
         int totalAtk = e.AttackBase + e.AttackDRN;

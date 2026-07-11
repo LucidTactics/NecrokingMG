@@ -37,9 +37,11 @@ public static class JumpSystem
     /// <summary>Margin past combined-radius (attacker.R + target.R) within which
     /// a pounce can still hit at landing. If the target outran the pounce by
     /// more than this, the pounce lands cleanly but doesn't connect — like a
-    /// missed swipe rather than auto-tracking damage. 0.5u = "they were within
-    /// arm's reach when I landed."</summary>
-    private const float PounceLandingHitMargin = 0.5f;
+    /// missed swipe rather than auto-tracking damage. 0.8u mirrors the normal
+    /// melee reach base (Settings.Combat.MeleeRange), so the landing window
+    /// equals a regular bite's reach: anything the wolf could bite from where
+    /// it landed, the pounce catches.</summary>
+    private const float PounceLandingHitMargin = 0.8f;
 
     /// <summary>Fraction of the target's radius the pounce landing point stands
     /// off from the predicted center, along the attacker's approach. 0.5 = the

@@ -58,8 +58,15 @@ public class WolfHitAndRunScenario : ScenarioBase
         {
             int idx = units.AddUnit(soldierPositions[s], UnitType.Soldier);
             units[idx].AI = AIBehavior.AttackClosest;
+            // Beefy soldiers: the validation needs at least one full wolf
+            // hit-and-run cycle (Attack -> Disengage) before the fight ends.
+            // At stock 10 HP, a lucky wolf opening killed both soldiers before
+            // any wolf finished its first cycle -> flaky "invariant untested"
+            // failures (rarer before impact-frame whiffs stopped soldiers from
+            // hitting already-disengaged wolves at a distance).
+            units[idx].Stats.MaxHP = 40; units[idx].Stats.HP = 40;
             _soldierIds[s] = units[idx].Id;
-            DebugLog.Log(ScenarioLog, $"Soldier {s}: spawned at ({soldierPositions[s].X:F1}, {soldierPositions[s].Y:F1}), id={_soldierIds[s]}, AI=AttackClosest");
+            DebugLog.Log(ScenarioLog, $"Soldier {s}: spawned at ({soldierPositions[s].X:F1}, {soldierPositions[s].Y:F1}), id={_soldierIds[s]}, AI=AttackClosest, HP=40");
         }
 
         DebugLog.Log(ScenarioLog, $"Total units spawned: {units.Count}");

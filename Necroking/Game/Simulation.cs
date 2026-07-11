@@ -2292,6 +2292,73 @@ public class Simulation
         return 1.0f;
     }
 
+    /// <summary>Combat-log faction tag: A=undead, B=human, C=animal.</summary>
+    private char FactionChar(int idx) =>
+        _units[idx].Faction == Faction.Undead ? 'A'
+        : _units[idx].Faction == Faction.Animal ? 'C' : 'B';
+
+    /// <summary>Tolerance added to melee reach at the impact frame. The swing was
+    /// stamped in range, so the target gets this much escape allowance before the
+    /// hit becomes a whiff. Generous on purpose: a whiff should mean "visibly ran
+    /// out of the bite," not pixel-shaving a target drifting in place — at 1.5u,
+    /// only a target already near full flight speed when the swing started can
+    /// escape the windup.</summary>
+    private const float ImpactWhiffTolerance = 1.5f;
+
+    /// <summary>
+    /// Resolve a queued attack at its animation's impact frame, re-checking that a
+    /// melee target is still plausibly in reach. Range is gated at stamp time; this
+    /// is the impact-side honesty check — a target that outran the swing during the
+    /// windup gets a logged Whiff (cooldown stays spent, no dice) instead of
+    /// impossible-looking damage at a distance. Ranged pending attacks resolve
+    /// unchecked (the projectile flies and leads on its own). Pounce never comes
+    /// through here: JumpSystem's landing callback has its own combined-radius
+    /// check and calls ResolvePendingAttack directly.
+    /// </summary>
+    public void TryResolvePendingAttackAtImpact(int unitIdx)
+    {
+        if (unitIdx < 0 || unitIdx >= _units.Count || !_units[unitIdx].Alive) return;
+        var t = _units[unitIdx].PendingAttack;
+        if (t.IsNone) return;
+
+        if (!_units[unitIdx].PendingWeaponIsRanged && t.IsUnit)
+        {
+            int ti = ResolveUnitTarget(t);
+            if (ti >= 0)
+            {
+                int w = _units[unitIdx].PendingWeaponIdx;
+                var weapons = _units[unitIdx].Stats.MeleeWeapons;
+                var ws = (w >= 0 && w < weapons.Count) ? weapons[w] : null;
+                // Sweep stamps at its own (larger) radius; everything else at melee reach.
+                float reach = (ws != null && ws.Archetype == WeaponArchetype.Sweep)
+                    ? ws.SweepRadius
+                    : GameSystems.Combat.MeleeRangeUtil.Compute(_units, unitIdx, ti, _gameData);
+                reach += ImpactWhiffTolerance;
+                float dist = (_units[ti].Position - _units[unitIdx].Position).Length();
+                if (dist > reach)
+                {
+                    _combatLog.AddEntry(new CombatLogEntry
+                    {
+                        Timestamp = _gameTime,
+                        AttackerName = GetUnitDisplayName(unitIdx),
+                        DefenderName = GetUnitDisplayName(ti),
+                        AttackerFaction = FactionChar(unitIdx),
+                        DefenderFaction = FactionChar(ti),
+                        WeaponName = ws?.Name ?? "?",
+                        Outcome = CombatLogOutcome.Whiff,
+                        Note = $"Out of reach at impact: dist {dist:F2} > reach {reach:F2}",
+                    });
+                    _units[unitIdx].PendingAttack = CombatTarget.None;
+                    _units[unitIdx].PendingWeaponIdx = -1;
+                    _units[unitIdx].PendingWeaponIsRanged = false;
+                    _units[unitIdx].PendingRangedTarget = GameConstants.InvalidUnit;
+                    return;
+                }
+            }
+        }
+        ResolvePendingAttack(unitIdx);
+    }
+
     public void ResolvePendingAttack(int unitIdx)
     {
         if (unitIdx < 0 || unitIdx >= _units.Count || !_units[unitIdx].Alive) return;
@@ -2618,8 +2685,8 @@ public class Simulation
             Timestamp = _gameTime,
             AttackerName = GetUnitDisplayName(attackerIdx),
             DefenderName = GetUnitDisplayName(defenderIdx),
-            AttackerFaction = _units[attackerIdx].Faction == Faction.Undead ? 'A' : _units[attackerIdx].Faction == Faction.Animal ? 'C' : 'B',
-            DefenderFaction = _units[defenderIdx].Faction == Faction.Undead ? 'A' : _units[defenderIdx].Faction == Faction.Animal ? 'C' : 'B',
+            AttackerFaction = FactionChar(attackerIdx),
+            DefenderFaction = FactionChar(defenderIdx),
             WeaponName = weaponName,
             AttackBase = atkStats.Attack,
             AttackDRN = atkDRN,

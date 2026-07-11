@@ -204,12 +204,11 @@ public class RatPackHandler : IArchetypeHandler
             case FightBite:
             {
                 SubroutineSteps.AttackTarget(ref ctx);
-                // Skitter the instant the bite commits. We only enter Bite when the
-                // attack was ready, so AttackCooldown>0 here means THIS bite fired
-                // (not leftover cooldown). PostAttackTimer<=0 → strike anim finished.
-                if (ctx.Units[ctx.UnitIndex].AttackCooldown > 0f
-                    && ctx.Units[ctx.UnitIndex].PostAttackTimer <= 0f
-                    && ctx.SubroutineTimer > 0.1f)
+                // Skitter once THIS bite fired and its swing resolved. We only
+                // enter Bite when the attack was ready, so AttackCooldown>0 here
+                // means this bite, not leftover cooldown (shared gate — see
+                // AttackTarget_SwingFinished for the why).
+                if (SubroutineSteps.AttackTarget_SwingFinished(ref ctx, minTime: 0.1f))
                 {
                     ctx.Subroutine = FightSkitter;
                     ctx.SubroutineTimer = 0f;

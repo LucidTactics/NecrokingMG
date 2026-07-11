@@ -202,6 +202,42 @@ it: `CombatTransitions.cs`, `HordeMinionHandler.cs`, `CombatUnitHandler.cs`,
 `WolfPackHandler.cs`, `RatPackHandler.cs`, `DeerHerdHandler.cs`. Edit these for AI-side
 engage/attack-distance behavior, not the resolver.
 
+## Whiffs vs fleeing targets — mid-swing cancellation & phantom windups
+
+Why a chase-attack "plays the anim but doesn't connect". A **stamped** melee swing always
+resolves at ANY distance (no resolve-time range check), so distance itself never whiffs a
+queued swing. The whiff mechanisms are upstream:
+
+- **AI handler cancels the queued swing before its effect frame.**
+  `SubroutineSteps.Disengage` (`Necroking/AI/SubroutineSteps.cs`) force-clears
+  `PendingAttack` + `PostAttackTimer` **every tick**. `AI/SoloPredatorHandler.cs`
+  (SoloPredator = DireWolf/JuvWolf, AmbushPredator = bear) transitions SubAttacking →
+  SubDisengage on `AttackCooldown > 0 && SubroutineTimer > 0.2f` — but **AttackCooldown
+  starts at STAMP time, not at the hit**, so the swing gets cancelled ~0.2s after queueing,
+  usually before the attack anim's effect_time fires → anim plays, damage never rolls.
+  `WolfPackHandler.cs` FightExecuteAttack and `RatPackHandler.cs` were both fixed to wait
+  for `PostAttackTimer <= 0` first ("phantom no-damage retreat" comment); SoloPredator was
+  not. `SubroutineSteps.AttackTarget_CooldownStarted` encodes the same flawed condition.
+- **Pre-roll windup anims with no queued attack.** `Game1.Animation.cs` (~line 602) plays
+  the attack anim purely visually when `InCombat && AttackCooldown > 0` near cooldown end —
+  no `PendingAttack` exists. If the target breaks melee range before the stamp gates align
+  (cooldown 0 + InCombat + facing + PostAttackTimer 0), the windup plays and nothing fires.
+- **Plant oscillation shrinks the stamp window.** `Simulation.UpdateMovement` zeroes the
+  attacker's Velocity while `PendingAttack`/`PostAttackTimer`/`InCombat` (non-player,
+  non-fleeing) — but **fleeing/routing targets are exempt from the InCombat plant**, so a
+  chaser brakes on contact while the target keeps sprinting; melee-range contact lasts only
+  a few frames per catch-up cycle, and the weapon cooldown (`CooldownRounds ×
+  Settings.Combat.RoundDuration`, default 3s) must be ready inside that window.
+- **Zero-damage hits are legal** (glancing: `netDmg < 0 → 0`, logged as Hit with
+  NetDamage=0). Misses log `Outcome=Miss` + bump defender Harassment. Note the DRN math:
+  with `drn:1` (d3) both sides, wolf bite (atk 6 + bonus 2) vs deer (def 6) can never
+  roll a miss — so absent log entries mean the swing was cancelled/never stamped, not
+  that the dice failed.
+- **Movement during the swing is a hard plant, no physical lunge** —
+  `Render/LungeSystem.cs` only writes a cosmetic `RenderOffset` from
+  `Unit.CurrentAttackLungeDist` (weapon `lungeDist`, stamped in the attack-selection loop);
+  Position doesn't move.
+
 ## Pitfalls / gotchas
 - **Range is gated at stamp time, not at resolve time.** Any new code that sets
   `PendingAttack` directly (player orders, scripted attacks) must do its own
