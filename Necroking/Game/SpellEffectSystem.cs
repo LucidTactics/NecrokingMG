@@ -474,7 +474,7 @@ public static class SpellEffectSystem
         {
             projectiles.SpawnFireball(origin, target,
                 casterFaction, ownerUid, spell.Damage, spell.AoeRadius, spell.DisplayName,
-                spawnHeight: spawnHeight);
+                spawnHeight: spawnHeight, gravityScale: spell.GravityScale);
         }
         else
         {
@@ -483,7 +483,7 @@ public static class SpellEffectSystem
                 volley: spell.Trajectory == "Lob",
                 precision: spell.PrecisionBonus + 10,
                 weaponName: spell.DisplayName,
-                spawnHeight: spawnHeight);
+                spawnHeight: spawnHeight, gravityScale: spell.GravityScale);
         }
         var projs = projectiles.Projectiles;
         if (projs.Count > 0) {

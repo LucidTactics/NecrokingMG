@@ -13,6 +13,11 @@ public class Projectile
     public float Height;
     public Vec2 Velocity;
     public float VelocityZ;
+    /// <summary>Multiplier on the downward pull applied each tick (1 = normal gravity).
+    /// &lt;1 flattens the arc (floatier, more airtime), &gt;1 steepens it, 0 = flies dead
+    /// flat. The launch solve is fed the SAME scaled gravity, so a lob still lands on its
+    /// target — only the arc shape changes.</summary>
+    public float GravityScale = 1f;
     public ProjectileType Type = ProjectileType.Arrow;
     public Faction OwnerFaction = Faction.Human;
     public uint OwnerID = GameConstants.InvalidUnit;
@@ -130,13 +135,15 @@ public class ProjectileManager
     // own copy — a later consolidation batch adopts this solver there.)
 
     /// <summary>Launch angle (radians) for a ballistic lob that lands
-    /// <paramref name="dist"/> away at <paramref name="speed"/> under
-    /// <see cref="Gravity"/>: θ = ½·asin(min(d·g/v², 1)). Optional clamp —
-    /// arrow volleys use [10°, 45°] so short lobs still arc visibly.</summary>
+    /// <paramref name="dist"/> away at <paramref name="speed"/> under gravity
+    /// <paramref name="gravity"/>: θ = ½·asin(min(d·g/v², 1)). Optional clamp —
+    /// arrow volleys use [10°, 45°] so short lobs still arc visibly. Pass a scaled
+    /// <paramref name="gravity"/> (Gravity·GravityScale) so the arc still lands on target
+    /// when a projectile's gravity is tuned.</summary>
     public static float SolveLobTheta(float dist, float speed,
-        float minTheta = 0f, float maxTheta = Pi / 2f)
+        float minTheta = 0f, float maxTheta = Pi / 2f, float gravity = Gravity)
     {
-        float sinTwoTheta = MathF.Min(dist * Gravity / (speed * speed), 1f);
+        float sinTwoTheta = MathF.Min(dist * gravity / (speed * speed), 1f);
         return MathUtil.Clamp(0.5f * MathF.Asin(sinTwoTheta), minTheta, maxTheta);
     }
 
@@ -163,7 +170,8 @@ public class ProjectileManager
     /// and should only be used by tests / non-unit sources.
     /// </summary>
     public void SpawnArrow(Vec2 from, Vec2 target, Faction faction, uint owner, int damage,
-                           bool volley, int precision, string weaponName = "", float spawnHeight = 0.6f)
+                           bool volley, int precision, string weaponName = "", float spawnHeight = 0.6f,
+                           float gravityScale = 1f)
     {
         PrepAim(from, target, out var dir, out float dist);
         float speed = ArrowSpeed;
@@ -172,7 +180,8 @@ public class ProjectileManager
         {
             Position = from, Height = spawnHeight, Type = ProjectileType.Arrow,
             OwnerFaction = faction, OwnerID = owner, Damage = damage,
-            Precision = precision, WeaponName = weaponName, IsLob = volley
+            Precision = precision, WeaponName = weaponName, IsLob = volley,
+            GravityScale = gravityScale
         };
 
         if (volley)
@@ -185,7 +194,7 @@ public class ProjectileManager
             dir = (target - from).Normalized();
             dist = (target - from).Length();
 
-            float theta = SolveLobTheta(dist, speed, 10f * Deg2Rad, 45f * Deg2Rad);
+            float theta = SolveLobTheta(dist, speed, 10f * Deg2Rad, 45f * Deg2Rad, Gravity * gravityScale);
             (p.Velocity, p.VelocityZ) = BallisticVelocity(dir, speed, theta);
         }
         else
@@ -201,11 +210,12 @@ public class ProjectileManager
     /// use the caster's <c>Unit.EffectSpawnHeight</c> for animation-accurate origin.
     /// </summary>
     public void SpawnFireball(Vec2 from, Vec2 target, Faction faction, uint owner,
-                              int damage, float aoeRadius, string weaponName = "", float spawnHeight = 0.6f)
+                              int damage, float aoeRadius, string weaponName = "", float spawnHeight = 0.6f,
+                              float gravityScale = 1f)
     {
         PrepAim(from, target, out var dir, out float dist);
         float speed = MagicSpeed;
-        var (vel, velZ) = BallisticVelocity(dir, speed, SolveLobTheta(dist, speed));
+        var (vel, velZ) = BallisticVelocity(dir, speed, SolveLobTheta(dist, speed, gravity: Gravity * gravityScale));
 
         _projectiles.Add(new Projectile
         {
@@ -214,7 +224,8 @@ public class ProjectileManager
             AoeRadius = aoeRadius, WeaponName = weaponName,
             NoFriendlyFire = false, IsLob = true,
             Velocity = vel,
-            VelocityZ = velZ
+            VelocityZ = velZ,
+            GravityScale = gravityScale
         });
     }
 
@@ -223,11 +234,12 @@ public class ProjectileManager
     /// use the thrower's <c>Unit.EffectSpawnHeight</c> so the arc starts at the throwing hand.
     /// </summary>
     public void SpawnPotionLob(Vec2 from, Vec2 target, Faction faction, uint owner,
-                               string potionId, float scale = 0.5f, float spawnHeight = 0.6f)
+                               string potionId, float scale = 0.5f, float spawnHeight = 0.6f,
+                               float gravityScale = 1f)
     {
         PrepAim(from, target, out var dir, out float dist);
         float speed = MagicSpeed * 0.7f; // potions are slower than fireballs
-        var (vel, velZ) = BallisticVelocity(dir, speed, SolveLobTheta(dist, speed));
+        var (vel, velZ) = BallisticVelocity(dir, speed, SolveLobTheta(dist, speed, gravity: Gravity * gravityScale));
 
         _projectiles.Add(new Projectile
         {
@@ -237,7 +249,8 @@ public class ProjectileManager
             NoFriendlyFire = false, IsLob = true,
             ParticleScale = scale,
             Velocity = vel,
-            VelocityZ = velZ
+            VelocityZ = velZ,
+            GravityScale = gravityScale
         });
     }
 
@@ -256,7 +269,7 @@ public class ProjectileManager
             // Physics
             proj.Position += proj.Velocity * dt;
             proj.Height += proj.VelocityZ * dt;
-            proj.VelocityZ -= Gravity * dt;
+            proj.VelocityZ -= Gravity * proj.GravityScale * dt;
             proj.Age += dt;
 
             // Homing
@@ -502,7 +515,7 @@ public class ProjectileManager
             if (!p.Alive) continue;
             p.Position += p.Velocity * dt;
             p.Height += p.VelocityZ * dt;
-            p.VelocityZ -= Gravity * dt;
+            p.VelocityZ -= Gravity * p.GravityScale * dt;
             p.Age += dt;
             if (p.Height <= 0f && p.Age > 0.1f) { p.Alive = false; _impacts.Add(new ImpactEvent { Position = p.Position, Type = p.Type, AoeRadius = p.AoeRadius }); }
             if (p.Age > MaxAge) p.Alive = false;

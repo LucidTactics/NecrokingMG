@@ -250,6 +250,13 @@ public class SpellDef : INamedDef
     [EditorField(Label = "Proj Speed", Group = "PROJECTILE", Order = 202, Step = 0.1f, Decimals = 1)]
     [JsonPropertyName("projectileSpeed")] public float ProjectileSpeed { get; set; } = 28.29f;
 
+    // Multiplier on gravity for this projectile: 1 = normal, <1 floats/flattens the arc,
+    // >1 steepens it, 0 = flies dead flat. The launch solve uses the same scaled gravity,
+    // so a lob still lands on target — only the arc shape (and airtime) changes.
+    [EditorVisible("Category", "Projectile")]
+    [EditorField(Label = "Gravity Scale", Group = "PROJECTILE", Order = 209, Step = 0.1f, Decimals = 2)]
+    [JsonPropertyName("gravityScale")] public float GravityScale { get; set; } = 1f;
+
     [EditorVisible("Category", "Projectile")]
     [EditorField(Label = "Precision Bonus", Group = "PROJECTILE", Order = 203)]
     [JsonPropertyName("precisionBonus")] public int PrecisionBonus { get; set; }
