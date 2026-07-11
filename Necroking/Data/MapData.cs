@@ -172,6 +172,7 @@ public static class MapData
     internal static readonly JsonSerializerOptions EnvDefJson = new()
     {
         WriteIndented = true,
+        NewLine = "\n", // LF, not CRLF — stable diffs across machines/collaborators.
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,

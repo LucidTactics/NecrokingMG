@@ -146,6 +146,7 @@ public abstract class RegistryBase<TDef> where TDef : class, IHasId, new()
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             WriteIndented = true,
+            NewLine = "\n", // LF, not CRLF — stable diffs across machines/collaborators.
             DefaultIgnoreCondition = JsonIgnoreCondition.Never,
             // Write &, <, >, + literally instead of & etc. — avoids noisy
             // diffs against hand/Python-edited saves. Safe: never embedded in HTML.

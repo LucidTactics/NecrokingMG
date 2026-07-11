@@ -34,6 +34,7 @@ public static class MapSidecars
         var o = new JsonSerializerOptions
         {
             WriteIndented = true,
+            NewLine = "\n", // LF, not CRLF — stable diffs across machines/collaborators.
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             PropertyNameCaseInsensitive = true,
             // Omits TriggerDef.Condition when null (matching the old saver);

@@ -17,6 +17,7 @@ public static class JsonDefaults
     public static readonly JsonSerializerOptions Indented = new()
     {
         WriteIndented = true,
+        NewLine = "\n", // LF, not CRLF — stable diffs across machines/collaborators.
         // Write &, <, >, + literally instead of & etc. (default HTML-safe
         // escaping is pointless for game-data files and creates noisy diffs against
         // hand/Python-edited saves). Safe here — this output is never embedded in HTML.
