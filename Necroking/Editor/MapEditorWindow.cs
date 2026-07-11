@@ -1608,6 +1608,7 @@ public class MapEditorWindow
 
     private void DrawGroundTab(int panelX, int contentY, int contentH, int screenW, int screenH)
     {
+        int viewBottom = contentY + contentH; // tab clip bottom, before the header advances contentY
         DrawSectionHeader(panelX, ref contentY, $"Ground Types ({_groundSystem.TypeCount})");
 
         var mouse = _eb._input.Mouse;
@@ -1701,6 +1702,8 @@ public class MapEditorWindow
         addY += LineHeight;
         DrawSmallText("Left-drag to paint | Q/E brush size", panelX + Margin, addY, TextDim);
         // (Brush cursor drawn by DrawWorldOverlaysForActiveTab, outside the clip.)
+
+        DrawTabScrollbar(panelX, contentY, viewBottom, addY + LineHeight, ref _tabScroll[0]);
     }
 
     // ====================================================================
@@ -1915,6 +1918,7 @@ public class MapEditorWindow
 
     private void DrawGrassTab(int panelX, int contentY, int contentH, int screenW, int screenH)
     {
+        int viewBottom = contentY + contentH; // tab clip bottom, before the header advances contentY
         DrawSectionHeader(panelX, ref contentY, $"Grass Types ({_grassTypes.Count})");
 
         var mouse = _eb._input.Mouse;
@@ -2089,6 +2093,8 @@ public class MapEditorWindow
         y += ButtonHeight + 4;
         DrawSmallText($"Grass map: {_grassW}x{_grassH}", panelX + Margin, y, TextDim);
         // (Grid overlay + brush cursor drawn by DrawWorldOverlaysForActiveTab, outside the clip.)
+
+        DrawTabScrollbar(panelX, contentY, viewBottom, y + LineHeight, ref _tabScroll[1]);
     }
 
     /// <summary>
@@ -2825,6 +2831,12 @@ public class MapEditorWindow
                 DrawSmallText($"{groups[i]} ({defCount} defs)", panelX + Margin + 4, itemY + 3, selected ? TextBright : TextColor);
             }
 
+            // Clamp + thin scrollbar for the group list (the def grid clamps
+            // its own scroll; groups reuse _envListScroll as a plain row list).
+            int groupsContentH = groups.Count * (ButtonHeight + 2);
+            _envListScroll = MathF.Min(_envListScroll, Math.Max(0, groupsContentH - listAreaH));
+            _eb.DrawVScrollbar(panelX + PanelWidth - 6, contentY, listAreaH, groupsContentH, _envListScroll);
+
             // Selected group info
             if (IsEnvGroupSelected)
             {
@@ -2897,6 +2909,10 @@ public class MapEditorWindow
                         _eb.DrawBorder(cell, new Color(120, 120, 170));
                 }
             }
+
+            // Thin scrollbar in the panel's right margin, spanning the grid viewport.
+            _eb.DrawVScrollbar(panelX + PanelWidth - 6, contentY, listAreaH,
+                totalRows * rowStride, _envListScroll);
 
             // Hover tooltip — queued globally, drawn topmost after the clip closes.
             if (hoveredIdx >= 0 && hoveredIdx < filteredDefs.Count)
@@ -3110,6 +3126,7 @@ public class MapEditorWindow
 
     private void DrawWallsTab(int panelX, int contentY, int contentH, int screenW, int screenH)
     {
+        int viewBottom = contentY + contentH; // tab clip bottom, before the header advances contentY
         DrawSectionHeader(panelX, ref contentY, $"Walls ({_wallSystem.DefCount} types)");
 
         var mouse = _eb._input.Mouse;
@@ -3173,6 +3190,8 @@ public class MapEditorWindow
         y += LineHeight;
         DrawSmallText("Left-drag to paint, Right-drag to erase", panelX + Margin, y, TextDim);
         // (Brush cursor drawn by DrawWorldOverlaysForActiveTab, outside the clip.)
+
+        DrawTabScrollbar(panelX, contentY, viewBottom, y + LineHeight, ref _tabScroll[3]);
     }
 
     /// <summary>Whether the "Show Debug" checkbox is active on the Walls tab.</summary>
@@ -3347,6 +3366,7 @@ public class MapEditorWindow
 
     private void DrawRoadsTab(int panelX, int contentY, int contentH, int screenW, int screenH)
     {
+        int viewBottom = contentY + contentH; // tab clip bottom, before the header advances contentY
         DrawSectionHeader(panelX, ref contentY, $"Roads ({_roadSystem.RoadCount} roads, {_roadSystem.JunctionCount} junctions)");
 
         var mouse = _eb._input.Mouse;
@@ -3542,6 +3562,8 @@ public class MapEditorWindow
 
         // (Road control points/junction overlays drawn by
         // DrawWorldOverlaysForActiveTab, outside the clip.)
+
+        DrawTabScrollbar(panelX, contentY, viewBottom, y + LineHeight, ref _tabScroll[4]);
     }
 
     private void DrawRoadOverlays(int screenW, int screenH)
@@ -3827,6 +3849,7 @@ public class MapEditorWindow
 
     private void DrawRegionsTab(int panelX, int contentY, int contentH, int screenW, int screenH)
     {
+        int viewBottom = contentY + contentH; // tab clip bottom, before the header advances contentY
         DrawSectionHeader(panelX, ref contentY, $"Regions ({_triggerSystem.Regions.Count})");
 
         var mouse = _eb._input.Mouse;
@@ -4001,6 +4024,8 @@ public class MapEditorWindow
         }
 
         // (Region overlays drawn by DrawWorldOverlaysForActiveTab, outside the clip.)
+
+        DrawTabScrollbar(panelX, contentY, viewBottom, y + ButtonHeight + 4, ref _tabScroll[5]);
     }
 
     private void DrawRegionOverlays(int screenW, int screenH)
@@ -4851,14 +4876,13 @@ public class MapEditorWindow
             }
         }
 
-        // Scroll
-        var scrollDelta = mouse.ScrollWheelValue - _prevScrollValue;
-        if (scrollDelta != 0 && overPanel && !IsAnyPopupBlocking())
-            _tabScroll[6] = MathF.Max(0, _tabScroll[6] - scrollDelta * 0.2f);
+        // (No wheel handler here: the generic per-tab handler in Update()
+        // already scrolls _tabScroll[6] — a second one doubled the rate.)
     }
 
     private void DrawTriggersTab(int panelX, int contentY, int contentH)
     {
+        int viewBottom = contentY + contentH; // tab clip bottom, before the header advances contentY
         DrawSectionHeader(panelX, ref contentY, "Triggers");
 
         var mouse = _eb._input.Mouse;
@@ -5131,6 +5155,8 @@ public class MapEditorWindow
                 }
             }
         }
+
+        DrawTabScrollbar(panelX, contentY, viewBottom, y + LineHeight, ref _tabScroll[6]);
     }
 
     private int _condEditIdCounter; // Incremented each frame to create unique field IDs
@@ -5482,6 +5508,10 @@ public class MapEditorWindow
                     _eb.DrawBorder(cell, new Color(120, 120, 170));
             }
         }
+
+        // Thin scrollbar in the panel's right margin, spanning the grid viewport.
+        _eb.DrawVScrollbar(panelX + PanelWidth - 6, curY, listH,
+            totalRows * rowStride, _tabScroll[(int)MapEditorTab.Units]);
         curY += listH;
 
         // Hover tooltip — queued globally, drawn topmost after the clip closes.
@@ -5595,6 +5625,22 @@ public class MapEditorWindow
         scale = Math.Min(scale, 3f); // don't blow tiny sprites up into pixel mush
         _eb!.DrawTexture(tex, new Vector2(cell.Center.X, cell.Center.Y), rect, Color.White,
             0f, new Vector2(rect.Width / 2f, rect.Height / 2f), scale, SpriteEffects.None);
+    }
+
+    /// <summary>Thin scrollbar at the panel's right edge for a scrolling tab
+    /// body. viewTop = where the scrollable content starts (post-header),
+    /// viewBottom = the tab clip bottom, contentBottom = the bottom of the last
+    /// laid-out row in screen space (i.e. already offset by -scroll). Also
+    /// max-clamps the scroll so the wheel can't run endlessly past the end
+    /// (the generic wheel handler only clamps at 0). Tabs that cull rows with
+    /// an early break under-report contentBottom, so the clamp only ever
+    /// trails the true end — it never blocks reaching it.</summary>
+    private void DrawTabScrollbar(int panelX, int viewTop, int viewBottom, int contentBottom, ref float scroll)
+    {
+        int viewH = viewBottom - viewTop;
+        float contentH = contentBottom + scroll - viewTop;
+        scroll = Math.Clamp(scroll, 0f, Math.Max(0f, contentH - viewH));
+        _eb?.DrawVScrollbar(panelX + PanelWidth - 6, viewTop, viewH, contentH, scroll);
     }
 
     /// <summary>Name tooltip above the hovered grid cell, via the global
@@ -5879,6 +5925,7 @@ public class MapEditorWindow
     private void DrawProcGenTab(int panelX, int contentY, int contentH)
     {
         EnsureProcGenStylesLoaded();
+        int viewBottom = contentY + contentH; // tab clip bottom, before the header advances contentY
         DrawSectionHeader(panelX, ref contentY, $"ProcGen Styles ({_procGenStyles.Count})");
         if (_eb == null) return;
 
@@ -5969,6 +6016,10 @@ public class MapEditorWindow
         y += ButtonHeight + 8;
 
         DrawSmallText("Hold LMB in the world to paint.", panelX + Margin, y, TextDim);
+
+        // (Skipped on the early "list changed" returns above — one frame only.)
+        DrawTabScrollbar(panelX, contentY, viewBottom, y + LineHeight,
+            ref _tabScroll[(int)MapEditorTab.ProcGen]);
     }
 
     /// <summary>One category's config block: editable name + remove button, a density

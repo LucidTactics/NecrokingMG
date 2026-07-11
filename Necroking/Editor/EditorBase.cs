@@ -719,6 +719,21 @@ public class EditorBase
 
     // === Scrollable List ===
 
+    /// <summary>The canonical thin vertical scrollbar (indicator-only, 5px wide
+    /// with its left edge at x): a faint track spanning the viewport with a
+    /// proportional thumb. No-op when the content fits. Pure draw — pair it
+    /// with whatever wheel handler owns the scroll value; the ratio is clamped
+    /// so an overscrolled value can't push the thumb past the track.</summary>
+    public void DrawVScrollbar(int x, int y, int viewH, float contentH, float scroll)
+    {
+        if (viewH <= 0 || contentH <= viewH) return;
+        DrawRect(new Rectangle(x, y, 5, viewH), new Color(30, 30, 45, 120));
+        int barH = Math.Max(20, (int)(viewH * (float)viewH / contentH));
+        float ratio = Math.Clamp(scroll / (contentH - viewH), 0f, 1f);
+        int barY = y + (int)(ratio * (viewH - barH));
+        DrawRect(new Rectangle(x, barY, 5, barH), new Color(100, 100, 140, 180));
+    }
+
     /// <summary>
     /// Optional callback for custom item rendering in DrawScrollableList.
     /// Called with (itemIndex, itemRect, isSelected) after the background is drawn.
@@ -879,14 +894,7 @@ public class EditorBase
             if (searchFilter == null || items[i].Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
                 totalItems++;
         }
-        int totalHeight = totalItems * itemH;
-        if (totalHeight > h)
-        {
-            float scrollRatio = scroll / (totalHeight - h);
-            int barH = Math.Max(20, h * h / totalHeight);
-            int barY = y + (int)(scrollRatio * (h - barH));
-            DrawRect(new Rectangle(x + w - 6, barY, 5, barH), new Color(100, 100, 140, 180));
-        }
+        DrawVScrollbar(x + w - 6, y, h, totalItems * itemH, scroll);
 
         // Selecting a different object abandons any in-progress text-field edit.
         // The edit buffer (_inputBuffer) is keyed by a static field id ("wd_id",
