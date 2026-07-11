@@ -334,13 +334,26 @@ partial class GameRenderer
         }
     }
 
+    /// <summary>True when this projectile renders in the additive HDR pass
+    /// (DrawProjectilesHdr) instead of the plain alpha pass: fireballs always, and
+    /// any arrow-type projectile carrying a loaded projectile flipbook — spells fired
+    /// as arrows are magic darts and use their SpellDef's ProjectileFlipbook visuals,
+    /// not the hardcoded arrow shaft. An arrow whose flipbook is missing/unloaded
+    /// falls back to the classic arrow rendering rather than a fireball glow.</summary>
+    private bool RendersInHdrPass(Projectile proj)
+        => proj.Type == ProjectileType.Fireball
+        || (proj.Type == ProjectileType.Arrow
+            && !string.IsNullOrEmpty(proj.FlipbookID)
+            && _g._flipbooks.TryGetValue(proj.FlipbookID, out var fb) && fb.IsLoaded);
+
     private void DrawProjectiles()
     {
         foreach (var proj in _g._sim.Projectiles.Projectiles)
         {
             if (!proj.Alive) continue;
-            // Fireballs are drawn in the additive HDR pass (DrawProjectilesHdr)
-            if (proj.Type == ProjectileType.Fireball) continue;
+            // Fireballs and flipbook-carrying spell arrows are drawn in the additive
+            // HDR pass (DrawProjectilesHdr)
+            if (RendersInHdrPass(proj)) continue;
             // Fog of war: hide projectile if its current tile isn't visible.
             if (!_g._fogOfWar.IsVisible(proj.Position)) continue;
 
@@ -448,12 +461,15 @@ partial class GameRenderer
         }
     }
 
-    /// <summary>Draw fireball projectiles with HDR intensity (called in additive HdrSprite pass).</summary>
+    /// <summary>Draw fireball and flipbook-arrow projectiles with HDR intensity
+    /// (called in additive HdrSprite pass). Pass membership is decided by
+    /// <see cref="RendersInHdrPass"/> — keep the two draw methods' guards in sync
+    /// through it, or a projectile draws twice or not at all.</summary>
     private void DrawProjectilesHdr()
     {
         foreach (var proj in _g._sim.Projectiles.Projectiles)
         {
-            if (!proj.Alive || proj.Type != ProjectileType.Fireball) continue;
+            if (!proj.Alive || !RendersInHdrPass(proj)) continue;
             if (!_g._fogOfWar.IsVisible(proj.Position)) continue;
             var sp = _g._renderer.WorldToScreen(proj.Position, proj.Height, _g._camera);
 
