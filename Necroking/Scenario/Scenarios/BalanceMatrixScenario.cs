@@ -485,7 +485,12 @@ public class BalanceMatrixScenario : ScenarioBase
             StartConfig(_wCount, next);
     }
 
-    /// <summary>The evaluated config whose decisive win rate sat closest to 50%.</summary>
+    /// <summary>The evaluated config whose decisive win rate sat closest to 50%.
+    /// Ties prefer the LATER config: when a steep matchup produces nothing but
+    /// shutouts (every config equidistant at 0.5), the last-evaluated configs are
+    /// the bisection endpoints straddling the true flip point — reporting the 5v5
+    /// baseline there (as strict &lt; did) says "0%, dead even counts", which is
+    /// the least informative answer possible.</summary>
     private ConfigResult ClosestConfig()
     {
         ConfigResult best = _cfg;
@@ -495,7 +500,7 @@ public class BalanceMatrixScenario : ScenarioBase
             float wp = WinFracA(c);
             if (wp < 0f) continue;
             float d = Math.Abs(wp - 0.5f);
-            if (d < bestDist) { bestDist = d; best = c; }
+            if (d <= bestDist) { bestDist = d; best = c; }
         }
         return best;
     }
