@@ -268,18 +268,23 @@ partial class GameRenderer
         if (_g._menuState == MenuState.UnitEditor || _g._menuState == MenuState.SpellEditor)
             _g._editorUi.DrawColorPickerPopup();
 
-        // Immediate-mode editor UI reads click edges during Draw, but Update can run
-        // several times per Draw under fixed-timestep catch-up (slow frames), which
-        // would collapse the one-frame press edge before Draw sees it and drop most
-        // clicks. Snapshot the mouse once per Draw so edges are measured against the
-        // previous Draw, not the previous Update. _g._editorUi backs Settings + the
-        // unit/spell/map/item editors; _g._uiEditor is its own EditorBase instance.
+        // Per-editor end-of-draw housekeeping (dropdown reconcile) — gated like the
+        // editors themselves.
         if (_g._menuState == MenuState.Settings || _g._menuState == MenuState.UnitEditor
             || _g._menuState == MenuState.SpellEditor || _g._menuState == MenuState.MapEditor
             || _g._menuState == MenuState.ItemEditor || _g._menuState == MenuState.Multiplayer)
             _g._editorUi.EndDrawFrame();
         else if (_g._menuState == MenuState.UIEditor)
             _g._uiEditor.EndDrawFrame();
+
+        // Immediate-mode editor UI reads click edges during Draw, but Update can run
+        // several times per Draw under fixed-timestep catch-up (slow frames), which
+        // would collapse the one-frame press edge before Draw sees it and drop most
+        // clicks. Snapshot the mouse once per Draw so edges are measured against the
+        // previous Draw, not the previous Update. Runs UNCONDITIONALLY — a snapshot
+        // gated on an editor being open goes stale across close/open and replays
+        // the closing click into the next editor session (spell-editor insta-close).
+        _g._input.SnapshotDrawFrame();
 
         if (_g._font != null && showUI && _g._showPerfReadout)
         {

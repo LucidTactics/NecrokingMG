@@ -645,6 +645,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     // Dev cursor override for headless hover testing (set via the `mousepos` dev command).
     private Microsoft.Xna.Framework.Vector2? _devMouseOverride;
+    // Menu state as of the last input capture — detects mode transitions so the
+    // in-flight press gesture can be invalidated (see Update, ConsumeGesture).
+    private MenuState _menuStateAtLastCapture;
     internal int _channelingSlot = -1;
     private readonly TextureCache _itemTextureCache = new();
     internal int _hoveredObjectIdx = -1;
@@ -886,6 +889,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         Tooltips = new Necroking.UI.TooltipSystem(this);
         Instance = this;
         _gameRenderer = new GameRenderer(this);
+
+        // Editors read mouse state live through the shared InputState (see
+        // EditorBase._mouse) — wire it up before any editor can draw so they
+        // never sit on a stale default instance.
+        _editorUi._input = _input;
+        _uiEditor._input = _input;
 
         // Unified UI layer list (see UI/UIRouter.cs): input dispatches through
         // these top-down in reverse render order, so the topmost visible widget
@@ -2769,6 +2778,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // (drag-out, multi-monitor). Those must not cast/command either.
         bool cursorOutside = mouse.X < 0 || mouse.Y < 0 || mouse.X >= vpW || mouse.Y >= vpH;
 
+        // A menu-state transition (editor opened/closed, pause menu, …) means the
+        // in-flight press gesture belonged to the OLD screen — it must not fire a
+        // widget that appeared under the cursor in the new mode. Checked before
+        // Capture so a press starting this very Update is honored, not killed.
+        if (_menuState != _menuStateAtLastCapture)
+        {
+            _input.ConsumeGesture();
+            _menuStateAtLastCapture = _menuState;
+        }
+
         if (unfocused)
         {
             // Kept running (dev server or "run when unfocused"): feed NEUTRAL input — no
@@ -4169,6 +4188,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// click-side mirror of F9-F12, shared by the editor-launcher layer.</summary>
     internal void ToggleEditorWindow(int idx)
     {
+        // The click that toggles an editor must not also fire a widget that
+        // appears (or disappears) under the cursor this frame — kill the
+        // in-flight press gesture before switching modes. (The Update-loop
+        // menu-state-transition check covers this one frame later; this call
+        // covers the toggle frame's own Draw.)
+        _input.ConsumeGesture();
         switch (idx)
         {
             case HUDRenderer.EditorUnit:

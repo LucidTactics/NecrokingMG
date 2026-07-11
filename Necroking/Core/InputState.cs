@@ -17,6 +17,21 @@ public class InputState
     public KeyboardState Kb;
     public KeyboardState PrevKb;
 
+    // Mouse state at the end of the previous Draw. Immediate-mode editor widgets
+    // (EditorBase) measure their press/release edges against this rather than
+    // PrevMouse, so a click survives fixed-timestep catch-up (several Updates per
+    // Draw would collapse the one-frame edge before the Draw pass reads it).
+    // Snapshotted once per Draw by SnapshotDrawFrame() — unconditionally, unlike
+    // the per-editor copy this replaces, so it can never go stale while no
+    // editor is open.
+    public MouseState DrawPrevMouse;
+
+    // Screen position where the current left press began; (-1,-1) when no press
+    // is in flight or the gesture was consumed. Release-fired widgets require
+    // the press to have STARTED inside their rect, so clearing this kills the
+    // whole press→release gesture in one place.
+    public Point PressStartPos = new(-1, -1);
+
     // Derived helpers
     public Vector2 MousePos;
     public Vector2 PrevMousePos;
@@ -79,6 +94,7 @@ public class InputState
         ScrollDelta = mouse.ScrollWheelValue - prevMouse.ScrollWheelValue;
 
         LeftPressed = mouse.LeftButton == ButtonState.Pressed && prevMouse.LeftButton == ButtonState.Released;
+        if (LeftPressed) PressStartPos = new Point(mouse.X, mouse.Y);
         LeftDown = mouse.LeftButton == ButtonState.Pressed;
         LeftReleased = mouse.LeftButton == ButtonState.Released && prevMouse.LeftButton == ButtonState.Pressed;
         RightPressed = mouse.RightButton == ButtonState.Pressed && prevMouse.RightButton == ButtonState.Released;
@@ -92,6 +108,18 @@ public class InputState
         _consumedKeys.Clear();
         MouseOverUI = false;
     }
+
+    /// <summary>Snapshot the current mouse state as the edge reference for the
+    /// next Draw's immediate-mode widgets. Call exactly once per Draw, after all
+    /// editor widgets have drawn, regardless of whether an editor is open.</summary>
+    public void SnapshotDrawFrame() => DrawPrevMouse = Mouse;
+
+    /// <summary>Invalidate the in-flight press gesture. A press that caused a UI
+    /// mode change (opened an editor, toggled a menu) belongs to the widget it
+    /// started on and must not also fire a widget that appeared under the cursor
+    /// in the new mode — e.g. the spell editor's [X] eating the launcher click
+    /// that opened it. The next physical press re-stamps PressStartPos.</summary>
+    public void ConsumeGesture() => PressStartPos = new Point(-1, -1);
 
     // Keyboard helpers
     public bool WasKeyPressed(Keys key) => Kb.IsKeyDown(key) && PrevKb.IsKeyUp(key);

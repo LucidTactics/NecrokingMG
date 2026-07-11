@@ -85,14 +85,16 @@ public class EditorBase
     protected SpriteFont? _smallFont;
     protected SpriteFont? _largeFont;
     internal GraphicsDevice _gd = null!;
-    internal MouseState _mouse;
-    internal MouseState _prevMouse;
-    // Mouse state snapshotted at the END of the previous Draw (see EndDrawFrame).
-    // Immediate-mode widgets measure their press/release edge against this rather
-    // than the previous Update, so a click survives fixed-timestep catch-up (when
-    // several Updates run per Draw on a slow frame). Without it the one-frame edge
-    // is overwritten before the Draw pass reads it and ~6/7 of clicks are dropped.
-    private MouseState _drawSnapMouse;
+    // Live views over the centralized InputState — EditorBase deliberately keeps
+    // NO private mouse history of its own. A private copy only updated while an
+    // editor is open goes stale across close/open; it once replayed the ghost of
+    // the closing click into the freshly opened editor, insta-closing it.
+    // _prevMouse is the previous DRAW's state rather than the previous Update's,
+    // so a click survives fixed-timestep catch-up (several Updates per Draw would
+    // collapse the one-frame edge before the Draw pass reads it — without this
+    // ~6/7 of clicks are dropped on slow frames).
+    internal MouseState _mouse => _input.Mouse;
+    internal MouseState _prevMouse => _input.DrawPrevMouse;
     internal KeyboardState _kb;
     internal KeyboardState _prevKb;
     internal InputState _input = new();
@@ -355,8 +357,9 @@ public class EditorBase
     // the button is released, so vertical moves don't hijack a neighbour.
     private string? _activeSliderId;
 
-    // Screen position where the current left press began (see UpdateInput).
-    private Point _pressStartPos = new(-1, -1);
+    // Screen position where the current left press began — owned by InputState
+    // (stamped in Capture, invalidated by ConsumeGesture on UI mode changes).
+    private Point _pressStartPos => _input.PressStartPos;
     // Guards against a shared color picker being drawn twice per frame when
     // nested editors (wall/env inside map editor) each call DrawColorPickerPopup.
     private bool _colorPickerDrawnThisFrame;
@@ -386,16 +389,10 @@ public class EditorBase
     public void UpdateInput(MouseState mouse, MouseState prevMouse, KeyboardState kb, KeyboardState prevKb,
         int screenW, int screenH, GameTime gameTime, InputState? input = null)
     {
-        _mouse = mouse;
-        // Edge detection for widgets happens during Draw, but UpdateInput can run
-        // multiple times per Draw under fixed-timestep catch-up. Measuring against
-        // the previous Update (the passed prevMouse) would collapse a press edge
-        // before Draw sees it, dropping clicks on slow frames. Measure against the
-        // mouse state at the previous Draw instead; EndDrawFrame refreshes it once
-        // per frame. In the common 1-Update-per-Draw case the two are identical, so
-        // existing behavior is unchanged. (prevMouse is still used below for the
-        // dropdown-hold / color-picker dismiss logic, which is per-Update by design.)
-        _prevMouse = _drawSnapMouse;
+        // Mouse state and press/release edges live in InputState now — _mouse /
+        // _prevMouse / _pressStartPos are read-through properties over _input.
+        // (The mouse/prevMouse params are still used below for the dropdown-hold /
+        // color-picker dismiss logic, which is per-Update by design.)
         _kb = kb;
         _prevKb = prevKb;
         if (input != null) _input = input;
@@ -408,13 +405,6 @@ public class EditorBase
         // of the next frame so that game-world click handlers see it.
         if (_mouseOverEditorUI && _input != null)
             _input.MouseOverUI = true;
-
-        // Track where the current press began (measured against the same
-        // draw-snapshot edge the widgets use). DrawButton requires the press to
-        // have STARTED inside its rect before firing on release — pressing in
-        // the world / another widget and dragging onto a button no longer fires it.
-        if (_mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
-            _pressStartPos = new Point(_mouse.X, _mouse.Y);
 
         // Reset per-frame flags
         // If a dropdown is open from last frame, pre-set input layer to block all widgets
@@ -476,16 +466,12 @@ public class EditorBase
     }
 
     /// <summary>
-    /// Snapshot the current mouse state as the reference for next frame's edge
-    /// detection. Call exactly once per Draw, AFTER this editor's widgets have been
-    /// drawn. Pairs with <see cref="UpdateInput"/>'s use of <c>_drawSnapMouse</c> so
-    /// press/release edges are measured against the previous Draw — keeping clicks
-    /// responsive even when several Updates run per Draw (fixed-timestep catch-up on
-    /// a slow frame). See the field comment on <c>_drawSnapMouse</c>.
+    /// End-of-Draw housekeeping. The mouse edge snapshot itself moved to
+    /// <see cref="Necroking.Core.InputState.SnapshotDrawFrame"/>, which
+    /// GameRenderer calls unconditionally every Draw.
     /// </summary>
     public void EndDrawFrame()
     {
-        _drawSnapMouse = _mouse;
         // An open dropdown whose combo wasn't drawn this frame is unreachable
         // (its tab/panel went away) — close it so the pre-raised layer doesn't
         // invisibly block the editor.
