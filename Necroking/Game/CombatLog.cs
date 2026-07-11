@@ -8,7 +8,7 @@ namespace Necroking.GameSystems;
 // attack being queued and its animation's impact frame. Distinct from Miss
 // (dice rolled, defense won) so chase whiffs are visible in the log instead
 // of the swing vanishing silently.
-public enum CombatLogOutcome : byte { Hit, Miss, Blocked, Whiff }
+public enum CombatLogOutcome : byte { Hit, Miss, Blocked, Whiff, NoteOnly }
 
 public class CombatLogEntry
 {

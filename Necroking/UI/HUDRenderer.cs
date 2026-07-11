@@ -913,6 +913,7 @@ public partial class HUDRenderer
                 CombatLogOutcome.Miss => $"{e.AttackerName} missed {e.DefenderName}{weap}",
                 CombatLogOutcome.Blocked => $"{e.DefenderName} blocked {e.AttackerName}'s attack{weap}",
                 CombatLogOutcome.Whiff => $"{e.DefenderName} escaped {e.AttackerName}'s attack{weap}",
+                CombatLogOutcome.NoteOnly => $"{e.Note}",
                 _ => ""
             };
             if (logLine.Length == 0) continue; // unknown outcome: don't burn a visible slot on a blank line
