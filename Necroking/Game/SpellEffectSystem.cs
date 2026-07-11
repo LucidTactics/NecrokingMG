@@ -453,8 +453,8 @@ public static class SpellEffectSystem
     /// shared by the Swirly and HomingSwirly trajectories.</summary>
     private static void ApplySwirl(Projectile p)
     {
-        p.SwirlFreq = 3f + (float)_projRng.NextDouble() * 5f;
-        p.SwirlAmplitude = 0.5f + (float)_projRng.NextDouble() * 1.5f;
+        p.SwirlFreq = 1f + (float)_projRng.NextDouble() * 0.5f;
+        p.SwirlAmplitude = 1.0f + (float)_projRng.NextDouble() * 0.25f;
         p.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
     }
 
