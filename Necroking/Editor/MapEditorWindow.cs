@@ -265,13 +265,19 @@ public class MapEditorWindow
     private string _unitPatrolRoute = "";
     private bool _placeAsCorpse; // when set, the Units tool places dead bodies
     // Units-tab thumbnail grid: layout cached from Draw for hit-testing in Update
-    private const int UnitGridCols = 6;
-    private const int UnitGridGap = 2;
+    private const int ThumbGridCols = 6;
+    private const int ThumbGridGap = 2;
     private int _unitGridDrawX;
     private int _unitGridDrawY;
     private int _unitGridCellW;
     private int _unitGridCellH;
     private int _unitGridRowsVisible;
+    // Objects-tab thumbnail grid (same scheme)
+    private int _objGridDrawX;
+    private int _objGridDrawY;
+    private int _objGridCellW;
+    private int _objGridCellH;
+    private int _objGridRowsVisible;
 
     // When the editor is entered via a mouse click (e.g. the pause-menu "Map
     // Editor" button), that same click would otherwise bubble straight into the
@@ -2251,16 +2257,22 @@ public class MapEditorWindow
                     }
                 }
             }
-            else
+            else if (_objGridDrawY > 0 && _objGridCellW > 0)
             {
-                for (int i = 0; i < filteredDefs.Count; i++)
+                // Grid cell hit-test against the layout cached by DrawObjectsTab
+                // (same scheme as the Units tab).
+                int colStride = _objGridCellW + ThumbGridGap;
+                int rowStride = _objGridCellH + ThumbGridGap;
+                int relX = mouse.X - _objGridDrawX;
+                int relY = mouse.Y - _objGridDrawY;
+                if (relX >= 0 && relY >= 0 && relY < _objGridRowsVisible * rowStride
+                    && relX % colStride < _objGridCellW && relY % rowStride < _objGridCellH)
                 {
-                    int itemY = listY + i * (ButtonHeight + 2) - (int)_envListScroll;
-                    if (mouse.Y >= itemY && mouse.Y < itemY + ButtonHeight)
-                    {
+                    int col = relX / colStride;
+                    int row = relY / rowStride + (int)(_envListScroll / rowStride);
+                    int i = row * ThumbGridCols + col;
+                    if (col < ThumbGridCols && i >= 0 && i < filteredDefs.Count)
                         SelectedEnvDefIndex = filteredDefs[i];
-                        break;
-                    }
                 }
             }
         }
@@ -2828,26 +2840,67 @@ public class MapEditorWindow
         }
         else
         {
-            // Normal def list
+            // Normal def grid: 6-wide sprite thumbnails (hover a cell for the
+            // name), same scheme as the Units tab.
             var filteredDefs = GetFilteredEnvDefs(categories);
 
-            for (int i = 0; i < filteredDefs.Count; i++)
+            int gridX = panelX + Margin;
+            int gridW = PanelWidth - Margin * 2;
+            int cellW = (gridW - (ThumbGridCols - 1) * ThumbGridGap) / ThumbGridCols;
+            int cellH = cellW;
+            int rowStride = cellH + ThumbGridGap;
+            int totalRows = (filteredDefs.Count + ThumbGridCols - 1) / ThumbGridCols;
+            int visibleRows = Math.Max(1, listAreaH / rowStride);
+
+            // Clamp the wheel-driven scroll to the end of the grid (the wheel
+            // handler in Update only clamps at 0).
+            float maxObjScroll = Math.Max(0, (totalRows - visibleRows) * rowStride);
+            _envListScroll = Math.Clamp(_envListScroll, 0, maxObjScroll);
+            int firstRow = (int)(_envListScroll / rowStride);
+
+            // Cache for Update hit-testing
+            _objGridDrawX = gridX;
+            _objGridDrawY = contentY;
+            _objGridCellW = cellW;
+            _objGridCellH = cellH;
+            _objGridRowsVisible = visibleRows;
+
+            // MousePos, not raw .Mouse: the mousepos dev override patches only
+            // MousePos, and with a real mouse the two are identical.
+            int mx = (int)_eb._input.MousePos.X, my = (int)_eb._input.MousePos.Y;
+            int hoveredIdx = -1;
+            Rectangle hoveredCell = default;
+            for (int r = 0; r < visibleRows; r++)
             {
-                int itemY = contentY + i * (ButtonHeight + 2) - (int)_envListScroll;
-                if (itemY < contentY - ButtonHeight || itemY > contentY + listAreaH) continue;
+                int row = firstRow + r;
+                if (row >= totalRows) break;
+                for (int c = 0; c < ThumbGridCols; c++)
+                {
+                    int i = row * ThumbGridCols + c;
+                    if (i >= filteredDefs.Count) break;
 
-                int defIdx = filteredDefs[i];
-                var def = _envSystem.GetDef(defIdx);
-                bool selected = defIdx == SelectedEnvDefIndex;
-                var btnRect = new Rectangle(panelX + Margin, itemY, PanelWidth - Margin * 2, ButtonHeight);
+                    int defIdx = filteredDefs[i];
+                    var def = _envSystem.GetDef(defIdx);
+                    var cell = new Rectangle(gridX + c * (cellW + ThumbGridGap), contentY + r * rowStride, cellW, cellH);
+                    bool selected = defIdx == SelectedEnvDefIndex;
+                    bool hovered = cell.Contains(mx, my);
+                    if (hovered) { hoveredIdx = i; hoveredCell = cell; }
 
-                var bgColor = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
-                if (bgColor != Color.Transparent)
-                    Scope.Draw(_pixel, btnRect, bgColor);
+                    Scope.Draw(_pixel, cell, selected ? new Color(60, 60, 100, 220)
+                        : hovered ? new Color(40, 40, 70, 180) : new Color(25, 25, 35, 160));
+                    DrawEnvDefThumb(defIdx, def, cell);
+                    if (selected)
+                        _eb.DrawBorder(cell, new Color(255, 230, 160));
+                    else if (hovered)
+                        _eb.DrawBorder(cell, new Color(120, 120, 170));
+                }
+            }
 
-                // RM09: Display as "[category] name" instead of "name [B]"
-                string label = $"[{def.Category}] {def.Name}";
-                DrawSmallText(label, panelX + Margin + 4, itemY + 3, selected ? TextBright : TextColor);
+            // Hover tooltip — drawn after the whole grid so it layers on top.
+            if (hoveredIdx >= 0 && hoveredIdx < filteredDefs.Count)
+            {
+                var hovDef = _envSystem.GetDef(filteredDefs[hoveredIdx]);
+                DrawGridCellTooltip($"[{hovDef.Category}] {hovDef.Name}", hoveredCell, screenW);
             }
 
             // Selected def properties
@@ -5260,8 +5313,8 @@ public class MapEditorWindow
         if (leftClick && overPanel && _unitGridDrawY > 0 && _unitGridCellW > 0)
         {
             var unitIds = GetFilteredUnitIds();
-            int colStride = _unitGridCellW + UnitGridGap;
-            int rowStride = _unitGridCellH + UnitGridGap;
+            int colStride = _unitGridCellW + ThumbGridGap;
+            int rowStride = _unitGridCellH + ThumbGridGap;
             int relX = mouse.X - _unitGridDrawX;
             int relY = mouse.Y - _unitGridDrawY;
             if (relX >= 0 && relY >= 0 && relY < _unitGridRowsVisible * rowStride
@@ -5269,8 +5322,8 @@ public class MapEditorWindow
             {
                 int col = relX / colStride;
                 int row = relY / rowStride + (int)(_tabScroll[(int)MapEditorTab.Units] / rowStride);
-                int idx = row * UnitGridCols + col;
-                if (col < UnitGridCols && idx >= 0 && idx < unitIds.Count)
+                int idx = row * ThumbGridCols + col;
+                if (col < ThumbGridCols && idx >= 0 && idx < unitIds.Count)
                     _selectedUnitDefIdx = idx;
             }
         }
@@ -5379,10 +5432,10 @@ public class MapEditorWindow
         curY += 18;
 
         int listH = contentH - (curY - contentY) - 100;
-        int cellW = (w - (UnitGridCols - 1) * UnitGridGap) / UnitGridCols;
+        int cellW = (w - (ThumbGridCols - 1) * ThumbGridGap) / ThumbGridCols;
         int cellH = cellW;
-        int rowStride = cellH + UnitGridGap;
-        int totalRows = (unitIds.Count + UnitGridCols - 1) / UnitGridCols;
+        int rowStride = cellH + ThumbGridGap;
+        int totalRows = (unitIds.Count + ThumbGridCols - 1) / ThumbGridCols;
         int visibleRows = Math.Max(1, listH / rowStride);
 
         // Clamp the wheel-driven scroll to the end of the grid (the generic
@@ -5407,12 +5460,12 @@ public class MapEditorWindow
         {
             int row = firstRow + r;
             if (row >= totalRows) break;
-            for (int c = 0; c < UnitGridCols; c++)
+            for (int c = 0; c < ThumbGridCols; c++)
             {
-                int idx = row * UnitGridCols + c;
+                int idx = row * ThumbGridCols + c;
                 if (idx >= unitIds.Count) break;
 
-                var cell = new Rectangle(x + c * (cellW + UnitGridGap), curY + r * rowStride, cellW, cellH);
+                var cell = new Rectangle(x + c * (cellW + ThumbGridGap), curY + r * rowStride, cellW, cellH);
                 var def = _gameData.Units.Get(unitIds[idx]);
                 bool selected = idx == _selectedUnitDefIdx;
                 bool hovered = cell.Contains(mx, my);
@@ -5434,7 +5487,7 @@ public class MapEditorWindow
         {
             var def = _gameData.Units.Get(unitIds[hoveredIdx]);
             string tip = def != null ? $"{def.DisplayName} [{def.Faction}]" : unitIds[hoveredIdx];
-            DrawUnitGridTooltip(tip, hoveredCell, screenW);
+            DrawGridCellTooltip(tip, hoveredCell, screenW);
         }
 
         // Placed units count
@@ -5516,9 +5569,35 @@ public class MapEditorWindow
             0f, new Vector2(rect.Width / 2f, rect.Height / 2f), scale, SpriteEffects.None);
     }
 
+    /// <summary>Env-def sprite thumbnail fitted+centered in a grid cell (frame 0
+    /// for animated spritesheets); defs with no texture fall back to the def's
+    /// initial so the cell stays readable.</summary>
+    private void DrawEnvDefThumb(int defIdx, EnvironmentObjectDef def, Rectangle cell)
+    {
+        var tex = _envSystem.GetDefTexture(defIdx);
+        if (tex == null)
+        {
+            string letter = string.IsNullOrEmpty(def.Name) ? "?" : def.Name[..1].ToUpperInvariant();
+            var ls = _eb!.MeasureText(letter, _smallFont);
+            _eb.DrawText(letter, new Vector2(cell.X + (cell.Width - (int)ls.X) / 2,
+                cell.Y + (cell.Height - (int)ls.Y) / 2), TextColor, _smallFont);
+            return;
+        }
+        // Placeholder textures are a flat sheet with no frames — slicing them
+        // by AnimFrames produces invisible slivers (see IsUsingPlaceholder).
+        var rect = _envSystem.IsUsingPlaceholder(defIdx)
+            ? new Rectangle(0, 0, tex.Width, tex.Height)
+            : def.GetAnimFrameRect(tex.Width, tex.Height, 0);
+        if (rect.Width <= 0 || rect.Height <= 0) return;
+        float scale = Math.Min((cell.Width - 4f) / rect.Width, (cell.Height - 4f) / rect.Height);
+        scale = Math.Min(scale, 3f); // don't blow tiny sprites up into pixel mush
+        _eb!.DrawTexture(tex, new Vector2(cell.Center.X, cell.Center.Y), rect, Color.White,
+            0f, new Vector2(rect.Width / 2f, rect.Height / 2f), scale, SpriteEffects.None);
+    }
+
     /// <summary>Name tooltip above the hovered grid cell (flips below when
     /// clipped at the top; clamped horizontally to the screen).</summary>
-    private void DrawUnitGridTooltip(string text, Rectangle anchorCell, int screenW)
+    private void DrawGridCellTooltip(string text, Rectangle anchorCell, int screenW)
     {
         if (_eb == null) return;
         var size = _eb.MeasureText(text, _smallFont);
