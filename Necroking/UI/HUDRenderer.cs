@@ -924,8 +924,10 @@ public partial class HUDRenderer
                 CombatLogOutcome.Hit => $"{e.AttackerName} hit {e.DefenderName} for {e.NetDamage}{weap}",
                 CombatLogOutcome.Miss => $"{e.AttackerName} missed {e.DefenderName}{weap}",
                 CombatLogOutcome.Blocked => $"{e.DefenderName} blocked {e.AttackerName}'s attack{weap}",
+                CombatLogOutcome.Whiff => $"{e.DefenderName} escaped {e.AttackerName}'s attack{weap}",
                 _ => ""
             };
+            if (logLine.Length == 0) continue; // unknown outcome: don't burn a visible slot on a blank line
 
             Text(_smallFont, logLine, new Vector2(10, logBaseY - linesDrawn * 16),
                 new Color((byte)200, (byte)200, (byte)200, alpha));
