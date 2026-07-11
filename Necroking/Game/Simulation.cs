@@ -2300,8 +2300,10 @@ public class Simulation
     /// <summary>Tolerance added to melee reach at the impact frame. The swing was
     /// stamped in range, so the target gets this much escape allowance before the
     /// hit becomes a whiff. Generous on purpose: a whiff should mean "visibly ran
-    /// out of the bite," not pixel-shaving a target drifting in place.</summary>
-    private const float ImpactWhiffTolerance = 1.0f;
+    /// out of the bite," not pixel-shaving a target drifting in place — at 1.5u,
+    /// only a target already near full flight speed when the swing started can
+    /// escape the windup.</summary>
+    private const float ImpactWhiffTolerance = 1.5f;
 
     /// <summary>
     /// Resolve a queued attack at its animation's impact frame, re-checking that a
