@@ -131,6 +131,36 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
   editor's own `_placedUnits` list only, never from live sim units. Env *defs* save
   separately via `MapData.SaveEnvDefs("data/env_defs.json")`; zones to the `SaveZones`
   sidecar (see [zones.md](zones.md)).
+- **Units tab = the placeable-unit picker + world place/delete.** All in
+  `MapEditorWindow.cs`: `DrawUnitsTab` (faction-filter combo → patrol combo → place-as-corpse
+  checkbox → the scrolling **text list** of unit defs from `GetFilteredUnitIds()` →
+  placed-count + Clear All), `UpdateUnitsTab` (panel click → `_selectedUnitDefIdx`; world
+  left-click → append `PlacedUnit` + `UndoUnitPlace`; right-drag sweep-delete →
+  `UndoUnitRemove`). **Draw/Update split via cached layout fields**: `DrawUnitsTab` stores
+  `_unitListDrawY`/`_unitListItemH`/`_unitListVisibleCount`; `UpdateUnitsTab` hit-tests with
+  those (one-frame-stale by design — change the layout in Draw and Update follows next frame,
+  but both must agree on geometry). Scroll = the shared `_tabScroll[(int)MapEditorTab.Units]`
+  (wheel handled generically in `Update`; `DrawUnitsTab` clamps the max itself since the
+  generic handler only clamps at 0). **`_selectedUnitDefIdx` indexes the FILTERED list** —
+  reset it to -1 whenever the filter changes (the faction-combo handler already does).
+  `DrawPlacedUnitMarkers` draws world diamonds/crosses (no sprites).
+- **Drawing a unit sprite thumbnail in editor UI** (the unit-editor preview pattern,
+  `UnitEditorWindow.DrawPreviewSprite`): `def.Sprite` (`SpriteRef {AtlasName, SpriteName}`)
+  → `AtlasDefs.ResolveAtlasName` → `Game1._atlases[idx]` (internal, reachable via the
+  editor's `_game`) → `atlas.GetUnit(name)` = `UnitSpriteData`; **`UnitDef.SpriteData` is
+  already pre-resolved at load** (`Game1.LoadContent` sets it for every def), so for a
+  static thumbnail: `def.SpriteData.GetAnim("Idle")` → `AngleFrames` (prefer angle 60 =
+  down-right, fall back to any) → first `Keyframe.Frame` (`SpriteFrame {Rect, PivotX/Y,
+  TextureIndex}`) → `atlas.GetTextureForFrame(frame)` → `_eb.DrawTexture(tex, pos,
+  frame.Rect, …)`. Only the atlas texture lookup still needs the atlas object; the anim
+  data does not. No AnimController needed for a static frame.
+- **No editor grid-of-image-thumbnails picker exists yet** (as of 2026-07): the nearest
+  precedents are UIEditorWindow's RI15 inline 18px texture thumbnails in a *list*, the wall
+  editor's 3x3 *button* grid, and `ReflectionPropertyRenderer.DrawCheckboxGridField`
+  (text checkbox grid). `TextureFileBrowser` is a file list + single preview, not a grid.
+  **No hover-tooltip helper exists in `EditorBase` either** — editors hand-roll
+  (rect + `DrawText` after the hovered content so it draws on top); the runtime
+  `HUDRenderer.DrawCursorTooltip` is private HUD code, not usable from editors.
 - **Def-dropdown precedent**: `DrawZoneSpawnPanel` rows use `_eb.DrawCombo` with cached
   filtered id arrays (`GetZoneForagableIdOptions` filters `_envSystem` defs by `IsForagable`,
   cache invalidated on `DefCount` change) — copy this for any "pick an env def" UI.
