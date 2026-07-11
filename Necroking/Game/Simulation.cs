@@ -2496,13 +2496,14 @@ public class Simulation
         int atkDrn = attackerIdx >= 0 && attackerIdx < _units.Count
             ? _units[attackerIdx].Stats.Drn : 2;
 
-        // Roll order preserved (shared RNG in RollDRN): attack, defense, then —
-        // on a hit — protection and damage. Split out so each roll's DRN component
-        // can be recorded in the combat-log entry below.
+        // Hit resolution rolls tier-4 dice for both sides (same rule as melee); the
+        // damage/prot rolls below keep each unit's own Drn tier. Roll order preserved
+        // (shared RNG in RollDRN): attack, defense, then — on a hit — protection and
+        // damage. Split out so each roll's DRN component can be recorded in the log.
         int harassment = _units[defenderIdx].Harassment;
-        int atkDrnRoll = UnitUtil.RollDRN(atkDrn);
+        int atkDrnRoll = UnitUtil.RollDRN(4);
         int defBase = Math.Max(defStats.Defense / 2 - harassment, 0) + defStats.ShieldParry * 2;
-        int defDrnRoll = UnitUtil.RollDRN(defStats.Drn);
+        int defDrnRoll = UnitUtil.RollDRN(4);
         int atkRoll = hit.Precision + atkDrnRoll;
         int defRoll = defBase + defDrnRoll;
 
@@ -2712,8 +2713,13 @@ public class Simulation
         // recovery formula). Regens at 1/tick every FatigueRegenInterval seconds.
         _units[attackerIdx].Fatigue = MathF.Min(100f, _units[attackerIdx].Fatigue + atkStats.Encumbrance);
 
-        int atkDRN = UnitUtil.RollDRN(atkStats.Drn);
-        int defDRN = UnitUtil.RollDRN(defStats.Drn);
+        // Hit resolution always rolls tier-4 (d6 open-ended) dice for BOTH sides,
+        // regardless of unit tier — the exploding die means any attacker can
+        // eventually connect with any defender (no impossible-to-hit stat walls;
+        // female deer mirrors used to be literal stalemates at 4+d3 vs 6+d3).
+        // Damage/protection rolls below still use each unit's own Drn tier.
+        int atkDRN = UnitUtil.RollDRN(4);
+        int defDRN = UnitUtil.RollDRN(4);
 
         // Fatigue penalties (manual p.61): attack −1 per 20 fatigue, defense −1 per
         // 10 fatigue (rounded down). This is what makes a tired unit easier to hit

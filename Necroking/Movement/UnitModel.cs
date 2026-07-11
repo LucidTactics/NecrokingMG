@@ -668,9 +668,11 @@ public static class UnitUtil
         return HitLocation.Feet;
     }
 
-    /// <summary>Tiered dice roll — every combat roll uses the owning unit's tier
-    /// (<see cref="UnitStats.Drn"/>): the attacker's tier for attack/damage rolls,
-    /// the defender's for defense/protection rolls, etc.
+    /// <summary>Tiered dice roll. Attack-vs-defense HIT rolls (melee + ranged)
+    /// always use tier 4 for both sides — the open-ended die guarantees any
+    /// attacker can eventually connect. Damage/protection rolls (and other
+    /// contests: knockdown, morale, spell penetration) use the owning unit's
+    /// tier (<see cref="UnitStats.Drn"/>).
     ///   1: d3 closed
     ///   2: d6 closed
     ///   3: d6, a 6 adds one extra d6 (max one reroll, so ≤12)

@@ -26,17 +26,21 @@ bin/Debug/Necroking.exe --scenario <name> --timeout <seconds>
 ```
 Flags:
 - `--scenario <name>` — required, selects which scenario to run
-- `--timeout <seconds>` — optional (default 30), wall-clock time before force-quit
-- `--speed <N>` — optional (default 1), N simulation ticks per frame for faster playback. Fixed 1/60s timestep per tick, so behavior is identical to speed 1. Attacks resolve instantly at speed > 1 (no animation wait)
+- `--timeout <seconds>` — **DEAD as of 2026-07**: parsed into `LaunchArgs.Timeout` but consumed nowhere. There is NO force-quit; a scenario that never completes runs forever. Kill the process yourself (launch via `Start-Process -PassThru` and `WaitForExit(ms)`).
+- `--speed <N>` — **DEAD as of 2026-07**: parsed into `LaunchArgs.Speed` but consumed nowhere; scenarios always run 1 sim tick per frame (real time). For fast-forward, batch extra `sim.Tick(1f/60f)` calls inside the scenario's own `OnTick` — see `BalanceMatrixScenario` for the pattern. **Caveat:** melee swings are resolved by Game1's per-frame animation pass, so under scenario-driven fast-forward every swing expires unresolved (SwingJanitor); the scenario must call `sim.ResolvePendingAttack(i)` itself per tick (skip units that are `Jumping` or in a `ChargePhase` — JumpSystem/TrampleSystem resolve those sim-side).
 - `--bgcolor R,G,B` — optional, set background color (default 45,35,25 dark muddy brown)
 - `--headless` — optional, hides the game window (screenshots still work)
 
 Behavior: opens a window (or runs hidden with `--headless`), runs the scenario,
-exits automatically. Exit code 0 = pass, non-zero = fail. Stderr prints
-`SCENARIO PASS` / `SCENARIO FAIL` with a summary.
+exits automatically **when the scenario completes** (no external timeout — see
+above). Exit code 0 = pass, non-zero = fail. Stderr prints `SCENARIO PASS` /
+`SCENARIO FAIL` with a summary.
 
-**Prefer `--headless --speed 10`** to avoid stealing focus and finish faster.
-Only omit `--headless` when the user wants to visually watch it play out.
+**Prefer `--headless`** to avoid stealing focus. Only omit it when the user
+wants to visually watch the scenario play out. Note that launching the exe from
+PowerShell does NOT block (GUI subsystem app): use
+`$p = Start-Process bin\Debug\Necroking.exe -ArgumentList ... -PassThru; $p.WaitForExit(120000)`
+or the scenario "completes" silently in the background.
 
 ## Available scenarios
 The authoritative set is the `Register(...)` calls in
