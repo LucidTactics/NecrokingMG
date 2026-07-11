@@ -264,10 +264,14 @@ public class MapEditorWindow
     private int _unitFactionFilter; // 0=All, 1=Undead, 2=Human, 3=Animal
     private string _unitPatrolRoute = "";
     private bool _placeAsCorpse; // when set, the Units tool places dead bodies
-    // Cached from Draw for hit-testing in Update
-    private int _unitListDrawY;
-    private int _unitListItemH = 22;
-    private int _unitListVisibleCount;
+    // Units-tab thumbnail grid: layout cached from Draw for hit-testing in Update
+    private const int UnitGridCols = 6;
+    private const int UnitGridGap = 2;
+    private int _unitGridDrawX;
+    private int _unitGridDrawY;
+    private int _unitGridCellW;
+    private int _unitGridCellH;
+    private int _unitGridRowsVisible;
 
     // When the editor is entered via a mouse click (e.g. the pause-menu "Map
     // Editor" button), that same click would otherwise bubble straight into the
@@ -5252,17 +5256,22 @@ public class MapEditorWindow
     {
         if (_gameData == null) return;
 
-        // Click on panel to select unit def (uses cached layout from Draw)
-        if (leftClick && overPanel && _unitListDrawY > 0)
+        // Click on a grid cell to select a unit def (uses cached layout from Draw)
+        if (leftClick && overPanel && _unitGridDrawY > 0 && _unitGridCellW > 0)
         {
             var unitIds = GetFilteredUnitIds();
-            int relY = mouse.Y - _unitListDrawY;
-            if (relY >= 0 && relY < _unitListVisibleCount * _unitListItemH)
+            int colStride = _unitGridCellW + UnitGridGap;
+            int rowStride = _unitGridCellH + UnitGridGap;
+            int relX = mouse.X - _unitGridDrawX;
+            int relY = mouse.Y - _unitGridDrawY;
+            if (relX >= 0 && relY >= 0 && relY < _unitGridRowsVisible * rowStride
+                && relX % colStride < _unitGridCellW && relY % rowStride < _unitGridCellH)
             {
-                int clickedVisIdx = relY / _unitListItemH;
-                int scrolledIdx = clickedVisIdx + (int)(_tabScroll[(int)MapEditorTab.Units] / _unitListItemH);
-                if (scrolledIdx >= 0 && scrolledIdx < unitIds.Count)
-                    _selectedUnitDefIdx = scrolledIdx;
+                int col = relX / colStride;
+                int row = relY / rowStride + (int)(_tabScroll[(int)MapEditorTab.Units] / rowStride);
+                int idx = row * UnitGridCols + col;
+                if (col < UnitGridCols && idx >= 0 && idx < unitIds.Count)
+                    _selectedUnitDefIdx = idx;
             }
         }
 
@@ -5363,49 +5372,70 @@ public class MapEditorWindow
         _placeAsCorpse = _eb.DrawCheckbox("Place as corpse", _placeAsCorpse, x, curY, w);
         curY += 24;
 
-        // Unit def list
+        // Unit def grid: 6-wide sprite thumbnails (hover a cell for the name)
+        // instead of one-per-row text — far more defs visible at once.
         var unitIds = GetFilteredUnitIds();
         _eb.DrawText("Unit Defs:", new Vector2(x, curY), EditorBase.TextBright);
         curY += 18;
 
         int listH = contentH - (curY - contentY) - 100;
-        int itemH = 22;
-        int visibleItems = listH / itemH;
+        int cellW = (w - (UnitGridCols - 1) * UnitGridGap) / UnitGridCols;
+        int cellH = cellW;
+        int rowStride = cellH + UnitGridGap;
+        int totalRows = (unitIds.Count + UnitGridCols - 1) / UnitGridCols;
+        int visibleRows = Math.Max(1, listH / rowStride);
 
-        // Clamp the wheel-driven scroll to the end of the list (the generic
+        // Clamp the wheel-driven scroll to the end of the grid (the generic
         // wheel handler in Update only clamps at 0).
-        float maxUnitScroll = Math.Max(0, (unitIds.Count - visibleItems) * itemH);
+        float maxUnitScroll = Math.Max(0, (totalRows - visibleRows) * rowStride);
         _tabScroll[(int)MapEditorTab.Units] = Math.Clamp(_tabScroll[(int)MapEditorTab.Units], 0, maxUnitScroll);
+        int firstRow = (int)(_tabScroll[(int)MapEditorTab.Units] / rowStride);
 
         // Cache for Update hit-testing
-        _unitListDrawY = curY;
-        _unitListItemH = itemH;
-        _unitListVisibleCount = Math.Min(unitIds.Count, visibleItems);
+        _unitGridDrawX = x;
+        _unitGridDrawY = curY;
+        _unitGridCellW = cellW;
+        _unitGridCellH = cellH;
+        _unitGridRowsVisible = visibleRows;
 
-        var mouse = _eb._input.Mouse;
-        for (int i = 0; i < unitIds.Count && i < visibleItems; i++)
+        // MousePos, not raw .Mouse: the mousepos dev override patches only
+        // MousePos, and with a real mouse the two are identical.
+        int mx = (int)_eb._input.MousePos.X, my = (int)_eb._input.MousePos.Y;
+        int hoveredIdx = -1;
+        Rectangle hoveredCell = default;
+        for (int r = 0; r < visibleRows; r++)
         {
-            int scrolledIdx = i + (int)(_tabScroll[(int)MapEditorTab.Units] / itemH);
-            if (scrolledIdx >= unitIds.Count) break;
+            int row = firstRow + r;
+            if (row >= totalRows) break;
+            for (int c = 0; c < UnitGridCols; c++)
+            {
+                int idx = row * UnitGridCols + c;
+                if (idx >= unitIds.Count) break;
 
-            var def = _gameData.Units.Get(unitIds[scrolledIdx]);
-            string label = def != null ? $"{def.DisplayName} [{def.Faction}]" : unitIds[scrolledIdx];
-            bool selected = scrolledIdx == _selectedUnitDefIdx;
-            int itemY = curY + i * itemH;
+                var cell = new Rectangle(x + c * (cellW + UnitGridGap), curY + r * rowStride, cellW, cellH);
+                var def = _gameData.Units.Get(unitIds[idx]);
+                bool selected = idx == _selectedUnitDefIdx;
+                bool hovered = cell.Contains(mx, my);
+                if (hovered) { hoveredIdx = idx; hoveredCell = cell; }
 
-            if (selected)
-                Scope.Draw(_pixel, new Rectangle(x, itemY, w, itemH), new Color(60, 60, 100, 200));
-
-            bool hovered = mouse.X >= x && mouse.X < x + w && mouse.Y >= itemY && mouse.Y < itemY + itemH;
-            if (hovered && !selected)
-                Scope.Draw(_pixel, new Rectangle(x, itemY, w, itemH), new Color(40, 40, 70, 150));
-
-            // TextColor to match every other list in this panel (TextDim is the
-            // label/hint color and made the unit rows look greyed-out/disabled).
-            Color textCol = selected ? new Color(255, 230, 160) : TextColor;
-            _eb.DrawText(label, new Vector2(x + 4, itemY + 3), textCol, _smallFont);
+                Scope.Draw(_pixel, cell, selected ? new Color(60, 60, 100, 220)
+                    : hovered ? new Color(40, 40, 70, 180) : new Color(25, 25, 35, 160));
+                DrawUnitThumb(def, unitIds[idx], cell);
+                if (selected)
+                    _eb.DrawBorder(cell, new Color(255, 230, 160));
+                else if (hovered)
+                    _eb.DrawBorder(cell, new Color(120, 120, 170));
+            }
         }
         curY += listH;
+
+        // Hover tooltip — drawn after the whole grid so it layers on top.
+        if (hoveredIdx >= 0 && hoveredIdx < unitIds.Count)
+        {
+            var def = _gameData.Units.Get(unitIds[hoveredIdx]);
+            string tip = def != null ? $"{def.DisplayName} [{def.Faction}]" : unitIds[hoveredIdx];
+            DrawUnitGridTooltip(tip, hoveredCell, screenW);
+        }
 
         // Placed units count
         _eb.DrawText($"Placed: {_placedUnits.Count} units", new Vector2(x, curY + 4), EditorBase.TextBright);
@@ -5436,6 +5466,71 @@ public class MapEditorWindow
                 filtered.Add(id);
         }
         return filtered;
+    }
+
+    /// <summary>Representative frame for a unit's grid thumbnail: Idle (fall
+    /// back Walk, then any anim), facing 60° (down-right, the unit editor's
+    /// portrait angle), first keyframe.</summary>
+    private static SpriteFrame? GetUnitThumbFrame(Data.Registries.UnitDef def)
+    {
+        var sd = def.SpriteData;
+        if (sd == null) return null;
+        var anim = sd.GetAnim("Idle") ?? sd.GetAnim("Walk");
+        if (anim == null)
+            foreach (var a in sd.Animations.Values) { anim = a; break; }
+        if (anim == null) return null;
+        var kfs = anim.GetAngle(60);
+        if (kfs == null || kfs.Count == 0)
+            foreach (var (_, v) in anim.AngleFrames)
+                if (v.Count > 0) { kfs = v; break; }
+        if (kfs == null || kfs.Count == 0) return null;
+        return kfs[0].Frame;
+    }
+
+    /// <summary>Sprite thumbnail fitted+centered in a grid cell; defs without
+    /// a resolvable sprite fall back to the unit's initial so the cell stays
+    /// readable (and indices stay dense for hit-testing).</summary>
+    private void DrawUnitThumb(Data.Registries.UnitDef? def, string unitId, Rectangle cell)
+    {
+        var frame = def != null ? GetUnitThumbFrame(def) : null;
+        Texture2D? tex = null;
+        if (frame.HasValue && def?.Sprite != null)
+        {
+            int atlasIdx = AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
+            if (atlasIdx >= 0 && atlasIdx < _game._atlases.Length && _game._atlases[atlasIdx] != null)
+                tex = _game._atlases[atlasIdx].GetTextureForFrame(frame.Value);
+        }
+        if (tex == null || frame!.Value.Rect.Width <= 0 || frame.Value.Rect.Height <= 0)
+        {
+            string name = def?.DisplayName ?? unitId;
+            string letter = string.IsNullOrEmpty(name) ? "?" : name[..1].ToUpperInvariant();
+            var ls = _eb!.MeasureText(letter, _smallFont);
+            _eb.DrawText(letter, new Vector2(cell.X + (cell.Width - (int)ls.X) / 2,
+                cell.Y + (cell.Height - (int)ls.Y) / 2), TextColor, _smallFont);
+            return;
+        }
+        var rect = frame.Value.Rect;
+        float scale = Math.Min((cell.Width - 4f) / rect.Width, (cell.Height - 4f) / rect.Height);
+        scale = Math.Min(scale, 3f); // don't blow tiny sprites up into pixel mush
+        _eb!.DrawTexture(tex, new Vector2(cell.Center.X, cell.Center.Y), rect, Color.White,
+            0f, new Vector2(rect.Width / 2f, rect.Height / 2f), scale, SpriteEffects.None);
+    }
+
+    /// <summary>Name tooltip above the hovered grid cell (flips below when
+    /// clipped at the top; clamped horizontally to the screen).</summary>
+    private void DrawUnitGridTooltip(string text, Rectangle anchorCell, int screenW)
+    {
+        if (_eb == null) return;
+        var size = _eb.MeasureText(text, _smallFont);
+        const int pad = 4;
+        int tw = (int)size.X + pad * 2, th = (int)size.Y + pad * 2;
+        int tx = Math.Clamp(anchorCell.X + anchorCell.Width / 2 - tw / 2, 2, screenW - tw - 2);
+        int ty = anchorCell.Y - th - 2;
+        if (ty < 2) ty = anchorCell.Bottom + 2;
+        var box = new Rectangle(tx, ty, tw, th);
+        Scope.Draw(_pixel, box, new Color(15, 15, 25, 235));
+        _eb.DrawBorder(box, new Color(90, 90, 130));
+        _eb.DrawText(text, new Vector2(tx + pad, ty + pad), EditorBase.TextBright, _smallFont);
     }
 
     private void DrawPlacedUnitMarkers(int screenW, int screenH)
