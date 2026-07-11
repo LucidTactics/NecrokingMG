@@ -40,6 +40,21 @@ public static class JumpSystem
     /// missed swipe rather than auto-tracking damage. 0.5u = "they were within
     /// arm's reach when I landed."</summary>
     private const float PounceLandingHitMargin = 0.5f;
+
+    /// <summary>Fraction of the target's radius the pounce landing point stands
+    /// off from the predicted center, along the attacker's approach. 0.5 = the
+    /// pouncer's center lands halfway between the target's center and its
+    /// collision edge — deep enough that prediction-error slack is near-symmetric
+    /// in every direction (edge-aiming made undershoot the dominant miss), but
+    /// not zero, so simultaneous pouncers still spread around the target's rim
+    /// instead of piling onto the exact center point.</summary>
+    private const float PounceStandoffFraction = 0.5f;
+
+    /// <summary>Max distance the liftoff re-prediction may move the committed
+    /// landing point. Bounds the direction snap between crouch facing and leap
+    /// direction, and keeps a wild velocity swing from stretching the leap far
+    /// past what the initiation-time range/overshoot gates allowed.</summary>
+    private const float MaxLiftoffCorrection = 3f;
     private const float MinAirDuration = 0.40f;       // seconds, enforced minimum
     private const float DefaultArcPeak = 2.0f;         // parabola peak height
     // Per-phase safety timeouts. Each phase should finish naturally via anim callbacks
@@ -79,7 +94,8 @@ public static class JumpSystem
     /// <summary>
     /// Begin a pounce: unit keeps running toward target while JumpTakeoff anim
     /// plays on the ground; physically leaps at the anim's effect_time_ms;
-    /// lands at landingPos (locked at pounce-start, not tracking).
+    /// lands at landingPos (re-aimed once at the liftoff instant via
+    /// RetargetPounceAtLiftoff, then committed — no mid-air tracking).
     ///
     /// Timing: required total duration (from pounce-start to touchdown) is computed
     /// from dist / MaxSpeed. If this is shorter than the baseline anim duration
@@ -147,6 +163,24 @@ public static class JumpSystem
             $"playback={playbackSpeed:F2}x airborne={airborneMs:F0}ms takeoffEff={takeoffEffect:F0}ms landEff={landEffect:F0}ms");
     }
 
+    /// <summary>
+    /// Where a pounce should land relative to a (predicted) target center:
+    /// standoff = PounceStandoffFraction × target radius, back along the
+    /// attacker's approach. Single source for the initiation-time landing pick
+    /// (Simulation.InitiatePounceWithWeapon) and the liftoff re-aim here.
+    /// Direction is toward the PREDICTED point — offsetting along the stale
+    /// attacker→current vector would land the pouncer sideways of a moving target.
+    /// </summary>
+    public static Vec2 PounceLandingPoint(Vec2 from, Vec2 predictedCenter, float targetRadius)
+    {
+        Vec2 toTarget = predictedCenter - from;
+        float len = toTarget.Length();
+        float standoff = targetRadius * PounceStandoffFraction;
+        return len > 0.01f
+            ? predictedCenter - toTarget * (standoff / len)
+            : predictedCenter;
+    }
+
     private static float LookupAnimTotalMs(System.Collections.Generic.Dictionary<string, AnimationMeta>? animMeta,
         string spriteName, string category)
     {
@@ -208,10 +242,18 @@ public static class JumpSystem
         // JustHitEffectFrame is the edge-flag replacement for ConsumeActionMoment.
         if (ctrl.JustHitEffectFrame || units[idx].JumpTimer > TakeoffSafetyTimeout)
         {
-            // Capture current position as the real liftoff start. JumpEndPos was locked at
-            // BeginPounce; JumpDuration (airborne seconds) was computed there too, so the
-            // arc interpolation reaches the landing point in exactly the planned time.
+            // Capture current position as the real liftoff start. JumpDuration
+            // (airborne seconds) was computed at BeginPounce, so the arc
+            // interpolation reaches the landing point in exactly the planned time.
             units[idx].JumpStartPos = units[idx].Position;
+            // Re-aim the landing point now that we're actually leaving the
+            // ground: the initiation-time prediction used the target's
+            // pre-reaction velocity from before the whole crouch; by liftoff
+            // the target has committed to its flee direction and the remaining
+            // flight time (JumpDuration) is known exactly, so a fresh one-shot
+            // lead is strictly more accurate.
+            if (units[idx].JumpKind == (byte)Kind.Pounce)
+                RetargetPounceAtLiftoff(units, idx);
             units[idx].JumpTimer = 0f;
             units[idx].JumpPhase = 2; // Airborne
             units[idx].Jumping = true;
@@ -219,6 +261,28 @@ public static class JumpSystem
             ctrl.RequestState(AnimState.JumpLoop);
             DebugLog.Log("jump", $"[Liftoff] unit#{idx} start=({units[idx].JumpStartPos.X:F1},{units[idx].JumpStartPos.Y:F1}) end=({units[idx].JumpEndPos.X:F1},{units[idx].JumpEndPos.Y:F1}) airborne={units[idx].JumpDuration:F2}s");
         }
+    }
+
+    /// <summary>Recompute the pounce landing point at the liftoff instant with the
+    /// target's current velocity. Time is fixed (JumpDuration), so the lead is a
+    /// single-shot linear extrapolation — no iteration needed. The correction is
+    /// capped at MaxLiftoffCorrection from the committed point; a correction that
+    /// large means the initiation-time prediction was hopeless anyway.</summary>
+    private static void RetargetPounceAtLiftoff(UnitArrays units, int idx)
+    {
+        int ti = UnitUtil.ResolveUnitIndex(units, units[idx].JumpPounceTargetId);
+        if (ti < 0 || !units[ti].Alive) return;
+
+        Vec2 predicted = units[ti].Position + units[ti].Velocity * units[idx].JumpDuration;
+        Vec2 newEnd = PounceLandingPoint(units[idx].Position, predicted, units[ti].Radius);
+
+        Vec2 delta = newEnd - units[idx].JumpEndPos;
+        float d = delta.Length();
+        if (d > MaxLiftoffCorrection)
+            newEnd = units[idx].JumpEndPos + delta * (MaxLiftoffCorrection / d);
+        units[idx].JumpEndPos = newEnd;
+        DebugLog.Log("jump", $"[Retarget] unit#{idx} liftoff re-aim moved landing " +
+            $"{MathF.Min(d, MaxLiftoffCorrection):F2}u (raw correction {d:F2}u)");
     }
 
     private static void TickAirborne(float dt, UnitArrays units, int idx, AnimController ctrl)
