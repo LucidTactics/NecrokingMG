@@ -48,6 +48,19 @@ getters (no per-frame push/pop syncing).
 adding a new panel/overlay (give it a `PanelLayer` seat in the `Game1` ctor), or moving
 something above/below something else.
 
+### Cursor-tooltip z-order trap (Hud band internals)
+All cursor tooltips (spell-slot hover `DrawSpellSlotTooltip`, object/belly/corpse/unit
+tooltips) are drawn INSIDE `HUDRenderer.Draw`, which is called by **`HudChromeLayer`**
+(`UI/Layers/HudLayers.cs`) — registered FIRST in the Hud band (`Game1` ctor, ~line 890),
+so `SpellBarLayer`, `TimeControlsLayer` and **`AggressionBarLayer`** (registered after,
+same band) all draw ON TOP of those tooltips. The aggro bar sits just above the spell bar,
+so the spell-slot tooltip can render behind it. The **`UIBand.Tooltip` (=900) band exists
+and is currently EMPTY** — no layer uses it; that's the natural seat for a draw-only
+topmost tooltip layer. Note `HudChromeLayer.Draw` parks `MousePos` off-screen when a
+higher band owns the hover (so `_hoverSlotSpell` never gets set under a covering panel) —
+any extracted tooltip layer keeps working because the hover *state* is still populated
+during the Hud-band `DrawSpellBar`, and tooltip draws are no-ops when that state is null.
+
 ## The selected/inspected unit sheet (right-side "unit bar")
 
 `Necroking/UI/UnitInfoPanel.cs` — **the right-side unit info panel**. Class `UnitInfoPanel`
