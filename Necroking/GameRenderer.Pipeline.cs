@@ -183,7 +183,7 @@ partial class GameRenderer
 
         scene.Add(new CustomPass("Ground", ctx =>
         {
-            if ((_g._activeScenario == null || _g._activeScenario.WantsGround) && !_g._devShotNoGround)
+            if ((_g._activeScenario == null || _g._activeScenario.WantsGround || _g.userInteractingWithWindow) && !_g._devShotNoGround)
             {
                 DrawGround();
                 // Perf scenarios can ask Game1 to redraw the ground N extra times to
