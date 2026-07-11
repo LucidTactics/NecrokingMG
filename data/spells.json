@@ -455,26 +455,28 @@
       "primaryLevel": 1,
       "cooldown": 3,
       "castingBuffID": "buff_4_copy_copy",
-      "damage": 15,
+      "defenseNegating": false,
+      "damage": 2,
       "beamDisplacement": 0.15,
-      "beamCoreWidth": 0.5,
-      "beamGlowWidth": 1,
+      "beamCoreWidth": 0.7,
+      "beamGlowWidth": 1.3,
       "beamFlickerMin": 0.8,
-      "beamFlickerHz": 1,
-      "beamJitterHz": 10,
+      "beamFlickerMax": 1.2,
+      "beamFlickerHz": 0.7,
+      "beamJitterHz": 7,
       "beamCoreColor": {
         "r": 255,
         "g": 253,
         "b": 196,
         "a": 255,
-        "intensity": 3.1730769
+        "intensity": 5.590909
       },
       "beamGlowColor": {
         "r": 149,
         "g": 231,
         "b": 255,
-        "a": 180,
-        "intensity": 3.4615386
+        "a": 150,
+        "intensity": 5.181818
       },
       "beamChainBranches": 2,
       "beamChainDepth": 2,
