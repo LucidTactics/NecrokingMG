@@ -128,22 +128,28 @@ public class SoloPredatorHandler : IArchetypeHandler
             {
                 if (dist <= attackRange)
                 {
-                    if (_opportunist
+                    bool waitForOpening = _opportunist
                         && !IsTargetFacingAway(ref ctx, targetIdx, OpportunistAngle)
-                        && ctx.SubroutineTimer <= attackCooldown)
+                        && ctx.SubroutineTimer <= attackCooldown;
+                    if (attackCooldown <= 0f && !waitForOpening)
                     {
-                        // Wait for the opening, circling at the edge of range.
+                        // Commit: the combat queue takes it from here. Only when
+                        // the attack is actually ready — entering SubAttacking
+                        // with leftover cooldown makes the exit gate fire before
+                        // any swing is queued, i.e. a phantom no-damage retreat.
+                        // (Mirrors WolfPack MoveToEngage's ready-gate.)
+                        ctx.Subroutine = SubAttacking;
+                        ctx.SubroutineTimer = 0f;
+                        ctx.Units[i].EngagedTarget = ctx.Units[i].Target;
+                    }
+                    else
+                    {
+                        // Wait for the opening / the cooldown, circling at the
+                        // edge of range.
                         ctx.SubroutineTimer += ctx.Dt;
                         Vec2 perp = new Vec2(-(targetPos.Y - myPos.Y), targetPos.X - myPos.X);
                         if (perp.LengthSq() > 0.01f) perp = perp.Normalized();
                         ctx.Units[i].PreferredVel = perp * ctx.Units[i].MaxSpeed * 0.5f;
-                    }
-                    else
-                    {
-                        // Commit: the combat queue takes it from here.
-                        ctx.Subroutine = SubAttacking;
-                        ctx.SubroutineTimer = 0f;
-                        ctx.Units[i].EngagedTarget = ctx.Units[i].Target;
                     }
                 }
                 else
@@ -157,8 +163,11 @@ public class SoloPredatorHandler : IArchetypeHandler
 
             case SubAttacking:
             {
-                // Once the attack cooldown starts (we just bit) → disengage.
-                if (attackCooldown > 0f && ctx.SubroutineTimer > 0.2f)
+                // Once the bite fired AND its swing resolved → disengage. The
+                // PostAttackTimer part of the gate matters: leaving early hands
+                // control to SubDisengage, whose per-tick PendingAttack clear
+                // cancels the still-unresolved swing (anim plays, no damage).
+                if (SubroutineSteps.AttackTarget_SwingFinished(ref ctx))
                 {
                     ctx.Subroutine = SubDisengage;
                     ctx.SubroutineTimer = 0f;

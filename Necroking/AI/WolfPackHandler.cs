@@ -419,11 +419,9 @@ public class WolfPackHandler : IArchetypeHandler
             case FightExecuteAttack:
             {
                 SubroutineSteps.AttackTarget(ref ctx);
-                // Transition: wait for attack animation to finish (PostAttackTimer == 0)
-                // before disengaging. AttackCooldown > 0 means the attack was initiated.
-                if (ctx.Units[ctx.UnitIndex].AttackCooldown > 0
-                    && ctx.Units[ctx.UnitIndex].PostAttackTimer <= 0f
-                    && ctx.SubroutineTimer > 0.1f)
+                // Transition: wait for the swing to resolve before disengaging
+                // (shared gate — see AttackTarget_SwingFinished for the why).
+                if (SubroutineSteps.AttackTarget_SwingFinished(ref ctx, minTime: 0.1f))
                 {
                     ctx.Subroutine = FightDisengage;
                     ctx.SubroutineTimer = 0f;
