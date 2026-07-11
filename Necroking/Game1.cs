@@ -965,7 +965,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 {
                     Vec2 mw = _camera.ScreenToWorld(_input.MousePos, c.ScreenW, c.ScreenH);
                     var sp = _renderer.WorldToScreen(mw, 0f, _camera);
-                    _buildingMenuUI.DrawGhostPreview(_spriteBatch, _pixel, mw, sp, _camera, _renderer);
+                    _buildingMenuUI.DrawGhostPreview(_spriteBatch, _pixel, mw, sp, _camera);
                 }
             }, () => ShowUIForDraw && _buildingMenuUI.IsVisible));
         _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _craftingMenu,

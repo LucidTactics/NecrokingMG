@@ -1193,36 +1193,13 @@ public class MapEditorWindow
         }
         if (defIdx < 0 || defIdx >= _envSystem.DefCount) return;
 
-        var tex = _envSystem.GetDefTexture(defIdx);
-        if (tex == null) return;
-        var def = _envSystem.GetDef(defIdx);
-
         // MousePos, not the raw MouseState: identical for a real cursor, but it
         // also honors the dev `mousepos` override so headless drives can test.
         Vec2 worldPos = _camera.ScreenToWorld(_eb._input.MousePos, screenW, screenH);
-        bool canPlace = _envSystem.CanPlaceObject(defIdx, worldPos.X, worldPos.Y);
-
-        // Animated sheets preview frame 0; placeholder textures must not be sliced.
-        Rectangle? srcRect = null;
-        float frameW = tex.Width, frameH = tex.Height;
-        if (def.IsAnimated && def.AnimTotalFrames > 1 && !_envSystem.IsUsingPlaceholder(defIdx))
-        {
-            var r = def.GetAnimFrameRect(tex.Width, tex.Height, 0);
-            srcRect = r;
-            frameW = r.Width;
-            frameH = r.Height;
-        }
-
-        float worldH = def.SpriteWorldHeight * def.Scale;
-        float scale = worldH * _camera.Zoom / frameH;
-        var origin = new Vector2(def.PivotX * frameW, def.PivotY * frameH);
         var screenPos = _camera.WorldToScreen(worldPos, 0f, screenW, screenH);
-
-        byte alpha = 76; // ~0.3, matches BuildingMenuUI.DrawGhostPreview
-        Color tint = canPlace
-            ? new Color((byte)140, (byte)140, (byte)140, alpha)
-            : new Color((byte)200, (byte)50, (byte)50, alpha);
-        Scope.Draw(tex, screenPos, srcRect, tint, 0f, origin, scale, SpriteEffects.None, 0f);
+        Render.EnvGhostRenderer.Draw(Scope, _envSystem, defIdx, screenPos, _camera.Zoom,
+            _envSystem.CanPlaceObject(defIdx, worldPos.X, worldPos.Y),
+            Render.EnvGhostRenderer.EditorValidTint, _pixel);
     }
 
     public void Draw(int screenW, int screenH)

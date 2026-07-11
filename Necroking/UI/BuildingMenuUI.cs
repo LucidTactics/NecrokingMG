@@ -264,38 +264,14 @@ public class BuildingMenuUI : SideListMenu
 
     /// <summary>Draw ghost preview of building at cursor position.</summary>
     public void DrawGhostPreview(SpriteScope batch, Texture2D pixel, Vec2 mouseWorld,
-        Vector2 screenPos, Camera25D camera, Renderer renderer)
+        Vector2 screenPos, Camera25D camera)
     {
         if (!IsPlacementActive) return;
 
         int defIdx = _buildableDefIndices[_selectedIndex];
-        var envDef = _envSystem.Defs[defIdx];
         bool canPlace = _envSystem.CanPlaceObject(defIdx, mouseWorld.X, mouseWorld.Y);
-
-        var tex = _envSystem.GetDefTexture(defIdx);
-        if (tex != null)
-        {
-            float worldH = envDef.SpriteWorldHeight * envDef.Scale;
-            float pixelH = worldH * camera.Zoom;
-            float scale = pixelH / tex.Height;
-            var origin = new Vector2(envDef.PivotX * tex.Width, envDef.PivotY * tex.Height);
-
-            // Ghost tint: green if valid, red if invalid, max alpha 0.3
-            byte alpha = 76; // ~0.3 * 255
-            Color ghostColor = canPlace
-                ? new Color((byte)50, (byte)200, (byte)50, alpha)
-                : new Color((byte)200, (byte)50, (byte)50, alpha);
-
-            batch.Draw(tex, screenPos, null, ghostColor, 0f, origin, scale, SpriteEffects.None, 0f);
-        }
-
-        // Draw placement radius circle hint
-        if (envDef.PlacementRadius > 0)
-        {
-            float radiusPixels = envDef.PlacementRadius * camera.Zoom;
-            Render.DrawUtils.DrawCircleOutline(batch, pixel, screenPos, radiusPixels,
-                canPlace ? new Color(50, 200, 50, 40) : new Color(200, 50, 50, 40), 16);
-        }
+        EnvGhostRenderer.Draw(batch, _envSystem, defIdx, screenPos, camera.Zoom,
+            canPlace, EnvGhostRenderer.BuildValidTint, pixel);
     }
 
 }

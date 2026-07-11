@@ -162,3 +162,9 @@ Established by the consolidation batches (evidence: docs/consolidation-review/):
 - **Floating damage/text numbers**: `FloatingText` helper (SpellEffectSystem.cs).
 - **World nearest-X queries**: `WorldQuery` (`_sim.Query`) — unit, env-object,
   faction, threat; hand-rolled scans are migration debt.
+- **Placement ghost preview** (env object at cursor, tinted by validity):
+  `Render/EnvGhostRenderer.Draw` — owns frame slicing, pivot/scale math, tint,
+  PlacementRadius circle. Caller owns def choice, the validity check (pass the
+  same one the click path uses), and the valid tint (`BuildValidTint` green /
+  `EditorValidTint` grey; invalid is always `InvalidTint` red). Used by
+  BuildingMenuUI + map editor Objects tab.
