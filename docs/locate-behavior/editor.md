@@ -425,45 +425,58 @@ model and both save + clone paths.
   are by id so no infinite recursion), but grand-child data only exists as `ChildOverrides`
   on the child, which `CloneChild` does deep-copy.
 
-## Editor entry-click leak — opening an editor by mouse fires its widgets (stale-press edge)
+## Editor entry-click ghost-replay — a mouse-opened editor replayed the previous close click (FIXED 2026-07)
 
 The immediate-mode editors **bypass the router's click-consumption entirely**: `EditorBase`
-widgets read raw `_mouse`/`_prevMouse` snapshots during Draw and never check
-`InputState.IsMouseConsumed` / `UILayer.InputGranted`. Consumption is also per-frame
-(reset in `InputState.Capture`), while `EditorBase.DrawButton` fires **on release**
+widgets read mouse state during Draw and never check `InputState.IsMouseConsumed` /
+`UILayer.InputGranted`. `EditorBase.DrawButton` fires **on release**
 (`hovered && released-edge && rect.Contains(_pressStartPos)`) — a multi-frame gesture that
-one-frame consumption can't protect anyway.
+per-frame consumption never protected anyway.
 
-**The bug pattern** (spell/unit/item editors opened via the HUD editor-launcher row or the
-pause menu): while no editor is open, `_editorUi.UpdateInput`/`EndDrawFrame` never run, so
-`_drawSnapMouse` (the Draw-snapshot prev-mouse, `EditorBase.EndDrawFrame`) goes stale at
-"released". The opening click is consumed by the router (`EditorLauncherLayer.OnPointer` →
-`Game1.ToggleEditorWindow`), but on the NEXT frame `EditorBase.UpdateInput` runs
-(`Game1.Update`, gated on `_menuState`), computes `_prevMouse = _drawSnapMouse` (stale
-released) vs held button → manufactures a **fresh press edge** and stamps `_pressStartPos`
-at the cursor (still on the launcher button). On physical release, whatever editor top-bar
-button materialized under the cursor fires — the launcher row (`HUDRenderer` `EditorBtnTop`,
-y≈36-60) overlaps the editor top-bar buttons (Save/Buffs/[X], `panelY + 10`), so the entry
-click can hit `[X] → WantsClose` and insta-close the editor. Keyboard entry (F9-F12) has no
-click in flight, so it never triggers.
+**The bug (root-caused, now fixed):** the insta-close only ever happened on the **2nd+**
+mouse-open of an editor. Closing an editor via its `[X]` flips `_menuState` **mid-Draw**,
+which skipped the gated `EndDrawFrame`, freezing `EditorBase`'s (then-private)
+`_mouse`/`_prevMouse`/`_pressStartPos` as a **complete ghost of the closing click**
+(released@X-position / prev pressed / press-start inside the `[X]` rect). On the next
+launcher-click open, `_editorUi.UpdateInput` hadn't run that frame (menuState was still
+`None` at `Game1.cs:3281`), so the first Draw used the frozen ghost and `DrawButton`
+**replayed the old `[X]` click** — same stale hit-test position = the X's own rect — closing
+the editor the frame it opened. First open was safe (frozen state = default); **F10 was safe**
+because it sets `_menuState` *before* line 3281, so `UpdateInput` ran with fresh mouse.
 
-**The existing cure — `SuppressClicksUntilRelease` — exists only on `MapEditorWindow`**
-(field `_suppressClicksUntilRelease`, cleared when both buttons are up; the comment at its
-declaration describes exactly this stale-`_prevMouse` mechanism). `Game1.ToggleEditorWindow`
-calls it ONLY for the Map case; the Unit/Spell cases just call `_editorUi.ClearActiveField()`.
-Fix direction: generalize the suppress-until-release into `EditorBase` (set on editor open;
-while set, skip the `_pressStartPos` stamp / treat the held button as no-press) and call it
-from all mouse entry points (`ToggleEditorWindow`, pause-menu buttons, dev `ui` verbs).
-Precedent inside EditorBase: `_dropdownHoldingMousePress` already blocks press+release until
-full release after a dropdown/color-picker dismiss.
+**The fix (implemented, builds, drive-verified — this is now reality):** `EditorBase` keeps
+**no private mouse history at all**. `Necroking/Core/InputState.cs` owns everything:
+- `DrawPrevMouse` — snapshotted once per Draw by `InputState.SnapshotDrawFrame()`, called
+  **unconditionally** at the end of `GameRenderer.DrawHudBlock` (`GameRenderer.Draw.cs`) — so
+  it can never freeze stale the way the old gated `EndDrawFrame` did.
+- `PressStartPos` — stamped in `InputState.Capture` on the physical `LeftPressed` edge.
+- `ConsumeGesture()` — invalidates the in-flight press (`PressStartPos = (-1,-1)`), so
+  `DrawButton`'s `rect.Contains(_pressStartPos)` test fails until the next physical press.
+
+`EditorBase._mouse`/`_prevMouse`/`_pressStartPos` are now **read-through properties over
+`_input`** (`_prevMouse => _input.DrawPrevMouse`, `_pressStartPos => _input.PressStartPos`);
+`EditorBase.EndDrawFrame` keeps only the dropdown reconcile. Both `_editorUi` and `_uiEditor`
+are wired to Game1's central `InputState` in the `Game1` ctor. The gesture is invalidated on
+**any `_menuState` transition**: `Game1.Update` compares `_menuState` against
+`_menuStateAtLastCapture` (field ~`Game1.cs:650`) *before* `_input.Capture` (~line 2785) and
+calls `ConsumeGesture()`; `ToggleEditorWindow` (~line 4196) also calls it for same-frame
+coverage.
+
+**Do NOT reintroduce the old band-aid.** `MapEditorWindow.SuppressClicksUntilRelease` still
+exists but only for the map editor's own canvas paint logic — it is **no longer the model to
+generalize**. The earlier "generalize SuppressClicksUntilRelease into EditorBase"
+recommendation was superseded by the `InputState` consolidation above; centralize any new
+mouse-history need in `InputState`, not in per-editor flags.
 
 **Close paths of the full-screen editors** (there is NO outside-click-close): `[X]` button →
 `WantsClose`, polled by `EditorHostLayer.Draw` (`UI/Layers/HostLayers.cs`) right after each
 editor's Draw; ESC → `EditorHostLayer.OnCancel` (Closable); toggling F-key/launcher again.
+Note the `[X]`-flips-`_menuState`-mid-Draw shape is what made this class of bug possible.
 
-**Look/edit here when:** an editor opens and instantly closes/saves when opened by mouse,
-an entry click paints/edits on frame one, or you're wiring a new mouse path that opens an
-editor (call the suppress method).
+**Look/edit here when:** an editor opens and instantly closes/saves when opened by mouse, an
+entry click paints/edits on frame one, or you're wiring a new mouse path that opens/closes an
+editor — invalidate the gesture via `InputState.ConsumeGesture()` (as `ToggleEditorWindow`
+and the `_menuState`-transition check already do), don't add a per-editor suppress flag.
 
 ## Related areas
 - Runtime widget rendering/layout: `UI/RuntimeWidgetRenderer.cs`, `UI/WidgetLayoutUtils.cs`
