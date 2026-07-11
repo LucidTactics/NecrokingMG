@@ -66,6 +66,15 @@ public class CombatLog
     private static void WriteEntryToFile(CombatLogEntry e)
     {
         string time = FormatTime(e.Timestamp);
+
+        // NoteOnly: a free-text event (e.g. a spell projectile impact) with no
+        // attacker/defender or roll breakdown — print just the note, no header.
+        if (e.Outcome == CombatLogOutcome.NoteOnly)
+        {
+            DebugLog.Log(Tag, $"{time}  {e.Note}");
+            return;
+        }
+
         string outcome = e.Outcome.ToString();
 
         // Header: attack roll summary

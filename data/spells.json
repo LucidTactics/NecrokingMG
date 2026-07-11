@@ -1593,7 +1593,6 @@
       "school": "Evocation",
       "tileTemplate": "evocation",
       "icon": "assets/UI/Icons/Spells/fireball.png",
-      "hidden": true,
       "range": 35,
       "manaCost": 5,
       "cooldown": 0.5,

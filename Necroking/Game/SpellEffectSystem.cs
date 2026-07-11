@@ -454,9 +454,26 @@ public static class SpellEffectSystem
     public static void SpawnProjectile(SpellDef spell, ProjectileManager projectiles,
         Vec2 origin, Vec2 target, uint ownerUid, float spawnHeight, Faction casterFaction)
     {
-        projectiles.SpawnFireball(origin, target,
-            casterFaction, ownerUid, spell.Damage, spell.AoeRadius, spell.DisplayName,
-            spawnHeight: spawnHeight);
+        // AOE spells fly as fireballs and burst on impact; a single-target (zero-AOE)
+        // spell flies as an arrow instead, so it actually strikes its target rather
+        // than relying on a zero-radius explosion happening to reach it. The +10
+        // precision keeps these magic darts reliable — conceptually they home in,
+        // unlike a physically-fired arrow that can be dodged.
+        if (spell.AoeRadius > 0f)
+        {
+            projectiles.SpawnFireball(origin, target,
+                casterFaction, ownerUid, spell.Damage, spell.AoeRadius, spell.DisplayName,
+                spawnHeight: spawnHeight);
+        }
+        else
+        {
+            projectiles.SpawnArrow(origin, target,
+                casterFaction, ownerUid, spell.Damage,
+                volley: spell.Trajectory == "Lob",
+                precision: spell.PrecisionBonus + 10,
+                weaponName: spell.DisplayName,
+                spawnHeight: spawnHeight);
+        }
         var projs = projectiles.Projectiles;
         if (projs.Count > 0) {
             var lastProj = projs[projs.Count - 1];
