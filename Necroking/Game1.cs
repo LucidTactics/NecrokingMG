@@ -3563,8 +3563,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
             // --- Ghost mode toggle (G) ---
             if (_input.WasKeyPressed(Keys.G) && necroIdx >= 0)
+            {
                 _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
-
+                ToggleGodMode(necroIdx, force_to_value: _sim.UnitsMut[necroIdx].GhostMode);
+            }
             // --- God mode toggle (Shift+P) ---
             // Cheat / debug toggle. Applies/removes buff_god_mode on the
             // necromancer; the buff's effects (path-9, +caps, +mana, +regen,
@@ -4166,10 +4168,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// necromancer. On apply, also tops mana up to the new effective cap so
     /// the +999 mana effect is felt immediately rather than slowly filling
     /// at the buffed regen rate.</summary>
-    private void ToggleGodMode(int necroIdx)
+    private void ToggleGodMode(int necroIdx, bool? force_to_value=null)
     {
         if (necroIdx < 0 || _gameData == null) return;
         const string godBuffId = "buff_god_mode";
+        if (force_to_value != null && (bool)force_to_value == BuffSystem.HasBuff(_sim.Units, necroIdx, godBuffId)) {
+           return;
+        }
         if (BuffSystem.HasBuff(_sim.Units, necroIdx, godBuffId))
         {
             BuffSystem.RemoveBuff(_sim.UnitsMut, necroIdx, godBuffId);

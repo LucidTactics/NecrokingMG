@@ -266,7 +266,7 @@ public static class Locomotion
             // honors rope drag like the old player branch did).
             if (u.GhostMode)
             {
-                u.MaxSpeed = GhostModeSpeed * (isPlayer ? player.DragSlow : 1f);
+                u.MaxSpeed = GhostModeSpeed * (isPlayer ? player.DragSlow * (player.WantSprint ? 2 : 1) : 1f);
                 continue;
             }
 
