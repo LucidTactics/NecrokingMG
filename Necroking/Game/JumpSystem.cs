@@ -276,13 +276,30 @@ public static class JumpSystem
         Vec2 predicted = units[ti].Position + units[ti].Velocity * units[idx].JumpDuration;
         Vec2 newEnd = PounceLandingPoint(units[idx].Position, predicted, units[ti].Radius);
 
-        Vec2 delta = newEnd - units[idx].JumpEndPos;
+        Vec2 oldEnd = units[idx].JumpEndPos;
+        Vec2 delta = newEnd - oldEnd;
         float d = delta.Length();
         if (d > MaxLiftoffCorrection)
-            newEnd = units[idx].JumpEndPos + delta * (MaxLiftoffCorrection / d);
+            newEnd = oldEnd + delta * (MaxLiftoffCorrection / d);
+
+        // The re-aim may redirect or shorten the leap but never extend it past
+        // the committed length (both measured from the liftoff position): the
+        // endpoint-displacement cap alone stacks on top of the lead-overshoot
+        // clamp (a max-lead pounce plus a full correction produced a 13u
+        // mega-leap), and since JumpDuration is fixed, any added length also
+        // inflates air speed. A correction that wants MORE length means the
+        // target is outrunning the pounce — a miss either way; don't look
+        // silly stretching for it.
+        float committedLen = (oldEnd - units[idx].Position).Length();
+        Vec2 leap = newEnd - units[idx].Position;
+        float newLen = leap.Length();
+        if (newLen > committedLen && newLen > 0.01f)
+            newEnd = units[idx].Position + leap * (committedLen / newLen);
+
         units[idx].JumpEndPos = newEnd;
         DebugLog.Log("jump", $"[Retarget] unit#{idx} liftoff re-aim moved landing " +
-            $"{MathF.Min(d, MaxLiftoffCorrection):F2}u (raw correction {d:F2}u)");
+            $"{(newEnd - oldEnd).Length():F2}u (raw correction {d:F2}u, " +
+            $"leap {newLen:F2}u -> {MathF.Min(newLen, committedLen):F2}u, committed {committedLen:F2}u)");
     }
 
     private static void TickAirborne(float dt, UnitArrays units, int idx, AnimController ctrl)
