@@ -1597,8 +1597,9 @@
       "range": 35,
       "manaCost": 5,
       "cooldown": 0.5,
+      "impactForce": 30,
+      "impactUpward": 8,
       "aoeType": "AOE",
-      "damage": 0,
       "aoeRadius": 2,
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
@@ -1616,7 +1617,9 @@
         "alignment": "Ground",
         "duration": -1
       },
+      "trajectory": "DirectFire",
       "projectileSpeed": 54,
+      "detonateAtTarget": true,
       "projectileFlipbook": {
         "flipbookID": "fire_loop",
         "fps": 0,
@@ -1632,11 +1635,7 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1
-      },
-      "trajectory": "DirectFire",
-      "impactForce": 30,
-      "impactUpward": 8,
-      "detonateAtTarget": true
+      }
     }
   ]
 }
