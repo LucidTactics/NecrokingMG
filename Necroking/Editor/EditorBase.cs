@@ -207,6 +207,10 @@ public class EditorBase
     public float GetScrollOffset(string panelId) =>
         _scrollOffsets.TryGetValue(panelId, out float v) ? v : 0f;
 
+    /// <summary>Set/reset a panel's stored scroll offset — e.g. scroll a
+    /// detail panel back to the top when the selection changes.</summary>
+    public void SetScrollOffset(string panelId, float value) => _scrollOffsets[panelId] = value;
+
     // Scissor clipping stack
     private readonly Stack<Rectangle> _scissorStack = new();
     // CPU-side mirror of the active clip so hit-testing can respect it: a widget
@@ -796,6 +800,86 @@ public class EditorBase
         DrawRect(new Rectangle(x, y, ScrollbarW, viewH), ScrollTrackColor);
         DrawRect(new Rectangle(x, barY, ScrollbarW, barH), hot ? ScrollThumbHotColor : ScrollThumbColor);
         return scroll;
+    }
+
+    // === Scroll panel scope ===
+
+    /// <summary>
+    /// Scope for the standard scrollable detail/properties panel: wheel
+    /// scrolling (clamped by last frame's content height), scissor clip,
+    /// content-height measurement, and the canonical draggable scrollbar —
+    /// with the scroll state owned by EditorBase (keyed by panelId, same store
+    /// as DrawScrollableList). Usage:
+    /// <code>
+    ///   var sp = _ui.BeginScrollPanel("env_props", new Rectangle(x, y, w, h), topPad: 8);
+    ///   int curY = sp.ContentY;   // first row Y — scroll already applied
+    ///   ...draw rows, advancing curY...
+    ///   sp.End(curY);             // measure + record + clamp + scrollbar + EndClip
+    /// </code>
+    /// Callers never touch the offset or the height arithmetic (hand-rolled
+    /// copies of that math have double-counted the scroll offset before, which
+    /// turns the draggable bar into a feedback loop). Reset to the top on
+    /// selection change with <see cref="SetScrollOffset"/>(panelId, 0).
+    /// </summary>
+    /// <param name="topPad">Gap above the first row, inside the rect.</param>
+    /// <param name="bottomPad">Extra scrollable space below the last row.</param>
+    /// <param name="wheelEnabled">Pass false to suppress wheel scrolling this
+    /// frame (e.g. while a popup that doesn't block input layers is open above
+    /// this panel — the panel would otherwise consume the wheel first).</param>
+    /// <param name="clip">Scissor-clip the rect until End. Pass false when an
+    /// enclosing scope already clips this exact area (e.g. RegistryCrudPanel's
+    /// detail callback).</param>
+    public ScrollPanel BeginScrollPanel(string panelId, Rectangle rect, int topPad = 4,
+        int bottomPad = 0, int layer = 0, bool wheelEnabled = true, bool clip = true)
+    {
+        if (wheelEnabled)
+        {
+            float scroll = GetScrollOffset(panelId);
+            HandlePanelScroll(rect, ref scroll, panelId, rect.Height, 0.3f, layer);
+            _scrollOffsets[panelId] = scroll;
+        }
+        if (clip) BeginClip(rect);
+        return new ScrollPanel(this, panelId, rect, topPad, bottomPad, layer, clip);
+    }
+
+    /// <summary>Scope returned by <see cref="BeginScrollPanel"/>: draw content
+    /// from <see cref="ContentY"/> downward, then call <see cref="End"/> with
+    /// the final layout cursor.</summary>
+    public readonly struct ScrollPanel
+    {
+        private readonly EditorBase _ui;
+        private readonly string _id;
+        private readonly Rectangle _rect;
+        private readonly int _topPad, _bottomPad, _layer;
+        private readonly bool _clip;
+
+        /// <summary>Y of the first content row (top padding and scroll applied).</summary>
+        public int ContentY { get; }
+
+        internal ScrollPanel(EditorBase ui, string id, Rectangle rect,
+            int topPad, int bottomPad, int layer, bool clip)
+        {
+            _ui = ui; _id = id; _rect = rect;
+            _topPad = topPad; _bottomPad = bottomPad; _layer = layer; _clip = clip;
+            ContentY = rect.Y + topPad - (int)ui.GetScrollOffset(id);
+        }
+
+        /// <summary>Close the scope: ends the clip, records the measured
+        /// content height for next frame's wheel clamp, and draws the
+        /// draggable scrollbar (which also clamps the offset, so a shrinking
+        /// panel can't strand it past the end). <paramref name="contentBottomY"/>
+        /// is the layout cursor after the last row — screen space, i.e. still
+        /// offset by the scroll like <see cref="ContentY"/> was.</summary>
+        public void End(int contentBottomY)
+        {
+            if (_clip) _ui.EndClip();
+            // ContentY already includes -scroll, so this difference is the
+            // pure content height — the ONE place this arithmetic lives.
+            float contentH = (contentBottomY - ContentY) + _topPad + _bottomPad;
+            _ui.SetPanelContentHeight(_id, contentH);
+            _ui._scrollOffsets[_id] = _ui.DrawVScrollbar(_id, _rect.Right - 6, _rect.Y,
+                _rect.Height, contentH, _ui.GetScrollOffset(_id), _layer);
+        }
     }
 
     /// <summary>

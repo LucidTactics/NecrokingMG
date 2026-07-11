@@ -55,7 +55,7 @@ public class UnitEditorWindow
             }
             if (_selectedIdx < 0) return null;
         }
-        _propScrollOffset = 0;
+        _ui.SetScrollOffset("unit_props", 0);
         SyncPreviewToSelected();
         return _gameData.Units.Get(ids[_selectedIdx])?.DisplayName ?? ids[_selectedIdx];
     }
@@ -83,9 +83,6 @@ public class UnitEditorWindow
     private int _factionTab; // 0=All, 1=Undead, 2=Human, 3=Animal
     private List<string> _filteredIds = new();
 
-    // --- Right panel scroll ---
-    private float _propScrollOffset;
-    private float _maxPropHeight;
 
     // --- Sprite preview ---
     private AnimController _previewAnim = new();
@@ -139,7 +136,6 @@ public class UnitEditorWindow
     private SubEditor _activeSubEditor = SubEditor.None;
 
     private string _subSearchFilter = "";
-    private float _subPropScroll;
 
     // Generic sub-editor panels (created in SetGameData): list/CRUD/clipboard mechanics
     // live in RegistryCrudPanel; each panel owns its own selection + Ctrl+C/V clipboard.
@@ -150,7 +146,6 @@ public class UnitEditorWindow
     // --- Group editor popup state ---
     private bool _groupEditorOpen;
     private int _groupSelectedIdx = -1;
-    private float _groupPropScroll;
 
     // --- Clipboard for Ctrl+C / Ctrl+V ---
     private UnitDef _clipboardUnit;
@@ -690,7 +685,7 @@ public class UnitEditorWindow
         {
             string clickedId = _filteredIds[clicked];
             _selectedIdx = EditorBase.IndexOf(allIds, clickedId);
-            _propScrollOffset = 0;
+            _ui.SetScrollOffset("unit_props", 0);
             SyncPreviewToSelected();
         }
 
@@ -794,19 +789,16 @@ public class UnitEditorWindow
         var def = _gameData.Units.Get(allIds[_selectedIdx]);
         if (def == null) return;
 
-        // --- Scroll handling ---
-        var propArea = new Rectangle(x, y, w, h);
-        if (_activeSubEditor == SubEditor.None)
-            _ui.HandlePanelScroll(propArea, ref _propScrollOffset, Math.Max(0, _maxPropHeight - h + 40));
-
         int pad = 8;
         int contentW = Math.Min(w - pad * 2, 600);
         int drawX = x + pad;
-        int drawY = y + pad - (int)_propScrollOffset;
-        int startDrawY = drawY;
 
-        // RU40: Scissor clip the right panel content area
-        _ui.BeginClip(new Rectangle(x, y, w, h));
+        // Wheel + clip + measurement + draggable scrollbar. Wheel is disabled
+        // while a sub-editor popup is open above (it would consume the wheel
+        // before the popup gets a chance).
+        var sp = _ui.BeginScrollPanel("unit_props", new Rectangle(x, y, w, h),
+            topPad: pad, bottomPad: 40, wheelEnabled: _activeSubEditor == SubEditor.None);
+        int drawY = sp.ContentY;
 
         // RU02: Name and ID above the sprite preview
         drawY = DrawNameIdFields(def, drawX, drawY, contentW);
@@ -856,20 +848,7 @@ public class UnitEditorWindow
         drawY = DrawLocomotionCalibrationSection(def, drawX, drawY, contentW);
         drawY += 16;
 
-        // startDrawY already includes -_propScrollOffset, so this difference IS
-        // the full content height. (It used to add the scroll offset back on
-        // top, inflating the measured height by the current scroll — harmless
-        // for the old indicator-only bar, but a feedback loop once the bar
-        // became draggable: dragging grew the range it was dragging within.)
-        _maxPropHeight = drawY - startDrawY;
-
-        _ui.EndClip(); // RU40: end scissor clip
-
-        // --- Scrollbar (outside clip so it's always visible; draggable) ---
-        // contentH includes the same +40 bottom padding the wheel clamp allows,
-        // so the draggable range matches the wheel range exactly.
-        if (_maxPropHeight > h)
-            _propScrollOffset = _ui.DrawVScrollbar("unit_props", x + w - 7, y, h, _maxPropHeight + 40, _propScrollOffset);
+        sp.End(drawY);
     }
 
     // =========================================================================
@@ -2626,7 +2605,7 @@ public class UnitEditorWindow
         if (clicked >= 0 && clicked < groupIds.Count)
         {
             _groupSelectedIdx = clicked;
-            _groupPropScroll = 0;
+            _ui.SetScrollOffset("unit_groupdetail", 0);
         }
 
         // --- Bottom CRUD buttons for groups ---
@@ -2697,11 +2676,7 @@ public class UnitEditorWindow
         {
             var gDef = _gameData.UnitGroups.Get(groupIds[_groupSelectedIdx]);
             if (gDef != null)
-            {
-                _ui.BeginClip(new Rectangle(rightX, contentY, rightW, contentH));
                 DrawGroupDetail(gDef, rightX, contentY, rightW, contentH);
-                _ui.EndClip();
-            }
         }
 
         _ui.EndOverlay();
@@ -2709,12 +2684,8 @@ public class UnitEditorWindow
 
     private void DrawGroupDetail(UnitGroupDef g, int x, int y, int ww, int h)
     {
-        // Handle scroll. Id-keyed overload clamps to the end using last frame's
-        // content height (recorded below) so the wheel stops at the edge (was unbounded).
-        var area = new Rectangle(x, y, ww, h);
-        _ui.HandlePanelScroll(area, ref _groupPropScroll, "unit_groupdetail", h);
-
-        int curY = y + 4 - (int)_groupPropScroll;
+        var sp = _ui.BeginScrollPanel("unit_groupdetail", new Rectangle(x, y, ww, h));
+        int curY = sp.ContentY;
 
         // Name field
         string newName = _ui.DrawTextField("g_name", "Name", g.DisplayName, x, curY, ww);
@@ -2769,11 +2740,9 @@ public class UnitEditorWindow
             g.Entries.Add(new UnitGroupEntry());
             _unsavedChanges = true;
         }
+        curY += 24;
 
-        // Record content extent + clamp so the wheel stops at the end.
-        int groupContentH = curY + (int)_groupPropScroll - y;
-        _groupPropScroll = Math.Min(_groupPropScroll, Math.Max(0, groupContentH - h));
-        _ui.SetPanelContentHeight("unit_groupdetail", groupContentH);
+        sp.End(curY);
     }
 
     private string[] BuildUnitDropdownList()
@@ -2840,7 +2809,12 @@ public class UnitEditorWindow
         int listH = contentH - 26;
 
         ActivePanel?.DrawListAndDetail(_subSearchFilter, leftX, listY, listW, listH,
-            popX, popW, contentY, contentH, () => _subPropScroll = 0);
+            popX, popW, contentY, contentH, () =>
+            {
+                _ui.SetScrollOffset("unit_weapondetail", 0);
+                _ui.SetScrollOffset("unit_armordetail", 0);
+                _ui.SetScrollOffset("unit_shielddetail", 0);
+            });
 
         // --- Bottom CRUD buttons ---
         int bottomY = popY + popH - 34;
@@ -2853,12 +2827,10 @@ public class UnitEditorWindow
 
     private void DrawWeaponDetail(WeaponDef w, int x, int y, int ww, int h)
     {
-        // Handle scroll. Id-keyed overload clamps to the end using last frame's
-        // content height (recorded below) so the wheel stops at the edge (was unbounded).
-        var area = new Rectangle(x, y, ww, h);
-        _ui.HandlePanelScroll(area, ref _subPropScroll, "unit_weapondetail", h);
-
-        int curY = y + 4 - (int)_subPropScroll;
+        // clip:false — RegistryCrudPanel already clips this exact area around
+        // the detail callback.
+        var sp = _ui.BeginScrollPanel("unit_weapondetail", new Rectangle(x, y, ww, h), clip: false);
+        int curY = sp.ContentY;
 
         string newName = _ui.DrawTextField("w_name", "Name", w.DisplayName, x, curY, ww);
         if (newName != w.DisplayName) { w.DisplayName = newName; _unsavedChanges = true; }
@@ -3063,22 +3035,17 @@ public class UnitEditorWindow
             _unsavedChanges = true;
         }
 
-        // Record content extent + clamp so the wheel stops at the end.
-        int weaponContentH = curY + (int)_subPropScroll - y;
-        _subPropScroll = Math.Min(_subPropScroll, Math.Max(0, weaponContentH - h));
-        _ui.SetPanelContentHeight("unit_weapondetail", weaponContentH);
+        sp.End(curY);
     }
 
     // ---- ARMOR SUB-EDITOR (list/CRUD mechanics live in RegistryCrudPanel) ----
 
     private void DrawArmorDetail(ArmorDef a, int x, int y, int ww, int h)
     {
-        // Id-keyed overload clamps to the end using last frame's content height
-        // (recorded below) so the wheel stops at the edge (was unbounded).
-        var area = new Rectangle(x, y, ww, h);
-        _ui.HandlePanelScroll(area, ref _subPropScroll, "unit_armordetail", h);
-
-        int curY = y + 4 - (int)_subPropScroll;
+        // clip:false — RegistryCrudPanel already clips this exact area around
+        // the detail callback.
+        var sp = _ui.BeginScrollPanel("unit_armordetail", new Rectangle(x, y, ww, h), clip: false);
+        int curY = sp.ContentY;
 
         string newName = _ui.DrawTextField("a_name", "Name", a.DisplayName, x, curY, ww);
         if (newName != a.DisplayName) { a.DisplayName = newName; _unsavedChanges = true; }
@@ -3122,22 +3089,17 @@ public class UnitEditorWindow
             _unsavedChanges = true;
         }
 
-        // Record content extent + clamp so the wheel stops at the end.
-        int armorContentH = curY + (int)_subPropScroll - y;
-        _subPropScroll = Math.Min(_subPropScroll, Math.Max(0, armorContentH - h));
-        _ui.SetPanelContentHeight("unit_armordetail", armorContentH);
+        sp.End(curY);
     }
 
     // ---- SHIELD SUB-EDITOR (list/CRUD mechanics live in RegistryCrudPanel) ----
 
     private void DrawShieldDetail(ShieldDef s, int x, int y, int ww, int h)
     {
-        // Id-keyed overload clamps to the end using last frame's content height
-        // (recorded below) so the wheel stops at the edge (was unbounded).
-        var area = new Rectangle(x, y, ww, h);
-        _ui.HandlePanelScroll(area, ref _subPropScroll, "unit_shielddetail", h);
-
-        int curY = y + 4 - (int)_subPropScroll;
+        // clip:false — RegistryCrudPanel already clips this exact area around
+        // the detail callback.
+        var sp = _ui.BeginScrollPanel("unit_shielddetail", new Rectangle(x, y, ww, h), clip: false);
+        int curY = sp.ContentY;
 
         string newName = _ui.DrawTextField("s_name", "Name", s.DisplayName, x, curY, ww);
         if (newName != s.DisplayName) { s.DisplayName = newName; _unsavedChanges = true; }
@@ -3160,10 +3122,7 @@ public class UnitEditorWindow
         if (newDef != s.Defense) { s.Defense = newDef; _unsavedChanges = true; }
         curY += RowH;
 
-        // Record content extent + clamp so the wheel stops at the end.
-        int shieldContentH = curY + (int)_subPropScroll - y;
-        _subPropScroll = Math.Min(_subPropScroll, Math.Max(0, shieldContentH - h));
-        _ui.SetPanelContentHeight("unit_shielddetail", shieldContentH);
+        sp.End(curY);
     }
 
     // ---- SUB-EDITOR CRUD ----

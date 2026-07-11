@@ -88,7 +88,6 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
     private int _pvAreaX, _pvAreaY, _pvAreaW, _pvAreaH;
 
     // Scroll
-    private float _propScrollY;
     // Set when a def is selected programmatically (Open(defIndex)) so the def
     // list scrolls to reveal it on the next draw.
     private bool _pendingScrollToSelection;
@@ -204,7 +203,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         _selectedDef = _env.DefCount > 0 ? 0 : -1;
         _categoryFilter = 0;
         _searchFilter = "";
-        _propScrollY = 0;
+        _ui.SetScrollOffset("env_props", 0);
         _confirmDeleteOpen = false;
         _newCategoryDialogOpen = false;
         _deleteCategoryDialogOpen = false;
@@ -548,7 +547,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         if (clicked >= 0 && clicked < filtered.Count && filtered[clicked] != _selectedDef)
         {
             _selectedDef = filtered[clicked];
-            _propScrollY = 0;
+            _ui.SetScrollOffset("env_props", 0);
             ReloadPreview();
         }
     }
@@ -1191,15 +1190,8 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         int fieldW = w - Padding * 2;
         int fx = x + Padding;
 
-        // Scroll handling. Id-keyed overload clamps to the end using last frame's
-        // content height (recorded below) so the wheel can't overshoot and snap back.
-        var propRect = new Rectangle(x, y, w, h);
-        _ui.HandlePanelScroll(propRect, ref _propScrollY, "env_props", h);
-
-        // Begin scissor clip for properties
-        _ui.BeginClip(propRect);
-
-        int curY = y + Padding - (int)_propScrollY;
+        var sp = _ui.BeginScrollPanel("env_props", new Rectangle(x, y, w, h), topPad: Padding);
+        int curY = sp.ContentY;
 
         // --- Section: Identity ---
         curY = DrawSectionLabel(fx, curY, fieldW, "IDENTITY");
@@ -1806,14 +1798,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         if (newMaxOut != def.MaxOutputQueue) def.MaxOutputQueue = newMaxOut;
         curY += RowH;
 
-        // End scissor clip
-        _ui.EndClip();
-
-        // Clamp max scroll
-        int totalContentH = curY + (int)_propScrollY - y;
-        float maxScroll = MathF.Max(0, totalContentH - h);
-        _propScrollY = MathF.Min(_propScrollY, maxScroll);
-        _ui.SetPanelContentHeight("env_props", totalContentH);
+        sp.End(curY);
     }
 
     private int DrawSectionLabel(int x, int curY, int w, string label)
@@ -1878,7 +1863,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
 
         int newIdx = _env.AddDef(def);
         _selectedDef = newIdx;
-        _propScrollY = 0;
+        _ui.SetScrollOffset("env_props", 0);
         ReloadPreview();
     }
 
@@ -1907,7 +1892,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         int newIdx = _env.AddDef(copy);
         _env.ReloadDefTexture(newIdx);
         _selectedDef = newIdx;
-        _propScrollY = 0;
+        _ui.SetScrollOffset("env_props", 0);
         ReloadPreview();
     }
 
@@ -1920,7 +1905,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
         // Adjust selection
         if (_selectedDef >= _env.DefCount)
             _selectedDef = _env.DefCount - 1;
-        _propScrollY = 0;
+        _ui.SetScrollOffset("env_props", 0);
         ReloadPreview();
     }
 

@@ -342,11 +342,6 @@ public partial class UIEditorWindow : EditorBase
     private MouseState _prevMouseLocal;
     private GameTime? _lastGameTime;
 
-    // Detail panel scroll offsets
-    private float _nsDetailScroll;
-    private float _elemDetailScroll;
-    private float _widgetDetailScroll;
-
     // Add-child DrawCombo IDs (for programmatic close on tab switch)
     private const string AddElemComboId = "addchild_elem_combo";
     private const string AddWgtComboId = "addchild_wgt_combo";
@@ -729,9 +724,9 @@ public partial class UIEditorWindow : EditorBase
                 _selectedChildPath.Clear();
                 _expandedPaths.Clear();
                 _childDragActive = false;
-                _nsDetailScroll = 0;
-                _elemDetailScroll = 0;
-                _widgetDetailScroll = 0;
+                SetScrollOffset("ui_nsdetail", 0);
+                SetScrollOffset("ui_elemdetail", 0);
+                SetScrollOffset("ui_widgetdetail", 0);
                 // Drop ANY focused field/combo — a field from the old tab is
                 // never drawn again, so its focus would otherwise persist
                 // forever (blocking Ctrl+S / undo / child keyboard nav) and its
@@ -939,16 +934,11 @@ public partial class UIEditorWindow : EditorBase
             return;
         }
 
-        // Handle scroll wheel. Id-keyed overload clamps to the end using last
-        // frame's content height (recorded below) so the wheel stops at the edge.
-        var clipRect = new Rectangle(x, y, w, h);
-        HandlePanelScroll(clipRect, ref _nsDetailScroll, "ui_nsdetail", h);
-
-        BeginClip(clipRect);
+        var sp = BeginScrollPanel("ui_nsdetail", new Rectangle(x, y, w, h), topPad: 8);
 
         var def = _nineSlices[SelectedIndex];
         int propW = Math.Min(340, w);
-        int curY = y + 8 - (int)_nsDetailScroll;
+        int curY = sp.ContentY;
         int pad = 8;
 
         // ID
@@ -1027,12 +1017,7 @@ public partial class UIEditorWindow : EditorBase
             DrawNineSlicePreview(def, x + pad, curY, w - pad * 2);
         }
 
-        // Record content extent + clamp so the wheel stops at the end (was unbounded).
-        int nsContentH = curY + (int)_nsDetailScroll - y;
-        _nsDetailScroll = Math.Min(_nsDetailScroll, Math.Max(0, nsContentH - h));
-        SetPanelContentHeight("ui_nsdetail", nsContentH);
-
-        EndClip();
+        sp.End(curY);
     }
 
     private void DrawTextureWithBorders(UIEditorNineSliceDef def, Texture2D tex,
@@ -1233,14 +1218,10 @@ public partial class UIEditorWindow : EditorBase
             return;
         }
 
-        // Handle scroll wheel
-        var clipRect = new Rectangle(x, y, w, h);
-        HandlePanelScroll(clipRect, ref _elemDetailScroll, "ui_elemdetail", h);
-
-        BeginClip(clipRect);
+        var sp = BeginScrollPanel("ui_elemdetail", new Rectangle(x, y, w, h), topPad: 8);
 
         var def = _elements[SelectedIndex];
-        int curY = y + 8 - (int)_elemDetailScroll;
+        int curY = sp.ContentY;
         int pad = 8;
         int propW = w - pad * 2;
 
@@ -1441,12 +1422,7 @@ public partial class UIEditorWindow : EditorBase
             }
         }
 
-        // Track content height for scroll clamping
-        int contentBottom = curY + (int)_elemDetailScroll - y;
-        _elemDetailScroll = Math.Min(_elemDetailScroll, Math.Max(0, contentBottom - h));
-        SetPanelContentHeight("ui_elemdetail", contentBottom);
-
-        EndClip();
+        sp.End(curY);
     }
 
     private void DrawElementCanvas(int x, int y, int w, int h)
@@ -1743,14 +1719,11 @@ public partial class UIEditorWindow : EditorBase
             return;
         }
 
-        // Handle scroll wheel
-        var clipRect = new Rectangle(x, y, w, h);
-        HandlePanelScroll(clipRect, ref _widgetDetailScroll, "ui_widgetdetail", h);
-
-        BeginClip(clipRect);
+        // bottomPad covers trailing separators (see the note at sp.End).
+        var sp = BeginScrollPanel("ui_widgetdetail", new Rectangle(x, y, w, h), topPad: 8, bottomPad: 24);
 
         var def = _widgets[SelectedIndex];
-        int curY = y + 8 - (int)_widgetDetailScroll;
+        int curY = sp.ContentY;
         int pad = 8;
         int propW = w - pad * 2;
 
@@ -1990,7 +1963,7 @@ public partial class UIEditorWindow : EditorBase
 
         // Hierarchical child tree (UI11). Full height (not capped) so rows don't
         // overflow the box into the fields below — the whole property panel scrolls
-        // via _widgetDetailScroll, so a long child list is reachable by scrolling.
+        // via the ui_widgetdetail scroll panel, so a long child list is reachable by scrolling.
         int treeAreaH = 40 + CountTreeNodes(def.Children, def.Id) * 20;
         if (treeAreaH > 40)
         {
@@ -2129,15 +2102,10 @@ public partial class UIEditorWindow : EditorBase
             }
         }
 
-        // Track content height for scroll clamping. DrawChildProperties now
-        // reports its real height (the old hardcoded +800 guess made long
-        // child-property blocks unreachable and short ones over-scrollable);
-        // the small pad covers trailing separators.
-        int contentBottom = curY + (int)_widgetDetailScroll - y + 24;
-        _widgetDetailScroll = Math.Min(_widgetDetailScroll, Math.Max(0, contentBottom - h));
-        SetPanelContentHeight("ui_widgetdetail", contentBottom);
-
-        EndClip();
+        // DrawChildProperties reports its real height (the old hardcoded +800
+        // guess made long child-property blocks unreachable and short ones
+        // over-scrollable); the scope's bottomPad covers trailing separators.
+        sp.End(curY);
     }
 
     /// <summary>Navigate the editor to the element / sub-widget a child references —

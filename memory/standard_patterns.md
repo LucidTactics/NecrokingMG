@@ -50,6 +50,24 @@ CLAUDE.md → "Standard Patterns Reference".)
 - **Draw order at end of an editor's Draw**: panels → own popups →
   `DrawDropdownOverlays()` → `DrawColorPickerPopup()` last. Both are
   double-draw-guarded for nested editors.
+- **Scrollable detail/properties panel — `BeginScrollPanel`/`ScrollPanel.End`**
+  (EditorBase, added 2026-07-11): the ONE way to build a panel of stacked
+  fields that scrolls. `var sp = ui.BeginScrollPanel(id, rect, topPad, bottomPad);
+  int curY = sp.ContentY; …draw rows…; sp.End(curY);` — owns wheel scrolling
+  (id-keyed, clamped by last frame's height), scissor clip (`clip:false` when an
+  enclosing scope already clips, e.g. RegistryCrudPanel's detail callback),
+  content-height measurement, end-clamp, and the canonical draggable scrollbar.
+  Scroll state lives in EditorBase keyed by panel id — reset on selection change
+  with `ui.SetScrollOffset(id, 0)`. NEVER hand-write the
+  `contentH = curY + scroll - y` measurement or a `HandlePanelScroll`+
+  `BeginClip`+`SetPanelContentHeight` sandwich (a hand-rolled copy once
+  double-counted the scroll and broke thumb-dragging).
+- **Scrollbars** — every editor scrollbar is `EditorBase.DrawVScrollbar`
+  (5px track+thumb, the Spell-editor look). Interactive overload
+  `DrawVScrollbar(id, …)` adds thumb-drag + track-click jump and returns the
+  new offset; rows with click targets under the bar column exclude
+  `VScrollbarHitRect` from their hit tests (DrawScrollableList does this
+  internally). Never draw a scrollbar with raw `DrawRect`s.
 
 ## Combat / gameplay math
 
