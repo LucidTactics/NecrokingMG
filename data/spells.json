@@ -98,6 +98,77 @@
       }
     },
     {
+      "name": "Darts",
+      "id": "darts",
+      "school": "Evocation",
+      "tileTemplate": "evocation",
+      "icon": "assets/UI/Icons/Spells/nether_darts.png",
+      "range": 60,
+      "manaCost": 4,
+      "primaryPath": "death",
+      "primaryLevel": 1,
+      "cooldown": 1,
+      "damage": 3,
+      "gravityScale": 1,
+      "hitEffectFlipbook": {
+        "flipbookID": "cloud03",
+        "fps": 3,
+        "scale": 0.6,
+        "color": {
+          "r": 255,
+          "g": 255,
+          "b": 255,
+          "a": 255,
+          "intensity": 4.0384617
+        },
+        "rotation": 0,
+        "blendMode": "Alpha",
+        "alignment": "Ground",
+        "duration": -1
+      },
+      "quantity": 40,
+      "trajectory": "Direct",
+      "projectileSpeed": 50,
+      "precisionBonus": -5,
+      "projectileDelay": 0.02
+    },
+    {
+      "name": "Darts Lob",
+      "id": "darts_lob",
+      "school": "Evocation",
+      "tileTemplate": "evocation",
+      "icon": "assets/UI/Icons/Spells/nether_darts.png",
+      "range": 60,
+      "manaCost": 4,
+      "primaryPath": "death",
+      "primaryLevel": 1,
+      "cooldown": 1,
+      "damage": 3,
+      "gravityScale": 1,
+      "hitEffectFlipbook": {
+        "flipbookID": "cloud03",
+        "fps": 3,
+        "scale": 0.6,
+        "color": {
+          "r": 255,
+          "g": 255,
+          "b": 255,
+          "a": 255,
+          "intensity": 4.0384617
+        },
+        "rotation": 0,
+        "blendMode": "Alpha",
+        "alignment": "Ground",
+        "duration": -1
+      },
+      "quantity": 40,
+      "trajectory": "HighLob",
+      "projectileSpeed": 50,
+      "gravityScale": 2,
+      "precisionBonus": -5,
+      "projectileDelay": 0.02
+    },
+    {
       "name": "Nether Darts",
       "id": "nether_darts",
       "school": "Evocation",

@@ -477,7 +477,7 @@ public static class SpellEffectSystem
         Vec2 origin, Vec2 target, uint ownerUid, float spawnHeight, Faction casterFaction)
     {
         // AOE spells fly as Explosive and burst on impact; a single-target (zero-AOE)
-        // spell flies as Direct instead, so it actually strikes its target rather
+        // spell flies as RegularHit instead, so it actually strikes its target rather
         // than relying on a zero-radius explosion happening to reach it. The +10
         // precision keeps these magic darts reliable — conceptually they home in,
         // unlike a physically-fired arrow that can be dodged.
@@ -487,7 +487,7 @@ public static class SpellEffectSystem
         bool lob = traj == Trajectory.Lob || traj == Trajectory.HighLob;
         float speed = spell.ProjectileSpeed > 0 ? spell.ProjectileSpeed : ProjectileManager.MagicSpeed;
         var proj = projectiles.Spawn(origin, target, casterFaction, ownerUid,
-            spell.AoeRadius > 0f ? ProjectileType.Explosive : ProjectileType.Direct,
+            spell.AoeRadius > 0f ? ProjectileType.Explosive : ProjectileType.RegularHit,
             spell.Damage, speed, lob,
             aoeRadius: spell.AoeRadius, precision: spell.PrecisionBonus + 10,
             weaponName: spell.DisplayName, spawnHeight: spawnHeight,
