@@ -4,6 +4,7 @@ using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
 using Necroking.Game;
+using Necroking.Lib;
 using Necroking.Movement;
 using Necroking.Spatial;
 
@@ -473,13 +474,13 @@ public static class SpellEffectSystem
         p.SwirlAmplitude = 1.0f + (float)_projRng.NextDouble() * 0.25f;
         p.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
     }
-    
+
     private static void ApplySwirl3d(Projectile p)
     {
        p.SwirlFreq = 1f + (float)_projRng.NextDouble() * 0.5f;
        p.SwirlAmplitude = 1.0f + (float)_projRng.NextDouble() * 0.25f;
        p.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
-       
+
        p.SwirlFreq2 = 1f + (float)_projRng.NextDouble() * 0.5f;
        p.SwirlAmplitude2 = 1.0f + (float)_projRng.NextDouble() * 0.25f;
        p.SwirlPhase2 = (float)_projRng.NextDouble() * 2f * MathF.PI;

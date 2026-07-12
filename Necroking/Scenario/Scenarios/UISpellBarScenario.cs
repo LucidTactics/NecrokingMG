@@ -1,5 +1,6 @@
 using Necroking.Core;
 using Necroking.GameSystems;
+using Necroking.Lib;
 
 namespace Necroking.Scenario.Scenarios;
 

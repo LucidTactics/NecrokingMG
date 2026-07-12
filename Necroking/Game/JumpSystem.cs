@@ -1,6 +1,7 @@
 using System;
 using Necroking.Core;
 using Necroking.Game;
+using Necroking.Lib;
 using Necroking.Movement;
 using Necroking.Render;
 

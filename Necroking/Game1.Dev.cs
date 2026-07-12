@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using Necroking.Core;
 using Necroking.Data;
+using Necroking.Lib;
 using Necroking.Scenario;
 
 namespace Necroking;

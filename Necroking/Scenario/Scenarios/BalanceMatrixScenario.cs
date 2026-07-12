@@ -5,6 +5,7 @@ using System.Text.Json;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.GameSystems;
+using Necroking.Lib;
 
 namespace Necroking.Scenario.Scenarios;
 

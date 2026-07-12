@@ -4,6 +4,7 @@ using System.IO;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.GameSystems;
+using Necroking.Lib;
 using Necroking.World;
 
 namespace Necroking.Scenario.Scenarios;

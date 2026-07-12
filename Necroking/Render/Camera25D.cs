@@ -1,6 +1,7 @@
 using Necroking.Core;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
+using Necroking.Lib;
 
 namespace Necroking.Render;
 

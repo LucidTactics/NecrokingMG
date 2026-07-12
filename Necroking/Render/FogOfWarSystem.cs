@@ -5,6 +5,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
+using Necroking.Lib;
 using Necroking.Movement;
 
 namespace Necroking.Render;

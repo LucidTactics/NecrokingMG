@@ -8,6 +8,7 @@ using Necroking.Data;
 using Necroking.Data.Registries;
 using Necroking.Game;
 using Necroking.GameSystems;
+using Necroking.Lib;
 using Necroking.Render;
 using Necroking.World;
 

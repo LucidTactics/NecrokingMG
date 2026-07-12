@@ -3,6 +3,7 @@ using Necroking.Data;
 using Necroking.Data.Registries;
 using Necroking.Game;
 using Necroking.GameSystems;
+using Necroking.Lib;
 
 namespace Necroking.Scenario.Scenarios;
 

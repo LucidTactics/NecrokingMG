@@ -2,6 +2,7 @@ using Necroking.Core;
 using Necroking.GameSystems;
 using Necroking.Movement;
 using Microsoft.Xna.Framework;
+using Necroking.Lib;
 
 namespace Necroking.AI;
 

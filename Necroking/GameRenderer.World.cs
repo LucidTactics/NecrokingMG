@@ -16,6 +16,7 @@ using Necroking.GameSystems;
 using Necroking.World;
 using Necroking.Scenario;
 using Necroking.Editor;
+using Necroking.Lib;
 using Necroking.UI;
 
 namespace Necroking;

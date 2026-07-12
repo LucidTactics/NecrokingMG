@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
+using Necroking.Lib;
 using Necroking.Movement;
 using Necroking.Spatial;
 
@@ -75,7 +76,7 @@ public class Projectile
             var perp = new Vec2(-BaseDirection.Y, BaseDirection.X);
             float omega = SwirlFreq * 2f * MathF.PI;
             float swirlVel = MathF.Cos(omega * Age + SwirlPhase) * SwirlAmplitude * omega;
-            
+
             return Velocity + perp * swirlVel;
         }
     }
@@ -83,7 +84,7 @@ public class Projectile
     public float VisualVelocityZ {
        get {
           if (SwirlFreq2 <= 0f) return VelocityZ;
-            
+
           float omega = SwirlFreq2 * 2f * MathF.PI;
           float swirlVel = MathF.Cos(omega * Age + SwirlPhase2) * SwirlAmplitude2 * omega;
           return VelocityZ + swirlVel;

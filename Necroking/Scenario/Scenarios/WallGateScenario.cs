@@ -6,6 +6,7 @@ using Necroking.GameSystems;
 using Necroking.Movement;
 using Necroking.World;
 using Necroking.Algorithm;
+using Necroking.Lib;
 
 namespace Necroking.Scenario.Scenarios;
 
