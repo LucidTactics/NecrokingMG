@@ -891,7 +891,7 @@ partial class GameRenderer
 
         int boxW = 350;
         int btnW = 280, btnH = 40, btnGap = 10;
-        int gapSpace = (btnH + btnGap) / 2;
+        int gapSpace = 25;
         int extraGaps = items.Count(i => i.gapBefore);
         int boxH = 60 + items.Length * (btnH + btnGap) + 10 + PauseControls.Length * 16 + 20 + gapSpace * extraGaps;
         int boxX = (screenW - boxW) / 2;
@@ -925,18 +925,19 @@ partial class GameRenderer
             (MenuButtonId.Continue, hasSaves ? $"Continue {_g._loadMenuSaves[0].Name}" : "Continue", false, hasSaves),
             (MenuButtonId.Play, "Play", true, true),
             (MenuButtonId.PlayTestMap, "Play Test Map", false, true),
+            (MenuButtonId.LoadGame, "Load Game", true, true),
             (MenuButtonId.Scenarios, "Scenarios", false, true),
-            (MenuButtonId.LoadGame, "Load Game", false, true),
             (MenuButtonId.Quit, "Quit", true, true),
         };
 
-        int btnW = 320, btnH = 55, btnGap = 18;
+        int btnW = 320, btnH = 55, btnGap = 12;
+        int gapSpace = 25;
         int x = screenW / 2 - btnW / 2;
         int y = screenH / 2 - 20 - btnH;
         var buttons = new MenuButton[items.Length];
         for (int i = 0; i < items.Length; i++)
         {
-            if (items[i].gapBefore) y += btnGap * 2;
+            if (items[i].gapBefore) y += gapSpace;
             buttons[i] = new MenuButton
                 { Id = items[i].id, Label = items[i].label, Rect = new Rectangle(x, y, btnW, btnH), Interactable = items[i].interactable };
             y += btnH + btnGap;
