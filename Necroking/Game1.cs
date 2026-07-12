@@ -2658,6 +2658,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         _saveGameWindow = new SaveGameWindow(_editorUi);
         _saveGameWindow.SetCallbacks(ListSaveGames, UniqueSaveName, SaveFileExists, WriteSaveGame, SanitizeSaveName);
+        _saveGameWindow.DrawPreviewCard = (dest, formId, spellIds) => _gameRenderer.DrawSavePreviewCard(dest, formId, spellIds);
 
         _settingsWindow = new SettingsWindow(_editorUi);
         System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.UserSettingsDir));
@@ -3348,7 +3349,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             y2 += btnH2 + btnGap2;
             // Save Game
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _saveGameWindow.OnOpen(); _menuState = MenuState.SaveMenu; }
+                OpenSaveMenu();
             y2 += btnH2 + btnGap2;
             // Unit Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)

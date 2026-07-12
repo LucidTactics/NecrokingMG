@@ -897,6 +897,42 @@ partial class GameRenderer
         DrawText(_g._smallFont, "MonoGame Port v0.1", new Vector2(10, screenH - 20), new Color(80, 80, 100));
     }
 
+    // Placeholder save-preview card: necromancer-form portrait on top, the first
+    // 4 spellbar spells (Q/E/1/2) as an icon row below. The ONE place save
+    // previews are drawn — SaveGameWindow reaches it via a delegate wired in
+    // Game1.LoadContent, the load menu calls it directly. Upgrade it here and
+    // every save UI follows. Data must come from the save payload (SaveGameInfo),
+    // not the live sim — except the save dialog's "current game" card.
+    internal void DrawSavePreviewCard(Rectangle dest, string formDefId, IReadOnlyList<string> spellIds)
+    {
+        _g.Scope.Draw(_g._pixel, dest, new Color(12, 12, 22, 230));
+
+        const int cells = 4;
+        int cellW = dest.Width / cells;
+        int iconRowH = Math.Min(cellW, dest.Height / 3);
+        var portraitRect = new Rectangle(dest.X + 2, dest.Y + 2, dest.Width - 4, dest.Height - iconRowH - 4);
+        if (!string.IsNullOrEmpty(formDefId))
+            DrawUnitIdleSprite(formDefId, portraitRect);
+
+        var spells = _g._gameData.Spells;
+        int rowY = dest.Bottom - iconRowH;
+        for (int i = 0; i < cells; i++)
+        {
+            var cell = new Rectangle(dest.X + i * cellW, rowY, cellW, iconRowH);
+            _g.Scope.Draw(_g._pixel, cell, new Color(30, 30, 45, 230));
+            _g.Scope.Draw(_g._pixel, new Rectangle(cell.X, cell.Y, 1, cell.Height), new Color(70, 70, 100));
+            string spellId = i < spellIds.Count ? spellIds[i] : "";
+            string icon = string.IsNullOrEmpty(spellId) ? "" : spells.Get(spellId)?.Icon ?? "";
+            // Not _widgetRenderer.DrawIcon — that renderer initializes lazily on
+            // the first in-game inventory draw and silently no-ops before that,
+            // which blanked these icons on a cold main menu.
+            var tex = icon != "" ? _g.GetItemTextureByPath(icon) : null;
+            if (tex != null)
+                _g.Scope.Draw(tex, new Rectangle(cell.X + 1, cell.Y + 1, cell.Width - 2, cell.Height - 2), Color.White);
+        }
+        Necroking.Render.DrawUtils.DrawRectBorder(_g._spriteBatch, _g._pixel, dest, new Color(100, 100, 180));
+    }
+
     // Fully-resolved load-menu layout for one frame: one rect per visible save row
     // plus the back button. Drawing (DrawLoadMenu) and hit-testing (Game1's
     // LoadMenu update block) both consume this, so they can't drift apart.
@@ -909,7 +945,7 @@ partial class GameRenderer
 
     internal LoadMenuView BuildLoadMenuLayout(int screenW, int screenH, int saveCount)
     {
-        int btnW = 560, btnH = 42, btnGap = 10;
+        int btnW = 560, btnH = 64, btnGap = 10;
         int titleY = screenH / 20 + 20;
         int listY = titleY + 70;
         // Leave room for the back button + margin at the bottom.
@@ -956,6 +992,7 @@ partial class GameRenderer
             var s = saves[i];
             var r = view.RowRects[i];
             DrawMenuButtonAt($"{s.Name}    {s.MapName}    {s.SavedAt.ToLocalTime():yyyy-MM-dd HH:mm}", r.X, r.Y, r.Width, r.Height);
+            DrawSavePreviewCard(new Rectangle(r.X + 4, r.Y + 4, 88, r.Height - 8), s.FormId, s.SpellBar);
         }
         if (saves.Count > view.Shown && _g._font != null)
             DrawText(_g._font, $"(+{saves.Count - view.Shown} more)", new Vector2(view.BackRect.X, view.BackRect.Y - 22), new Color(140, 140, 160));

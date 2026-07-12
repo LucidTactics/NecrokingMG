@@ -2046,8 +2046,7 @@ public partial class Game1 {
             return true;
          case "save_menu":
          case "savemenu":
-            _saveGameWindow.OnOpen();
-            _menuState = MenuState.SaveMenu;
+            OpenSaveMenu();
             _clock.Pause(GameClock.PauseSource.User); // reached from the pause menu in normal play
             return true;
          case "multiplayer":

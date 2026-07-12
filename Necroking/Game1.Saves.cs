@@ -73,10 +73,23 @@ public partial class Game1
                 MapName = data.MapName,
                 SavedAt = savedAt,
                 FilePath = file,
+                FormId = data.Player.FormId,
+                SpellBar = data.SpellBar,
             });
         }
         result.Sort((a, b) => b.SavedAt.CompareTo(a.SavedAt));
         return result;
+    }
+
+    /// <summary>Open the save dialog with the current game's preview data
+    /// (form + spellbar) — the one entry point for showing the SaveMenu.</summary>
+    internal void OpenSaveMenu()
+    {
+        int idx = _sim.NecromancerIndex;
+        _saveGameWindow.OnOpen(
+            idx >= 0 ? _sim.Units[idx].UnitDefID : "",
+            _spellBarState.Slots.Select(s => s.SpellID ?? "").ToList());
+        _menuState = MenuState.SaveMenu;
     }
 
     /// <summary>Snapshot the current session into saves/{name}.json. Returns

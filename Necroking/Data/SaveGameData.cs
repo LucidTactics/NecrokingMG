@@ -49,4 +49,7 @@ public class SaveGameInfo
     public string MapName = "";
     public DateTime SavedAt;
     public string FilePath = "";
+    // Preview-card data (see GameRenderer.DrawSavePreviewCard).
+    public string FormId = "";
+    public List<string> SpellBar = new();
 }

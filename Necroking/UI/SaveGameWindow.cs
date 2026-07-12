@@ -29,13 +29,24 @@ public class SaveGameWindow
     private Func<string, bool> _writeSave = _ => false;
     private Func<string, string> _sanitize = s => s;
 
+    /// <summary>Draws the shared save-preview card (form portrait + Q/E/1/2 spell
+    /// icons) — wired to GameRenderer.DrawSavePreviewCard in Game1.LoadContent so
+    /// this window needs no renderer reference. Safe: EditorBase and GameRenderer
+    /// share the same SpriteBatch.</summary>
+    public Action<Rectangle, string, IReadOnlyList<string>>? DrawPreviewCard;
+
     private List<SaveGameInfo> _saves = new();
     private string _name = "";
     private string _error = "";
+    // What the confirm button would write — shown next to the name field.
+    private string _currentFormId = "";
+    private List<string> _currentSpells = new();
 
     private const int PanelW = 520;
-    private const int PanelH = 560;
-    private const int MaxVisibleSaves = 10;
+    private const int PanelH = 640;
+    private const int MaxVisibleSaves = 6;
+    private const int RowH = 64;
+    private const int CardW = 88;
 
     public SaveGameWindow(EditorBase ui)
     {
@@ -53,12 +64,15 @@ public class SaveGameWindow
     }
 
     /// <summary>Called when the pause-menu Save Game button opens this window:
-    /// refresh the save list and prefill a free default name.</summary>
-    public void OnOpen()
+    /// refresh the save list, prefill a free default name, and snapshot the
+    /// current game's preview data (form + first spellbar spells).</summary>
+    public void OnOpen(string currentFormId, List<string> currentSpells)
     {
         _saves = _listSaves();
         _name = _uniqueName("Quicksave");
         _error = "";
+        _currentFormId = currentFormId;
+        _currentSpells = currentSpells;
         WantsClose = false;
     }
 
@@ -80,14 +94,22 @@ public class SaveGameWindow
         int w = PanelW - 40;
         int y = panelY + 36;
 
+        // ── What you're saving: current-game preview card + name field ───
+        DrawPreviewCard?.Invoke(new Rectangle(x, y, CardW, RowH), _currentFormId, _currentSpells);
+        int fieldX = x + CardW + 12;
+
         // ── Existing saves (click to take that name → overwrite) ─────────
-        _ui.DrawText("EXISTING SAVES", new Vector2(x, y), EditorBase.AccentColor);
-        y += 22;
+        // Rows are drawn BELOW first so a row click can override the name
+        // field's return value this frame: the same click deactivates the
+        // focused field (committing its old buffer), and taking that committed
+        // buffer would stomp the row's name.
+        int listY = y + RowH + 14;
+        int rowsY = listY + 22;
         bool pickedRow = false;
         if (_saves.Count == 0)
         {
-            _ui.DrawText("(no saves yet)", new Vector2(x, y), EditorBase.TextDim);
-            y += 24;
+            _ui.DrawText("(no saves yet)", new Vector2(x, rowsY), EditorBase.TextDim);
+            rowsY += 24;
         }
         else
         {
@@ -98,28 +120,27 @@ public class SaveGameWindow
             {
                 var s = _saves[i];
                 string rowText = $"{s.Name}    {s.MapName}    {s.SavedAt.ToLocalTime():yyyy-MM-dd HH:mm}";
-                if (_ui.DrawButton(rowText, x, y, w, 26))
+                if (_ui.DrawButton(rowText, x, rowsY, w, RowH))
                 {
                     _name = s.Name;
                     pickedRow = true;
                 }
-                y += 30;
+                DrawPreviewCard?.Invoke(new Rectangle(x + 4, rowsY + 4, CardW, RowH - 8), s.FormId, s.SpellBar);
+                rowsY += RowH + 6;
             }
             if (_saves.Count > shown)
             {
-                _ui.DrawText($"(+{_saves.Count - shown} older saves)", new Vector2(x, y), EditorBase.TextDim);
-                y += 20;
+                _ui.DrawText($"(+{_saves.Count - shown} older saves)", new Vector2(x, rowsY), EditorBase.TextDim);
+                rowsY += 20;
             }
         }
-        y += 8;
 
-        // ── Name field ───────────────────────────────────────────────────
-        // A row click above must win over the field this frame: the same click
-        // deactivates the focused field (committing its old buffer), so taking
-        // the field's return value then would stomp the row's name.
-        string edited = _ui.DrawTextField("save_name", "Save name", _name, x, y, w);
+        // Name field next to the current-game card (drawn after the rows so a
+        // row click this frame wins — see comment above).
+        string edited = _ui.DrawTextField("save_name", "Save name", _name, fieldX, y + (RowH - 20) / 2, w - CardW - 12);
         if (!pickedRow) _name = edited;
-        y += 34;
+        _ui.DrawText("EXISTING SAVES", new Vector2(x, listY), EditorBase.AccentColor);
+        y = rowsY;
 
         if (_error != "")
         {
