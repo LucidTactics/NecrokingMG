@@ -414,7 +414,7 @@ public partial class HUDRenderer
 
     /// <summary>Programmer-style debug readout drawn top-left in place of the
     /// player stat bars. For now: live projectile counts broken down by the
-    /// <see cref="ProjectileType"/> enum category (Direct / Explosive / Potion).
+    /// <see cref="ProjectileType"/> enum category (RegularHit / Explosive / Potion).
     /// Styled like the text tooltip panel (dark box + thin accent border).</summary>
     private void DrawDebugPanel(Simulation sim)
     {
