@@ -41,6 +41,9 @@ public class GodRayParams
 
 public class ActiveStrike
 {
+    /// <summary>Stable per-instance seed salt: the bolt only re-rolls its shape on
+    /// the JitterHz clock, never because an endpoint (or the camera) moved.</summary>
+    public uint Seed;
     public Vec2 TargetPos;
     public float TelegraphTimer;
     public float TelegraphDuration;
@@ -63,6 +66,8 @@ public class ActiveStrike
 
 public class ActiveZap
 {
+    /// <summary>Stable per-instance seed salt (see ActiveStrike.Seed).</summary>
+    public uint Seed;
     public Vec2 StartPos;
     public Vec2 EndPos;
     public float StartHeight;
@@ -75,6 +80,10 @@ public class ActiveZap
 
 public class ActiveBeam
 {
+    /// <summary>Stable per-instance seed salt (see ActiveStrike.Seed). Without it a
+    /// beam whose endpoints move (walking target) re-rolled its shape every frame,
+    /// making JitterHz appear to "go crazy" mid-channel.</summary>
+    public uint Seed;
     public uint CasterID;
     public uint TargetID;
     public string SpellID = "";
@@ -146,6 +155,10 @@ public class LightningSystem
     private readonly List<ActiveBeam> _beams = new();
     private readonly List<ActiveDrain> _drains = new();
 
+    // Per-instance seed salts (visual only — never touches sim determinism).
+    private uint _seedCounter = 0x9E3779B9;
+    private uint NextSeed() => _seedCounter = _seedCounter * 1103515245u + 12345u;
+
     public IReadOnlyList<ActiveStrike> Strikes => _strikes;
     public IReadOnlyList<ActiveZap> Zaps => _zaps;
     public IReadOnlyList<ActiveBeam> Beams => _beams;
@@ -160,6 +173,7 @@ public class LightningSystem
     {
         _strikes.Add(new ActiveStrike
         {
+            Seed = NextSeed(),
             TargetPos = targetPos,
             TelegraphDuration = telegraphDuration,
             TelegraphVisible = telegraphVisible,
@@ -181,6 +195,7 @@ public class LightningSystem
     {
         _beams.Add(new ActiveBeam
         {
+            Seed = NextSeed(),
             CasterID = casterID, TargetID = targetID, SpellID = spellID,
             DamagePerTick = damagePerTick, TickRate = tickRate, RetargetRadius = retargetRadius,
             Style = style, MaxDuration = maxDuration
@@ -210,6 +225,7 @@ public class LightningSystem
     {
         _zaps.Add(new ActiveZap
         {
+            Seed = NextSeed(),
             StartPos = start, EndPos = end, Duration = duration, Style = style,
             StartHeight = startHeight, EndHeight = endHeight
         });

@@ -101,7 +101,7 @@ public class LightningRenderer
                     // Procedural lightning bolt from sky (start above top of screen)
                     float skyY = -50f; // well above screen edge
                     float skyX = sp.X - 50f + (sp.Y - skyY) * 0.05f; // slight angle
-                    AddBoltStrips(new Vector2(skyX, skyY), sp, strike.Style, fade);
+                    AddBoltStrips(new Vector2(skyX, skyY), sp, strike.Style, fade, strike.Seed);
                 }
             }
         }
@@ -116,7 +116,7 @@ public class LightningRenderer
             var startSp = _renderer.WorldToScreenPx(zap.StartPos, zap.StartHeight * _camera.Zoom, _camera);
             var endSp = _renderer.WorldToScreen(zap.EndPos, zap.EndHeight, _camera);
             float fade = 1f - zap.Timer / zap.Duration;
-            AddBoltStrips(startSp, endSp, zap.Style, fade);
+            AddBoltStrips(startSp, endSp, zap.Style, fade, zap.Seed);
         }
 
         // Draw active beams
@@ -135,7 +135,7 @@ public class LightningRenderer
             var startSp = _renderer.WorldToScreenPx(_sim.Units[casterIdx].EffectSpawnPos2D,
                 _sim.Units[casterIdx].EffectSpawnHeight * _camera.Zoom, _camera);
             var endSp = _renderer.WorldToScreen(_sim.Units[targetIdx].Position, 1f, _camera);
-            AddBoltStrips(startSp, endSp, beam.Style, 1f);
+            AddBoltStrips(startSp, endSp, beam.Style, 1f, beam.Seed);
         }
 
         // Draw active drains
@@ -180,11 +180,12 @@ public class LightningRenderer
     /// SpriteBatch path below. Returns the flicker brightness multiplier.
     /// </summary>
     private static float ComputeBoltShape(Vector2 start, Vector2 end, LightningStyle style,
-        float gameTime, out List<Vector2> mainPoints, out List<List<Vector2>> branches)
+        float gameTime, out List<Vector2> mainPoints, out List<List<Vector2>> branches,
+        uint seedSalt = 0)
     {
-        // JitterHz: how often the bolt reshapes. 0 = never — the shape seeds off
-        // the endpoints alone and stays frozen (matches the buff-aura convention
-        // where Hz 0 disables the behavior; want per-frame reshaping? set ~60).
+        // JitterHz: how often the bolt reshapes. 0 = never — the shape stays
+        // frozen (matches the buff-aura convention where Hz 0 disables the
+        // behavior; want per-frame reshaping? set ~60).
         float jitterTime = 0f;
         if (style.JitterHz > 0.01f)
             jitterTime = MathF.Floor(gameTime * style.JitterHz) / style.JitterHz;
@@ -197,7 +198,14 @@ public class LightningRenderer
             flicker = style.FlickerMin + (style.FlickerMax - style.FlickerMin) * t;
         }
 
-        uint seed = (uint)(start.X * 1000 + end.Y * 7 + jitterTime * 60);
+        // With a per-instance salt the seed changes ONLY on the JitterHz clock —
+        // moving endpoints just deform the current shape (displacements are
+        // relative to the segment). The endpoint-derived fallback (salt 0, used by
+        // static previews) re-rolls whenever an endpoint moves: fine for a
+        // stationary preview, visibly frantic on a beam tracking a walking target.
+        uint seed = seedSalt != 0
+            ? seedSalt * 2654435761u + (uint)(jitterTime * 60f)
+            : (uint)(start.X * 1000 + end.Y * 7 + jitterTime * 60);
         mainPoints = GenerateBoltPoints(start, end, style.Subdivisions, style.Displacement, ref seed);
         branches = mainPoints.Count >= 2
             ? GenerateBranches(mainPoints, style, ref seed)
@@ -205,8 +213,9 @@ public class LightningRenderer
         return flicker;
     }
 
-    private void AddBoltStrips(Vector2 start, Vector2 end, LightningStyle style, float fade)
-        => AddBoltStripsStatic(_strips, start, end, style, fade, _gameTime);
+    private void AddBoltStrips(Vector2 start, Vector2 end, LightningStyle style, float fade,
+        uint seedSalt = 0)
+        => AddBoltStripsStatic(_strips, start, end, style, fade, _gameTime, seedSalt: seedSalt);
 
     /// <summary>
     /// Collect a bolt (main + branches) as miter-joined ribbons into a strip batch;
@@ -217,9 +226,10 @@ public class LightningRenderer
     /// intensity applied via the strip batch's per-bucket Intensity uniform.
     /// </summary>
     public static void AddBoltStripsStatic(HdrStripBatch strips, Vector2 start, Vector2 end,
-        LightningStyle style, float fade, float gameTime, float widthScale = 1f)
+        LightningStyle style, float fade, float gameTime, float widthScale = 1f,
+        uint seedSalt = 0)
     {
-        float flicker = ComputeBoltShape(start, end, style, gameTime, out var mainPoints, out var branches);
+        float flicker = ComputeBoltShape(start, end, style, gameTime, out var mainPoints, out var branches, seedSalt);
         if (mainPoints.Count < 2) return;
         float ef = fade * flicker;
         if (ef <= 0.001f) return;
