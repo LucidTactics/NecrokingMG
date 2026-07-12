@@ -30,6 +30,11 @@ only; locate-behavior integration explicitly declined).
   editor's variant — unify visually to ONE style? (user-facing consistency call).
 - Necromancer-as-normal-unit (Q9 direction) — its own project; casting half done via
   ICasterResources; HP/stats/HUD/save/ghost migration needs the agreed sub-plan first.
+- **HDR triangle flush ×2** (2026-07-12): `HdrStripBatch.DrawAll` (lightning ribbons) and
+  `GodRayRenderer.FlushTriangles/DrawAll` both do ortho-WVP + BlendState.Additive +
+  DrawUserPrimitives with HdrIntensity.fx and a BasicEffect fallback. God rays could adopt
+  `HdrStripBatch` buckets (intensity-per-sublayer maps to buckets) — deferred to avoid
+  touching working god-ray code during the lightning change.
 
 ## Process notes
 - Stale scenario: craft_table asserts the zombie at craft-completion instant but spawns are

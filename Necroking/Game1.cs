@@ -3910,8 +3910,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
             // Collect damage events for floating numbers (height owned by the sim event)
             foreach (var dmg in _sim.DamageEvents)
-                FloatingText.AddDamage(_damageNumbers, dmg.Position, dmg.Damage,
-                    dmg.Height, dmg.IsPoison, dmg.IsFatigue);
+            {
+                if (dmg.IsHeal)
+                    FloatingText.AddText(_damageNumbers, dmg.Position,
+                        dmg.Damage.ToString(), dmg.Height); // green "+N" gain
+                else
+                    FloatingText.AddDamage(_damageNumbers, dmg.Position, dmg.Damage,
+                        dmg.Height, dmg.IsPoison, dmg.IsFatigue);
+            }
         }
 
         // --- Scenario tick when editor is active (editors pause normal sim but scenarios must still tick) ---

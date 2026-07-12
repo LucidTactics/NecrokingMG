@@ -75,6 +75,9 @@ public class DamageEvent
     public float Height;
     public bool IsPoison;
     public bool IsFatigue;
+    /// <summary>True = Damage is an HP GAIN (drain heal): rendered as a green
+    /// "+N" pickup-style number instead of a red damage number.</summary>
+    public bool IsHeal;
 
     /// <summary>Build a floating-damage-number event. Pass a per-unit `height` only
     /// when you already have the correct value on hand (e.g. from a UnitDef's
@@ -865,10 +868,29 @@ public class Simulation
         // Lightning
         PhaseStart();
         var lightningDmg = new List<LightningDamage>();
-        _lightning.Update(dt, lightningDmg, _quadtree, _units);
+        _lightning.Update(dt, lightningDmg, _quadtree, _units, _corpses);
         foreach (var ld in lightningDmg)
-            if (ld.UnitIdx >= 0 && ld.UnitIdx < _units.Count)
+        {
+            if (ld.UnitIdx < 0 || ld.UnitIdx >= _units.Count) continue;
+            if (ld.IsHeal)
+            {
+                // Drain life transfer: clamped HP gain (sacrifice-heal convention)
+                // + a green floating number via the heal-flagged damage event.
+                if (!_units[ld.UnitIdx].Alive) continue;
+                int max = BuffSystem.EffectiveMaxHP(_units, ld.UnitIdx);
+                int before = _units[ld.UnitIdx].Stats.HP;
+                int after = Math.Min(max, before + ld.Damage);
+                if (after <= before) continue;
+                _units[ld.UnitIdx].Stats.HP = after;
+                var he = DamageEvent.Create(_units[ld.UnitIdx].Position, after - before);
+                he.IsHeal = true;
+                _damageEvents.Add(he);
+            }
+            else
+            {
                 DealDamage(ld.UnitIdx, ld.Damage, UnitUtil.ResolveUnitIndex(_units, ld.OwnerID));
+            }
+        }
         PhaseEnd("lightning");
 
         // Poison clouds

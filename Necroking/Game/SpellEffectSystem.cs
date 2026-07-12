@@ -149,7 +149,13 @@ public static class SpellEffectSystem
 
             case "Beam":
             {
-                int beamTarget = FindClosestEnemy(sim, target, 3f, casterFaction);
+                // Honor TryStartSpellCast's targeting (written into pending at cast
+                // start); a target that died during the wind-up — or an AI cast with
+                // an empty pending — falls back to the closest enemy near the aim.
+                int beamTarget = pending.TargetUnitID != GameConstants.InvalidUnit
+                    ? UnitUtil.ResolveUnitIndex(units, pending.TargetUnitID) : -1;
+                if (beamTarget >= 0 && !units[beamTarget].Alive) beamTarget = -1;
+                if (beamTarget < 0) beamTarget = FindClosestEnemy(sim, target, 3f, casterFaction);
                 if (beamTarget >= 0)
                 {
                     sim.Lightning.SpawnBeam(casterUid, units[beamTarget].Id,
@@ -162,7 +168,35 @@ public static class SpellEffectSystem
 
             case "Drain":
             {
-                int drainTarget = FindClosestEnemy(sim, target, 5f, casterFaction);
+                // Honor TryStartSpellCast's targeting: enemy unit, corpse fallback,
+                // or the reversed-mode ally. AI casts arrive with an empty pending —
+                // fall back to the old closest-enemy search (non-reversed only).
+                int drainTarget = pending.TargetUnitID != GameConstants.InvalidUnit
+                    ? UnitUtil.ResolveUnitIndex(units, pending.TargetUnitID) : -1;
+                if (drainTarget >= 0 && !units[drainTarget].Alive) drainTarget = -1;
+
+                if (drainTarget < 0 && pending.TargetCorpseID >= 0)
+                {
+                    // Corpse drain — re-resolve by STABLE id, not the captured index
+                    // (the corpse list compacts during the cast wind-up).
+                    int corpseIdx = sim.FindCorpseIndexByID(pending.TargetCorpseID);
+                    if (corpseIdx >= 0 && !sim.Corpses[corpseIdx].Dissolving
+                        && !sim.Corpses[corpseIdx].ConsumedBySummon)
+                    {
+                        sim.Lightning.SpawnDrain(casterUid, GameConstants.InvalidUnit,
+                            spell.Id, spell.Damage, spell.DrainTickRate, spell.DrainHealPercent,
+                            spell.DrainCorpseHP, spell.DrainReversed, spell.DrainMaxDuration,
+                            spell.BuildDrainVisuals(),
+                            targetCorpseIdx: corpseIdx, targetCorpseID: pending.TargetCorpseID,
+                            corpsePos: sim.Corpses[corpseIdx].Position);
+                        StartChannel(game, units, casterIdx, slot, spell,
+                            sim.Corpses[corpseIdx].Position);
+                    }
+                    break;
+                }
+
+                if (drainTarget < 0 && !spell.DrainReversed)
+                    drainTarget = FindClosestEnemy(sim, target, 5f, casterFaction);
                 if (drainTarget >= 0)
                 {
                     sim.Lightning.SpawnDrain(casterUid, units[drainTarget].Id,

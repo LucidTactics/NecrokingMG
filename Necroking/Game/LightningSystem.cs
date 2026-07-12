@@ -82,6 +82,9 @@ public class ActiveBeam
     public float TickRate;
     public int DamagePerTick;
     public float RetargetRadius;
+    /// <summary>Where the target was last seen alive — the retarget hop searches
+    /// around the fallen target, not the caster.</summary>
+    public Vec2 LastTargetPos;
     public LightningStyle Style = new();
     public float MaxDuration;
     public float Elapsed;
@@ -108,6 +111,9 @@ public class ActiveDrain
     public uint CasterID;
     public uint TargetID;
     public int TargetCorpseIdx = -1;
+    /// <summary>Stable corpse id (Corpse.CorpseID) for corpse-target drains — ticks
+    /// re-resolve by this, never by the captured index (the corpse list compacts).</summary>
+    public int TargetCorpseID = -1;
     public Vec2 CorpsePos;
     public string SpellID = "";
     public float DamageAccumulator;
@@ -126,8 +132,11 @@ public class LightningDamage
 {
     public int UnitIdx;
     public int Damage;
-    /// <summary>Casting unit (from the strike) for attacker attribution. InvalidUnit = none.</summary>
+    /// <summary>Casting unit (from the strike/beam/drain) for attacker attribution. InvalidUnit = none.</summary>
     public uint OwnerID = GameConstants.InvalidUnit;
+    /// <summary>True = Damage is a HEAL for UnitIdx (drain life transfer). Applied by
+    /// Simulation as a clamped HP gain instead of going through DamageSystem.</summary>
+    public bool IsHeal;
 }
 
 public class LightningSystem
@@ -181,14 +190,18 @@ public class LightningSystem
     public void SpawnDrain(uint casterID, uint targetID, string spellID,
                            int damagePerTick, float tickRate, float healPercent,
                            int corpseHP, bool reversed, float maxDuration,
-                           DrainVisualParams visuals)
+                           DrainVisualParams visuals,
+                           int targetCorpseIdx = -1, int targetCorpseID = -1,
+                           Vec2 corpsePos = default)
     {
         _drains.Add(new ActiveDrain
         {
             CasterID = casterID, TargetID = targetID, SpellID = spellID,
             DamagePerTick = damagePerTick, TickRate = tickRate, HealPercent = healPercent,
             CorpseHP = corpseHP, Reversed = reversed, MaxDuration = maxDuration,
-            Visuals = visuals
+            Visuals = visuals,
+            TargetCorpseIdx = targetCorpseIdx, TargetCorpseID = targetCorpseID,
+            CorpsePos = corpsePos
         });
     }
 
@@ -203,7 +216,8 @@ public class LightningSystem
     }
 
     public void Update(float dt, List<LightningDamage> outDamage,
-                        Quadtree? quadtree = null, UnitArrays? units = null)
+                        Quadtree? quadtree = null, UnitArrays? units = null,
+                        List<Corpse>? corpses = null)
     {
         // Update strikes
         for (int i = _strikes.Count - 1; i >= 0; i--)
@@ -263,7 +277,8 @@ public class LightningSystem
             if (b.MaxDuration > 0 && b.Elapsed >= b.MaxDuration) b.Alive = false;
             // A channel is only as alive as its endpoints: a caster that dies or
             // gets disabled (stun/knockdown/knockback/paralysis/jump) drops the
-            // beam, and a dead target does too (the beam is drawn caster→target).
+            // beam. A dead target first tries the retarget hop below; only when
+            // no candidate is in RetargetRadius does the beam die too.
             // This is the core channel-interrupt rule — it covers the player and
             // AI casters alike; their slot/timer bookkeeping syncs off the beam
             // disappearing (Game1's channel-hold block / Unit.ChannelTimer here).
@@ -271,7 +286,35 @@ public class LightningSystem
             if (units != null && b.Alive)
             {
                 int ti = UnitUtil.ResolveUnitIndex(units, b.TargetID);
-                if (ti < 0 || !units[ti].Alive) b.Alive = false;
+                if (ti >= 0 && units[ti].Alive)
+                {
+                    b.LastTargetPos = units[ti].Position;
+                }
+                else
+                {
+                    // Retarget hop: the target fell mid-channel — arc to the
+                    // closest living enemy of the caster near where it fell.
+                    ti = RetargetBeam(b, quadtree, units);
+                    if (ti >= 0) { b.TargetID = units[ti].Id; b.LastTargetPos = units[ti].Position; }
+                    else b.Alive = false;
+                }
+
+                // Damage ticks through the standard pipeline: emitted as
+                // LightningDamage and applied by Simulation.DealDamage with
+                // caster attribution — same as strike AoE damage.
+                if (b.Alive && b.DamagePerTick > 0)
+                {
+                    b.DamageAccumulator += dt;
+                    float interval = b.TickRate > 0.01f ? b.TickRate : 0.25f;
+                    while (b.DamageAccumulator >= interval)
+                    {
+                        b.DamageAccumulator -= interval;
+                        outDamage.Add(new LightningDamage
+                        {
+                            UnitIdx = ti, Damage = b.DamagePerTick, OwnerID = b.CasterID
+                        });
+                    }
+                }
             }
             if (!b.Alive) _beams.RemoveAt(i);
         }
@@ -290,8 +333,104 @@ public class LightningSystem
                 int ti = UnitUtil.ResolveUnitIndex(units, d.TargetID);
                 if (ti < 0 || !units[ti].Alive) d.Alive = false;
             }
+
+            // Drain ticks. Damage goes out as LightningDamage (standard
+            // DealDamage pipeline in Simulation); heals go out with IsHeal set
+            // (clamped HP gain in Simulation). Three modes:
+            //  - enemy unit:   damage target, heal caster by HealPercent of it
+            //  - corpse:       consume the corpse's CorpseHP pool, heal caster;
+            //                  the corpse dissolves when the pool empties
+            //  - reversed:     transfer — damage the CASTER, heal the friendly
+            //                  target; stops before the caster would die
+            if (units != null && d.Alive && d.DamagePerTick > 0)
+            {
+                d.DamageAccumulator += dt;
+                float interval = d.TickRate > 0.01f ? d.TickRate : 0.25f;
+                while (d.DamageAccumulator >= interval && d.Alive)
+                {
+                    d.DamageAccumulator -= interval;
+                    int ci = UnitUtil.ResolveUnitIndex(units, d.CasterID);
+                    if (ci < 0 || !units[ci].Alive) { d.Alive = false; break; }
+                    int heal = (int)MathF.Round(d.DamagePerTick * d.HealPercent);
+
+                    if (d.TargetCorpseIdx >= 0)
+                    {
+                        int corpseIdx = FindCorpseIndex(corpses, d.TargetCorpseID);
+                        if (corpseIdx < 0) { d.Alive = false; break; }
+                        int pull = Math.Min(d.DamagePerTick, d.CorpseHP);
+                        if (pull <= 0) { d.Alive = false; break; }
+                        d.CorpseHP -= pull;
+                        int corpseHeal = (int)MathF.Round(pull * d.HealPercent);
+                        if (corpseHeal > 0)
+                            outDamage.Add(new LightningDamage
+                            { UnitIdx = ci, Damage = corpseHeal, OwnerID = d.CasterID, IsHeal = true });
+                        if (d.CorpseHP <= 0)
+                        {
+                            // Pool exhausted — the husk crumbles (poison-cloud
+                            // corpse-consumption convention).
+                            corpses![corpseIdx].Dissolving = true;
+                            d.Alive = false;
+                        }
+                    }
+                    else if (d.Reversed)
+                    {
+                        int ti = UnitUtil.ResolveUnitIndex(units, d.TargetID);
+                        if (ti < 0 || !units[ti].Alive) { d.Alive = false; break; }
+                        // Never let the transfer kill the caster.
+                        if (units[ci].Stats.HP <= d.DamagePerTick) { d.Alive = false; break; }
+                        outDamage.Add(new LightningDamage
+                        { UnitIdx = ci, Damage = d.DamagePerTick, OwnerID = d.CasterID });
+                        if (heal > 0)
+                            outDamage.Add(new LightningDamage
+                            { UnitIdx = ti, Damage = heal, OwnerID = d.CasterID, IsHeal = true });
+                    }
+                    else
+                    {
+                        int ti = UnitUtil.ResolveUnitIndex(units, d.TargetID);
+                        if (ti < 0 || !units[ti].Alive) { d.Alive = false; break; }
+                        outDamage.Add(new LightningDamage
+                        { UnitIdx = ti, Damage = d.DamagePerTick, OwnerID = d.CasterID });
+                        if (heal > 0)
+                            outDamage.Add(new LightningDamage
+                            { UnitIdx = ci, Damage = heal, OwnerID = d.CasterID, IsHeal = true });
+                    }
+                }
+            }
             if (!d.Alive) _drains.RemoveAt(i);
         }
+    }
+
+    /// <summary>Resolve a corpse-list index from a stable CorpseID (the list
+    /// compacts, so stored indices go stale). Skips dissolving/consumed corpses.</summary>
+    private static int FindCorpseIndex(List<Corpse>? corpses, int corpseID)
+    {
+        if (corpses == null || corpseID < 0) return -1;
+        for (int i = 0; i < corpses.Count; i++)
+            if (corpses[i].CorpseID == corpseID)
+                return corpses[i].Dissolving || corpses[i].ConsumedBySummon ? -1 : i;
+        return -1;
+    }
+
+    /// <summary>Closest living enemy of the beam's caster within RetargetRadius of
+    /// where the previous target fell; -1 when none (the beam ends).</summary>
+    private static int RetargetBeam(ActiveBeam b, Quadtree? quadtree, UnitArrays units)
+    {
+        if (quadtree == null || b.RetargetRadius <= 0f) return -1;
+        int ci = UnitUtil.ResolveUnitIndex(units, b.CasterID);
+        if (ci < 0) return -1;
+        var nearby = new List<uint>();
+        quadtree.QueryRadiusByFaction(b.LastTargetPos, b.RetargetRadius,
+            FactionMaskExt.AllExcept(units[ci].Faction), nearby);
+        int best = -1;
+        float bestDist = float.MaxValue;
+        foreach (uint nid in nearby)
+        {
+            int j = UnitUtil.ResolveUnitIndex(units, nid);
+            if (j < 0 || !units[j].Alive) continue;
+            float dist = (units[j].Position - b.LastTargetPos).LengthSq();
+            if (dist < bestDist) { bestDist = dist; best = j; }
+        }
+        return best;
     }
 
     /// <summary>True while the caster can keep sustaining its channel. As a side
