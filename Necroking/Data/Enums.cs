@@ -45,12 +45,12 @@ public enum AIBehavior : byte
 
 /// <summary>
 /// What a projectile does when it reaches something — named for behavior, not visuals.
-/// Direct strikes the first unit it touches along its flight path (arrows, magic darts);
+/// RegularHit strikes the first unit it touches along its flight path (arrows, magic darts);
 /// Explosive bursts on proximity/ground impact and deals AoE damage; Potion delivers a
 /// potion payload to the closest unit/corpse where it lands. How it flies (flat vs lob)
 /// is the separate <c>lob</c> argument to <c>ProjectileManager.Spawn</c>.
 /// </summary>
-public enum ProjectileType : byte { Direct, Explosive, Potion }
+public enum ProjectileType : byte { RegularHit, Explosive, Potion }
 public enum HitLocation : byte { Head, Arms, Chest, Legs, Feet }
 
 /// <summary>

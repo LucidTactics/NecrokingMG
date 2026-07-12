@@ -100,14 +100,14 @@ per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, pr
 - **ONE spawn entry point**: **`Spawn(from, target, faction, owner, type, damage, speed,
   lob, aoeRadius, precision, weaponName, spawnHeight, gravityScale, preferHighArc)`**
   returns the spawned `Projectile` for post-configuration (SpellID, flipbooks, homing,
-  potion payload). `ProjectileType` is behavior-named: **`Direct`** strikes the first unit
+  potion payload). `ProjectileType` is behavior-named: **`RegularHit`** strikes the first unit
   it touches along its flight path (arrows, magic darts), **`Explosive`** bursts on
   proximity/ground with AoE, **`Potion`** delivers a potion payload to the closest
   unit/corpse. `lob:false` = near-flat 5° direct shot; `lob:true` = ballistic arc solved
-  from `dist*Gravity/speed²`. A **Direct lob** (arrow volley) also gets precision-scaled
+  from `dist*Gravity/speed²`. A **RegularHit lob** (arrow volley) also gets precision-scaled
   scatter + a 10°–45° arc clamp; an Explosive/Potion lob flies the exact min-energy arc
   (or the mortar-style high arc with `preferHighArc`, spell `Trajectory` `"HighLob"`).
-  `NoFriendlyFire` derives from type (Direct respects factions; Explosive/Potion hit
+  `NoFriendlyFire` derives from type (RegularHit respects factions; Explosive/Potion hit
   everyone). Arc choice is made by the CALLER (`Simulation.FireArrowAt` uses
   `lob = !(dist <= directRange && IsFireLaneClear)`). `spawnHeight` should be the
   attacker's `Unit.EffectSpawnHeight` (bow-tip anim point). `DetonateAtTarget` bursts
@@ -167,7 +167,7 @@ per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, pr
   `dist > speed²/Gravity`; `HighLob` takes the mirrored high arc).
 - **Spell-projectile spawn/config chokepoint**: `SpellEffectSystem.SpawnProjectile(spell,
   projectiles, origin, target, ownerUid, spawnHeight, casterFaction)` — calls
-  `ProjectileManager.Spawn` (Explosive when `AoeRadius > 0`, else Direct) and
+  `ProjectileManager.Spawn` (Explosive when `AoeRadius > 0`, else RegularHit) and
   post-configures the returned projectile from the `SpellDef` (SpellID tag, homing/swirl
   trajectories, DetonateAtTarget for Blight, flipbooks).
   Called from `SpellEffectSystem` cast paths and `Game1.Spells.cs`
@@ -208,7 +208,7 @@ Where each in-flight projectile is drawn. **Two separate draw methods, split by 
   `_g._flipbooks.TryGetValue(fbId, ...)`, animated by `fb.GetFrameAtTime(proj.Age)`), tinted
   by `proj.ParticleColor` (`HdrColor.ToHdrVertex`), scaled by `proj.ParticleScale`, with a
   2-frame trail (main + 2 fading previous frames). Pass membership = `RendersInHdrPass(proj)`
-  (Explosive always, or a **Direct** projectile carrying a loaded flipbook — this is the path
+  (Explosive always, or a **RegularHit** projectile carrying a loaded flipbook — this is the path
   spell "magic dart"/barrage projectiles take).
   - **TRAIL / TAIL ORIENTATION does NOT follow the trajectory** (the "trail doesn't face
     travel direction" bug). Two separate defects, both in this method's flipbook branch
@@ -226,7 +226,7 @@ Where each in-flight projectile is drawn. **Two separate draw methods, split by 
     use it as the draw rotation and normalize `(dx,dy)` for the trail-offset direction. The
     hardcoded arrow-shaft angle in `DrawProjectiles()` (~line 365,
     `Atan2(Velocity.Y*YRatio, Velocity.X)`) has the **same Z-ignoring bug** for flipbook-less
-    Direct arrows on arcs.
+    RegularHit arrows on arcs.
 
 **How the visual fields get ONTO the projectile:** `SpellEffectSystem.SpawnProjectile`
 (`Necroking/Game/SpellEffectSystem.cs`, the chokepoint) copies `spell.ProjectileFlipbook`

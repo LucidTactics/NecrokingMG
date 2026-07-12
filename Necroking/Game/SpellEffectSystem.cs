@@ -103,15 +103,15 @@ public static class SpellEffectSystem
     /// Game1._pendingSpell, AI casts pass their own record, so concurrent casters
     /// can't stomp each other's targeting.</param>
     public static void Execute(SpellDef spell, Game1 game, int casterIdx, Vec2 target, int slot,
-        PendingSpellCast pending)
-    {
+        PendingSpellCast pending) {
         var sim = game._sim;
         var gameData = game._gameData;
         var units = sim.UnitsMut;
-        var casterUid = units[casterIdx].Id;
-        var casterFaction = units[casterIdx].Faction;
-        var effectOrigin = units[casterIdx].EffectSpawnPos2D;
-        var effectOriginH = units[casterIdx].EffectSpawnHeight;
+        var caster = units[casterIdx];
+        var casterUid = caster.Id;
+        var casterFaction = caster.Faction;
+        var effectOrigin = caster.EffectSpawnPos2D;
+        var effectOriginH = caster.EffectSpawnHeight + caster.Z;
 
         switch (spell.Category)
         {
@@ -144,7 +144,7 @@ public static class SpellEffectSystem
                 break;
 
             case "Summon":
-                ExecuteSummonSpell(spell, game, pending, units[casterIdx].Position, casterIdx);
+                ExecuteSummonSpell(spell, game, pending, caster.Position, casterIdx);
                 break;
 
             case "Beam":
@@ -238,7 +238,7 @@ public static class SpellEffectSystem
 
             case "Toggle":
                 if (spell.ToggleEffect == "ghost_mode")
-                    units[casterIdx].GhostMode = !units[casterIdx].GhostMode;
+                   caster.GhostMode = !caster.GhostMode;
                 break;
         }
     }
@@ -493,7 +493,7 @@ public static class SpellEffectSystem
         Vec2 origin, Vec2 target, uint ownerUid, float spawnHeight, Faction casterFaction)
     {
         // AOE spells fly as Explosive and burst on impact; a single-target (zero-AOE)
-        // spell flies as Direct instead, so it actually strikes its target rather
+        // spell flies as RegularHit instead, so it actually strikes its target rather
         // than relying on a zero-radius explosion happening to reach it. The +10
         // precision keeps these magic darts reliable — conceptually they home in,
         // unlike a physically-fired arrow that can be dodged.
@@ -503,7 +503,7 @@ public static class SpellEffectSystem
         bool lob = traj == Trajectory.Lob || traj == Trajectory.HighLob;
         float speed = spell.ProjectileSpeed > 0 ? spell.ProjectileSpeed : ProjectileManager.MagicSpeed;
         var proj = projectiles.Spawn(origin, target, casterFaction, ownerUid,
-            spell.AoeRadius > 0f ? ProjectileType.Explosive : ProjectileType.Direct,
+            spell.AoeRadius > 0f ? ProjectileType.Explosive : ProjectileType.RegularHit,
             spell.Damage, speed, lob,
             aoeRadius: spell.AoeRadius, precision: spell.PrecisionBonus + 10,
             weaponName: spell.DisplayName, spawnHeight: spawnHeight,

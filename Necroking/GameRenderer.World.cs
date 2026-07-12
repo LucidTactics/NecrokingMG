@@ -336,13 +336,13 @@ partial class GameRenderer
 
     /// <summary>True when this projectile renders in the additive HDR pass
     /// (DrawProjectilesHdr) instead of the plain alpha pass: explosives always, and
-    /// any Direct projectile carrying a loaded projectile flipbook — spells fired
-    /// as Direct are magic darts and use their SpellDef's ProjectileFlipbook visuals,
-    /// not the hardcoded arrow shaft. A Direct projectile whose flipbook is missing/
+    /// any RegularHit projectile carrying a loaded projectile flipbook — spells fired
+    /// as RegularHit are magic darts and use their SpellDef's ProjectileFlipbook visuals,
+    /// not the hardcoded arrow shaft. A RegularHit projectile whose flipbook is missing/
     /// unloaded falls back to the classic arrow rendering rather than a fireball glow.</summary>
     private bool RendersInHdrPass(Projectile proj)
         => proj.Type == ProjectileType.Explosive
-        || (proj.Type == ProjectileType.Direct
+        || (proj.Type == ProjectileType.RegularHit
             && !string.IsNullOrEmpty(proj.FlipbookID)
             && _g._flipbooks.TryGetValue(proj.FlipbookID, out var fb) && fb.IsLoaded);
 
@@ -359,7 +359,7 @@ partial class GameRenderer
 
             var sp = _g._renderer.WorldToScreen(proj.Position, proj.Height, _g._camera);
 
-            if (proj.Type == ProjectileType.Direct)
+            if (proj.Type == ProjectileType.RegularHit)
             {
                 // Oriented arrow shaft — include the height (Z) component so the shaft
                 // tilts with the arc (WorldToScreen projects height up-screen at YRatio).

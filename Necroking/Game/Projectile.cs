@@ -18,7 +18,7 @@ public class Projectile
     /// flat. The launch solve is fed the SAME scaled gravity, so a lob still lands on its
     /// target — only the arc shape changes.</summary>
     public float GravityScale = 1f;
-    public ProjectileType Type = ProjectileType.Direct;
+    public ProjectileType Type = ProjectileType.RegularHit;
     public Faction OwnerFaction = Faction.Human;
     public uint OwnerID = GameConstants.InvalidUnit;
     public int Damage;
@@ -116,7 +116,7 @@ public class ProjectileHit
     public Faction OwnerFaction = Faction.Human;
     public int Precision;
     public string WeaponName = "";
-    public ProjectileType ProjectileType = ProjectileType.Direct;
+    public ProjectileType ProjectileType = ProjectileType.RegularHit;
     public string PotionID = "";
     public Vec2 ImpactPos;
     public int CorpseHitIdx = -1;
@@ -175,7 +175,7 @@ public class ProjectileManager
     /// <paramref name="preferLob"/> returns the higher arc, WIP, this needs more work since
     /// realistic high arcs feel bad!</summary>
     public static float SolveLobTheta(float dist, float speed,
-        float minTheta = 0f, float maxTheta = Pi / 2f, float gravity = Gravity, bool preferLob=false)
+        float minTheta = -Pi / 2f, float maxTheta = Pi / 2f, float gravity = Gravity, bool preferLob=false)
     {
         float sinTwoTheta = MathF.Min(dist * gravity / (speed * speed), 1f);
         float res = MathUtil.Clamp(0.5f * MathF.Asin(sinTwoTheta), minTheta, maxTheta);
@@ -202,7 +202,7 @@ public class ProjectileManager
     /// (unit arrows, spell shots, potion lobs, dev fireballs). What it does on contact
     /// is <paramref name="type"/> (see <see cref="ProjectileType"/>); how it flies is
     /// <paramref name="lob"/>: false = flat direct fire at <see cref="DirectFireTheta"/>,
-    /// true = ballistic arc solved to land on the target. A Direct lob (arrow volley)
+    /// true = ballistic arc solved to land on the target. A RegularHit lob (arrow volley)
     /// additionally scatters around the target (worse <paramref name="precision"/> =
     /// wider) and clamps the arc to [10°, 45°] so short lobs still rise visibly over
     /// allies' heads; an Explosive/Potion lob flies the exact min-energy arc, or the
@@ -226,9 +226,10 @@ public class ProjectileManager
         float theta;
         if (!lob)
         {
-            theta = DirectFireTheta;
+           // Direct fire, no accuracy needed.
+           theta = SolveLobTheta(dist, speed, gravity: Gravity * gravityScale);
         }
-        else if (type == ProjectileType.Direct)
+        else
         {
             float precFactor = MathF.Sqrt(precision / 10f);
             float scatterRadius = (dist / 40f) * 3f / MathF.Max(precFactor, 0.1f);
@@ -237,10 +238,6 @@ public class ProjectileManager
             target += new Vec2(MathF.Cos(scatterAngle), MathF.Sin(scatterAngle)) * scatterDist;
             dir = (target - from).Normalized();
             dist = (target - from).Length();
-            theta = SolveLobTheta(dist, speed, 10f * Deg2Rad, 45f * Deg2Rad, Gravity * gravityScale);
-        }
-        else
-        {
             theta = SolveLobTheta(dist, speed, gravity: Gravity * gravityScale, preferLob: preferHighArc);
         }
 
@@ -249,8 +246,8 @@ public class ProjectileManager
             Position = from, Height = spawnHeight, Type = type,
             OwnerFaction = faction, OwnerID = owner, Damage = damage,
             AoeRadius = aoeRadius, Precision = precision, WeaponName = weaponName,
-            // A Direct shot respects factions; explosions and potion splashes hit everyone.
-            NoFriendlyFire = type == ProjectileType.Direct,
+            // A RegularHit shot respects factions; explosions and potion splashes hit everyone.
+            NoFriendlyFire = type == ProjectileType.RegularHit,
             IsLob = lob, GravityScale = gravityScale, BaseDirection = dir
         };
         (p.Velocity, p.VelocityZ) = BallisticVelocity(dir, speed, theta);
@@ -367,7 +364,7 @@ public class ProjectileManager
             }
 
             // Direct-hit in-flight collision (arrows, magic darts)
-            if (proj.Alive && proj.Type == ProjectileType.Direct && proj.Height < UnitHitHeight && proj.Height > 0f)
+            if (proj.Alive && proj.Type == ProjectileType.RegularHit && proj.Height < UnitHitHeight && proj.Height > 0f)
             {
                 nearbyIDs.Clear();
                 if (proj.NoFriendlyFire)
@@ -501,7 +498,7 @@ public class ProjectileManager
                         if (d < bestDist) { bestDist = d; bestIdx = idx; }
                     }
                     if (bestIdx >= 0)
-                        _hits.Add(new ProjectileHit { UnitIdx = bestIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type, SpellID = proj.SpellID, ImpactPos = proj.Position, HitLocation = proj.Type == ProjectileType.Direct ? RollArrowHitLocation(proj.IsLob) : HitLocation.Chest, FlightDir = proj.Velocity, ImpactForce = proj.ImpactForce, ImpactUpward = proj.ImpactUpward });
+                        _hits.Add(new ProjectileHit { UnitIdx = bestIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type, SpellID = proj.SpellID, ImpactPos = proj.Position, HitLocation = proj.Type == ProjectileType.RegularHit ? RollArrowHitLocation(proj.IsLob) : HitLocation.Chest, FlightDir = proj.Velocity, ImpactForce = proj.ImpactForce, ImpactUpward = proj.ImpactUpward });
                 }
                 _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, AoeRadius = proj.AoeRadius, SpellID = proj.SpellID, HitEffectFlipbookID = proj.HitEffectFlipbookID, HitEffectColor = proj.HitEffectColor, HitEffectScale = proj.HitEffectScale, HitEffectBlendMode = proj.HitEffectBlendMode, HitEffectAlignment = proj.HitEffectAlignment });
                 proj.Alive = false;
