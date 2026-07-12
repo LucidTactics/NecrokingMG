@@ -945,6 +945,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _uiRouter.Register(new Necroking.UI.SpellBarLayer(this));
         _uiRouter.Register(new Necroking.UI.TimeControlsLayer(this));
         _uiRouter.Register(new Necroking.UI.AggressionBarLayer(this));
+        _uiRouter.Register(new Necroking.UI.DebugSettingsPanelLayer(this)); // left-side debug F-key dropdowns
         // Tooltips live in the Tooltip band (topmost) so they draw over every
         // other layer: the host runs the HUD cursor-tooltip funnel and then
         // drains the global Game1.Tooltips queue — see TooltipHostLayer.

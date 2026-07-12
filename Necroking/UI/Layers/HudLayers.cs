@@ -191,6 +191,45 @@ public sealed class AggressionBarLayer : UILayer
     }
 }
 
+/// <summary>Left-side debug settings panel (under the player-data status bars):
+/// a dropdown per debug-mode F-key (F2/F3/F5/F6/F7/F8), the click twin of those
+/// toggles. Draw + hit-test + open-state live in GameRenderer.DebugPanel.cs; this
+/// layer only routes, matching the other thin HUD layers.</summary>
+public sealed class DebugSettingsPanelLayer : UILayer
+{
+    private readonly Game1 _g;
+    public DebugSettingsPanelLayer(Game1 g) { _g = g; Band = UIBand.Hud; }
+
+    public override string Id => "hud.debug_panel";
+    public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { }
+    public override bool Visible => _g.HudVisible && _g._menuState == MenuState.None;
+
+    public override bool ContainsMouse(int mx, int my, in UICtx ctx)
+        => _g._gameRenderer.DebugPanelContains(mx, my);
+
+    protected override void OnPointer(InputState input, in UICtx ctx)
+    {
+        if (!input.LeftPressed) return;
+        _g._gameRenderer.HandleDebugPanelClick((int)input.MousePos.X, (int)input.MousePos.Y);
+    }
+
+    public override bool VisibleForDraw => _g.ShowUIForDraw && _g._menuState == MenuState.None;
+
+    public override void Draw(in UICtx ctx)
+    {
+        var input = _g._input;
+        // Dismiss an open dropdown when a click lands outside the panel (this
+        // layer only gets input while hovered, so close-on-outside lives here).
+        _g._gameRenderer.MaybeCloseDebugPanel((int)input.MousePos.X, (int)input.MousePos.Y,
+            input.LeftPressed);
+
+        // Hover highlights only when this layer owns the cursor.
+        int mx = IsHovered ? (int)input.MousePos.X : -10000;
+        int my = IsHovered ? (int)input.MousePos.Y : -10000;
+        _g._gameRenderer.DrawDebugSettingsPanel(mx, my);
+    }
+}
+
 /// <summary>The one topmost tooltip seat (Tooltip band). Two jobs each frame:
 /// run the HUD cursor-tooltip funnel (spell-bar slot, world object, belly,
 /// corpse, unit — hover state captured during the Hud-band draw, fresh because
