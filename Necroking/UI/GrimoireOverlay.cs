@@ -197,7 +197,7 @@ public class GrimoireOverlay : IModalLayer
     public void Update(InputState input, int screenW, int screenH)
     {
         if (!IsVisible) return;
-        if (input.Kb.IsKeyDown(Keys.Delete)) {
+        if (_onPick != null && input.Kb.IsKeyDown(Keys.Delete)) {
            _onPick("");
            Hide();
            return;
