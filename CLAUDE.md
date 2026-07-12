@@ -128,7 +128,7 @@ reference (not a reusable utility), and the read→flat-fill→ask→shader work
 
 ## Architecture & Code Organization
 
-## Direct over Inject
+### Direct over Inject
 
 Don't pass delegates, instead use static references. Instead of SetCallbacks(ListSaveGames), just call
 `Game1.Instance.ListSaveGames` or `_g.ListSaveGames` directly. We don't need these dependency injections,
@@ -139,6 +139,9 @@ Game1 will always be there.
 
 ### Principle: Single Source of Truth
 Every distinct behavior or pattern should have one canonical implementation. Before writing new code, check whether an existing system, utility, or pattern already solves the problem. The goal is fewer pieces of code doing the same function — when a bug is fixed, it's fixed in one place.
+
+Never implement UI click handlers by writing the ui layout code again in the click handler, write down the
+layout once and reuse that for rendering and handling clicks.
 
 ### Before Writing New Code
 1. **Locate first — use the `locate-behavior` skill, don't freestyle grep.** Any time you
