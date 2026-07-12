@@ -7,26 +7,26 @@ namespace Necroking.Lib;
 
 public struct Oscillator
 {
-    public float freq;
-    public float amplitude;
-    public float phase;
+    public float Freq;
+    public float Amplitude;
+    public float Phase;
 
     public Oscillator(float freq, float amplitude, float phase)
     {
-        this.freq = freq;
-        this.amplitude = amplitude;
-        this.phase = phase;
+        this.Freq = freq;
+        this.Amplitude = amplitude;
+        this.Phase = phase;
     }
 
     public float ValueAt(float t)
     {
-        float omega = freq * 2f * MathF.PI;
-        return MathF.Sin(omega * t + phase) * amplitude;
+        float omega = Freq * 2f * MathF.PI;
+        return MathF.Sin(omega * t + Phase) * Amplitude;
     }
 
     public float VelocityAt(float t)
     {
-        float omega = freq * 2f * MathF.PI;
-        return MathF.Cos(omega * t + phase) * amplitude * omega;
+        float omega = Freq * 2f * MathF.PI;
+        return MathF.Cos(omega * t + Phase) * Amplitude * omega;
     }
 }

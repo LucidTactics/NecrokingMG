@@ -466,24 +466,22 @@ public static class SpellEffectSystem
             ? baseTarget + MathUtil.RandomInDisc(rng, spell.ProjectileSpread)
             : baseTarget;
 
+    public static Oscillator MakeSwirlOscillator() => new Oscillator(
+        1f + (float)_projRng.NextDouble() * 0.5f,
+        1.0f + (float)_projRng.NextDouble() * 0.25f,
+        (float)_projRng.NextDouble() * 2f * MathF.PI);
+
     /// <summary>Randomize the swirl params (freq/amplitude/phase) on a projectile —
     /// shared by the Swirly and HomingSwirly trajectories.</summary>
     private static void ApplySwirl(Projectile p)
     {
-        p.SwirlFreq = 1f + (float)_projRng.NextDouble() * 0.5f;
-        p.SwirlAmplitude = 1.0f + (float)_projRng.NextDouble() * 0.25f;
-        p.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
+        p.Swirl = MakeSwirlOscillator();
     }
 
     private static void ApplySwirl3d(Projectile p)
     {
-       p.SwirlFreq = 1f + (float)_projRng.NextDouble() * 0.5f;
-       p.SwirlAmplitude = 1.0f + (float)_projRng.NextDouble() * 0.25f;
-       p.SwirlPhase = (float)_projRng.NextDouble() * 2f * MathF.PI;
-
-       p.SwirlFreq2 = 1f + (float)_projRng.NextDouble() * 0.5f;
-       p.SwirlAmplitude2 = 1.0f + (float)_projRng.NextDouble() * 0.25f;
-       p.SwirlPhase2 = (float)_projRng.NextDouble() * 2f * MathF.PI;
+        p.Swirl = MakeSwirlOscillator();
+        p.Swirl2 = MakeSwirlOscillator();
     }
 
     /// <summary>Spawn a spell projectile and post-configure it: tag it with the spell id

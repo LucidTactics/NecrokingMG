@@ -47,10 +47,8 @@ public class Projectile
     public Vec2 TargetPos;
     public float HomingStrength;
     public Vec2 BaseDirection;
-    public float SwirlFreq;
-    public float SwirlAmplitude;
-    public float SwirlPhase;
-    public float SwirlFreq2;
+    public Oscillator Swirl;
+    public Oscillator Swirl2;
     public float SwirlAmplitude2;
     public float SwirlPhase2;
     public string PotionID = "";
@@ -72,21 +70,18 @@ public class Projectile
     {
         get
         {
-            if (SwirlFreq <= 0f) return Velocity;
+            if (Swirl.Freq <= 0f) return Velocity;
             var perp = new Vec2(-BaseDirection.Y, BaseDirection.X);
-            float omega = SwirlFreq * 2f * MathF.PI;
-            float swirlVel = MathF.Cos(omega * Age + SwirlPhase) * SwirlAmplitude * omega;
 
-            return Velocity + perp * swirlVel;
+            return Velocity + perp * Swirl.VelocityAt(Age);
         }
     }
 
     public float VisualVelocityZ {
        get {
-          if (SwirlFreq2 <= 0f) return VelocityZ;
+          if (Swirl2.Freq <= 0f) return VelocityZ;
 
-          float omega = SwirlFreq2 * 2f * MathF.PI;
-          float swirlVel = MathF.Cos(omega * Age + SwirlPhase2) * SwirlAmplitude2 * omega;
+          float swirlVel = Swirl2.VelocityAt(Age);
           return VelocityZ + swirlVel;
        }
     }
@@ -294,17 +289,17 @@ public class ProjectileManager
             }
 
             // Swirl
-            if (proj.SwirlFreq > 0f)
+            if (proj.Swirl.Freq > 0f)
             {
                 var perp = new Vec2(-proj.BaseDirection.Y, proj.BaseDirection.X);
-                float prevSwirl = MathF.Sin(proj.SwirlFreq * (proj.Age - dt) * 2f * Pi + proj.SwirlPhase) * proj.SwirlAmplitude;
-                float currSwirl = MathF.Sin(proj.SwirlFreq * proj.Age * 2f * Pi + proj.SwirlPhase) * proj.SwirlAmplitude;
+                float prevSwirl = proj.Swirl.ValueAt(proj.Age - dt);
+                float currSwirl = proj.Swirl.ValueAt(proj.Age);
                 proj.Position += perp * (currSwirl - prevSwirl);
             }
-            if (proj.SwirlFreq2 > 0f)
+            if (proj.Swirl2.Freq > 0f)
             {
-               float prevSwirl = MathF.Sin(proj.SwirlFreq2 * (proj.Age - dt) * 2f * Pi + proj.SwirlPhase2) * proj.SwirlAmplitude2;
-               float currSwirl = MathF.Sin(proj.SwirlFreq2 * proj.Age * 2f * Pi + proj.SwirlPhase2) * proj.SwirlAmplitude2;
+                float prevSwirl = proj.Swirl2.ValueAt(proj.Age - dt);
+                float currSwirl = proj.Swirl2.ValueAt(proj.Age);
                proj.Height += (currSwirl - prevSwirl);
             }
 
