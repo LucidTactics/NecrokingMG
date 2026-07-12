@@ -814,7 +814,7 @@ partial class GameRenderer
             _g.Scope.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
 
         int boxW = 350;
-        int btnCount = 10; // Resume + 5 editors + Settings + Multiplayer + Main Menu + Quit (hit-tests: Game1.cs pause-menu click block — keep in lockstep!)
+        int btnCount = 11; // Resume + Save Game + 5 editors + Settings + Multiplayer + Main Menu + Quit (hit-tests: Game1.cs pause-menu click block — keep in lockstep!)
         int btnH2 = 40, btnGap2 = 10;
         int controlLines = 4;
         int boxH = 60 + btnCount * (btnH2 + btnGap2) + 10 + controlLines * 16 + 20;
@@ -835,6 +835,7 @@ partial class GameRenderer
         int menuY = boxY + 60;
 
         DrawMenuButton("Resume", menuX, ref menuY, btnW, btnH, btnGap);
+        DrawMenuButton("Save Game", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Unit Editor (F9)", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Spell Editor (F10)", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Map Editor (F11)", menuX, ref menuY, btnW, btnH, btnGap);
@@ -880,18 +881,86 @@ partial class GameRenderer
             DrawText(_g._font, subtitle, new Vector2(screenW / 2f - subSize.X / 2f, titleY + 30), new Color(180, 160, 120, 200));
         }
 
-        // Menu buttons
+        // Menu buttons (5 × (55+18) must fit below screenH/2 at 720p — hit-tests:
+        // Game1.cs main-menu click block — keep in lockstep!)
         int btnW = 320, btnH = 55, btnGap = 18;
         int menuX = screenW / 2 - btnW / 2;
-        int menuY = screenH / 2 + 20;
+        int menuY = screenH / 2 - 20;
 
         DrawMenuButton("Play", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Play Test Map", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Scenarios", menuX, ref menuY, btnW, btnH, btnGap);
+        DrawMenuButton("Load Game", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Quit", menuX, ref menuY, btnW, btnH, btnGap);
 
         // Version info
         DrawText(_g._smallFont, "MonoGame Port v0.1", new Vector2(10, screenH - 20), new Color(80, 80, 100));
+    }
+
+    // Fully-resolved load-menu layout for one frame: one rect per visible save row
+    // plus the back button. Drawing (DrawLoadMenu) and hit-testing (Game1's
+    // LoadMenu update block) both consume this, so they can't drift apart.
+    internal struct LoadMenuView
+    {
+        public Rectangle[] RowRects; // aligned with the first Shown entries of _loadMenuSaves
+        public int Shown;            // rows laid out (list may be longer)
+        public Rectangle BackRect;
+    }
+
+    internal LoadMenuView BuildLoadMenuLayout(int screenW, int screenH, int saveCount)
+    {
+        int btnW = 560, btnH = 42, btnGap = 10;
+        int titleY = screenH / 20 + 20;
+        int listY = titleY + 70;
+        // Leave room for the back button + margin at the bottom.
+        int maxRows = System.Math.Max(1, (screenH - 80 - listY) / (btnH + btnGap));
+        int shown = System.Math.Min(saveCount, maxRows);
+
+        var view = new LoadMenuView { Shown = shown, RowRects = new Rectangle[shown] };
+        int x = (screenW - btnW) / 2;
+        int y = listY;
+        for (int i = 0; i < shown; i++)
+        {
+            view.RowRects[i] = new Rectangle(x, y, btnW, btnH);
+            y += btnH + btnGap;
+        }
+        view.BackRect = new Rectangle((screenW - 200) / 2, y + 14, 200, 45);
+        return view;
+    }
+
+    private void DrawLoadMenu(int screenW, int screenH)
+    {
+        DrawMenuBackdrop(screenW, screenH);
+
+        int titleY = screenH / 20 + 20;
+        if (_g._largeFont != null)
+        {
+            string title = "LOAD GAME";
+            var titleSize = _g._largeFont.MeasureString(title);
+            DrawText(_g._largeFont, title, new Vector2(screenW / 2f - titleSize.X / 2f + 3, titleY + 3), new Color(0, 0, 0, 180));
+            DrawText(_g._largeFont, title, new Vector2(screenW / 2f - titleSize.X / 2f, titleY), new Color(220, 180, 100));
+        }
+
+        var saves = _g._loadMenuSaves;
+        var view = BuildLoadMenuLayout(screenW, screenH, saves.Count);
+
+        if (saves.Count == 0 && _g._font != null)
+        {
+            string none = "(no saves found)";
+            var size = _g._font.MeasureString(none);
+            DrawText(_g._font, none, new Vector2((int)(screenW / 2f - size.X / 2f), titleY + 80), new Color(140, 140, 160));
+        }
+
+        for (int i = 0; i < view.Shown; i++)
+        {
+            var s = saves[i];
+            var r = view.RowRects[i];
+            DrawMenuButtonAt($"{s.Name}    {s.MapName}    {s.SavedAt.ToLocalTime():yyyy-MM-dd HH:mm}", r.X, r.Y, r.Width, r.Height);
+        }
+        if (saves.Count > view.Shown && _g._font != null)
+            DrawText(_g._font, $"(+{saves.Count - view.Shown} more)", new Vector2(view.BackRect.X, view.BackRect.Y - 22), new Color(140, 140, 160));
+
+        DrawMenuButtonAt("< Back", view.BackRect.X, view.BackRect.Y, view.BackRect.Width, view.BackRect.Height);
     }
 
     private void DrawScenarioList(int screenW, int screenH)

@@ -209,7 +209,8 @@ public sealed class MenuHostLayer : UILayer
     public override string Id => "menu.host";
     public override bool Visible => _g._menuState == MenuState.PauseMenu
         || _g._menuState == MenuState.Settings
-        || _g._menuState == MenuState.Multiplayer;
+        || _g._menuState == MenuState.Multiplayer
+        || _g._menuState == MenuState.SaveMenu;
     public override bool Blocking => true;
     public override bool Closable => true;
     public override bool ContainsMouse(int mx, int my, in UICtx ctx) => true;
@@ -220,6 +221,7 @@ public sealed class MenuHostLayer : UILayer
         {
             case MenuState.Settings:
             case MenuState.Multiplayer:
+            case MenuState.SaveMenu:
                 _g._editorUi?.ResetAllState();
                 _g._menuState = MenuState.PauseMenu;
                 break;
@@ -252,6 +254,9 @@ public sealed class MenuHostLayer : UILayer
                 break;
             case MenuState.Multiplayer:
                 _g._multiplayerWindow.Draw(ctx.ScreenW, ctx.ScreenH);
+                break;
+            case MenuState.SaveMenu:
+                _g._saveGameWindow.Draw(ctx.ScreenW, ctx.ScreenH);
                 break;
         }
     }
