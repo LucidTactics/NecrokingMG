@@ -372,8 +372,8 @@ public class ProjectileManager
                     if (nid == proj.OwnerID) continue;
                     int hitIdx = UnitUtil.ResolveUnitIndex(units, nid);
                     if (hitIdx < 0) continue;
-                    _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, ProjectileType = proj.Type, HitLocation = RollArrowHitLocation(proj.IsLob), FlightDir = proj.Velocity, ImpactForce = proj.ImpactForce, ImpactUpward = proj.ImpactUpward });
-                    _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type });
+                    _hits.Add(new ProjectileHit { UnitIdx = hitIdx, Damage = proj.Damage, OwnerID = proj.OwnerID, OwnerFaction = proj.OwnerFaction, Precision = proj.Precision, WeaponName = proj.WeaponName, SpellID = proj.SpellID, ProjectileType = proj.Type, HitLocation = RollArrowHitLocation(proj.IsLob), FlightDir = proj.Velocity, ImpactForce = proj.ImpactForce, ImpactUpward = proj.ImpactUpward });
+                    _impacts.Add(new ImpactEvent { Position = proj.Position, Type = proj.Type, SpellID = proj.SpellID });
                     proj.Alive = false;
                     break;
                 }

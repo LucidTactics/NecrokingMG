@@ -2681,7 +2681,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         Exiting += (s, e) => _net.Stop();
 
         _saveGameWindow = new SaveGameWindow(_editorUi);
-        _saveGameWindow.SetCallbacks(ListSaveGames, UniqueSaveName, SaveFileExists, WriteSaveGame, SanitizeSaveName);
+        _saveGameWindow.SetCallbacks(ListSaveGames, UniqueSaveName, SaveFileExists, WriteSaveGame, DeleteSaveGame, SanitizeSaveName);
 
         _settingsWindow = new SettingsWindow(_editorUi);
         System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.UserSettingsDir));

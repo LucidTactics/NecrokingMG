@@ -27,6 +27,7 @@ public class SaveGameWindow
     private Func<string, string> _uniqueName = b => b;
     private Func<string, bool> _fileExists = _ => false;
     private Func<string, bool> _writeSave = _ => false;
+    private Func<string, bool> _deleteSave = _ => false;
     private Func<string, string> _sanitize = s => s;
 
     private List<SaveGameInfo> _saves = new();
@@ -46,12 +47,14 @@ public class SaveGameWindow
     }
 
     public void SetCallbacks(Func<List<SaveGameInfo>> listSaves, Func<string, string> uniqueName,
-        Func<string, bool> fileExists, Func<string, bool> writeSave, Func<string, string> sanitize)
+        Func<string, bool> fileExists, Func<string, bool> writeSave, Func<string, bool> deleteSave,
+        Func<string, string> sanitize)
     {
         _listSaves = listSaves;
         _uniqueName = uniqueName;
         _fileExists = fileExists;
         _writeSave = writeSave;
+        _deleteSave = deleteSave;
         _sanitize = sanitize;
     }
 
@@ -102,7 +105,9 @@ public class SaveGameWindow
         // focused field (committing its old buffer), and taking that committed
         // buffer would stomp the row's name.
         int listY = y + RowH + 14;
-        int btnY = panelY + PanelH - 42;
+        // Delete row sits at the very bottom; confirm/cancel row above it.
+        int deleteBtnY = panelY + PanelH - 42;
+        int btnY = deleteBtnY - 38;
         // Scrollable list window: from below the header down to above the
         // error line / confirm buttons. BeginScrollPanel owns wheel + clip +
         // the draggable bar; rows are narrowed to keep clear of the bar column.
@@ -170,5 +175,23 @@ public class SaveGameWindow
         }
         if (_ui.DrawButton("Cancel", panelX + PanelW / 2 + 50, btnY, 120, 30))
             WantsClose = true;
+
+        // ── Delete selected save (own row at the bottom) ─────────────────
+        bool canDelete = overwrite; // a save with this name exists
+        if (_ui.DrawButton(canDelete ? $"Delete \"{clean}\"" : "Delete Save",
+                panelX + PanelW / 2 - 110, deleteBtnY, 220, 30,
+                canDelete ? new Color(120, 50, 50, 240) : EditorBase.ButtonBg) && canDelete)
+        {
+            if (_deleteSave(clean))
+            {
+                _saves = _listSaves();
+                _name = _uniqueName("Quicksave");
+                _error = "";
+            }
+            else
+            {
+                _error = "Delete failed - see log";
+            }
+        }
     }
 }

@@ -26,6 +26,7 @@ public class CombatLogEntry
     public int ProtBase, ProtDRN;
     public int ToughnessMit;   // damage absorbed by toughness halving (post-armor)
     public int NetDamage;
+    public DamageFlags DamageFlags;
     public HitLocation HitLoc;
     public string HitLocationName = "";
     /// <summary>Free-text detail line (used by Whiff: dist vs reach). Printed
@@ -92,6 +93,8 @@ public class CombatLog
         int totalAtk = e.AttackBase + e.AttackDRN;
         int totalDef = e.DefenseBase + e.DefenseDRN;
         DebugLog.Log(Tag, $"         Attack: {e.AttackBase}+{e.AttackDRN}={totalAtk} vs Defense: {e.DefenseBase}+{e.DefenseDRN}={totalDef}");
+        if (e.DamageFlags != default)
+            DebugLog.Log(Tag, $"         DamageFlags: {e.DamageFlags.ToString()}");
 
         if (e.HarassmentPenalty != 0)
             DebugLog.Log(Tag, $"         Harassment penalty: {e.HarassmentPenalty}");

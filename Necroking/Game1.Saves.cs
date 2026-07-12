@@ -129,6 +129,28 @@ public partial class Game1
 
     }
 
+    /// <summary>Delete saves/{name}.json. Returns false (logged) when the file
+    /// doesn't exist or deletion throws.</summary>
+    internal bool DeleteSaveGame(string name)
+    {
+        if (!SaveFileExists(name))
+        {
+            DebugLog.Log("saves", $"DeleteSaveGame: no save named '{name}'");
+            return false;
+        }
+        try
+        {
+            File.Delete(SaveFilePath(name));
+            DebugLog.Log("saves", $"Deleted save '{name}'");
+            return true;
+        }
+        catch (Exception e)
+        {
+            DebugLog.Log("saves", $"DeleteSaveGame failed for '{name}': {e.Message}");
+            return false;
+        }
+    }
+
     /// <summary>Snapshot the current session into saves/{name}.json. Returns
     /// false (logged) when there is no live player to save.</summary>
     internal bool WriteSaveGame(string name)

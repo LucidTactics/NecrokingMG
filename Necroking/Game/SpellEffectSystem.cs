@@ -662,6 +662,7 @@ public static class SpellEffectSystem
         var flags = DamageFlags.None;
         if (spell.ArmorNegating) flags |= DamageFlags.ArmorNegating;
         if (spell.DefenseNegating) flags |= DamageFlags.DefenseNegating;
+        if (spell != null) flags |= DamageFlags.MagicWeapon;
         return flags;
     }
 
