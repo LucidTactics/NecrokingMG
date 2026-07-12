@@ -117,7 +117,7 @@ public class SaveGameWindow
             for (int i = 0; i < shown; i++)
             {
                 var s = _saves[i];
-                if (_ui.DrawButton("", x, rowsY, w, RowH))
+                if (_ui.DrawButton("", x, rowsY, w, RowH, bgOverride: _name == s.Name ? new(100, 100, 85, 240) : null))
                 {
                     _name = s.Name;
                     pickedRow = true;
