@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Necroking.Core;
+using Necroking.Lib;
 using Necroking.Render;
 
 namespace Necroking.UI;
@@ -14,8 +16,11 @@ namespace Necroking.UI;
 /// truth for each field, this is the click-driven twin.
 ///
 /// Self-contained (like LogPanel): owns its visibility, layout, draw and input.
-/// The thin <see cref="DebugSettingsPanelLayer"/> just routes into it. Toggled
-/// by the top-right "Debug" editor-row button. Off by default (opt-in dev tool).
+/// The thin <see cref="DebugSettingsPanelLayer"/> just routes into it (presses
+/// via HandlePress, releases/outside-presses polled via HandleFrame). Dropdowns
+/// use the eager press→drag→release gesture (<see cref="EagerDropdown"/>).
+/// Toggled by the top-right "Debug" editor-row button. Off by default (opt-in
+/// dev tool).
 /// </summary>
 public class DebugSettingsPanel
 {
@@ -35,16 +40,16 @@ public class DebugSettingsPanel
     private List<DebugModeToggle>? _toggles;
     private List<DebugModeToggle> Toggles => _toggles ??= BuildToggles();
 
-    // Which row's dropdown list is currently expanded (-1 = none).
-    private int _openDropdown = -1;
+    // Eager press→drag→release dropdown state; OpenKey = expanded row (-1 = none).
+    private readonly EagerDropdown _dd = new();
 
     private bool _visible;
     public bool IsVisible => _visible;
 
     public void Init(Game1 g) => _g = g;
 
-    public void Toggle() { _visible = !_visible; if (!_visible) _openDropdown = -1; }
-    public void Close() { _visible = false; _openDropdown = -1; }
+    public void Toggle() { _visible = !_visible; if (!_visible) _dd.Close(); }
+    public void Close() { _visible = false; _dd.Close(); }
 
     private List<DebugModeToggle> BuildToggles()
     {
@@ -120,57 +125,56 @@ public class DebugSettingsPanel
     {
         if (!_visible) return false;
         if (PanelRect().Contains(mx, my)) return true;
-        if (_openDropdown >= 0)
-        {
-            var t = Toggles[_openDropdown];
-            for (int o = 0; o < t.Options.Length; o++)
-                if (OptionRect(_openDropdown, o).Contains(mx, my)) return true;
-        }
-        return false;
+        return HitItem(mx, my) >= 0;
     }
 
-    /// <summary>Route a left-click into the panel: pick an open-list option, or
-    /// open/close/switch a row's dropdown.</summary>
-    public void HandleClick(int mx, int my)
+    /// <summary>Row index whose dropdown box contains the cursor, or -1.</summary>
+    private int HitBox(int mx, int my)
     {
-        var toggles = Toggles;
-
-        // 1) A click on the open dropdown's option list selects it.
-        if (_openDropdown >= 0)
-        {
-            var t = toggles[_openDropdown];
-            for (int o = 0; o < t.Options.Length; o++)
-            {
-                if (OptionRect(_openDropdown, o).Contains(mx, my))
-                {
-                    t.Set(o);
-                    _openDropdown = -1;
-                    return;
-                }
-            }
-        }
-
-        // 2) A click on a row's box toggles/switches which list is open.
-        for (int i = 0; i < toggles.Count; i++)
-        {
-            if (BoxRect(i).Contains(mx, my))
-            {
-                _openDropdown = _openDropdown == i ? -1 : i;
-                return;
-            }
-        }
-
-        // 3) Click elsewhere inside the panel closes any open list.
-        _openDropdown = -1;
+        for (int i = 0; i < Toggles.Count; i++)
+            if (BoxRect(i).Contains(mx, my)) return i;
+        return -1;
     }
 
-    /// <summary>Close an open dropdown if a click landed outside the panel — the
-    /// layer only receives input while the cursor is over it, so this catches
-    /// dismiss-on-outside-click. Called each frame from the layer's Draw.</summary>
-    public void MaybeCloseOnOutsideClick(int mx, int my, bool leftPressed)
+    /// <summary>Option index under the cursor in the OPEN dropdown list, or -1.</summary>
+    private int HitItem(int mx, int my)
     {
-        if (leftPressed && _openDropdown >= 0 && !ContainsMouse(mx, my))
-            _openDropdown = -1;
+        if (_dd.OpenKey < 0) return -1;
+        var t = Toggles[_dd.OpenKey];
+        for (int o = 0; o < t.Options.Length; o++)
+            if (OptionRect(_dd.OpenKey, o).Contains(mx, my)) return o;
+        return -1;
+    }
+
+    /// <summary>A left press granted to the panel (layer's OnPointer). Opens /
+    /// arms / marks-for-close the eager dropdown; selection fires on release in
+    /// <see cref="HandleFrame"/>.</summary>
+    public void HandlePress(int mx, int my)
+        => _dd.OnPress(HitBox(mx, my), HitItem(mx, my));
+
+    /// <summary>Per-frame input poll (layer's OnFrame). Releases are never
+    /// routed by the UI router and the layer only receives presses while
+    /// hovered, so both the release-select of the eager gesture and
+    /// dismiss-on-outside-press live here. Uses the real cursor, never Draw's
+    /// parked one.</summary>
+    public void HandleFrame(InputState input)
+    {
+        if (!_visible || !_dd.IsOpen) return;
+        int mx = (int)input.MousePos.X, my = (int)input.MousePos.Y;
+
+        if (input.LeftPressed && !ContainsMouse(mx, my))
+        {
+            _dd.OnPressOutside();
+            return;
+        }
+
+        if (input.LeftReleased)
+        {
+            int key = _dd.OpenKey; // snapshot: a selection closes the list
+            bool gestureValid = input.PressStartPos.X >= 0;
+            int sel = _dd.OnRelease(HitItem(mx, my), gestureValid);
+            if (sel >= 0) Toggles[key].Set(sel);
+        }
     }
 
     // ── Draw ────────────────────────────────────────────────────────────────
@@ -216,22 +220,22 @@ public class DebugSettingsPanel
 
             Text(f, t.Options[cur], box.X + 5, box.Y + 2, cur == 0 ? ValOff : ValActive);
             // Caret on the right edge of the box — flips when the list is open.
-            Text(f, _openDropdown == i ? "^" : "v", box.Right - 12, box.Y + 2, BoxBorder);
+            Text(f, _dd.OpenKey == i ? "^" : "v", box.Right - 12, box.Y + 2, BoxBorder);
         }
 
         // Open dropdown list, drawn last so it sits over rows below it.
-        if (_openDropdown >= 0)
+        if (_dd.OpenKey >= 0)
         {
-            var t = toggles[_openDropdown];
+            var t = toggles[_dd.OpenKey];
             int cur = Math.Clamp(t.Get(), 0, t.Options.Length - 1);
             for (int o = 0; o < t.Options.Length; o++)
             {
-                var r = OptionRect(_openDropdown, o);
+                var r = OptionRect(_dd.OpenKey, o);
                 bool hover = r.Contains(mx, my);
                 Scope.Draw(_g._pixel, r, hover ? OptHover : OptBg);
                 Text(f, t.Options[o], r.X + 5, r.Y + 1, o == cur ? HeaderCol : ValActive);
             }
-            var top = OptionRect(_openDropdown, 0);
+            var top = OptionRect(_dd.OpenKey, 0);
             DrawUtils.DrawRectBorder(_g._spriteBatch, _g._pixel,
                 new Rectangle(top.X, top.Y, BoxW, t.Options.Length * OptH), BoxBorder);
         }

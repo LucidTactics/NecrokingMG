@@ -193,8 +193,10 @@ public sealed class AggressionBarLayer : UILayer
 
 /// <summary>Left-side debug settings panel (under the player-data status bars):
 /// a dropdown per debug-mode F-key (F2/F3/F5/F6/F7/F8), the click twin of those
-/// toggles. Draw + hit-test + open-state live in GameRenderer.DebugPanel.cs; this
-/// layer only routes, matching the other thin HUD layers.</summary>
+/// toggles. Draw + hit-test + open-state live in UI/DebugSettingsPanel.cs; this
+/// layer only routes, matching the other thin HUD layers. Dropdowns are eager
+/// (press→drag→release selects), so presses route via OnPointer and the
+/// release-select + outside-press dismiss are polled in OnFrame.</summary>
 public sealed class DebugSettingsPanelLayer : UILayer
 {
     private readonly Game1 _g;
@@ -210,19 +212,17 @@ public sealed class DebugSettingsPanelLayer : UILayer
     protected override void OnPointer(InputState input, in UICtx ctx)
     {
         if (!input.LeftPressed) return;
-        _g._debugPanel.HandleClick((int)input.MousePos.X, (int)input.MousePos.Y);
+        _g._debugPanel.HandlePress((int)input.MousePos.X, (int)input.MousePos.Y);
     }
+
+    protected override void OnFrame(InputState input, in UICtx ctx)
+        => _g._debugPanel.HandleFrame(input);
 
     public override bool VisibleForDraw => _g._debugPanel.IsVisible && _g.ShowUIForDraw && _g._menuState == MenuState.None;
 
     public override void Draw(in UICtx ctx)
     {
         var input = _g._input;
-        // Dismiss an open dropdown when a click lands outside the panel (this
-        // layer only gets input while hovered, so close-on-outside lives here).
-        _g._debugPanel.MaybeCloseOnOutsideClick((int)input.MousePos.X, (int)input.MousePos.Y,
-            input.LeftPressed);
-
         // Hover highlights only when this layer owns the cursor.
         int mx = IsHovered ? (int)input.MousePos.X : -10000;
         int my = IsHovered ? (int)input.MousePos.Y : -10000;
