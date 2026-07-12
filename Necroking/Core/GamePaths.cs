@@ -104,6 +104,12 @@ public static class GamePaths
     public const string DefaultMapJson = "assets/maps/default.json";
     public const string MapsDir = "assets/maps";
 
+    // --- Save games ---
+    // Per-machine play-session saves (gitignored). A future move to a roaming
+    // location only needs to change this constant + Game1.Saves.cs SaveFilePath();
+    // all save/load sites route through them.
+    public const string SavesDir = "saves";
+
     // --- Asset directories ---
     public const string AssetsDir = "assets";
     public const string SpritesDir = "assets/Sprites";

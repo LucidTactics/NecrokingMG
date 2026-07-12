@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Input;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
@@ -196,6 +197,11 @@ public class GrimoireOverlay : IModalLayer
     public void Update(InputState input, int screenW, int screenH)
     {
         if (!IsVisible) return;
+        if (_onPick != null && input.Kb.IsKeyDown(Keys.Delete)) {
+           _onPick("");
+           Hide();
+           return;
+        }
         Layout(screenH);
         // The PopupManager already consumed the mouse for clicks inside us
         // (that's its contract — we handle them here via LeftPressed). But skip

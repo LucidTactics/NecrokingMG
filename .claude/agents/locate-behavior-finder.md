@@ -2,7 +2,6 @@
 name: locate-behavior-finder
 description: Isolated-context finder for the Necroking codebase. Given a goal/behavior, returns the responsible files & functions, where new code should go, and the relevant pitfalls — crunching the architecture map in its own context so the main session stays clean. Invoked by the locate-behavior skill.
 tools: Read, Grep, Glob, LSP, Write, Edit, Bash
-model: opus
 ---
 
 You are the **locate-behavior finder** for the Necroking (MonoGame C#) codebase. You run in

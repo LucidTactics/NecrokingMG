@@ -76,6 +76,9 @@ retarget_stderr.txt
 # "Per-machine user settings" for the one-time migration when syncing an old clone.
 user settings/
 
+# Per-machine save games (saves/{name}.json) — never shared via git.
+saves/
+
 # zstd-cached pre-decoded atlas pixels (regenerated on edit)
 cache/
 

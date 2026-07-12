@@ -56,6 +56,22 @@ public class Inventory
         return _slots[index];
     }
 
+    /// <summary>Write a slot directly, preserving its exact position — unlike
+    /// <see cref="AddItem"/> which re-packs and merges stacks. Used to restore a
+    /// saved inventory verbatim. Also records the item in the ever-seen set.
+    /// Out-of-range indices and empty/invalid items are ignored.</summary>
+    public void SetSlot(int index, string itemId, int quantity)
+    {
+        if (index < 0 || index >= _slots.Length) return;
+        if (string.IsNullOrEmpty(itemId) || quantity <= 0)
+        {
+            _slots[index] = InventorySlot.Empty;
+            return;
+        }
+        _everSeen.Add(itemId);
+        _slots[index] = new InventorySlot { ItemId = itemId, Quantity = quantity };
+    }
+
     /// <summary>Add items to inventory. Stacks onto existing slots first, then uses empty slots.
     /// Returns the number of items that could NOT be added (0 = all added).</summary>
     public int AddItem(string itemId, int quantity = 1)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using Microsoft.Xna.Framework;
@@ -23,6 +24,29 @@ namespace Necroking;
 // Game1 partial: HUD, menus, skill toasts and debug overlays.
 partial class GameRenderer
 {
+    // Draws a texture but keep aspect ratio.
+    public void DrawPreserveAspect(Texture2D texture, Rectangle destinationRectangle, Color color)
+    {
+        if (texture.Height <= 0 || destinationRectangle.Height <= 0 || texture.Width <= 0) return;
+        var a = texture.Width * 1.0 / texture.Height;
+        var b = destinationRectangle.Width * 1.0 / destinationRectangle.Height;
+
+        var rect = destinationRectangle;
+
+        if (a > b)
+        {
+            var h = (int)double.Round(rect.Width / a);
+            rect.Y += (rect.Height - h) / 2;
+            rect.Height = h;
+        } else if (a < b)
+        {
+            var w = (int)double.Round(rect.Height * a);
+            rect.X += (rect.Width - w) / 2;
+            rect.Width = w;
+        }
+        _g.Scope.Draw(texture, rect, color);
+    }
+
     /// <summary>Geometry helper — same layout numbers used in DrawSkillLearnToasts.
     /// Called from the input pass so clicks land on what was just rendered.</summary>
     private Rectangle GetSkillLearnToastRect(int sw, int sh, int stackIndex)
@@ -814,7 +838,7 @@ partial class GameRenderer
             _g.Scope.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
 
         int boxW = 350;
-        int btnCount = 10; // Resume + 5 editors + Settings + Multiplayer + Main Menu + Quit (hit-tests: Game1.cs pause-menu click block — keep in lockstep!)
+        int btnCount = 11; // Resume + Save Game + 5 editors + Settings + Multiplayer + Main Menu + Quit (hit-tests: Game1.cs pause-menu click block — keep in lockstep!)
         int btnH2 = 40, btnGap2 = 10;
         int controlLines = 4;
         int boxH = 60 + btnCount * (btnH2 + btnGap2) + 10 + controlLines * 16 + 20;
@@ -835,6 +859,7 @@ partial class GameRenderer
         int menuY = boxY + 60;
 
         DrawMenuButton("Resume", menuX, ref menuY, btnW, btnH, btnGap);
+        DrawMenuButton("Save Game", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Unit Editor (F9)", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Spell Editor (F10)", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Map Editor (F11)", menuX, ref menuY, btnW, btnH, btnGap);
@@ -880,18 +905,180 @@ partial class GameRenderer
             DrawText(_g._font, subtitle, new Vector2(screenW / 2f - subSize.X / 2f, titleY + 30), new Color(180, 160, 120, 200));
         }
 
-        // Menu buttons
+        // Menu buttons (5 × (55+18) must fit below screenH/2 at 720p — hit-tests:
+        // Game1.cs main-menu click block — keep in lockstep!)
         int btnW = 320, btnH = 55, btnGap = 18;
         int menuX = screenW / 2 - btnW / 2;
-        int menuY = screenH / 2 + 20;
+        int menuY = screenH / 2 - 20;
 
         DrawMenuButton("Play", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Play Test Map", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Scenarios", menuX, ref menuY, btnW, btnH, btnGap);
+        DrawMenuButton("Load Game", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Quit", menuX, ref menuY, btnW, btnH, btnGap);
 
         // Version info
         DrawText(_g._smallFont, "MonoGame Port v0.1", new Vector2(10, screenH - 20), new Color(80, 80, 100));
+    }
+
+    // Placeholder save-preview card: necromancer-form portrait on top, the first
+    // 4 spellbar spells (Q/E/1/2) as an icon row below. The ONE place save
+    // previews are drawn — SaveGameWindow reaches it via a delegate wired in
+    // Game1.LoadContent, the load menu calls it directly. Upgrade it here and
+    // every save UI follows. Data must come from the save payload (SaveGameInfo),
+    // not the live sim — except the save dialog's "current game" card.
+    internal void DrawSavePreviewCard(Rectangle dest, string formDefId, IReadOnlyList<string> spellIds,
+        IReadOnlyList<SavedInventorySlot> inventory)
+    {
+        int boxDim = 34;
+        _g.Scope.Draw(_g._pixel, dest, new Color(12, 12, 22, 230));
+
+        int cells = dest.Width / boxDim;
+        int cellW = boxDim;
+        int iconRowH = Math.Min(cellW, dest.Height / 3);
+
+        int rightInventorySize = boxDim * 2 + 2;
+
+        int upperSize = dest.Height - iconRowH;
+
+        var portraitRect = new Rectangle(dest.X + 2, dest.Y + 2, dest.Width - 4 - rightInventorySize, upperSize - 4);
+        if (!string.IsNullOrEmpty(formDefId))
+            DrawUnitIdleSprite(formDefId, portraitRect);
+
+        var inventoryIter = inventory.GetEnumerator();
+        Rectangle inventoryRect = new Rectangle(
+            dest.X + dest.Width - rightInventorySize + 1, dest.Y + 1,
+            rightInventorySize - 2, upperSize - 2);
+        for (int i = 0; i < 2; i++)
+        {
+            for (int j = 0; j < inventoryRect.Height / boxDim; j++)
+            {
+                var cell = new Rectangle(inventoryRect.X + i * boxDim + 1, inventoryRect.Y + j * boxDim + 1, 32, 32);
+                // body
+                _g.Scope.Draw(_g._pixel, cell, new Color(30, 30, 45, 230));
+                if (i == 0)
+                {
+                    // border left
+                    _g.Scope.Draw(_g._pixel, new Rectangle(cell.X-1, cell.Y-1, 1, boxDim), new Color(70, 70, 100));
+                }
+                // border right
+                _g.Scope.Draw(_g._pixel, new Rectangle(cell.X-1+boxDim, cell.Y-1, 1, boxDim), new Color(70, 70, 100));
+                if (j == 0)
+                {
+                    // border up
+                    _g.Scope.Draw(_g._pixel, new Rectangle(cell.X, cell.Y-1, 32, 1), new Color(70, 70, 100));
+                }
+                // border down
+                _g.Scope.Draw(_g._pixel, new Rectangle(cell.X, cell.Y-1+boxDim, 32, 1), new Color(70, 70, 100));
+                string icon = "";
+                string text = "";
+                if (inventoryIter.MoveNext() && inventoryIter.Current?.ItemId != null)
+                {
+                    icon = _g._gameData.Items.Get(inventoryIter.Current.ItemId)?.Icon ?? "";
+                    text = inventoryIter.Current.Quantity.ToString();
+                }
+                var tex = icon != "" ? _g.GetItemTextureByPath(icon) : null;
+                if (tex != null)
+                    DrawPreserveAspect(tex, new Rectangle(cell.X + 1, cell.Y + 1, cell.Width - 2, cell.Height - 2), Color.White);
+                if (!string.IsNullOrEmpty(text))
+                {
+                    Vector2 br = new Vector2(cell.X + cell.Width - 2, cell.Y + cell.Height - 2);
+                    Vector2 size = _g._smallFont.MeasureString(text);
+                    _g.Scope.DrawString(_g._smallFont, text, br - size, new Color(250, 250, 250));
+                }
+            }
+        }
+        inventoryIter.Dispose();
+
+        var spells = _g._gameData.Spells;
+        int rowY = dest.Bottom - iconRowH;
+        int skillBoxStart = (dest.Right - 1 - cells * cellW);
+
+        for (int i = 0; i < cells; i++)
+        {
+            var cell = new Rectangle(skillBoxStart + i * cellW, rowY, cellW, iconRowH);
+            _g.Scope.Draw(_g._pixel, cell, new Color(30, 30, 45, 230));
+            _g.Scope.Draw(_g._pixel, new Rectangle(cell.X, cell.Y, 1, cell.Height), new Color(70, 70, 100));
+            _g.Scope.Draw(_g._pixel, new Rectangle(cell.X+1, cell.Y, 32, 1), new Color(70, 70, 100));
+            string spellId = i < spellIds.Count ? spellIds[i] : "";
+            string icon = string.IsNullOrEmpty(spellId) ? "" : spells.Get(spellId)?.Icon ?? "";
+            // Not _widgetRenderer.DrawIcon — that renderer initializes lazily on
+            // the first in-game inventory draw and silently no-ops before that,
+            // which blanked these icons on a cold main menu.
+            var tex = icon != "" ? _g.GetItemTextureByPath(icon) : null;
+            if (tex != null)
+                DrawPreserveAspect(tex, new Rectangle(cell.X + 1, cell.Y + 1, cell.Width - 2, cell.Height - 2), Color.White);
+        }
+        Necroking.Render.DrawUtils.DrawRectBorder(_g._spriteBatch, _g._pixel, dest, new Color(100, 100, 180));
+    }
+
+    // Fully-resolved load-menu layout for one frame: one rect per visible save row
+    // plus the back button. Drawing (DrawLoadMenu) and hit-testing (Game1's
+    // LoadMenu update block) both consume this, so they can't drift apart.
+    internal struct LoadMenuView
+    {
+        public Rectangle[] RowRects; // aligned with the first Shown entries of _loadMenuSaves
+        public int Shown;            // rows laid out (list may be longer)
+        public Rectangle BackRect;
+    }
+
+    internal LoadMenuView BuildLoadMenuLayout(int screenW, int screenH, int saveCount)
+    {
+        int btnW = SaveGameWindow.PanelW, btnH = SaveGameWindow.RowH, btnGap = 10;
+        int titleY = screenH / 20 + 20;
+        int listY = titleY + 70;
+        // Leave room for the back button + margin at the bottom.
+        int maxRows = System.Math.Max(1, (screenH - 80 - listY) / (btnH + btnGap));
+        int shown = System.Math.Min(saveCount, maxRows);
+
+        var view = new LoadMenuView { Shown = shown, RowRects = new Rectangle[shown] };
+        int x = (screenW - btnW) / 2;
+        int y = listY;
+        for (int i = 0; i < shown; i++)
+        {
+            view.RowRects[i] = new Rectangle(x, y, btnW, btnH);
+            y += btnH + btnGap;
+        }
+        view.BackRect = new Rectangle((screenW - 200) / 2, y + 14, 200, 45);
+        return view;
+    }
+
+    private void DrawLoadMenu(int screenW, int screenH)
+    {
+        DrawMenuBackdrop(screenW, screenH);
+
+        int titleY = screenH / 20 + 20;
+        if (_g._largeFont != null)
+        {
+            string title = "LOAD GAME";
+            var titleSize = _g._largeFont.MeasureString(title);
+            DrawText(_g._largeFont, title, new Vector2(screenW / 2f - titleSize.X / 2f + 3, titleY + 3), new Color(0, 0, 0, 180));
+            DrawText(_g._largeFont, title, new Vector2(screenW / 2f - titleSize.X / 2f, titleY), new Color(220, 180, 100));
+        }
+
+        var saves = _g._loadMenuSaves;
+        var view = BuildLoadMenuLayout(screenW, screenH, saves.Count);
+
+        if (saves.Count == 0 && _g._font != null)
+        {
+            string none = "(no saves found)";
+            var size = _g._font.MeasureString(none);
+            DrawText(_g._font, none, new Vector2((int)(screenW / 2f - size.X / 2f), titleY + 80), new Color(140, 140, 160));
+        }
+
+        for (int i = 0; i < view.Shown; i++)
+        {
+            var s = saves[i];
+            var r = view.RowRects[i];
+            DrawMenuButtonAt("", r.X, r.Y, r.Width, r.Height);
+            DrawSavePreviewCard(new Rectangle(r.X + 4, r.Y + 4, SaveGameWindow.CardW, SaveGameWindow.RowH - 8), s.FormId, s.SpellBar, s.Inventory);
+            DrawMenuButtonTextAt($"{s.Name}    {s.MapName}    {s.SavedAt.ToLocalTime():yyyy-MM-dd HH:mm}",
+               r.X + SaveGameWindow.CardW + 2, r.Y, r.Width - (SaveGameWindow.CardW + 2), r.Height);
+        }
+        if (saves.Count > view.Shown && _g._font != null)
+            DrawText(_g._font, $"(+{saves.Count - view.Shown} more)", new Vector2(view.BackRect.X, view.BackRect.Y - 22), new Color(140, 140, 160));
+
+        DrawMenuButtonAt("< Back", view.BackRect.X, view.BackRect.Y, view.BackRect.Width, view.BackRect.Height);
     }
 
     private void DrawScenarioList(int screenW, int screenH)
@@ -1099,16 +1286,19 @@ partial class GameRenderer
         _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, h), bg);
         _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, 2), new Color(220, 180, 100, hover ? 255 : 120));
         _g.Scope.Draw(_g._pixel, new Rectangle(x, y + h - 2, w, 2), new Color(220, 180, 100, hover ? 255 : 60));
+        DrawMenuButtonTextAt(text, x, y, w, h);
+    }
 
-        if (_g._font != null)
-        {
-            // Shrink overly long scenario names to fit inside the narrower grid cell.
-            var textSize = _g._font.MeasureString(text);
-            float scale = textSize.X > w - 12 ? (w - 12) / textSize.X : 1f;
-            DrawText(_g._font, text,
-                new Vector2((int)(x + w / 2f - textSize.X * scale / 2f), (int)(y + (h - textSize.Y * scale) / 2f)),
-                new Color(255, 245, 220), scale);
-        }
+    private void DrawMenuButtonTextAt(string text, int x, int y, int w, int h) {
+       if (_g._font != null)
+       {
+          // Shrink overly long scenario names to fit inside the narrower grid cell.
+          var textSize = _g._font.MeasureString(text);
+          float scale = textSize.X > w - 12 ? (w - 12) / textSize.X : 1f;
+          DrawText(_g._font, text,
+             new Vector2((int)(x + w / 2f - textSize.X * scale / 2f), (int)(y + (h - textSize.Y * scale) / 2f)),
+             new Color(255, 245, 220), scale);
+       }
     }
 
     private void DrawMenuButton(string text, int x, ref int y, int w, int h, int gap)

@@ -23,7 +23,7 @@ using Necroking.UI;
 
 namespace Necroking;
 
-public enum MenuState { MainMenu, None, PauseMenu, Settings, Multiplayer, UnitEditor, SpellEditor, MapEditor, UIEditor, ItemEditor, ScenarioList }
+public enum MenuState { MainMenu, None, PauseMenu, Settings, Multiplayer, UnitEditor, SpellEditor, MapEditor, UIEditor, ItemEditor, ScenarioList, SaveMenu, LoadMenu }
 
 /// <summary>
 /// The MonoGame app shell and orchestrator — everything platform- and presentation-side.
@@ -61,9 +61,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal Texture2D _pixel = null!;
     internal Texture2D _glowTex = null!;
     internal Texture2D? _mainMenuBg;
-    internal SpriteFont? _font;
-    internal SpriteFont? _smallFont;
-    internal SpriteFont? _largeFont;
+
+    // If fonts don't load we crash the program.
+    internal SpriteFont _font;
+    internal SpriteFont _smallFont;
+    internal SpriteFont _largeFont;
     internal ShadowRenderer _shadowRenderer = new();
     internal HUDRenderer _hudRenderer = new();
     internal CharacterStatsUI _characterStatsUI = new();
@@ -91,7 +93,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // property keeps every _sim.* call site unchanged while StartGame recreates the session.
     internal Simulation _sim => _session.Sim;
     internal Inventory _inventory = null!;
-    private Render.FontManager _fontManager = new();
+    internal Render.FontManager _fontManager = new();
     internal RuntimeWidgetRenderer _widgetRenderer = new();
     internal InventoryUI _inventoryUI = new();
     internal BuildingMenuUI _buildingMenuUI = new();
@@ -1571,6 +1573,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private void StartGame(string mapName = "default")
     {
         ResetWorldState();
+        _currentMapName = mapName;
 
         // Load flipbooks (shared with the spell editor's live-reload path).
         ReloadFlipbooksFromRegistry();
@@ -2655,6 +2658,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Clean disconnect on quit so peers see us leave immediately instead of timing out.
         Exiting += (s, e) => _net.Stop();
 
+        _saveGameWindow = new SaveGameWindow(_editorUi);
+        _saveGameWindow.SetCallbacks(ListSaveGames, UniqueSaveName, SaveFileExists, WriteSaveGame, SanitizeSaveName);
+
         _settingsWindow = new SettingsWindow(_editorUi);
         System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.UserSettingsDir));
         _settingsWindow.SetGameData(_gameData, GamePaths.Resolve(GamePaths.UserSettingsJson), GamePaths.Resolve(GamePaths.UserWeatherJson));
@@ -2997,7 +3003,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 int screenH2 = GraphicsDevice.Viewport.Height;
                 int btnW = 320, btnH = 55, btnGap = 18;
                 int menuX = screenW2 / 2 - btnW / 2;
-                int menuY = screenH2 / 2 + 20;
+                int menuY = screenH2 / 2 - 20;
 
                 // Play button
                 if (mouse.X >= menuX && mouse.X < menuX + btnW && mouse.Y >= menuY && mouse.Y < menuY + btnH)
@@ -3026,6 +3032,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 {
                     _menuState = MenuState.ScenarioList;
                     _scenarioScrollPx = 0f;
+                    _prevKb = kb;
+                    _prevMouse = mouse;
+                    base.Update(gameTime);
+                    return;
+                }
+                menuY += btnH + btnGap;
+
+                // Load Game button
+                if (mouse.X >= menuX && mouse.X < menuX + btnW && mouse.Y >= menuY && mouse.Y < menuY + btnH)
+                {
+                    _loadMenuSaves = ListSaveGames();
+                    _menuState = MenuState.LoadMenu;
                     _prevKb = kb;
                     _prevMouse = mouse;
                     base.Update(gameTime);
@@ -3115,6 +3133,38 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
                 // Back button (fixed below the visible grid)
                 if (view.BackRect.Contains(mouse.X, mouse.Y))
+                    _menuState = MenuState.MainMenu;
+            }
+            _prevKb = kb;
+            _prevMouse = mouse;
+            base.Update(gameTime);
+            return;
+        }
+
+        // --- Load-game menu (main-menu family, shared layout with DrawLoadMenu) ---
+        if (_menuState == MenuState.LoadMenu)
+        {
+            // Escape to go back
+            if (_input.WasKeyPressed(Keys.Escape))
+            {
+                _menuState = MenuState.MainMenu;
+            }
+            else if (_input.LeftPressed)
+            {
+                int screenW2 = GraphicsDevice.Viewport.Width;
+                int screenH2 = GraphicsDevice.Viewport.Height;
+                var view = _gameRenderer.BuildLoadMenuLayout(screenW2, screenH2, _loadMenuSaves.Count);
+
+                for (int i = 0; i < view.Shown; i++)
+                {
+                    if (!view.RowRects[i].Contains(mouse.X, mouse.Y)) continue;
+                    // On success StartGame has switched _menuState to None; on a
+                    // validation failure (logged) we simply stay on this menu.
+                    LoadSaveGame(_loadMenuSaves[i].Name);
+                    break;
+                }
+
+                if (_menuState == MenuState.LoadMenu && view.BackRect.Contains(mouse.X, mouse.Y))
                     _menuState = MenuState.MainMenu;
             }
             _prevKb = kb;
@@ -3287,7 +3337,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             int sw = GraphicsDevice.Viewport.Width;
             int sh = GraphicsDevice.Viewport.Height;
             int btnW2 = 280, btnH2 = 40, btnGap2 = 10;
-            int pauseBtnCount = 10;
+            int pauseBtnCount = 11;
             int pauseControlLines = 4;
             int pauseBoxH = 60 + pauseBtnCount * (btnH2 + btnGap2) + 10 + pauseControlLines * 16 + 20;
             int boxY2 = (sh - pauseBoxH) / 2 + 60;
@@ -3297,6 +3347,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // Resume
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
             { _menuState = MenuState.None; _clock.ClearAllPauses(); }
+            y2 += btnH2 + btnGap2;
+            // Save Game
+            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
+                OpenSaveMenu();
             y2 += btnH2 + btnGap2;
             // Unit Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
@@ -3351,6 +3405,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _menuState = MenuState.PauseMenu;
         }
 
+        // --- Save-game window close handling ---
+        if (_menuState == MenuState.SaveMenu && _saveGameWindow.WantsClose)
+        {
+            _saveGameWindow.WantsClose = false;
+            _editorUi.ResetAllState();
+            _menuState = MenuState.PauseMenu;
+        }
+
         // --- ESC: gameplay → pause menu only ---
         // (The "ESC with nothing open → pause menu" fallback now lives AFTER
         // the router dispatch below, since panels/editors/popups consume ESC
@@ -3377,7 +3439,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // (which consume MouseOverUI and OverGameplayHud).
         RebuildUIHitRects(screenW, screenH);
 
-        if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor || _menuState == MenuState.MapEditor || _menuState == MenuState.Settings || _menuState == MenuState.Multiplayer || _menuState == MenuState.ItemEditor)
+        if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor || _menuState == MenuState.MapEditor || _menuState == MenuState.Settings || _menuState == MenuState.Multiplayer || _menuState == MenuState.ItemEditor || _menuState == MenuState.SaveMenu)
         {
             _editorUi.UpdateInput(mouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime, _input);
         }
@@ -3617,7 +3679,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             {
                 CheatAddAllSkillcounters(necroIdx, 10);
             }
-            
+
             // Potions are Construction spells (assignable to any spell slot) —
             // the old dedicated potion slots and their throw-on-click flow are
             // gone; casting routes through CastPotionSpell.
@@ -4177,7 +4239,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         u.Subroutine = AI.WorkRoutine.WorkEnd;
     }
 
-    private void CheatAddAllSkillcounters(int necroIdx, int amount) 
+    private void CheatAddAllSkillcounters(int necroIdx, int amount)
     {
        if (necroIdx < 0 || _gameData == null) return;
 

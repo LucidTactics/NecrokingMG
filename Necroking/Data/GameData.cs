@@ -43,6 +43,7 @@ public class GameData
 
         Items.Load(Path.Combine(dataDir, "items.json")); // optional, don't fail if missing
         Potions.Load(Path.Combine(dataDir, "potions.json")); // optional, don't fail if missing
+        GeneratePotionItems();
         GeneratePotionSpells(); // surface each potion as a Construction spell
         Corpse.Load(Path.Combine(dataDir, "corpse.json")); // optional, falls back to spritemeta pivots
         // Load weapon_points.json (must be after units.json so UnitDefs exist)
@@ -78,6 +79,23 @@ public class GameData
                 PrimaryPath = "",
                 PrimaryLevel = 0,
                 Range = p.ThrowRange < 1f ? 1f : p.ThrowRange,
+            });
+        }
+    }
+
+    private void GeneratePotionItems()
+    {
+        foreach (var pid in Potions.GetIDs())
+        {
+            var p = Potions.Get(pid);
+            if (p == null || string.IsNullOrEmpty(p.ItemID)) continue;
+            if (Items.Get(p.ItemID) != null) continue;
+            Items.Add(new ItemDef()
+            {
+                Id = p.ItemID,
+                DisplayName = p.DisplayName,
+                Icon = p.Icon,
+                Description = p.Description,
             });
         }
     }

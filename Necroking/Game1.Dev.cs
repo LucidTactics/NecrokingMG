@@ -450,7 +450,7 @@ public partial class Game1 {
             case "panels": {
                var js = System.Text.Json.JsonSerializer.Serialize(new {
                   panels = new[] {
-                     "main_menu", "scenarios", "game", "pause", "settings", "multiplayer",
+                     "main_menu", "scenarios", "load_menu", "game", "pause", "save_menu", "settings", "multiplayer",
                      "unit_editor", "spell_editor", "map_editor", "ui_editor", "item_editor"
                   },
                   tabs = new {
@@ -561,6 +561,55 @@ public partial class Game1 {
                }
 
                c.Complete(Necroking.Dev.DevServer.Ok(r));
+               break;
+            }
+
+            // Dump a unit's active buffs (id, remaining, permanent, stacks).
+            case "buffs": {                        // devctl: cmd buffs [selector]
+               var bIdxs = DevResolveUnits(c.Args.Length >= 1 ? c.Args[0] : "necro");
+               if (bIdxs.Count == 0) {
+                  c.Complete(Necroking.Dev.DevServer.Error("no units match"));
+                  break;
+               }
+               var js = System.Text.Json.JsonSerializer.Serialize(bIdxs.Select(i => new {
+                  idx = i,
+                  def = _sim.Units[i].UnitDefID,
+                  buffs = _sim.Units[i].ActiveBuffs.Select(b => new {
+                     id = b.BuffDefID,
+                     remaining = b.RemainingDuration,
+                     permanent = b.Permanent,
+                     stacks = b.StackCount,
+                  }).ToArray(),
+               }).ToArray());
+               c.Complete(Necroking.Dev.DevServer.OkRaw(js));
+               break;
+            }
+
+            // Write a save game (same path as the pause-menu Save dialog).
+            case "save_game": {                    // devctl: cmd save_game [name]
+               if (!_gameWorldLoaded) {
+                  c.Complete(Necroking.Dev.DevServer.Error("no game loaded"));
+                  break;
+               }
+               string saveName = c.Args.Length >= 1 ? SanitizeSaveName(c.Args[0]) : "";
+               if (saveName == "") saveName = UniqueSaveName();
+               c.Complete(WriteSaveGame(saveName)
+                  ? Necroking.Dev.DevServer.Ok($"saved '{saveName}' -> {SaveFilePath(saveName)}")
+                  : Necroking.Dev.DevServer.Error("save failed (see 'saves' log)"));
+               break;
+            }
+
+            // Load a save game (same path as the main-menu Load Game list).
+            case "load_game": {                    // devctl: cmd load_game <name>
+               if (c.Args.Length < 1) {
+                  var names = ListSaveGames().Select(s => s.Name);
+                  c.Complete(Necroking.Dev.DevServer.Error(
+                     $"load_game needs: <name> — existing: [{string.Join(", ", names)}]"));
+                  break;
+               }
+               c.Complete(LoadSaveGame(c.Args[0])
+                  ? Necroking.Dev.DevServer.Ok($"loaded '{c.Args[0]}' map={_currentMapName}")
+                  : Necroking.Dev.DevServer.Error($"load failed for '{c.Args[0]}' (see 'saves' log)"));
                break;
             }
 
@@ -2048,6 +2097,11 @@ public partial class Game1 {
             _menuState = MenuState.ScenarioList;
             _scenarioScrollPx = 0f;
             return true;
+         case "load_menu":
+         case "loadmenu":
+            _loadMenuSaves = ListSaveGames();
+            _menuState = MenuState.LoadMenu;
+            return true;
       }
 
       // Everything below renders over a live world — load one if needed.
@@ -2069,6 +2123,11 @@ public partial class Game1 {
          case "settings":
          case "options":
             _menuState = MenuState.Settings;
+            return true;
+         case "save_menu":
+         case "savemenu":
+            OpenSaveMenu();
+            _clock.Pause(GameClock.PauseSource.User); // reached from the pause menu in normal play
             return true;
          case "multiplayer":
          case "mp":
