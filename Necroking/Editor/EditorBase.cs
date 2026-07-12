@@ -361,6 +361,12 @@ public class EditorBase
     // When a dropdown consumes a mouse press, keep input blocked through the release
     // so release-based click detection (DrawButton) doesn't fire on widgets beneath.
     private bool _dropdownHoldingMousePress;
+    // Eager press→drag→release gesture state for the open combo (Lib/EagerDropdown).
+    // WHICH combo is open stays in _activeFieldId (the single source of truth,
+    // shared with all the existing close paths); the machine only tracks the
+    // gesture, so its key is always 0. Presses on a different combo's button
+    // are blocked by the input-layer pre-raise and land as "outside" here.
+    private readonly Necroking.Lib.EagerDropdown _comboEager = new();
     // Tracks the color picker's consume state across frames so we can swallow the
     // click that dismissed it (otherwise it falls through to a widget behind).
     private bool _colorPickerWasConsuming;
@@ -421,6 +427,11 @@ public class EditorBase
         // If a dropdown is open from last frame, pre-set input layer to block all widgets
         // This prevents widgets drawn BEFORE the combo from stealing clicks
         bool dropdownWasOpen = _activeFieldId != null && _activeFieldId.EndsWith("_combo");
+        // Keep the eager-gesture machine in lockstep with _activeFieldId: any
+        // external close (ESC, Enter-select, EndDrawFrame auto-close,
+        // ResetAllState, CloseActiveDropdown) resets it here — single sync
+        // point instead of chasing every close site.
+        if (!dropdownWasOpen) _comboEager.Close();
         // Clear the held-press flag once the mouse has been idle for a full frame
         // (both current and previous state released), so the release event itself is still blocked.
         if (_dropdownHoldingMousePress
@@ -1407,6 +1418,9 @@ public class EditorBase
     /// Draw a dropdown/combo for string enum values.
     /// Supports scrolling, search filtering (auto for 15+ items), keyboard navigation,
     /// max-height capping (40% screen), and an optional "(none)" entry.
+    /// Interaction is EAGER (Lib/EagerDropdown): press on the button opens the
+    /// list and releasing over an item selects it, so press→drag→release picks
+    /// in one gesture; plain click-click still works.
     /// </summary>
     private const int ComboItemH = 20;
     private const int ComboFilterH = 22; // height of the filter text box row
@@ -1461,12 +1475,17 @@ public class EditorBase
         {
             if (isOpen)
             {
-                _activeFieldId = null;
-                _comboFilterText.Remove(comboId);
-                _comboHighlightIdx = -1;
+                // Eager: a second press on the open button closes on RELEASE
+                // (handled in the open branch below) — unless the release lands
+                // on an item, in which case selection wins (drag from button
+                // onto the list). No early return: the open branch must still
+                // run this frame so the overlay renders (the press is on the
+                // button, so the item/outside handlers there won't also fire).
+                _comboEager.OnPress(0, -1);
             }
             else
             {
+                _comboEager.OnPress(0, -1); // open + arm: release over an item selects
                 _activeFieldId = comboId;
                 // Mark the combo as drawn this frame right as it opens. Otherwise
                 // EndDrawFrame sees IsDropdownOpen==true but _openComboDrawnThisFrame
@@ -1488,8 +1507,8 @@ public class EditorBase
                     _comboScrollOffsets[comboId] = Math.Max(0, Math.Min(selectedIdx - visCount / 2, effectiveOptions.Length - visCount));
                 else
                     _comboScrollOffsets[comboId] = 0;
+                return value;
             }
-            return value;
         }
 
         // When open: handle input inline (so DrawCombo can return the selection),
@@ -1662,16 +1681,53 @@ public class EditorBase
                 }
             }
 
-            // Check for option clicks using pre-computed rects
+            // Eager gesture: a press on an option only ARMS the machine — the
+            // actual selection fires on release over an item (which also covers
+            // press-on-button → drag → release-on-item in one gesture). A press
+            // inside the dropdown but on no item (filter row, scrollbar) feeds
+            // nothing and keeps the list open.
+            bool pressEdge = _mouse.LeftButton == ButtonState.Pressed
+                && _prevMouse.LeftButton == ButtonState.Released;
+            bool releaseEdge = _mouse.LeftButton == ButtonState.Released
+                && _prevMouse.LeftButton == ButtonState.Pressed;
+
+            // Hovered option (filtered index), shared by press-arm and release-select.
+            int hoverFi = -1;
             for (int vi = 0; vi < visibleCount; vi++)
             {
                 int fi = vi + scrollOffset;
                 if (fi >= filteredOptions.Length) break;
+                if (itemRects[vi].Contains(_mouse.X, _mouse.Y)) { hoverFi = fi; break; }
+            }
 
-                if (itemRects[vi].Contains(_mouse.X, _mouse.Y)
-                    && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
+            if (pressEdge && hoverFi >= 0)
+            {
+                _comboEager.OnPress(-1, hoverFi);
+                _dropdownOverlayConsumedClick = true;
+            }
+
+            // Close dropdown if clicking outside both the combo button and dropdown
+            if (pressEdge
+                && !dropRect.Contains(_mouse.X, _mouse.Y) && !inputRect.Contains(_mouse.X, _mouse.Y))
+            {
+                _comboEager.OnPressOutside();
+                _activeFieldId = null;
+                _comboFilterText.Remove(comboId);
+                _comboHighlightIdx = -1;
+                _dropdownOverlayConsumedClick = true;
+                _dropdownHoldingMousePress = true;
+            }
+
+            // Release: select the hovered item if the gesture armed it, or close
+            // when a press on the open button flagged close-on-release. Gated on
+            // PressStartPos so a gesture consumed by a UI mode change can't
+            // ghost-select on its release.
+            if (releaseEdge && _comboEager.IsOpen)
+            {
+                int sel = _comboEager.OnRelease(hoverFi, _pressStartPos.X >= 0);
+                if (sel >= 0 && sel < filteredOptions.Length)
                 {
-                    string picked = filteredOptions[fi];
+                    string picked = filteredOptions[sel];
                     _activeFieldId = null;
                     _comboFilterText.Remove(comboId);
                     _comboHighlightIdx = -1;
@@ -1680,17 +1736,15 @@ public class EditorBase
                     if (allowNone && picked == "(none)") return "";
                     return picked;
                 }
-            }
-
-            // Close dropdown if clicking outside both the combo button and dropdown
-            if (_mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released
-                && !dropRect.Contains(_mouse.X, _mouse.Y) && !inputRect.Contains(_mouse.X, _mouse.Y))
-            {
-                _activeFieldId = null;
-                _comboFilterText.Remove(comboId);
-                _comboHighlightIdx = -1;
-                _dropdownOverlayConsumedClick = true;
-                _dropdownHoldingMousePress = true;
+                if (!_comboEager.IsOpen) // close-on-release (second click on button)
+                {
+                    _activeFieldId = null;
+                    _comboFilterText.Remove(comboId);
+                    _comboHighlightIdx = -1;
+                    _dropdownOverlayConsumedClick = true;
+                    _dropdownHoldingMousePress = true;
+                    return value;
+                }
             }
 
             // Save layout for deferred rendering — renderer uses these exact rects
