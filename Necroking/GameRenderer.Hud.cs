@@ -912,6 +912,11 @@ partial class GameRenderer
         int menuX = screenW / 2 - btnW / 2;
         int menuY = screenH / 2 - 20;
 
+        DrawMenuButton(_g._loadMenuSaves.Count > 0 ? $"Continue {_g._loadMenuSaves[0].Name}" : "Continue", menuX,
+            ref menuY, btnW, btnH, btnGap, interactable: _g._loadMenuSaves.Count > 0);
+        // Extra gap.
+        menuY += btnGap * 2;
+
         DrawMenuButton("Play", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Play Test Map", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Scenarios", menuX, ref menuY, btnW, btnH, btnGap);
@@ -1373,20 +1378,22 @@ partial class GameRenderer
        }
     }
 
-    private void DrawMenuButton(string text, int x, ref int y, int w, int h, int gap)
+    private void DrawMenuButton(string text, int x, ref int y, int w, int h, int gap, bool interactable=true)
     {
         int mx = (int)_g._input.MousePos.X, my = (int)_g._input.MousePos.Y;
         bool hover = mx >= x && mx < x + w && my >= y && my < y + h;
         Color bg = hover ? new Color(90, 60, 120, 240) : new Color(60, 40, 80, 220);
-        _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, h), bg);
-        _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, 2), new Color(220, 180, 100, hover ? 255 : 120));
-        _g.Scope.Draw(_g._pixel, new Rectangle(x, y + h - 2, w, 2), new Color(220, 180, 100, hover ? 255 : 60));
+        _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, h), interactable ? bg : new Color(108, 88, 128));
+        _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, 2),
+            interactable ? new Color(220, 180, 100, hover ? 255 : 120) : new Color(180, 140, 100, 120));
+        _g.Scope.Draw(_g._pixel, new Rectangle(x, y + h - 2, w, 2),
+            interactable ? new Color(220, 180, 100, hover ? 255 : 60) : new Color(180, 140, 100, 60));
 
         if (_g._font != null)
         {
             var textSize = _g._font.MeasureString(text);
             DrawText(_g._font, text, new Vector2((int)(x + w / 2f - textSize.X / 2f), (int)(y + (h - textSize.Y) / 2f)),
-                new Color(255, 245, 220));
+                interactable ? new Color(255, 245, 220) : new Color(192, 192, 192));
         }
         y += h + gap;
     }
