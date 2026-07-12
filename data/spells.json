@@ -113,13 +113,13 @@
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
         "fps": 3,
-        "scale": 0.6,
+        "scale": 0.4,
         "color": {
           "r": 255,
           "g": 255,
           "b": 255,
           "a": 255,
-          "intensity": 4.0384617
+          "intensity": 2
         },
         "rotation": 0,
         "blendMode": "Alpha",
@@ -148,13 +148,13 @@
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
         "fps": 3,
-        "scale": 0.6,
+        "scale": 0.4,
         "color": {
           "r": 255,
           "g": 255,
           "b": 255,
           "a": 255,
-          "intensity": 4.0384617
+          "intensity": 2
         },
         "rotation": 0,
         "blendMode": "Alpha",
