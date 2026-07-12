@@ -44,6 +44,11 @@
 /processor:EffectProcessor
 /build:BloomCombine.fx
 
+#begin BloomDownsample.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/build:BloomDownsample.fx
+
 #begin GaussianBlur.fx
 /importer:EffectImporter
 /processor:EffectProcessor

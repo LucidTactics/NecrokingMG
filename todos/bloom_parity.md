@@ -1,41 +1,43 @@
-# Bloom Pipeline C++ Parity
+# Bloom Pipeline — post-overhaul state & remaining tuning
 
-## Status: In Progress
+## Status: pipeline overhauled 2026-07-11 (C++ parity goal superseded)
 
-The bloom pipeline was overhauled to match C++ structurally (soft knee extract, bicubic upsample, additive combine). God rays render with the same code as C++ god_ray.h. However, the visual output still differs — C# god rays are brighter/whiter in the center with less bloom spread than C++.
+The C++-parity chase is over: the pipeline now intentionally goes *beyond* the C++
+implementation (Jimenez SIGGRAPH-2014 downsampling + a shoulder tonemap), which fixes
+the root cause the parity todo was circling — overbright cores hard-clipping to flat
+white at the back-buffer write.
 
-## What's Done
-- BloomExtract.fx: soft knee matching C++ bloom_prefilter.fs
-- BloomCombine.fx: simple additive matching C++ bloom_composite.fs
-- BloomUpsampleBicubic.fx: Catmull-Rom matching C++ bloom_upsample_bicubic.fs
-- Bloom.cs: bicubic upsample wired into mip chain, extra Gaussian blur removed
-- GodRayRenderer.cs: triangle-based trapezoids, HDR intensity shader per sublayer
-- Settings: copied C++ bloom values (threshold 1.21, softKnee 0.25, intensity 5.48)
+## What changed (see docs/locate-behavior/render.md "Bloom & HDR" for detail)
+- BloomExtract.fx: prefilter is now a 13-tap downsample with Karis-weighted group
+  averages (kills fireflies/shimmer) + the same soft-knee threshold.
+- BloomDownsample.fx (new): 13-tap Jimenez filter down the mip chain (was plain
+  bilinear blits).
+- The extra 15-tap GaussianBlur pass on mip[0] was removed (was a spread band-aid;
+  spread now comes from iterations/scatter).
+- BloomCombine.fx: after `base + bloom*intensity`, an optional **shoulder tonemap** —
+  identity below `tonemapShoulder` (default 0.9, scene look preserved), extended-Reinhard
+  rolloff hitting pure white at `tonemapWhitePoint` (default 6). `tonemapDesaturate`
+  (default 0.4) blends hue-preserving (0 = glow keeps its color at any brightness) vs
+  per-channel (1 = hot cores bleach white like film).
+- Settings: `bloom.tonemap/tonemapShoulder/tonemapWhitePoint/tonemapDesaturate` in
+  GameSettings + sliders in the Settings window Bloom tab.
 
-## What Still Differs
-- God ray center is whiter than C++ — C++ shows warm golden center, C# shows pure white
-- Bloom glow spread is less prominent in C# — the soft halo around the beam is narrower
-- Two overlapping god rays don't blend as smoothly as C++
+## Reference screenshots (before/after, same scenes)
+`bin/Devbuild/log/screenshots/before_*.png` and `after2_*.png`
+(godmode buff outline, sky_lightning bolt, raise_zombie cloud); archived copies of the
+"before" set in the session scratchpad `bloom_refs/`. Result: godmode pulse peak now
+warm gold (was bleached white); sky-lightning bolt shows branch/filament structure and
+blue tint (was flat white column); raise cloud unchanged/slightly richer.
 
-## Investigation Notes
-- All shader math, blend modes, HDR RT format, and bloom settings verified identical
-- Bicubic upsample shader loads and is applied during upsample chain
-- The bloom combine is additive (`scene + bloom * intensity`) matching C++ exactly
-- Possible causes of remaining difference:
-  - HLSL bicubic shader may produce slightly different filtering than GLSL (frac vs fract, coord math)
-  - The disabled Gaussian blur pass (step 3.5 in Bloom.cs, `if (false &&`) may have been providing needed softness
-  - Screen resolution differences affect mip chain sizes and bloom spread
-  - C++ weather post-processing (fog, brightness, tint, vignette) applied after bloom may subtly affect appearance
-
-## How to Debug
-1. Add bloom debug mode to visualize each mip level side-by-side (C# vs C++ screenshots)
-2. Compare bloom extract output at a known pixel to verify soft knee produces same values
-3. Test with the extra Gaussian blur re-enabled to see if it helps
-4. Try increasing bloom iterations or scatter to get more spread
-
-
-## NEW FINDINGS
-Try to fix things like below and see if it helps.
-
-- HdrColor.ToScaledColor shouldn't be used except to preview the color in color picker, it being used Everywere is a big reason blending cannot be done well.
-- FlipbookRef settings like BlendMode isn't passed along. Need to check that all such values are actually used properly. This is a very big change.
+## What's left
+- **Retune per-spell intensities** in spells.json — values were tuned against the C++
+  build that ignored per-sublayer HDR intensities (see todos/rendering_pitfalls.md), so
+  many read hot. With the tonemap they no longer blow out, but cores sit deep in the
+  rolloff (e.g. sky_lightning strike colors at intensity 15 vs whitePoint 6). Retune
+  down rather than compensating with clamps.
+- **Per-spell intensity clamp** — user deferred; re-evaluate after retuning. Preferred
+  approach if needed: Max-blend for a spell's own layer group (clamps within-spell
+  stacking, stays additive vs the rest of the scene).
+- **BuffVisualSystem is still LDR** (CPU-clamped to 255, raw scene batch) — buff auras
+  can't overflow into bloom the way HdrSprite spell effects do. Migrate onto the HDR
+  additive material if buffs should glow like spells.

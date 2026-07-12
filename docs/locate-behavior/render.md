@@ -322,23 +322,30 @@ The scene→bloom→screen chain, concrete files:
 - **`Render/Bloom.cs` (`BloomRenderer`)** — the C# pass that owns everything. `Init` loads
   the four shaders; `CreateTargets` allocates the **`SurfaceFormat.HalfVector4` scene RT**
   (LDR `Color` fallback) so additive draws exceed 1.0, plus a half-res mip chain (up to
-  `MaxMips=8`, each ½ the previous) + one temp blur RT. `BeginScene` binds+clears the scene
-  RT (Scene phase `OnBegin`). **`EndScene` is the whole post pass**, four steps:
-  1. **Prefilter/extract** → `BloomExtract.fx`, params `BloomThreshold`/`SoftKnee`, into mip[0].
-  2. **Downsample** chain (Opaque LinearClamp blits, `iters = clamp(Iterations,1,mipCount)`).
+  `MaxMips=8`, each ½ the previous). `BeginScene` binds+clears the scene
+  RT (Scene phase `OnBegin`). **`EndScene` is the whole post pass**, four steps (Jimenez
+  SIGGRAPH-2014 style since 2026-07-11):
+  1. **Prefilter/extract** → `BloomExtract.fx`: 13-tap downsample with **Karis-weighted
+     group averages** (firefly suppression) + soft-knee threshold, into mip[0].
+  2. **Downsample** chain → `BloomDownsample.fx` (13-tap Jimenez filter, no Karis;
+     `iters = clamp(Iterations,1,mipCount)`).
   3. **Upsample** chain — additive scatter blend (`ColorSourceBlend=BlendFactor`,
-     `Dest=One`, `BlendFactor=scatter*255`), optional `BloomUpsampleBicubic.fx`; then an
-     **extra 15-tap H/V `GaussianBlur.fx`** on mip[0] (`BuildBlurKernel`, `BlurScale=1.5`)
-     to spread past the mip limit.
-  4. **Composite** → `BloomCombine.fx` binds bloom to `s1`, `outputTarget` = back buffer.
-- **Shaders (`resources/`)**: `BloomExtract.fx` = **max-channel brightness** soft-knee
-  quadratic threshold (`contribution = max(soft, brightness-threshold)/brightness`);
-  `BloomCombine.fx` = **`base.rgb + bloom.rgb * BloomIntensity`** — a plain additive add,
-  **NO tone-mapping** (no Reinhard/ACES anywhere); the HalfVector4 scene is truncated to
-  [0,1] only by the final `Color` back-buffer write, so overbright cores hard-clip to white.
+     `Dest=One`, `BlendFactor=scatter*255`), optional `BloomUpsampleBicubic.fx`.
+     (The old extra 15-tap `GaussianBlur.fx` pass was removed — spread comes from
+     iterations/scatter.)
+  4. **Composite** → `BloomCombine.fx` binds bloom to `s1`, `outputTarget` = back buffer:
+     `base + bloom*intensity`, then an optional **shoulder tonemap** — identity below
+     `TonemapShoulder`, extended-Reinhard rolloff reaching white at `TonemapWhitePoint`,
+     with `TonemapDesaturate` blending hue-preserving (max-channel) vs per-channel
+     (film-like bleach) compression. Tonemap off = legacy hard clip at the back buffer.
+- **Shaders (`resources/`)**: `BloomExtract.fx` = 13-tap Karis prefilter + **max-channel
+  brightness** soft-knee quadratic threshold; `BloomDownsample.fx` = 13-tap chain filter;
+  `BloomCombine.fx` = additive combine + shoulder tonemap (see above).
 - **Knobs** = `BloomSettings` in `Data/Registries/GameSettings.cs` (persisted in
   `user settings/settings.json` under `bloom`): `threshold=0.8`, `softKnee=0.5`,
-  `intensity=1.0`, `scatter=0.7`, `iterations=6`, `bicubicUpsampling=true`. Wired in
+  `intensity=1.0`, `scatter=0.7`, `iterations=6`, `bicubicUpsampling=true`, plus
+  `tonemap=true`, `tonemapShoulder=0.9`, `tonemapWhitePoint=6`, `tonemapDesaturate=0.4`.
+  UI in `Editor/SettingsWindow.cs` `DrawBloomTab`. Wired in
   `GameRenderer.Pipeline.cs` (`_frameBloomSettings`, `BeginScene` at Scene `OnBegin`,
   `EndScene` at `OnEnd`).
 - **HDR intensity encoding** = `Core/HdrColor.cs`, cap **`MaxHdrIntensity=4f`** (must match
@@ -363,18 +370,17 @@ The scene→bloom→screen chain, concrete files:
   clamped RGB clears `threshold` — they cannot overflow the HalfVector4 RT the way
   `HdrSprite` effects do (relevant if you want buff glows to bloom like spell effects).
 
-### Layered-additive intensity — the clamp gap (for the review ask)
-There is **no per-spell / per-region combined-intensity clamp or tone-map**. Overlapping
-additive layers from one spell each add independently into the scene RT (`base + additive`,
-unbounded up), then extract+`intensity` amplify the sum; the only ceiling is per-layer
-`MaxHdrIntensity=4` at encode time — N overlapping layers still reach ~4N before the final
-[0,1] back-buffer clip whitewashes the core. To "clamp combined intensity within one spell"
-the two natural insertion points are: (a) a **tone-map step** (Reinhard/ACES on `base.rgb`)
-added to `BloomCombine.fx` or a new pre-composite pass in `Bloom.cs` `EndScene`; or (b)
-**intensity budgeting** where a spell spawns its layered `Effect`s (`Render/EffectManager.cs`
-spawn API + the `SpellEffectSystem`/`Game1.Spells.cs` callers). Existing parity notes:
-`todos/bloom_parity.md` (bright-white cores vs soft-wide glow), `todos/rendering_pitfalls.md`
-(C++ ignored per-sublayer HDR intensities, so C++-tuned spells.json values are inflated).
+### Layered-additive intensity — how stacking is tamed (updated 2026-07-11)
+Overlapping additive layers from one spell each add independently into the scene RT
+(`base + additive`, unbounded up); the only per-layer ceiling is `MaxHdrIntensity=4` at
+encode time. Since 2026-07-11 the **shoulder tonemap in `BloomCombine.fx`** rolls the
+summed result off smoothly (white only at `tonemapWhitePoint`) instead of hard-clipping
+at 1.0, so stacked layers stay colored. There is still **no per-spell clamp** — if global
+compression proves insufficient, the remaining options are **intensity budgeting** at
+spawn (`Render/EffectManager.cs` spawn API + `SpellEffectSystem`/`Game1.Spells.cs`
+callers) or a **Max-blend within-spell layer group**. Related notes:
+`todos/rendering_pitfalls.md` (C++ ignored per-sublayer HDR intensities, so C++-tuned
+spells.json values are inflated — retune down rather than compensating with clamps).
 
 ## Target feature set — what we want the renderer to do
 
