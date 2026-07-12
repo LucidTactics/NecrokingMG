@@ -121,9 +121,15 @@ StuckTime/MoveEffort/GhostMode/InPhysics + all gameplay state), `MoveEffort` gai
 enum, `UnitArrays` (swap-and-pop removal with O(1) `_idToIndex`), `UnitUtil.ResolveUnitIndex`.
 **Look/edit here when…** adding per-unit movement state; index-vs-id stability questions.
 
-### `Necroking/Movement/FacingUtil.cs` — shared turn-rate-capped rotation
-`FacingUtil.TurnToward` — the one rotation step used by `Simulation.UpdateFacingAngles`
-and handler FacePosition calls. **Look/edit here when…** turn speed / facing snap.
+### `Necroking/Movement/Locomotion.cs` — `FacingUtil` (shared turn-rate-capped rotation)
+`FacingUtil` lives in `Locomotion.cs` (there is **no** `FacingUtil.cs`).
+`TurnToward(unit, targetAngle, dt, gd)` = the turn-rate-capped rotation step used by
+`Simulation.UpdateFacingAngles` and handler FacePosition calls;
+`TurnTowardPosition(unit, worldTarget, dt, gd)` turns toward a world point;
+`ForwardDir(unit)` = `AngleToDir(unit.FacingAngle)` (the unit's facing vector, `FacingAngle`
+in degrees). For an **instant** face-snap (no turn cap — the `Face(vector)` equivalent),
+write `unit.FacingAngle` directly or, for the player, `Simulation.SetNecromancerFacing(deg)`.
+**Look/edit here when…** turn speed / facing snap / "which way is the unit facing".
 
 ### `Necroking/Game/Simulation.cs` — UpdateMovement + steering entry points
 The per-frame consumer of everything above.

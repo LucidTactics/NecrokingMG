@@ -73,6 +73,26 @@ forwards to it so AI and sim share one formula (they previously drifted — 1.5f
   else `sim.ResolvePendingAttack(idx)`. Anim `effect_time_ms` comes from the sprite's
   meta JSON via `Render/AnimationMeta.cs` `AnimMetaLoader` (missing effect_time on
   JumpTakeoff/JumpLand = silent timing bugs; loader logs a warning).
+- **Voluntary (non-pounce) jump — `JumpSystem.BeginJumpAttack(units, idx, endPos, arcPeak)`**
+  (`Necroking/Game/JumpSystem.cs`): a stationary leap that skips TakeoffApproach and starts
+  **airborne** (`Kind.NecromancerAttack`), scripted-lerps to `endPos` on a parabolic arc and
+  resolves a melee `PendingAttack` at landing. Already wired to the **necromancer Space key**
+  in `Game1.cs` (`~line 3596`; leaps `FacingUtil.ForwardDir*4f`, guards `JumpPhase==0 &&
+  !Incap.IsLocked && !_pendingSpell.Active`). **This is the template for a new voluntary
+  "jump/leap" ability** that reuses the jump anim states without a pounce target — pick a
+  `Vec2` destination (no pounce lead/target needed). All phases tick per-unit via
+  **`JumpSystem.TickUnit(dt, units, idx, ctrl, sim)`**, called from `Game1.Animation.cs`
+  (`~line 423`); it returns true to make the anim loop skip normal anim/movement that frame.
+  Jump state fields on `Movement/UnitModel.cs`: `JumpPhase`/`Jumping`/`JumpKind`/`JumpStartPos`/
+  `JumpEndPos`/`JumpArcPeak`/`JumpTimer`/`JumpDuration`/`JumpPlaybackSpeed`.
+- **Fly height / vertical draw offset = `Unit.Z`** (world units; `Movement/UnitModel.cs`) — the
+  `SetFlyHeightTmp` equivalent. `JumpSystem.ApplyArc` writes `Z = arcPeak*4*t*(1-t)` each
+  airborne frame and zeroes it at landing/`EndJump`. Rendering lifts the sprite by it:
+  `GameRenderer.Units.cs` (`~line 1062`) draws at `WorldToScreen(u.RenderPos, u.Z, camera)`,
+  and `Camera25D.WorldToScreen` subtracts `worldHeight*Zoom*YRatio` from screen-Y. It is a
+  **persistent field written every frame by the scripted-motion owner** (JumpSystem/
+  PhysicsSystem), NOT a self-resetting "temp" — the owner MUST zero it on exit or the unit
+  stays floating (`EndJump`/`TickRecovery` do). Corpses use `Corpse.Z` identically.
 
 ### `Necroking/Game1.WorldClicks.cs` — the player click → melee order (regression lives here)
 - **`TryAttackClick(mouseWorld, necroIdx)`** — LMB/RMB on an enemy orders the necromancer to
