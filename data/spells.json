@@ -109,7 +109,6 @@
       "primaryLevel": 1,
       "cooldown": 1,
       "damage": 3,
-      "gravityScale": 1,
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
         "fps": 3,
@@ -144,7 +143,6 @@
       "primaryLevel": 1,
       "cooldown": 1,
       "damage": 3,
-      "gravityScale": 1,
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
         "fps": 3,
@@ -180,7 +178,6 @@
       "primaryLevel": 1,
       "cooldown": 1,
       "damage": 3,
-      "gravityScale": 0.25,
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
         "fps": 3,
@@ -200,6 +197,7 @@
       "quantity": 10,
       "trajectory": "Swirly",
       "projectileSpeed": 28.3,
+      "gravityScale": 0.25,
       "precisionBonus": -5,
       "projectileDelay": 0.08,
       "projectileFlipbook": {
@@ -231,7 +229,6 @@
       "primaryLevel": 1,
       "cooldown": 1,
       "damage": 3,
-      "gravityScale": 0.25,
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
         "fps": 3,
@@ -251,6 +248,7 @@
       "quantity": 10,
       "trajectory": "HomingSwirly",
       "projectileSpeed": 28.3,
+      "gravityScale": 0.25,
       "precisionBonus": -5,
       "projectileDelay": 0.08,
       "projectileFlipbook": {
@@ -578,26 +576,28 @@
       "primaryLevel": 1,
       "cooldown": 3,
       "castingBuffID": "buff_4_copy_copy",
-      "damage": 15,
+      "defenseNegating": false,
+      "damage": 2,
       "beamDisplacement": 0.15,
-      "beamCoreWidth": 0.5,
-      "beamGlowWidth": 1,
-      "beamFlickerMin": 0.8,
-      "beamFlickerHz": 1,
-      "beamJitterHz": 10,
+      "beamCoreWidth": 1,
+      "beamGlowWidth": 2,
+      "beamFlickerMin": 0.9,
+      "beamFlickerMax": 1.2,
+      "beamFlickerHz": 2,
+      "beamJitterHz": 7,
       "beamCoreColor": {
         "r": 255,
         "g": 253,
         "b": 196,
         "a": 255,
-        "intensity": 3.1730769
+        "intensity": 10.295455
       },
       "beamGlowColor": {
         "r": 149,
         "g": 231,
         "b": 255,
-        "a": 180,
-        "intensity": 3.4615386
+        "a": 150,
+        "intensity": 8.727272
       },
       "beamChainBranches": 2,
       "beamChainDepth": 2,

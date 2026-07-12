@@ -320,6 +320,15 @@ public class Unit
     /// WASD-cancels-routine logic in Simulation needs the raw input to fire.</summary>
     public bool IsLockedByAction()
         => CorpseInteractPhase != 0 || Incap.IsLocked || JumpPhase != 0;
+
+    /// <summary>True when the unit can no longer sustain a channeled cast (Beam/Drain
+    /// hold-channel): any incapacitation (stun / knockdown / sleep / freeze), physics
+    /// displacement (knockback launch), a paralysis stun, or a jump. The casting
+    /// system (LightningSystem's per-tick caster check) cuts the unit's beams/drains
+    /// the frame this turns true — channel-interrupt rules live here, not per-spell,
+    /// so every current and future channel breaks consistently.</summary>
+    public bool IsChannelBroken()
+        => Incap.Active || InPhysics || ParalysisStunTimer > 0f || JumpPhase != 0;
     /// <summary>When non-negative during a PutDown (CorpseInteractPhase==5), the corpse
     /// will be loaded into env-object[PutDownTableIdx]'s first empty corpse slot at
     /// anim completion instead of being placed on the ground at LerpStartPos.

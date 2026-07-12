@@ -15,6 +15,15 @@ public class BloomSettings
     [JsonPropertyName("scatter")] public float Scatter { get; set; } = 0.7f;
     [JsonPropertyName("iterations")] public int Iterations { get; set; } = 6;
     [JsonPropertyName("bicubicUpsampling")] public bool BicubicUpsampling { get; set; } = true;
+    // Shoulder tonemap in BloomCombine.fx: pixels below Shoulder are untouched,
+    // brighter values roll off smoothly and reach white at WhitePoint instead of
+    // hard-clipping at 1.0 (stacked additive spell layers stay colored).
+    [JsonPropertyName("tonemap")] public bool Tonemap { get; set; } = true;
+    [JsonPropertyName("tonemapShoulder")] public float TonemapShoulder { get; set; } = 0.9f;
+    [JsonPropertyName("tonemapWhitePoint")] public float TonemapWhitePoint { get; set; } = 6.0f;
+    // 0 = hue-preserving (bright glow keeps its color), 1 = per-channel
+    // (hot cores bleach to white like film). Blended in the shader.
+    [JsonPropertyName("tonemapDesaturate")] public float TonemapDesaturate { get; set; } = 0.4f;
 }
 
 public class GrassSettings

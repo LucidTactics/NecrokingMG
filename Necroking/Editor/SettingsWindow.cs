@@ -309,6 +309,28 @@ public class SettingsWindow
         if (bicubic != bloom.BicubicUpsampling) { bloom.BicubicUpsampling = bicubic; MarkDirty(); }
         y += rowH;
 
+        y += 6; // spacing
+
+        // SET08: Tonemap (shoulder rolloff instead of hard clip at 1.0)
+        bool tonemap = _ui.DrawCheckbox("Tonemap", bloom.Tonemap, x, y);
+        if (tonemap != bloom.Tonemap) { bloom.Tonemap = tonemap; MarkDirty(); }
+        y += rowH;
+
+        // SET09: Tonemap Shoulder (0.0 - 0.95) — rolloff start; below it the image is untouched
+        float shoulder = _ui.DrawFloatField("set_bloom_tm_shoulder", "Shoulder", bloom.TonemapShoulder, x, y, w, 0.05f);
+        if (MathF.Abs(shoulder - bloom.TonemapShoulder) > 0.0001f) { bloom.TonemapShoulder = Math.Clamp(shoulder, 0f, 0.95f); MarkDirty(); }
+        y += rowH;
+
+        // SET10: Tonemap White Point (1.1 - 16) — HDR value that maps to pure white
+        float whitePoint = _ui.DrawSliderFloat("set_bloom_tm_whitepoint", "White Point", bloom.TonemapWhitePoint, 1.1f, 16f, x, y, w);
+        if (MathF.Abs(whitePoint - bloom.TonemapWhitePoint) > 0.0001f) { bloom.TonemapWhitePoint = whitePoint; MarkDirty(); }
+        y += rowH;
+
+        // SET11: Tonemap Desaturate (0 - 1) — 0 keeps glow colored, 1 bleaches hot cores to white
+        float desat = _ui.DrawSliderFloat("set_bloom_tm_desat", "Desaturate", bloom.TonemapDesaturate, 0f, 1f, x, y, w);
+        if (MathF.Abs(desat - bloom.TonemapDesaturate) > 0.0001f) { bloom.TonemapDesaturate = desat; MarkDirty(); }
+        y += rowH;
+
         return y - startY;
     }
 

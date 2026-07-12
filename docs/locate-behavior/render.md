@@ -315,6 +315,73 @@ of 2026-07-03; the deferred-issue list behind several of them is
 - Rendering test scenarios: `blend_test`, `godray_render_test`, `BloomDebugScenario`
   (identical-parameter twins exist in C++ for pixel-readback comparison).
 
+## Bloom & HDR intensity — the pass internals (where glow is thresholded/composited)
+
+The scene→bloom→screen chain, concrete files:
+
+- **`Render/Bloom.cs` (`BloomRenderer`)** — the C# pass that owns everything. `Init` loads
+  the four shaders; `CreateTargets` allocates the **`SurfaceFormat.HalfVector4` scene RT**
+  (LDR `Color` fallback) so additive draws exceed 1.0, plus a half-res mip chain (up to
+  `MaxMips=8`, each ½ the previous). `BeginScene` binds+clears the scene
+  RT (Scene phase `OnBegin`). **`EndScene` is the whole post pass**, four steps (Jimenez
+  SIGGRAPH-2014 style since 2026-07-11):
+  1. **Prefilter/extract** → `BloomExtract.fx`: 13-tap downsample with **Karis-weighted
+     group averages** (firefly suppression) + soft-knee threshold, into mip[0].
+  2. **Downsample** chain → `BloomDownsample.fx` (13-tap Jimenez filter, no Karis;
+     `iters = clamp(Iterations,1,mipCount)`).
+  3. **Upsample** chain — additive scatter blend (`ColorSourceBlend=BlendFactor`,
+     `Dest=One`, `BlendFactor=scatter*255`), optional `BloomUpsampleBicubic.fx`.
+     (The old extra 15-tap `GaussianBlur.fx` pass was removed — spread comes from
+     iterations/scatter.)
+  4. **Composite** → `BloomCombine.fx` binds bloom to `s1`, `outputTarget` = back buffer:
+     `base + bloom*intensity`, then an optional **shoulder tonemap** — identity below
+     `TonemapShoulder`, extended-Reinhard rolloff reaching white at `TonemapWhitePoint`,
+     with `TonemapDesaturate` blending hue-preserving (max-channel) vs per-channel
+     (film-like bleach) compression. Tonemap off = legacy hard clip at the back buffer.
+- **Shaders (`resources/`)**: `BloomExtract.fx` = 13-tap Karis prefilter + **max-channel
+  brightness** soft-knee quadratic threshold; `BloomDownsample.fx` = 13-tap chain filter;
+  `BloomCombine.fx` = additive combine + shoulder tonemap (see above).
+- **Knobs** = `BloomSettings` in `Data/Registries/GameSettings.cs` (persisted in
+  `user settings/settings.json` under `bloom`): `threshold=0.8`, `softKnee=0.5`,
+  `intensity=1.0`, `scatter=0.7`, `iterations=6`, `bicubicUpsampling=true`, plus
+  `tonemap=true`, `tonemapShoulder=0.9`, `tonemapWhitePoint=6`, `tonemapDesaturate=0.4`.
+  UI in `Editor/SettingsWindow.cs` `DrawBloomTab`. Wired in
+  `GameRenderer.Pipeline.cs` (`_frameBloomSettings`, `BeginScene` at Scene `OnBegin`,
+  `EndScene` at `OnEnd`).
+- **HDR intensity encoding** = `Core/HdrColor.cs`, cap **`MaxHdrIntensity=4f`** (must match
+  `HdrSprite.fx` `MaxIntensity`). Two encoders: `ToHdrVertex` (additive — fade baked into
+  RGB, `intensity/4` in the alpha byte) and `ToHdrVertexAlpha` (alpha mode — `intensity/4`
+  baked into RGB, real fade in alpha). `HdrSprite.fx` decodes both (AlphaMode lerp); scene
+  emissives thus write >1.0 into the HalfVector4 RT and feed bloom. `ToScaledColor` bleaches
+  HDR — **color-picker only**. `HdrIntensity.fx` = god-ray VS/PS (`rgb*max(Intensity,0)`).
+
+### Where each spell/buff glow layer is drawn (blend + intensity per source)
+- **EffectManager one-shots (spell impacts, cast flares)** — `GameRenderer.World.cs`
+  `DrawEffectsFiltered(blendMode)`: per-`Effect` uses `eff.HdrIntensity`/`eff.Tint`/
+  `eff.BlendMode`, encodes via `ToHdrVertexAlpha` (blend 0) or `ToHdrVertex` (blend 1).
+  Submitted in the **`HdrEffects` SpriteQueuePass** (`GameRenderer.Pipeline.cs`
+  `CollectFxItems` → `WorldLayer.EffectsHdrAlpha`/`EffectsHdrAdditive`, materials
+  `Materials.HdrAlpha`/`HdrAdditive`). These DO write true HDR into the scene RT.
+- **BuffVisualSystem (auras/orbitals/lightning/weapon particles)** —
+  `Render/BuffVisualSystem.cs`, a **native-encoding island drawn through the raw Scene
+  batch (AlphaBlend), NOT the HDR additive pass**. Its `EncodeColor(hdr, alpha, blendMode)`
+  additive path uses the A=0 premult trick and **CPU-clamps per channel to 255**
+  (`hdr.R * min(Intensity,4) * alpha`). So buff glows are LDR-capped and only bloom if their
+  clamped RGB clears `threshold` — they cannot overflow the HalfVector4 RT the way
+  `HdrSprite` effects do (relevant if you want buff glows to bloom like spell effects).
+
+### Layered-additive intensity — how stacking is tamed (updated 2026-07-11)
+Overlapping additive layers from one spell each add independently into the scene RT
+(`base + additive`, unbounded up); the only per-layer ceiling is `MaxHdrIntensity=4` at
+encode time. Since 2026-07-11 the **shoulder tonemap in `BloomCombine.fx`** rolls the
+summed result off smoothly (white only at `tonemapWhitePoint`) instead of hard-clipping
+at 1.0, so stacked layers stay colored. There is still **no per-spell clamp** — if global
+compression proves insufficient, the remaining options are **intensity budgeting** at
+spawn (`Render/EffectManager.cs` spawn API + `SpellEffectSystem`/`Game1.Spells.cs`
+callers) or a **Max-blend within-spell layer group**. Related notes:
+`todos/rendering_pitfalls.md` (C++ ignored per-sublayer HDR intensities, so C++-tuned
+spells.json values are inflated — retune down rather than compensating with clamps).
+
 ## Target feature set — what we want the renderer to do
 
 The wishlist that the pass-based redesign (previous section) should be designed
@@ -421,6 +488,60 @@ instead of the number), `Height` (**world-units height passed to `WorldToScreen`
   (it already batches world-space primitives like `DrawProjectiles`/`DrawEffectsFiltered`
   inside the world `_g._spriteBatch.Begin(...)` block) and call it from the world section of
   `GameRenderer.Draw.cs`. Use `WorldToScreen` for every endpoint; do not draw in world units.
+
+## Lightning / zap / beam & drain-tendril rasterization (the jagged-polyline draw)
+
+**Where the point list becomes drawn primitives: `Render/LightningRenderer.cs`.** There is
+NO vertex buffer or line-strip mesh — every bolt segment is a **rotated 1×1-pixel
+`SpriteBatch.Draw`** (a stretched-quad sprite), submitted into the shared additive HDR batch.
+This is why at high zoom the bolt reads as a chain of angled rectangles with gaps/seams at
+the joints: each segment is an independent axis-stretched quad rotated about origin
+`(0, 0.5f)` at `points[i]`, with no miter/round join between consecutive quads.
+
+- **Data/sim side** (`Necroking/Game/LightningSystem.cs`, ns `Necroking.GameSystems`):
+  `LightningSystem` holds `_strikes`/`_zaps`/`_beams`/`_drains` lists; `Update` only ages
+  them. `LightningStyle` carries the bolt-shape knobs (`Subdivisions`, `Displacement`,
+  branch params, `CoreColor`/`GlowColor` as `HdrColor`, `CoreWidth`/`GlowWidth`). Drains use
+  `DrainVisualParams` instead. **No point list is stored** — the polyline is regenerated
+  every frame at draw time from endpoints + a per-frame seed.
+- **Submission / batch context**: `LightningRenderer.Draw()` runs inside the callback
+  `_cbFxLightning` in `GameRenderer.Pipeline.cs`, submitted at `WorldLayer.EffectsHdrAdditive`
+  with material `Materials.HdrAdditive` (HdrSprite.fx, additive). It is a **native-encoding
+  island** — it calls the raw `_spriteBatch.Draw` directly with HDR-packed vertex colors, NOT
+  the premult-converting `SpriteScope`. Colors come from `HdrColor.ToHdrVertex(color, fade,
+  intensity)`. Bloom then picks up the >1.0 additive output (see Bloom section).
+- **Point-list generation (midpoint displacement)**: `GenerateBoltPoints(start, end,
+  subdivisions, displacement, ref seed)` — recursive midpoint displacement, `2^subdivisions+1`
+  points, each midpoint offset along the segment perpendicular by `±segLen*displacement` via
+  an LCG `seed`. `GenerateBranches` forks extra polylines off the middle 50%. Endpoints are
+  **screen-space** pixels (already `WorldToScreen`-projected by the four `Draw()` loops).
+- **The two-pass core/glow rasterizer**: `DrawBoltPolylineStatic(batch, pixel, points,
+  coreHdr, glowHdr, coreWidth, glowWidth, coreFade, glowFade)` — loops segments, and for each
+  draws **glow quad first (wide) then core quad (narrow)**, both the same rotated-pixel sprite
+  at different `scale.Y` (width) and different HDR fade. `DrawLightningBoltStatic` is the
+  entry that applies flicker/jitter, draws branches (decayed width) then the main bolt.
+- **Drain tendrils reuse the SAME segment-quad approach** but a different shape generator:
+  `DrawDrainTendrils` → `DrawTendrilStatic` builds an arcing sine-swayed point array
+  (`segments = length/20`) and rasterizes it with the identical glow-then-core rotated-pixel
+  double-draw. So bolts and tendrils share the rasterization *pattern* but each inlines its own
+  segment loop — there is **no single shared polyline utility**; consolidating them (or moving
+  to a connected triangle-strip) means changing both `DrawBoltPolylineStatic` and
+  `DrawTendrilStatic`.
+- **Statics are reused elsewhere**: `LightningRenderer.DrawLightningBoltStatic` /
+  `DrawBoltPolylineStatic` / `DrawTendrilStatic` are `public static` and also called by
+  `Editor/SpellPreview.cs` and the `SpellVisualTestScenario`/`BloomTestScenario` — any
+  strip-rework must keep those call sites (they pass a raw `SpriteBatch` with HdrSprite.fx active).
+- **Not the same as `DrawUtils.DrawLine`**: the rope/bezier overlay helper above
+  (`Render/DrawUtils.cs`) is also a rotated-pixel segment but is straight-alpha screen-space
+  and unrelated to lightning — lightning does its own HDR-encoded draw and does not call it.
+
+**To render a connected strip instead of a chain of quads** the change is localized to
+`Render/LightningRenderer.cs` `DrawBoltPolylineStatic` (and `DrawTendrilStatic` for drains):
+either emit a triangle strip / `DrawUserPrimitives` (a custom vertex path — note C# is
+pixel-shader-only on SpriteBatch's built-in VS, see "Absent entirely → Custom vertex shaders"),
+or keep SpriteBatch but bridge the joints (round-cap glow sprite at each interior point, or
+overlap/miter adjacent quads). The core/glow two-pass and `HdrColor.ToHdrVertex` encoding must
+be preserved so bloom still fires.
 
 ### `Necroking/Render/Flipbook.cs` — flipbook (sprite-sheet frame sequence)
 What lives here: `class Flipbook` — loads a sprite-sheet texture (cols×rows, FPS) and

@@ -74,7 +74,9 @@ public struct PlayerLocoInput
     public float DragSlow;
     /// <summary>Mouse-driven target facing angle in degrees; NaN = none.</summary>
     public float FacingOverrideDeg;
-    /// <summary>Frozen cast aim angle in degrees while casting; NaN = none.</summary>
+    /// <summary>Frozen cast aim angle in degrees while casting or channeling;
+    /// NaN = none. Owns the player's facing whenever set — independent of
+    /// CastPlant, so a channel that permits movement still locks facing.</summary>
     public float CastAimAngleDeg;
 
     public static PlayerLocoInput None => new PlayerLocoInput
@@ -451,13 +453,16 @@ public static class Locomotion
 
                 float targetAngle;
                 float turnMult = 1f;
-                if (player.CastPlant && !float.IsNaN(player.CastAimAngleDeg))
+                if (!float.IsNaN(player.CastAimAngleDeg))
                 {
-                    // Cast plant: the body swings to face the frozen cast aim point
+                    // Cast aim: the body swings to face the frozen cast aim point
                     // (where the spell will actually go — not the live cursor) at a
                     // boosted rate, overriding the walk/jog facing hysteresis. The
                     // pivot overlaps the brake, so even a 180° sprint-cast is aimed
-                    // before the cast anim's effect frame.
+                    // before the cast anim's effect frame. Keyed off the aim angle
+                    // alone (not CastPlant) so a hold-channel with movement allowed
+                    // (ChannelStopsMovement off) still owns the facing — the caster
+                    // may walk, but never voluntarily turns away from its target.
                     targetAngle = player.CastAimAngleDeg;
                     turnMult = gameData.Settings.Animation.CastTurnBoost;
                 }

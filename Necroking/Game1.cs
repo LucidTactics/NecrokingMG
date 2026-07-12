@@ -651,7 +651,21 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // Menu state as of the last input capture — detects mode transitions so the
     // in-flight press gesture can be invalidated (see Update, ConsumeGesture).
     private MenuState _menuStateAtLastCapture;
+    // --- Beam/Drain hold-channel (player) ---
+    // Set by SpellEffectSystem.StartChannel when a player Beam/Drain fires; the
+    // channel lives while the slot's key stays held AND the caster can sustain it
+    // (see the channel-hold block in Update + SyncChannelPlant). While live, the
+    // caster holds the Spell1 effect frame, faces the channel target (or the
+    // initial cast direction), and — per the spell's ChannelStopsMovement — plants.
     internal int _channelingSlot = -1;
+    internal string _channelingSpellID = "";
+    // Dev-only: `cast <spell> <x> <y> hold=<secs>` sets this so a dev-started
+    // channel counts as "key held" for that long (no physical key to hold).
+    internal float _devChannelHoldTimer;
+    // Locked cast facing (deg). Follows the live channel target each frame; kept
+    // at its last value when the target is gone so the caster never voluntarily
+    // turns away mid-channel. NaN when not channeling.
+    internal float _channelAimAngleDeg = float.NaN;
     private readonly TextureCache _itemTextureCache = new();
     internal int _hoveredObjectIdx = -1;
     internal int _hoveredCorpseIdx = -1;
@@ -3599,15 +3613,22 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             }
 
             // --- Beam/drain channel-hold ---
-            if (_channelingSlot >= 0
-                && !SpellBarBindings.IsSlotHeld(_input, _channelingSlot))
+            // The channel ends when the key is released, the caster is gone/broken
+            // (stun/knockdown/knockback/paralysis — mirrors LightningSystem's core
+            // interrupt), or its beam/drain died on its own (target died, max
+            // duration, sim-side interrupt) — the slot state must never outlive
+            // the actual beam, or the caster would stay posed/planted over nothing.
+            if (_channelingSlot >= 0)
             {
-                if (necroIdx >= 0)
-                {
-                    _sim.Lightning.CancelBeamsForCaster(_sim.Units[necroIdx].Id);
-                    _sim.Lightning.CancelDrainsForCaster(_sim.Units[necroIdx].Id);
-                }
-                _channelingSlot = -1;
+                if (_devChannelHoldTimer > 0f)
+                    _devChannelHoldTimer -= (float)gameTime.ElapsedGameTime.TotalSeconds;
+                bool released = !SpellBarBindings.IsSlotHeld(_input, _channelingSlot)
+                    && _devChannelHoldTimer <= 0f;
+                bool sustained = necroIdx >= 0
+                    && !_sim.Units[necroIdx].IsChannelBroken()
+                    && HasActiveChannelSource(_sim.Units[necroIdx].Id);
+                if (released || !sustained)
+                    CancelPlayerChannel(necroIdx);
             }
 
             // (Spell-bar slot clicks are handled by SpellBarLayer in the router

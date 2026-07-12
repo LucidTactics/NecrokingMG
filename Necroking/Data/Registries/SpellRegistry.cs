@@ -506,6 +506,13 @@ public class SpellDef : INamedDef
     [JsonPropertyName("godRayNoiseScale")] public float GodRayNoiseScale { get; set; } = 3.0f;
 
     // ============ BEAM ============
+    // Shared hold-channel behavior (Beam + Drain): while the caster channels, stop
+    // its voluntary movement (the player's WASD is ignored; facing stays locked to
+    // the channel target either way). Off = the caster may walk while channeling.
+    [EditorVisible("Category", "Beam", "Drain")]
+    [EditorField(Label = "Stop Movement", Group = "BEAM", Order = 600, GroupColorR = 100, GroupColorG = 220, GroupColorB = 255)]
+    [JsonPropertyName("channelStopsMovement")] public bool ChannelStopsMovement { get; set; } = true;
+
     [EditorVisible("Category", "Beam")]
     [EditorField(Label = "Tick Rate", Group = "BEAM", Order = 601, Step = 0.01f, Decimals = 2, GroupColorR = 100, GroupColorG = 220, GroupColorB = 255)]
     [JsonPropertyName("beamTickRate")] public float BeamTickRate { get; set; } = 0.25f;

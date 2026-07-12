@@ -293,6 +293,16 @@ public class AnimController
     public int CurrentAnimDurationMs => GetEffectiveTotalDurationMs();
     public float AnimTime { get => _animTime; set => _animTime = value; }
     public float PlaybackSpeed { get => _playbackSpeed; set => _playbackSpeed = MathF.Max(0.1f, value); }
+
+    /// <summary>While true, playback pins at the current state's effect frame instead
+    /// of playing past it — the anim advances normally up to effect_time_ms, then
+    /// holds that pose (never finishing) until the flag clears, at which point the
+    /// remainder plays as a natural wind-down. Used by the Beam/Drain hold-channel so
+    /// the caster holds the casting pose for the channel's duration. The
+    /// JustHitEffectFrame edge still fires exactly once on the first crossing.
+    /// Owners set this declaratively every frame (it auto-clears on state switch, so
+    /// it can never leak into an unrelated animation).</summary>
+    public bool HoldAtEffectFrame;
     public void SetReversePlayback(bool reverse) => _reversePlayback = reverse;
 
     // --- Edge flags ---
@@ -554,6 +564,7 @@ public class AnimController
         _animTime = 0f;
         _finished = false;
         _playbackSpeed = 1f;
+        HoldAtEffectFrame = false; // a channel hold never survives into another state
         ResolveForState();
 
         if (isLocoToLoco)
@@ -601,6 +612,12 @@ public class AnimController
             if (effectThreshold > 0 && animTimeBefore < effectThreshold && _animTime >= effectThreshold)
                 JustHitEffectFrame = true;
 
+            // Channel hold: pin at the effect frame (clamping to exactly the
+            // threshold keeps the first crossing's edge above while later frames
+            // see animTimeBefore == threshold and don't re-fire it).
+            if (HoldAtEffectFrame && effectThreshold > 0 && _animTime > effectThreshold)
+                _animTime = effectThreshold;
+
             var mode = GetPlayMode(_currentState);
 
             if (mode == AnimPlayMode.Loop)
@@ -643,6 +660,10 @@ public class AnimController
             float effectT = totalT * 0.5f;
             if (animTimeBefore < effectT && _animTime >= effectT)
                 JustHitEffectFrame = true;
+
+            // Channel hold: pin at the effect frame (see ms-based path above).
+            if (HoldAtEffectFrame && _animTime > effectT)
+                _animTime = effectT;
 
             var mode = GetPlayMode(_currentState);
             if (mode == AnimPlayMode.Loop)

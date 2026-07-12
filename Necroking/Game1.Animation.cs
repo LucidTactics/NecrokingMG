@@ -296,7 +296,11 @@ public partial class Game1
     {
         if (_pendingCastAnim == null)
         {
-            _sim.SetNecromancerCasting(false);
+            // No wind-up in flight — but a live Beam/Drain hold-channel keeps its
+            // own plant + facing lock going (the channel starts at Spell1's effect
+            // frame, exactly when _pendingCastAnim clears, so the two hand off
+            // seamlessly).
+            SyncChannelPlant();
             return;
         }
         int necroIdx = FindNecromancer();
@@ -348,6 +352,38 @@ public partial class Game1
             }
             _unitAnims[uid] = anim;
         }
+    }
+
+    /// <summary>Per-frame movement/facing sync for a live player Beam/Drain
+    /// hold-channel (runs from TickCastPlant once the wind-up's _pendingCastAnim
+    /// has handed off). While channeling:
+    ///  - movement input is planted if the spell's ChannelStopsMovement is on
+    ///    (default for channeled spells),
+    ///  - facing locks to the live channel target — following it as it moves —
+    ///    or holds the last-known cast direction when no target is resolvable,
+    ///    which also means the body never follows the mouse mid-channel (the
+    ///    cast-aim facing outranks the mouse override in Locomotion's ladder).</summary>
+    private void SyncChannelPlant()
+    {
+        if (_channelingSlot < 0) { _sim.SetNecromancerCasting(false); return; }
+        int necroIdx = FindNecromancer();
+        if (necroIdx < 0) { _sim.SetNecromancerCasting(false); return; }
+
+        // Follow the live channel target; a gone/corpse target keeps the last aim.
+        if (TryGetChannelTargetUid(_sim.Units[necroIdx].Id, out uint targetUid)
+            && targetUid != GameConstants.InvalidUnit)
+        {
+            int ti = _sim.ResolveUnitID(targetUid);
+            if (ti >= 0 && _sim.Units[ti].Alive)
+            {
+                var to = _sim.Units[ti].Position - _sim.Units[necroIdx].Position;
+                if (to.LengthSq() > 0.0001f)
+                    _channelAimAngleDeg = MathF.Atan2(to.Y, to.X) * 180f / MathF.PI;
+            }
+        }
+
+        bool stopMovement = _gameData.Spells.Get(_channelingSpellID)?.ChannelStopsMovement ?? true;
+        _sim.SetNecromancerCasting(stopMovement, _channelAimAngleDeg);
     }
 
     private void UpdateAnimations(float dt)
@@ -645,6 +681,12 @@ public partial class Game1
                     animData.Ctrl.PlaybackSpeed = Movement.Locomotion.ComputePlayback(
                         _sim.Units[i], _gameData, curState, _sim.Units[i].Velocity.Length());
                 }
+                // Beam/Drain hold-channel (AI, timer-keyed): pin the Spell1 cast
+                // anim at its effect frame while the channel is live — the caster
+                // holds the casting pose, then the tail plays as the wind-down and
+                // the OneShot override auto-clears (see the legacy-path twin below).
+                animData.Ctrl.HoldAtEffectFrame = _sim.Units[i].ChannelTimer > 0f
+                    && animData.Ctrl.CurrentState == AnimState.Spell1;
                 animData.Ctrl.Update(dt);
 
                 // Cosmetic attack lunge — writes Unit.RenderOffset based on attack anim
@@ -775,6 +817,16 @@ public partial class Game1
             if (_pendingCastAnim.HasValue && i == _sim.NecromancerIndex
                 && IsChanneledCast(_pendingCastAnim.Value.CastAnim))
                 animData.Ctrl.PlaybackSpeed = ChannelPlaybackSpeed(animData.Ctrl, _pendingCastAnim.Value, out _);
+            // Beam/Drain hold-channel: pin the Spell1 cast anim at its effect frame
+            // for as long as the channel is live, so the caster holds the casting
+            // pose instead of playing the wind-down and idling mid-beam. Declarative
+            // — the frame the channel ends (any path) the pin drops and the Spell1
+            // tail plays as the natural wind-down. Covers the player (slot-keyed
+            // channel) and any legacy-path unit on a timer channel.
+            animData.Ctrl.HoldAtEffectFrame =
+                ((i == _sim.NecromancerIndex && _channelingSlot >= 0)
+                    || _sim.Units[i].ChannelTimer > 0f)
+                && animData.Ctrl.CurrentState == AnimState.Spell1;
             animData.Ctrl.Update(dt);
             } // end legacy path
 
@@ -806,8 +858,11 @@ public partial class Game1
                     // here while the tail keeps playing (a fresh slide), or the
                     // player would stand locked through frames that no longer do
                     // anything. The gait picker corrects Walk→Jog/Run next frame.
+                    // EXCEPT when this cast just started a Beam/Drain hold-channel
+                    // (_channelingSlot set inside ExecuteSpellEffect above): the
+                    // channel needs the Spell1 pose held at this very frame.
                     if ((_gameData.Settings.Animation?.CastTailCancel ?? true)
-                        && _sim.NecroMoveInputActive)
+                        && _sim.NecroMoveInputActive && _channelingSlot < 0)
                     {
                         RemoveCastingBuffAll(i);
                         animData.Ctrl.ForceState(AnimState.Walk);

@@ -193,6 +193,48 @@ public partial class Game1 {
       }
    }
 
+   /// <summary>End the player's Beam/Drain hold-channel: cut the beams/drains,
+   /// drop the casting glow, and clear the slot bookkeeping. The held Spell1
+   /// effect-frame pose and the movement/facing plant both release declaratively
+   /// next frame (they key off _channelingSlot — see UpdateAnimations /
+   /// SyncChannelPlant), so the wind-down plays and control returns seamlessly.
+   /// Safe to call when nothing is channeling.</summary>
+   internal void CancelPlayerChannel(int necroIdx) {
+      if (necroIdx >= 0) {
+         _sim.Lightning.CancelBeamsForCaster(_sim.Units[necroIdx].Id);
+         _sim.Lightning.CancelDrainsForCaster(_sim.Units[necroIdx].Id);
+         RemoveCastingBuffAll(necroIdx);
+      }
+      _channelingSlot = -1;
+      _channelingSpellID = "";
+      _channelAimAngleDeg = float.NaN;
+   }
+
+   /// <summary>True while the caster still sources at least one live beam or
+   /// drain — the ground truth the player's _channelingSlot must stay in sync
+   /// with (the sim can kill a beam on its own: target death, max duration,
+   /// caster interrupt).</summary>
+   bool HasActiveChannelSource(uint casterUid)
+      => TryGetChannelTargetUid(casterUid, out _);
+
+   /// <summary>Find the unit the caster's live beam/drain is attached to.
+   /// Returns false when the caster has no live beam/drain; targetUid is
+   /// InvalidUnit for a corpse-targeted drain.</summary>
+   bool TryGetChannelTargetUid(uint casterUid, out uint targetUid) {
+      var beams = _sim.Lightning.Beams;
+      for (int i = 0; i < beams.Count; i++)
+         if (beams[i].CasterID == casterUid) { targetUid = beams[i].TargetID; return true; }
+      var drains = _sim.Lightning.Drains;
+      for (int i = 0; i < drains.Count; i++)
+         if (drains[i].CasterID == casterUid) {
+            targetUid = drains[i].TargetCorpseIdx >= 0
+               ? Core.GameConstants.InvalidUnit : drains[i].TargetID;
+            return true;
+         }
+      targetUid = Core.GameConstants.InvalidUnit;
+      return false;
+   }
+
    /// <summary>Remove all casting effect buffs from a unit (buff_4 variants).</summary>
    void RemoveCastingBuffAll(int unitIdx) {
       var buffs = _sim.UnitsMut[unitIdx].ActiveBuffs;
@@ -285,6 +327,13 @@ public partial class Game1 {
             break;
       }
       if (result != CastResult.Success) return result;
+
+      // A new successful cast while a Beam/Drain channel is live releases the
+      // channel first — its casting is over. (The alternative, stacking a fresh
+      // Spell1 on top of the held channel pose, fights the effect-frame hold and
+      // strands the old beam with no slot tracking it.) A failed cast above
+      // deliberately does NOT break the channel.
+      if (_channelingSlot >= 0) CancelPlayerChannel(necroIdx);
 
       // Successful real-spell cast → light up its hotbar slot.
       FlashSpellSlot(slot);

@@ -19,7 +19,7 @@
 param([switch]$Push)
 
 # >>> EDIT THIS to your Google Drive assets folder <<<
-$DriveAssets = "G:\My Drive\NecrokingMG-Assets"
+$DriveAssets = "G:\Other computers\My Computer\assets"
 
 $RepoAssets = (Resolve-Path (Join-Path $PSScriptRoot "..\assets")).Path
 
