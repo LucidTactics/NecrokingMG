@@ -42,6 +42,12 @@ public class PoisonCloud
     // Effect flags
     public bool AppliesParalysis;
 
+    // Source identity: lets Simulation resolve the SpellDef so every cloud tick
+    // routes through ApplySpellDamage (MR gate + rolls + AN/AP flags) with
+    // caster attribution. CasterID InvalidUnit = casterless (glyph/trap clouds).
+    public string SpellID = "";
+    public uint CasterID = GameConstants.InvalidUnit;
+
     // Debuff config
     public string SlowBuffID = "";
     public string PlaguedBuffID = "";
@@ -79,6 +85,18 @@ public class PoisonCloud
     }
 }
 
+/// <summary>One pending cloud proc for Simulation to resolve through the standard
+/// spell pipeline (mirrors LightningDamage). Damage > 0 = a poison-stack tick;
+/// Paralysis = an MR-gated paralysis application attempt.</summary>
+public struct CloudDamageEvent
+{
+    public int UnitIdx;
+    public int Damage;
+    public string SpellID;
+    public uint CasterID;
+    public bool Paralysis;
+}
+
 public class PoisonCloudSystem
 {
     private readonly List<PoisonCloud> _clouds = new();
@@ -86,11 +104,14 @@ public class PoisonCloudSystem
 
     public IReadOnlyList<PoisonCloud> Clouds => _clouds;
 
-    public void SpawnCloud(Vec2 position, SpellDef spell, Faction ownerFaction)
+    public void SpawnCloud(Vec2 position, SpellDef spell, Faction ownerFaction,
+        uint casterID = GameConstants.InvalidUnit)
     {
         _clouds.Add(new PoisonCloud
         {
             AppliesParalysis = spell.CloudAppliesParalysis,
+            SpellID = spell.Id,
+            CasterID = casterID,
             Position = position,
             Age = 0f,
             Duration = spell.CloudDuration,
@@ -124,7 +145,7 @@ public class PoisonCloudSystem
     }
 
     public void Update(float dt, UnitArrays units, Quadtree qt, List<Corpse> corpses,
-                       List<DamageEvent> damageEvents, BuffRegistry? buffs)
+                       BuffRegistry? buffs, List<CloudDamageEvent>? outDamage = null)
     {
         var nearbyIDs = new List<uint>();
 
@@ -163,7 +184,7 @@ public class PoisonCloudSystem
             if (cloud.TickTimer <= 0f)
             {
                 cloud.TickTimer += cloud.TickInterval;
-                ApplyDamageTick(cloud, units, qt, nearbyIDs, damageEvents, buffs);
+                ApplyDamageTick(cloud, units, qt, nearbyIDs, outDamage, buffs);
             }
         }
     }
@@ -231,7 +252,7 @@ public class PoisonCloudSystem
     }
 
     private void ApplyDamageTick(PoisonCloud cloud, UnitArrays units, Quadtree qt,
-                                  List<uint> nearbyIDs, List<DamageEvent> damageEvents,
+                                  List<uint> nearbyIDs, List<CloudDamageEvent>? outDamage,
                                   BuffRegistry? buffs)
     {
         nearbyIDs.Clear();
@@ -261,17 +282,27 @@ public class PoisonCloudSystem
 
             if (cloud.AppliesParalysis)
             {
-                // Paralysis clouds don't stack poison; they push the target into the
-                // slow → stun sequence. No-op if already in that sequence.
-                PotionSystem.ApplyParalysis(idx, units);
+                // Paralysis attempt — Simulation MR-gates it against the cloud's
+                // spell before pushing the target into the slow → stun sequence.
+                outDamage?.Add(new CloudDamageEvent
+                {
+                    UnitIdx = idx, SpellID = cloud.SpellID, CasterID = cloud.CasterID,
+                    Paralysis = true
+                });
             }
             else
             {
+                // Poison-stack tick — emitted for Simulation.ApplySpellDamage
+                // (MR gate + opposed rolls + the spell's AN/AP flags); the rolled
+                // net amount becomes stacks. Potency/falloff scale the BASE here.
                 int damage = (int)MathF.Ceiling(cloud.BaseDamagePerTick * cloud.Potency * phaseMult * falloff);
                 if (damage > 0)
                 {
-                    DamageSystem.Apply(units, idx, damage,
-                        DamageType.Poison, DamageFlags.ArmorNegating, damageEvents);
+                    outDamage?.Add(new CloudDamageEvent
+                    {
+                        UnitIdx = idx, Damage = damage,
+                        SpellID = cloud.SpellID, CasterID = cloud.CasterID
+                    });
                 }
             }
 

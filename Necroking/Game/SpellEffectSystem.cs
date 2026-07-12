@@ -216,7 +216,7 @@ public static class SpellEffectSystem
                 break;
 
             case "Cloud":
-                ExecuteCloud(spell, sim, target, casterFaction);
+                ExecuteCloud(spell, sim, target, casterFaction, casterIdx);
                 break;
 
             case "WolfHunt":
@@ -666,25 +666,30 @@ public static class SpellEffectSystem
         }
     }
 
-    public static void ExecuteCloud(SpellDef spell, Simulation sim, Vec2 target, Faction casterFaction)
+    /// <summary>Cloud spell: spawn the lingering cloud, then resolve the initial
+    /// AoE burst through the standard spell pipeline (per-unit MR gate + rolls).
+    /// casterIdx -1 = casterless source (trap-fired clouds).</summary>
+    public static void ExecuteCloud(SpellDef spell, Simulation sim, Vec2 target,
+        Faction casterFaction, int casterIdx = -1)
     {
-        sim.PoisonClouds.SpawnCloud(target, spell, casterFaction);
+        var units = sim.UnitsMut;
+        uint casterUid = casterIdx >= 0 && casterIdx < units.Count
+            ? units[casterIdx].Id : GameConstants.InvalidUnit;
+        sim.PoisonClouds.SpawnCloud(target, spell, casterFaction, casterUid);
 
         float radius = spell.AoeRadius > 0 ? spell.AoeRadius : spell.CloudRadius;
 
         if (spell.CloudAppliesParalysis)
         {
-            // Paralysis clouds use their AoE burst to apply paralysis (no poison stacks).
-            PotionSystem.ApplyParalysisAoE(sim.UnitsMut, sim.Quadtree, target, radius, casterFaction);
+            // Paralysis clouds use their AoE burst to apply paralysis (no poison
+            // stacks) — MR-gated per victim when the spell checks MR.
+            sim.ApplyParalysisAoE(target, radius, casterFaction, spell, casterIdx);
             return;
         }
 
         if (spell.Damage > 0)
-        {
-            var flags = SpellDamageFlags(spell);
-            DamageSystem.ApplyAoE(sim.UnitsMut, sim.Quadtree, target, radius,
-                spell.Damage, DamageType.Poison, flags, casterFaction, sim.DamageEventsMut);
-        }
+            sim.ApplySpellDamageAoE(target, radius, spell.Damage, spell, casterIdx,
+                casterFaction, DamageType.Poison);
     }
 
     /// <summary>Build DamageFlags from a spell's AN/DN settings. Public because the

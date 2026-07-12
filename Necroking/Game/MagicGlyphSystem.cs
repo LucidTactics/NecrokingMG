@@ -143,13 +143,13 @@ public class MagicGlyphSystem
         return true;
     }
 
-    private readonly List<DamageEvent> _damageEvents = new();
-    public IReadOnlyList<DamageEvent> DamageEvents => _damageEvents;
+    // (The old private _damageEvents list was removed 2026-07-12: nothing ever
+    // drained it, so glyph damage numbers never rendered. Glyph procs now route
+    // through sim.ApplySpellDamageAoE, whose events feed the normal number flow.)
 
-    public void Update(float dt, UnitArrays units, Quadtree qt,
+    public void Update(float dt, UnitArrays units, Quadtree qt, Simulation sim,
                        PoisonCloudSystem? poisonClouds = null, SpellRegistry? spells = null)
     {
-        _damageEvents.Clear();
         var nearbyIDs = new List<uint>();
 
         for (int i = _glyphs.Count - 1; i >= 0; i--)
@@ -198,6 +198,9 @@ public class MagicGlyphSystem
                         g.DamageApplied = true;
 
                         // Spawn trigger spell (poison / paralyze cloud) if configured.
+                        // Bursts resolve through the standard spell pipeline (MR gate
+                        // + rolls + the spell's AN/AP flags); glyphs are casterless
+                        // (casterIdx -1 → base penetration, unattributed kills).
                         if (!string.IsNullOrEmpty(g.TriggerSpellID) && poisonClouds != null && spells != null)
                         {
                             var spell = spells.Get(g.TriggerSpellID);
@@ -208,28 +211,20 @@ public class MagicGlyphSystem
                                 float aoeR = spell.AoeRadius > 0 ? spell.AoeRadius : spell.CloudRadius;
 
                                 if (spell.CloudAppliesParalysis)
-                                {
-                                    Game.PotionSystem.ApplyParalysisAoE(units, qt, g.Position, aoeR, g.OwnerFaction);
-                                }
+                                    sim.ApplyParalysisAoE(g.Position, aoeR, g.OwnerFaction, spell, -1);
                                 else if (spell.Damage > 0)
-                                {
-                                    // Instant AoE poison burst.
-                                    var flags = DamageFlags.None;
-                                    if (spell.ArmorNegating) flags |= DamageFlags.ArmorNegating;
-                                    if (spell.DefenseNegating) flags |= DamageFlags.DefenseNegating;
-                                    DamageSystem.ApplyAoE(units, qt, g.Position, aoeR,
-                                        spell.Damage, DamageType.Poison, flags, g.OwnerFaction, _damageEvents);
-                                }
+                                    sim.ApplySpellDamageAoE(g.Position, aoeR, spell.Damage,
+                                        spell, -1, g.OwnerFaction, DamageType.Poison);
                             }
                         }
 
-                        // Apply flat physical damage to nearby enemies
+                        // Glyph's own damage: no SpellDef → a generic rolled physical
+                        // hit (opposed DRNs, armor counts in full).
                         if (g.Damage > 0)
                         {
                             float dmgR = g.DamageRadius > 0 ? g.DamageRadius : g.Radius;
-                            DamageSystem.ApplyAoE(units, qt, g.Position, dmgR,
-                                g.Damage, DamageType.Physical, DamageFlags.None,
-                                g.OwnerFaction, _damageEvents);
+                            sim.ApplySpellDamageAoE(g.Position, dmgR, g.Damage,
+                                null, -1, g.OwnerFaction, DamageType.Physical);
                         }
                     }
 

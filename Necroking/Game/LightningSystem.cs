@@ -155,6 +155,9 @@ public class LightningDamage
     /// drains nothing).</summary>
     public int HealTargetIdx = -1;
     public float HealPercent;
+    /// <summary>True = apply the EXACT amount flat (no rolls/mitigation) — the
+    /// reversed-drain self-cost, where the caster pays a known price per tick.</summary>
+    public bool Flat;
 }
 
 public class LightningSystem
@@ -406,7 +409,7 @@ public class LightningSystem
                         // Never let the transfer kill the caster.
                         if (units[ci].Stats.HP <= d.DamagePerTick) { d.Alive = false; break; }
                         outDamage.Add(new LightningDamage
-                        { UnitIdx = ci, Damage = d.DamagePerTick, OwnerID = d.CasterID });
+                        { UnitIdx = ci, Damage = d.DamagePerTick, OwnerID = d.CasterID, Flat = true });
                         if (heal > 0)
                             outDamage.Add(new LightningDamage
                             { UnitIdx = ti, Damage = heal, OwnerID = d.CasterID, IsHeal = true });

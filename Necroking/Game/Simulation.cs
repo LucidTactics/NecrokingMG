@@ -862,11 +862,15 @@ public class Simulation
             {
                 ApplyDrainHeal(ld.UnitIdx, ld.Damage);
             }
+            else if (ld.Flat)
+            {
+                // Exact-amount source (reversed-drain self-cost) — no rolls.
+                DealDamage(ld.UnitIdx, ld.Damage, UnitUtil.ResolveUnitIndex(_units, ld.OwnerID));
+            }
             else
             {
                 // Route through the standard spell pipeline (MR gate + opposed
-                // DRN roll + AN flag); empty SpellID (dev spawns, reversed-drain
-                // self-cost) falls back to flat armor-negating damage.
+                // DRN roll + AN/AP flags).
                 int attackerIdx = UnitUtil.ResolveUnitIndex(_units, ld.OwnerID);
                 var ldSpell = _gameData != null && ld.SpellID.Length > 0
                     ? _gameData.Spells.Get(ld.SpellID) : null;
@@ -885,10 +889,29 @@ public class Simulation
         }
         PhaseEnd("lightning");
 
-        // Poison clouds
+        // Poison clouds — ticks emit CloudDamageEvents; every proc resolves through
+        // the standard spell pipeline (poison stacks via rolled net, paralysis via
+        // the MR gate). The 3s stack→HP DoT conversion stays flat by design
+        // (PotionSystem.TickPotionEffects) — the roll already happened here.
         PhaseStart();
-        _poisonClouds.Update(dt, _units, _quadtree, _corpses, _damageEvents,
-            _gameData.Buffs);
+        var cloudDmg = new List<CloudDamageEvent>();
+        _poisonClouds.Update(dt, _units, _quadtree, _corpses, _gameData.Buffs, cloudDmg);
+        foreach (var cd in cloudDmg)
+        {
+            if (cd.UnitIdx < 0 || cd.UnitIdx >= _units.Count || !_units[cd.UnitIdx].Alive) continue;
+            var cdSpell = _gameData != null && !string.IsNullOrEmpty(cd.SpellID)
+                ? _gameData.Spells.Get(cd.SpellID) : null;
+            int cdCaster = UnitUtil.ResolveUnitIndex(_units, cd.CasterID);
+            if (cd.Paralysis)
+            {
+                if (cdSpell == null || SpellPenetration.Affects(_gameData, _units, cdCaster, cd.UnitIdx, cdSpell))
+                    PotionSystem.ApplyParalysis(cd.UnitIdx, _units);
+            }
+            else
+            {
+                ApplySpellDamage(cd.UnitIdx, cd.Damage, cdSpell, cdCaster, DamageType.Poison);
+            }
+        }
         PhaseEnd("clouds");
 
         // Corpse Eater AI — passive eat by wolves/bears once corpses age past
@@ -3398,38 +3421,56 @@ public class Simulation
     }
 
     /// <summary>
-    /// Standard SPELL damage entry point — every non-melee magical hit (projectile
-    /// impact, zap, strike AoE, beam/drain tick) funnels through here so all spell
-    /// damage shares one resolution:
+    /// Standard SPELL damage entry point — every magical damage proc (projectile
+    /// impact, zap, strike AoE, beam/drain tick, cloud burst/tick, glyph trap)
+    /// funnels through here so all spell damage shares one resolution:
     ///   1. MR gate — opposed DRN roll, only when the spell ChecksMagicResist; a
     ///      resisted hit/tick does nothing.
     ///   2. Damage roll, mirroring the melee formula minus its weapon concepts
-    ///      (hit locations, shields, piercing): damage + caster DRN vs
+    ///      (hit locations, shields, weapon types): damage + caster DRN vs
     ///      BodyProtection + target DRN, remainder halved by Toughness. Spells
     ///      auto-hit, so DefenseNegating plays no part here. ArmorNegating zeroes
-    ///      protection AND toughness but keeps the opposed rolls (melee AN
-    ///      convention) — even AN spell damage varies tick to tick.
-    /// Null spell = flat dev/utility source → legacy armor-negating DealDamage.
+    ///      the protection VALUE and toughness but keeps the opposed rolls (melee
+    ///      AN convention); ArmorPiercing halves both instead, rolls untouched.
+    ///   3. Poison type: the rolled net amount becomes poison STACKS (the roll IS
+    ///      the application; the flat 3s DoT ticks that later convert stacks to
+    ///      HP stay outside the formula by design). Physical: net HP damage.
+    /// Null spell = no MR gate, no flags — a generic rolled hit where armor
+    /// counts in full (glyph trap flat damage). Exact/flat sources (dev tools,
+    /// reversed-drain self-cost, sacrifice kills) use DealDamage directly.
     /// </summary>
     public void ApplySpellDamage(int targetIdx, int damage, Data.Registries.SpellDef? spell,
-        int casterIdx)
+        int casterIdx, DamageType type = DamageType.Physical)
     {
         if (targetIdx < 0 || targetIdx >= _units.Count || !_units[targetIdx].Alive) return;
         if (damage <= 0) return;
-        if (spell == null) { DealDamage(targetIdx, damage, casterIdx); return; }
 
-        if (!SpellPenetration.Affects(_gameData, _units, casterIdx, targetIdx, spell)) return;
+        if (spell != null && !SpellPenetration.Affects(_gameData, _units, casterIdx, targetIdx, spell)) return;
+
+        bool an = spell?.ArmorNegating ?? false;
+        bool ap = spell?.ArmorPiercing ?? false;
 
         int casterDrn = casterIdx >= 0 && casterIdx < _units.Count ? _units[casterIdx].Stats.Drn : 2;
         int dmgRoll = damage + UnitUtil.RollDRN(casterDrn);
         int protDRN = UnitUtil.RollDRN(_units[targetIdx].Stats.Drn);
 
-        float protStat = spell.ArmorNegating ? 0f : _units[targetIdx].Stats.Armor.BodyProtection;
-        float toughness = spell.ArmorNegating ? 0f : BuffSystem.GetModifiedStat(_units, targetIdx,
+        float protStat = an ? 0f : _units[targetIdx].Stats.Armor.BodyProtection;
+        float toughness = an ? 0f : BuffSystem.GetModifiedStat(_units, targetIdx,
             BuffStat.Toughness, _units[targetIdx].Stats.Toughness);
+        if (!an && ap) { protStat *= 0.5f; toughness *= 0.5f; }
 
         int netDmg = DamageSystem.MitigateByToughness(dmgRoll - ((int)protStat + protDRN), toughness);
         if (netDmg < 0) netDmg = 0; // glancing spell hits can deal zero, like melee
+
+        if (type == DamageType.Poison)
+        {
+            // Mitigation already rolled above — apply the net as stacks with
+            // ArmorNegating so DamageSystem doesn't mitigate a second time.
+            if (netDmg > 0)
+                DamageSystem.Apply(_units, targetIdx, netDmg, DamageType.Poison,
+                    DamageFlags.ArmorNegating, _damageEvents, casterIdx);
+            return;
+        }
 
         if (netDmg > 0) _units[targetIdx].HitReacting = true;
         else _units[targetIdx].BlockReacting = true;
@@ -3437,6 +3478,43 @@ public class Simulation
         DamageSystem.ApplyHitReactAnim(_units, targetIdx);
 
         DamageSystem.ApplyDirect(_units, targetIdx, netDmg, _damageEvents, casterIdx);
+    }
+
+    /// <summary>Selection half of the spell-hit pattern: every living enemy of
+    /// ownerFaction within the radius funnels through ApplySpellDamage. Cloud
+    /// bursts, glyph traps, and any future AoE damage source use this — target
+    /// picking in one place, per-unit resolution in the standard pipeline.</summary>
+    public void ApplySpellDamageAoE(Vec2 center, float radius, int damage,
+        Data.Registries.SpellDef? spell, int casterIdx, Faction ownerFaction,
+        DamageType type = DamageType.Physical)
+    {
+        if (damage <= 0) return;
+        var nearby = new List<uint>();
+        _quadtree.QueryRadiusByFaction(center, radius, FactionMaskExt.AllExcept(ownerFaction), nearby);
+        foreach (uint uid in nearby)
+        {
+            int idx = UnitUtil.ResolveUnitIndex(_units, uid);
+            if (idx < 0 || !_units[idx].Alive) continue;
+            ApplySpellDamage(idx, damage, spell, casterIdx, type);
+        }
+    }
+
+    /// <summary>Spell-driven paralysis AoE: like PotionSystem.ApplyParalysisAoE
+    /// (the ungated potion primitive) but each victim first passes the spell's MR
+    /// gate — paralysis is the classic MR-negates effect, so an MR-checked spell
+    /// only locks down targets its caster penetrates.</summary>
+    public void ApplyParalysisAoE(Vec2 center, float radius, Faction ownerFaction,
+        Data.Registries.SpellDef? spell, int casterIdx)
+    {
+        var nearby = new List<uint>();
+        _quadtree.QueryRadiusByFaction(center, radius, FactionMaskExt.AllExcept(ownerFaction), nearby);
+        foreach (uint uid in nearby)
+        {
+            int idx = UnitUtil.ResolveUnitIndex(_units, uid);
+            if (idx < 0 || !_units[idx].Alive) continue;
+            if (spell != null && !SpellPenetration.Affects(_gameData, _units, casterIdx, idx, spell)) continue;
+            PotionSystem.ApplyParalysis(idx, _units);
+        }
     }
 
     /// <summary>Build the per-unit AIContext shared by the archetype and PlayerControlled

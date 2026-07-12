@@ -2499,6 +2499,7 @@ public partial class Game1 {
              $"\"ai\":\"{u.AI}\"," +
              $"\"x\":{u.Position.X.ToString("F2", ci)},\"y\":{u.Position.Y.ToString("F2", ci)}," +
              $"\"hp\":{u.Stats.HP},\"maxHp\":{u.Stats.MaxHP}," +
+             $"\"poison\":{u.PoisonStacks}," +
              $"\"mana\":{u.Mana.ToString("F1", ci)},\"maxMana\":{u.MaxMana.ToString("F1", ci)}," +
              $"\"alive\":{(u.Alive ? "true" : "false")}," +
              $"\"inCombat\":{(u.InCombat ? "true" : "false")}," +

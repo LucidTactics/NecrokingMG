@@ -164,17 +164,23 @@ public class SpellDef : INamedDef
     [EditorField(Label = "Armor Negating", Group = "COMMON", Order = 106)]
     [JsonPropertyName("armorNegating")] public bool ArmorNegating { get; set; }
 
-    [EditorField(Label = "Defense Negating", Group = "COMMON", Order = 107)]
+    // Halves the target's protection VALUE and toughness; the protection DRN
+    // still rolls in full (melee armor-piercing convention). Ignored when
+    // ArmorNegating already zeroes protection.
+    [EditorField(Label = "Armor Piercing", Group = "COMMON", Order = 107)]
+    [JsonPropertyName("armorPiercing")] public bool ArmorPiercing { get; set; }
+
+    [EditorField(Label = "Defense Negating", Group = "COMMON", Order = 108)]
     [JsonPropertyName("defenseNegating")] public bool DefenseNegating { get; set; } = true;
 
     // Magic Resistance — when ChecksMagicResist is set, the spell must penetrate the
     // target's MR to affect it: (penetration + DRN) vs (MR + DRN). ResistDifficulty
     // shifts penetration like a Dominions spell difficulty: Hard +4, Easy −4.
-    [EditorField(Label = "Checks Magic Resist", Group = "COMMON", Order = 108)]
+    [EditorField(Label = "Checks Magic Resist", Group = "COMMON", Order = 109)]
     [JsonPropertyName("checksMagicResist")] public bool ChecksMagicResist { get; set; }
 
     [EditorVisible("ChecksMagicResist", "True")]
-    [EditorField(Label = "Resist Difficulty", Group = "COMMON", Order = 109)]
+    [EditorField(Label = "Resist Difficulty", Group = "COMMON", Order = 110)]
     [EditorCombo("Normal", "Easy", "Hard")]
     [JsonPropertyName("resistDifficulty")] public string ResistDifficulty { get; set; } = "Normal";
 
@@ -189,26 +195,26 @@ public class SpellDef : INamedDef
 
     // Physics knockback (applied on AoE impact)
     [EditorVisible("Category", "Projectile", "Cloud", "Strike")]
-    [EditorField(Label = "Knockback Force", Group = "PHYSICS", Order = 110, Step = 1f, Decimals = 0)]
+    [EditorField(Label = "Knockback Force", Group = "PHYSICS", Order = 111, Step = 1f, Decimals = 0)]
     [JsonPropertyName("knockbackForce")] public float KnockbackForce { get; set; }
 
     [EditorVisible("Category", "Projectile", "Cloud", "Strike")]
-    [EditorField(Label = "Knockback Up", Group = "PHYSICS", Order = 111, Step = 1f, Decimals = 0)]
+    [EditorField(Label = "Knockback Up", Group = "PHYSICS", Order = 112, Step = 1f, Decimals = 0)]
     [JsonPropertyName("knockbackUpward")] public float KnockbackUpward { get; set; }
 
     [EditorVisible("Category", "Projectile", "Cloud", "Strike")]
-    [EditorField(Label = "Knockback Radius", Group = "PHYSICS", Order = 112, Step = 0.5f, Decimals = 1)]
+    [EditorField(Label = "Knockback Radius", Group = "PHYSICS", Order = 113, Step = 0.5f, Decimals = 1)]
     [JsonPropertyName("knockbackRadius")] public float KnockbackRadius { get; set; }
 
     // Directional impact (applied only to units the projectile actually hits,
     // shoving them along the projectile's flight direction — unlike Knockback,
     // which blasts radially outward from the impact point)
     [EditorVisible("Category", "Projectile")]
-    [EditorField(Label = "Impact Force", Group = "PHYSICS", Order = 113, Step = 1f, Decimals = 0)]
+    [EditorField(Label = "Impact Force", Group = "PHYSICS", Order = 114, Step = 1f, Decimals = 0)]
     [JsonPropertyName("impactForce")] public float ImpactForce { get; set; }
 
     [EditorVisible("Category", "Projectile")]
-    [EditorField(Label = "Impact Up", Group = "PHYSICS", Order = 114, Step = 1f, Decimals = 0)]
+    [EditorField(Label = "Impact Up", Group = "PHYSICS", Order = 115, Step = 1f, Decimals = 0)]
     [JsonPropertyName("impactUpward")] public float ImpactUpward { get; set; }
 
     // ============ Shared fields (ungrouped, between COMMON and category sections) ============

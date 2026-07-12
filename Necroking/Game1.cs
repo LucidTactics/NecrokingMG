@@ -3809,7 +3809,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             ApplyBlightBombImpacts();
             FinalizeBushWorkIfPending();
             _dayNightSystem.Update(_clock.WorldDt, _gameData);
-            _sim.MagicGlyphs.Update(_clock.WorldDt, _sim.UnitsMut, _sim.Quadtree, _sim.PoisonClouds, _gameData.Spells);
+            _sim.MagicGlyphs.Update(_clock.WorldDt, _sim.UnitsMut, _sim.Quadtree, _sim, _sim.PoisonClouds, _gameData.Spells);
             _weatherRenderer.Update(_clock.WorldDt, _gameData);
             _envSystem.UpdateForagables(_clock.WorldDt);
             UpdateZoneSpawns(_clock.WorldDt);
