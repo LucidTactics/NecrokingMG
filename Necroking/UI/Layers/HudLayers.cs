@@ -202,7 +202,7 @@ public sealed class DebugSettingsPanelLayer : UILayer
 
     public override string Id => "hud.debug_panel";
     public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { }
-    public override bool Visible => _g.HudVisible && _g._menuState == MenuState.None;
+    public override bool Visible => _g._showDebugPanel && _g.HudVisible && _g._menuState == MenuState.None;
 
     public override bool ContainsMouse(int mx, int my, in UICtx ctx)
         => _g._gameRenderer.DebugPanelContains(mx, my);
@@ -213,7 +213,7 @@ public sealed class DebugSettingsPanelLayer : UILayer
         _g._gameRenderer.HandleDebugPanelClick((int)input.MousePos.X, (int)input.MousePos.Y);
     }
 
-    public override bool VisibleForDraw => _g.ShowUIForDraw && _g._menuState == MenuState.None;
+    public override bool VisibleForDraw => _g._showDebugPanel && _g.ShowUIForDraw && _g._menuState == MenuState.None;
 
     public override void Draw(in UICtx ctx)
     {

@@ -680,7 +680,7 @@ partial class GameRenderer
     /// highlighting the editor-launcher row.</summary>
     private int BuildEditorOpenMask()
     {
-        return _g._menuState switch
+        int m = _g._menuState switch
         {
             MenuState.UnitEditor  => 1 << HUDRenderer.EditorUnit,
             MenuState.SpellEditor => 1 << HUDRenderer.EditorSpell,
@@ -688,6 +688,8 @@ partial class GameRenderer
             MenuState.UIEditor    => 1 << HUDRenderer.EditorUi,
             _ => 0,
         };
+        if (_g._showDebugPanel) m |= 1 << HUDRenderer.EditorDebug;
+        return m;
     }
 
     /// <summary>Bitmask of which core menus are open, by HUDRenderer.Menu* index,

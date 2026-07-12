@@ -74,10 +74,10 @@ public partial class HUDRenderer
 
     // ── Editor-launcher row (below the core-menu row) ──
     // Click mirror of the F9-F12 editor-toggle shortcuts, and Game1.ToggleEditorButton.
-    public const int EditorUnit = 0, EditorSpell = 1, EditorMap = 2, EditorUi = 3;
-    public const int EditorBtnCount = 4;
+    public const int EditorUnit = 0, EditorSpell = 1, EditorMap = 2, EditorUi = 3, EditorDebug = 4;
+    public const int EditorBtnCount = 5;
     public static readonly string[] EditorButtonLabels =
-        { "Units (F9)", "Spells (F10)", "Map (F11)", "UI (F12)" };
+        { "Units (F9)", "Spells (F10)", "Map (F11)", "UI (F12)", "Debug" };
     private const int EditorBtnTop = MenuBtnTop + MenuBtnH + 4;
     private readonly Rectangle[] _editorBtnRects = new Rectangle[EditorBtnCount];
 

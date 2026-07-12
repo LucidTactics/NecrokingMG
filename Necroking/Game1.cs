@@ -843,6 +843,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // Wind debug (F6): shows gust heatmap + direction arrow
     internal bool _windDebug;
 
+    // Left-side debug settings panel visibility — toggled by the "Debug" button
+    // in the top-right editor-launcher row. Off by default (opt-in dev tool).
+    internal bool _showDebugPanel;
+
     // Scenario state
     internal ScenarioBase? _activeScenario;
 
@@ -4453,6 +4457,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             case HUDRenderer.EditorUi:
                 if (_menuState == MenuState.UIEditor) _menuState = MenuState.None;
                 else { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; }
+                break;
+            case HUDRenderer.EditorDebug:
+                // Not an editor — just flips the left-side debug settings panel.
+                _showDebugPanel = !_showDebugPanel;
                 break;
         }
     }
