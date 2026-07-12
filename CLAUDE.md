@@ -21,6 +21,7 @@ without opening it:
 - **If the branch is ahead of origin, surface it** and prompt to push (still ask permission) so the friend's clone stays in sync.
 - **Pull before fresh work**; if it won't fast-forward, stop and tell the user.
 - **Never commit `user settings/`** (gitignored per-machine `settings.json`/`weather.json`/`spellbar.json`).
+- **If a commit contains a new large file (above ~100kb), confirm with user before committing it, we probably want to gitignore it.
 
 ## Build
 ```bash
