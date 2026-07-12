@@ -75,6 +75,7 @@ public partial class Game1
                 FilePath = file,
                 FormId = data.Player.FormId,
                 SpellBar = data.SpellBar,
+                Inventory = data.Player.Inventory,
             });
         }
         result.Sort((a, b) => b.SavedAt.CompareTo(a.SavedAt));
@@ -92,15 +93,13 @@ public partial class Game1
         _menuState = MenuState.SaveMenu;
     }
 
-    /// <summary>Snapshot the current session into saves/{name}.json. Returns
-    /// false (logged) when there is no live player to save.</summary>
-    internal bool WriteSaveGame(string name)
+    internal SaveGameData GetSaveDataJson()
     {
         int idx = _sim.NecromancerIndex;
         if (idx < 0)
         {
             DebugLog.Log("saves", "WriteSaveGame failed: no live necromancer");
-            return false;
+            return null;
         }
         var unit = _sim.Units[idx];
         var data = new SaveGameData
@@ -124,6 +123,22 @@ public partial class Game1
             },
             SpellBar = _spellBarState.Slots.Select(s => s.SpellID ?? "").ToList(),
         };
+        return data;
+
+    }
+
+    /// <summary>Snapshot the current session into saves/{name}.json. Returns
+    /// false (logged) when there is no live player to save.</summary>
+    internal bool WriteSaveGame(string name)
+    {
+        int idx = _sim.NecromancerIndex;
+        if (idx < 0)
+        {
+            DebugLog.Log("saves", "WriteSaveGame failed: no live necromancer");
+            return false;
+        }
+        var data = GetSaveDataJson();
+        if (data == null) return false;
         Directory.CreateDirectory(GamePaths.Resolve(GamePaths.SavesDir));
         bool ok = JsonFile.Save(SaveFilePath(name), data, JsonDefaults.Indented);
         if (ok) DebugLog.Log("saves", $"Saved game '{name}' (map {data.MapName})");

@@ -128,8 +128,8 @@ public partial class HUDRenderer
     private SpriteBatch _batch = null!;
     private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
     private Texture2D _pixel = null!;
-    private SpriteFont? _font;
-    private SpriteFont? _smallFont;
+    private SpriteFont _font;
+    private SpriteFont _smallFont;
     // Shares Game1's SpriteBatch, so its element/icon draws land in the same
     // pass. Used to reuse the grimoire's frame + parchment backing for slots.
     private UI.RuntimeWidgetRenderer? _widgets;
@@ -148,7 +148,7 @@ public partial class HUDRenderer
     /// (see Game1's Ghost-mode toggle). Runtime-only, not persisted.</summary>
     public bool ShowDebugPanel;
 
-    public void Init(SpriteBatch batch, Texture2D pixel, SpriteFont? font, SpriteFont? smallFont,
+    public void Init(SpriteBatch batch, Texture2D pixel, SpriteFont font, SpriteFont smallFont,
         UI.RuntimeWidgetRenderer? widgets = null)
     {
         _batch = batch;

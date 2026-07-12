@@ -67,7 +67,10 @@ public class SaveGameWindow
         _currentFormId = currentFormId;
         _currentSpells = currentSpells;
         WantsClose = false;
+        data = Game1.Instance.GetSaveDataJson();
     }
+
+    SaveGameData data;
 
     public void Draw(int screenW, int screenH)
     {
@@ -89,7 +92,8 @@ public class SaveGameWindow
         int y = panelY + 36;
 
         // ── What you're saving: current-game preview card + name field ───
-        Game1.Instance._gameRenderer.DrawSavePreviewCard(new Rectangle(x, y, CardW, RowH), _currentFormId, _currentSpells);
+        Game1.Instance._gameRenderer.DrawSavePreviewCard(new Rectangle(x, y, CardW, RowH), _currentFormId,
+            data.SpellBar, data.Player.Inventory);
         int fieldX = x + CardW + 12;
 
         // ── Existing saves (click to take that name → overwrite) ─────────
@@ -119,7 +123,7 @@ public class SaveGameWindow
                     _name = s.Name;
                     pickedRow = true;
                 }
-                Game1.Instance._gameRenderer.DrawSavePreviewCard(new Rectangle(x + 4, rowsY + 4, CardW, RowH - 8), s.FormId, s.SpellBar);
+                Game1.Instance._gameRenderer.DrawSavePreviewCard(new Rectangle(x + 4, rowsY + 4, CardW, RowH - 8), s.FormId, s.SpellBar, s.Inventory);
                 rowsY += RowH + 6;
             }
             if (_saves.Count > shown)

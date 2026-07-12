@@ -62,4 +62,5 @@ public class SaveGameInfo
     // Preview-card data (see GameRenderer.DrawSavePreviewCard).
     public string FormId = "";
     public List<string> SpellBar = new();
+    public List<SavedInventorySlot> Inventory { get; set; } = new();
 }

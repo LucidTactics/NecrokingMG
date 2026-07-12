@@ -61,9 +61,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal Texture2D _pixel = null!;
     internal Texture2D _glowTex = null!;
     internal Texture2D? _mainMenuBg;
-    internal SpriteFont? _font;
-    internal SpriteFont? _smallFont;
-    internal SpriteFont? _largeFont;
+
+    // If fonts don't load we crash the program.
+    internal SpriteFont _font;
+    internal SpriteFont _smallFont;
+    internal SpriteFont _largeFont;
     internal ShadowRenderer _shadowRenderer = new();
     internal HUDRenderer _hudRenderer = new();
     internal CharacterStatsUI _characterStatsUI = new();
@@ -91,7 +93,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // property keeps every _sim.* call site unchanged while StartGame recreates the session.
     internal Simulation _sim => _session.Sim;
     internal Inventory _inventory = null!;
-    private Render.FontManager _fontManager = new();
+    internal Render.FontManager _fontManager = new();
     internal RuntimeWidgetRenderer _widgetRenderer = new();
     internal InventoryUI _inventoryUI = new();
     internal BuildingMenuUI _buildingMenuUI = new();
