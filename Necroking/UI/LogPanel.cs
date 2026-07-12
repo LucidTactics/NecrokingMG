@@ -23,7 +23,7 @@ public class LogPanel : IModalLayer
     private RuntimeWidgetRenderer _r = null!;
     private Game1 _g = null!;
 
-    private const int FsTitle = 16, FsTab = 13, FsLine = 11;
+    private const int FsTitle = 16, FsTab = 14, FsLine = 12;
     private const int PanelW = 800;
     private const int Pad = 10;
     private const int TitleH = 26;
@@ -193,6 +193,13 @@ public class LogPanel : IModalLayer
         for (; phaseRows < _phaseRowsMax; phaseRows++) _lines.Add("");
 
         _lines.Add("");
+        _lines.Add("== Input ==");
+
+        _lines.Add($"KeyPressed: {string.Join(", ", _g._input.Kb.GetPressedKeys())}");
+        _lines.Add($"MousePressed: {string.Join(", ", new{_g._input.Mouse.LeftButton, _g._input.Mouse.RightButton, _g._input.Mouse.MiddleButton})}");
+        _lines.Add($"MousePos: {_g._input.Mouse.Position.X,4}x {_g._input.Mouse.Position.Y,4}y");
+
+        _lines.Add("");
         _lines.Add("== Census ==");
         foreach (var line in _g._session.Census().TrimEnd('\n').Split('\n'))
             _lines.Add(line);
@@ -291,5 +298,6 @@ public class LogPanel : IModalLayer
             FsTab, new Color(232, 232, 236));
     }
 
-    private void Text(string s, int x, int y, int size, Color c) => _r.DrawText(s, x, y, size, c);
+    private void Text(string s, int x, int y, int size, Color c) => _r.DrawText(s, x, y, size, c,
+        fontFamily: "RobotoMono-Regular");
 }

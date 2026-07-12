@@ -3411,6 +3411,20 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (_uiEditor != null) _uiEditor.AllowWasdListNav = true;
         if (_mapEditor != null) _mapEditor.CameraInputEnabled = bareMapEditor;
 
+        // --- TopRightKey ---
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.OemTilde))
+        {
+            if (!_logPanel.IsVisible)
+            {
+                // Don't toggle, since we might want to be able to see this while holding tilde.
+                CloseSameSidePanels(Game1.PanelSide.Left, _logPanel);
+                _logPanel.Toggle(screenW, screenH);
+            }
+        }
+        // --- Slash? ---
+        if (!anyTextInputActive && _input.WasKeyPressed(Keys.OemQuestion))
+            _showDebugPanel = !_showDebugPanel;
+
         // Central UI hit-rect pass: catalogue every active UI region (popup
         // panels, HUD buttons/bars, toasts) and derive MouseOverUI from it in one
         // place. Runs after the keyboard toggles above (so a panel opened this
