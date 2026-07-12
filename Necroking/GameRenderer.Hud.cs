@@ -839,10 +839,13 @@ partial class GameRenderer
             _g.Scope.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
 
         int boxW = 350;
-        int btnCount = 11; // Resume + Save Game + 5 editors + Settings + Multiplayer + Main Menu + Quit (hit-tests: Game1.cs pause-menu click block — keep in lockstep!)
+        int btnCount = 12; // Resume + Save Game + 5 editors + Settings + Multiplayer + Main Menu + Quit (hit-tests: Game1.cs pause-menu click block — keep in lockstep!)
         int btnH2 = 40, btnGap2 = 10;
+        int extraGaps = 3;
+        int btnW = 280, btnH = 40, btnGap = 10;
+        int gapSpace = (btnH + btnGap) / 2;
         int controlLines = 4;
-        int boxH = 60 + btnCount * (btnH2 + btnGap2) + 10 + controlLines * 16 + 20;
+        int boxH = 60 + btnCount * (btnH2 + btnGap2) + 10 + controlLines * 16 + 20 + gapSpace * extraGaps;
         int boxX = (screenW - boxW) / 2;
         int boxY = (screenH - boxH) / 2;
         DrawPanel(new Rectangle(boxX, boxY, boxW, boxH), new Color(30, 30, 50, 235), new Color(100, 100, 180), 3);
@@ -855,12 +858,14 @@ partial class GameRenderer
         }
 
         // Menu items
-        int btnW = 280, btnH = 40, btnGap = 10;
         int menuX = boxX + (boxW - btnW) / 2;
         int menuY = boxY + 60;
 
         DrawMenuButton("Resume", menuX, ref menuY, btnW, btnH, btnGap);
+        menuY += gapSpace;
         DrawMenuButton("Save Game", menuX, ref menuY, btnW, btnH, btnGap);
+        DrawMenuButton("Load Game", menuX, ref menuY, btnW, btnH, btnGap);
+        menuY += gapSpace;
         DrawMenuButton("Unit Editor (F9)", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Spell Editor (F10)", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Map Editor (F11)", menuX, ref menuY, btnW, btnH, btnGap);
@@ -869,7 +874,7 @@ partial class GameRenderer
         DrawMenuButton("Settings", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Multiplayer", menuX, ref menuY, btnW, btnH, btnGap);
 
-        menuY += 10;
+        menuY += gapSpace;
         DrawMenuButton("Main Menu", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Quit", menuX, ref menuY, btnW, btnH, btnGap);
 

@@ -24,7 +24,8 @@ using Necroking.UI;
 
 namespace Necroking;
 
-public enum MenuState { MainMenu, None, PauseMenu, Settings, Multiplayer, UnitEditor, SpellEditor, MapEditor, UIEditor, ItemEditor, ScenarioList, SaveMenu, LoadMenu }
+public enum MenuState { MainMenu, None, PauseMenu, Settings, Multiplayer, UnitEditor, SpellEditor, MapEditor, UIEditor,
+    ItemEditor, ScenarioList, SaveMenu, LoadMenu }
 
 /// <summary>
 /// The MonoGame app shell and orchestrator — everything platform- and presentation-side.
@@ -601,6 +602,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// collision data.</summary>
     private MenuState _prevMenuState = MenuState.MainMenu;
     internal bool _gameWorldLoaded;
+    MenuState _backMenuState = MenuState.MainMenu;
     /// <summary>True while anything holds the game paused (forwarder for
     /// <see cref="Core.GameClock.Paused"/>). Write via <c>_clock.Pause / Resume /
     /// TogglePause / ClearAllPauses</c> with a <see cref="Core.GameClock.PauseSource"/>.</summary>
@@ -2942,6 +2944,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         if (_menuState == MenuState.MainMenu)
         {
+            _backMenuState = MenuState.MainMenu;
             if (_prevMenuState != MenuState.MainMenu) _loadMenuSaves = ListSaveGames();
         }
         _prevMenuState = _menuState;
@@ -3077,6 +3080,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 {
                     _loadMenuSaves = ListSaveGames();
                     _loadMenuScrollPx = 0f;
+                    _backMenuState = _menuState;
                     _menuState = MenuState.LoadMenu;
                     _prevKb = kb;
                     _prevMouse = mouse;
@@ -3182,7 +3186,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // Escape to go back
             if (_input.WasKeyPressed(Keys.Escape))
             {
-                _menuState = MenuState.MainMenu;
+                _menuState = _backMenuState;
                 _prevKb = kb;
                 _prevMouse = mouse;
                 base.Update(gameTime);
@@ -3246,7 +3250,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 }
 
                 if (_menuState == MenuState.LoadMenu && view.BackRect.Contains(mouse.X, mouse.Y))
-                    _menuState = MenuState.MainMenu;
+                {
+                    _menuState = _backMenuState;
+                }
             }
             _prevKb = kb;
             _prevMouse = mouse;
@@ -3411,16 +3417,19 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 }
             }
         }
+        if (_menuState == MenuState.PauseMenu) _backMenuState = MenuState.PauseMenu;
 
         // --- Pause menu button clicks ---
         if (_menuState == MenuState.PauseMenu && _input.LeftPressed)
         {
             int sw = GraphicsDevice.Viewport.Width;
+            int extraGaps = 3;
             int sh = GraphicsDevice.Viewport.Height;
             int btnW2 = 280, btnH2 = 40, btnGap2 = 10;
-            int pauseBtnCount = 11;
+            int gapSpace = (btnH2 + btnGap2) / 2;
+            int pauseBtnCount = 12;
             int pauseControlLines = 4;
-            int pauseBoxH = 60 + pauseBtnCount * (btnH2 + btnGap2) + 10 + pauseControlLines * 16 + 20;
+            int pauseBoxH = 60 + pauseBtnCount * (btnH2 + btnGap2) + 10 + pauseControlLines * 16 + 20 + gapSpace * extraGaps;
             int boxY2 = (sh - pauseBoxH) / 2 + 60;
             int menuX2 = (sw - btnW2) / 2;
             int y2 = boxY2;
@@ -3429,10 +3438,25 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
             { _menuState = MenuState.None; _clock.ClearAllPauses(); }
             y2 += btnH2 + btnGap2;
+            y2 += gapSpace;
             // Save Game
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
                 OpenSaveMenu();
             y2 += btnH2 + btnGap2;
+            // Load Game
+            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
+            {
+                _loadMenuSaves = ListSaveGames();
+                _loadMenuScrollPx = 0f;
+                _backMenuState = _menuState;
+                _menuState = MenuState.LoadMenu;
+                _prevKb = kb;
+                _prevMouse = mouse;
+                base.Update(gameTime);
+                return;
+            }
+            y2 += btnH2 + btnGap2;
+            y2 += gapSpace;
             // Unit Editor
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
             { _menuState = MenuState.UnitEditor; _clock.ClearAllPauses(); }
@@ -3460,7 +3484,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // Multiplayer
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
             { _menuState = MenuState.Multiplayer; }
-            y2 += btnH2 + btnGap2 + 10;
+            y2 += btnH2 + btnGap2;
+            y2 += gapSpace;
             // Main Menu
             if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
             { _menuState = MenuState.MainMenu; _clock.ClearAllPauses(); _gameWorldLoaded = false; }
