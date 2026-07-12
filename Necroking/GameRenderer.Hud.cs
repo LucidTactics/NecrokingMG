@@ -1038,34 +1038,51 @@ partial class GameRenderer
         Necroking.Render.DrawUtils.DrawRectBorder(_g._spriteBatch, _g._pixel, dest, new Color(100, 100, 180));
     }
 
-    // Fully-resolved load-menu layout for one frame: one rect per visible save row
-    // plus the back button. Drawing (DrawLoadMenu) and hit-testing (Game1's
+    // Fully-resolved load-menu layout for one frame: one rect per save row
+    // (positioned for the current scroll offset) plus the back button and the
+    // scrollbar geometry. Drawing (DrawLoadMenu) and hit-testing (Game1's
     // LoadMenu update block) both consume this, so they can't drift apart.
     internal struct LoadMenuView
     {
-        public Rectangle[] RowRects; // aligned with the first Shown entries of _loadMenuSaves
-        public int Shown;            // rows laid out (list may be longer)
+        public Rectangle[] RowRects; // aligned with _loadMenuSaves, scroll applied
         public Rectangle BackRect;
+        public int RowStride;        // row height + gap, for wheel scrolling
+        // Scrollbar column (pixel units, feeds the shared Necroking.UI.VScrollbar).
+        public int ScrollX;
+        public int ScrollY;
+        public int ScrollViewH;
+        public float ScrollContentH;
+
+        /// <summary>Clamp a pixel scroll offset to the valid range for this layout.</summary>
+        public float ClampScroll(float scrollPx) => Math.Clamp(scrollPx, 0f, Math.Max(0f, ScrollContentH - ScrollViewH));
     }
 
-    internal LoadMenuView BuildLoadMenuLayout(int screenW, int screenH, int saveCount)
+    internal LoadMenuView BuildLoadMenuLayout(int screenW, int screenH, int saveCount, float scrollPx)
     {
         int btnW = SaveGameWindow.PanelW, btnH = SaveGameWindow.RowH, btnGap = 10;
+        int stride = btnH + btnGap;
         int titleY = screenH / 20 + 20;
         int listY = titleY + 70;
         // Leave room for the back button + margin at the bottom.
-        int maxRows = System.Math.Max(1, (screenH - 80 - listY) / (btnH + btnGap));
-        int shown = System.Math.Min(saveCount, maxRows);
+        int maxRows = Math.Max(1, (screenH - 80 - listY) / stride);
+        int visRows = Math.Min(saveCount, maxRows);
+        int viewH = visRows * stride;
+        int scroll = (int)Math.Round(scrollPx);
 
-        var view = new LoadMenuView { Shown = shown, RowRects = new Rectangle[shown] };
-        int x = (screenW - btnW) / 2;
-        int y = listY;
-        for (int i = 0; i < shown; i++)
+        var view = new LoadMenuView
         {
-            view.RowRects[i] = new Rectangle(x, y, btnW, btnH);
-            y += btnH + btnGap;
-        }
-        view.BackRect = new Rectangle((screenW - 200) / 2, y + 14, 200, 45);
+            RowRects = new Rectangle[saveCount],
+            RowStride = stride,
+            ScrollY = listY,
+            ScrollViewH = viewH,
+            ScrollContentH = saveCount * stride,
+        };
+        int x = (screenW - btnW) / 2;
+        view.ScrollX = x + btnW + 8;
+        for (int i = 0; i < saveCount; i++)
+            view.RowRects[i] = new Rectangle(x, listY + i * stride - scroll, btnW, btnH);
+        // Back button fixed just below the visible window so it never scrolls away.
+        view.BackRect = new Rectangle((screenW - 200) / 2, listY + viewH + 14, 200, 45);
         return view;
     }
 
@@ -1083,7 +1100,7 @@ partial class GameRenderer
         }
 
         var saves = _g._loadMenuSaves;
-        var view = BuildLoadMenuLayout(screenW, screenH, saves.Count);
+        var view = BuildLoadMenuLayout(screenW, screenH, saves.Count, _g._loadMenuScrollPx);
 
         if (saves.Count == 0 && _g._font != null)
         {
@@ -1092,19 +1109,36 @@ partial class GameRenderer
             DrawText(_g._font, none, new Vector2((int)(screenW / 2f - size.X / 2f), titleY + 80), new Color(140, 140, 160));
         }
 
-        for (int i = 0; i < view.Shown; i++)
+        if (saves.Count > 0)
         {
-            var s = saves[i];
-            var r = view.RowRects[i];
-            DrawMenuButtonAt("", r.X, r.Y, r.Width, r.Height);
-            DrawSavePreviewCard(new Rectangle(r.X + 4, r.Y + 4, SaveGameWindow.CardW, SaveGameWindow.RowH - 8), s.FormId, s.SpellBar, s.Inventory);
+            // Clip the rows to their scroll window so partially-scrolled rows are
+            // cut at the edges (smooth sub-row scroll) rather than spilling into
+            // the title / back-button gaps — same mechanism as the scenario grid.
+            var device = _g.Scope.GraphicsDevice;
+            var prevScissor = device.ScissorRectangle;
+            device.ScissorRectangle = new Rectangle(0, view.ScrollY, screenW, view.ScrollViewH);
+            _g.Scope.PushMaterial(Materials.HudScissor);
 
-            DrawSaveGameText(new(r.X + SaveGameWindow.CardW + 2, r.Y, r.Width - (SaveGameWindow.CardW + 2), r.Height), s);
+            for (int i = 0; i < view.RowRects.Length; i++)
+            {
+                var r = view.RowRects[i];
+                if (r.Bottom <= view.ScrollY || r.Y >= view.ScrollY + view.ScrollViewH) continue;
+                var s = saves[i];
+                DrawMenuButtonAt("", r.X, r.Y, r.Width, r.Height);
+                DrawSavePreviewCard(new Rectangle(r.X + 4, r.Y + 4, SaveGameWindow.CardW, SaveGameWindow.RowH - 8), s.FormId, s.SpellBar, s.Inventory);
+
+                DrawSaveGameText(new(r.X + SaveGameWindow.CardW + 2, r.Y, r.Width - (SaveGameWindow.CardW + 2), r.Height), s);
+            }
+
+            _g.Scope.PopMaterial();
+            device.ScissorRectangle = prevScissor;
         }
-        if (saves.Count > view.Shown && _g._font != null)
-            DrawText(_g._font, $"(+{saves.Count - view.Shown} more)", new Vector2(view.BackRect.X, view.BackRect.Y - 22), new Color(140, 140, 160));
 
         DrawMenuButtonAt("< Back", view.BackRect.X, view.BackRect.Y, view.BackRect.Width, view.BackRect.Height);
+
+        // Scrollbar — canonical look, draw only; input lives in Game1's LoadMenu block.
+        DrawMenuScrollbar(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH,
+            _g._loadMenuScrollPx, _g._loadMenuScrollDragging);
     }
 
     private void DrawScenarioList(int screenW, int screenH)
@@ -1157,21 +1191,22 @@ partial class GameRenderer
 
         // Scrollbar — same canonical look/behaviour as the editor panels (shared
         // Necroking.UI.VScrollbar geometry). Draw only; input lives in Game1.
-        DrawScenarioScrollbar(view);
+        DrawMenuScrollbar(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH,
+            _g._scenarioScrollPx, _g._scenarioScrollDragging);
     }
 
-    // Draws the scenario-menu scrollbar using the shared VScrollbar geometry. The
+    // Draws a main-menu-family scrollbar using the shared VScrollbar geometry. The
     // thumb goes "hot" while hovered or being dragged (drag state lives on Game1).
-    private void DrawScenarioScrollbar(ScenarioMenuView view)
+    private void DrawMenuScrollbar(int x, int y, int viewH, float contentH, float scrollPx, bool dragging)
     {
-        if (Necroking.UI.VScrollbar.Fits(view.ScrollViewH, view.ScrollContentH)) return;
+        if (Necroking.UI.VScrollbar.Fits(viewH, contentH)) return;
 
-        var track = Necroking.UI.VScrollbar.TrackRect(view.ScrollX, view.ScrollY, view.ScrollViewH);
-        var thumb = Necroking.UI.VScrollbar.ThumbRect(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH, _g._scenarioScrollPx);
+        var track = Necroking.UI.VScrollbar.TrackRect(x, y, viewH);
+        var thumb = Necroking.UI.VScrollbar.ThumbRect(x, y, viewH, contentH, scrollPx);
 
         int mx = (int)_g._input.MousePos.X, my = (int)_g._input.MousePos.Y;
         bool overThumb = thumb.Contains(mx, my);
-        bool hot = _g._scenarioScrollDragging || overThumb;
+        bool hot = dragging || overThumb;
 
         _g.Scope.Draw(_g._pixel, track, Necroking.UI.VScrollbar.TrackColor);
         _g.Scope.Draw(_g._pixel, thumb, hot ? Necroking.UI.VScrollbar.ThumbHotColor : Necroking.UI.VScrollbar.ThumbColor);

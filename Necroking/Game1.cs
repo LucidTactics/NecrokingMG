@@ -650,6 +650,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     // Dev cursor override for headless hover testing (set via the `mousepos` dev command).
     private Microsoft.Xna.Framework.Vector2? _devMouseOverride;
+    // Dev full-mouse-state injection (the `raw_mouse` dev command) — replaces
+    // Mouse.GetState() at the top of Update so headless runs can drive the raw
+    // main-menu-family input paths (buttons + wheel, not just the cursor).
+    private MouseState? _devRawMouse;
     // Menu state as of the last input capture — detects mode transitions so the
     // in-flight press gesture can be invalidated (see Update, ConsumeGesture).
     private MenuState _menuStateAtLastCapture;
@@ -854,6 +858,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal float _scenarioScrollPx;             // scenario-menu scroll, in pixels (smooth, sub-row)
     internal bool _scenarioScrollDragging;         // dragging the scenario-menu scrollbar thumb
     private float _scenarioScrollGrabOffset;        // Y within the thumb where the drag started
+    internal float _loadMenuScrollPx;              // load-menu scroll, in pixels (smooth, sub-row)
+    internal bool _loadMenuScrollDragging;          // dragging the load-menu scrollbar thumb
+    private float _loadMenuScrollGrabOffset;         // Y within the thumb where the drag started
 
     // --- Tethers / drag ropes (Shift+T target, Shift+R attach) ---
     // A tether connects two endpoints, each a live unit or a corpse. When a unit end is
@@ -2818,6 +2825,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         var kb = Keyboard.GetState();
         var mouse = Mouse.GetState();
 
+        // Dev-injected mouse (the `raw_mouse` dev command): stands in for the OS
+        // mouse entirely so the raw menu paths below are drivable headless.
+        if (_devRawMouse.HasValue) mouse = _devRawMouse.Value;
+
         // Window unfocused or minimized (polled OS focus, not the unreliable
         // IsActive — see above). Exempt scenario / headless runs — automated runs
         // often lack window focus, and freezing them would break the test harness.
@@ -2858,12 +2869,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _menuStateAtLastCapture = _menuState;
         }
 
-        if (unfocused)
+        if (unfocused && !_devRawMouse.HasValue)
         {
             // Kept running (dev server or "run when unfocused"): feed NEUTRAL input — no
             // buttons, no keys, cursor parked at centre — so background/real clicks + keys
             // aren't consumed and the camera doesn't edge-drift. Dev-injected input is
-            // unaffected (it doesn't flow through here). Real states still reach
+            // unaffected (it doesn't flow through here) — except `raw_mouse`, which
+            // explicitly wants to be captured as if focused. Real states still reach
             // _prevMouse/_prevKb at the exit points, preserving refocus-click protection.
             var neutral = new MouseState(vpW / 2, vpH / 2, mouse.ScrollWheelValue,
                 ButtonState.Released, ButtonState.Released, ButtonState.Released,
@@ -3043,6 +3055,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 if (mouse.X >= menuX && mouse.X < menuX + btnW && mouse.Y >= menuY && mouse.Y < menuY + btnH)
                 {
                     _loadMenuSaves = ListSaveGames();
+                    _loadMenuScrollPx = 0f;
                     _menuState = MenuState.LoadMenu;
                     _prevKb = kb;
                     _prevMouse = mouse;
@@ -3148,20 +3161,66 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (_input.WasKeyPressed(Keys.Escape))
             {
                 _menuState = MenuState.MainMenu;
+                _prevKb = kb;
+                _prevMouse = mouse;
+                base.Update(gameTime);
+                return;
             }
-            else if (_input.LeftPressed)
-            {
-                int screenW2 = GraphicsDevice.Viewport.Width;
-                int screenH2 = GraphicsDevice.Viewport.Height;
-                var view = _gameRenderer.BuildLoadMenuLayout(screenW2, screenH2, _loadMenuSaves.Count);
 
-                for (int i = 0; i < view.Shown; i++)
+            int screenW2 = GraphicsDevice.Viewport.Width;
+            int screenH2 = GraphicsDevice.Viewport.Height;
+            var view = _gameRenderer.BuildLoadMenuLayout(screenW2, screenH2, _loadMenuSaves.Count, _loadMenuScrollPx);
+
+            // Draggable scrollbar — same behaviour as the scenario menu (shared
+            // Necroking.UI.VScrollbar). The scroll offset is stored in pixels, so
+            // the thumb math and drag conversion are both pixel-native.
+            if (_loadMenuScrollDragging && mouse.LeftButton != ButtonState.Pressed)
+                _loadMenuScrollDragging = false;
+
+            bool hasBar = !Necroking.UI.VScrollbar.Fits(view.ScrollViewH, view.ScrollContentH);
+            if (hasBar)
+            {
+                var thumb = Necroking.UI.VScrollbar.ThumbRect(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH, _loadMenuScrollPx);
+                var hit = Necroking.UI.VScrollbar.HitRect(view.ScrollX, view.ScrollY, view.ScrollViewH);
+
+                // Grab the thumb, or click the track to jump (thumb centres on the cursor).
+                if (_input.LeftPressed && hit.Contains(mouse.X, mouse.Y))
                 {
-                    if (!view.RowRects[i].Contains(mouse.X, mouse.Y)) continue;
-                    // On success StartGame has switched _menuState to None; on a
-                    // validation failure (logged) we simply stay on this menu.
-                    LoadSaveGame(_loadMenuSaves[i].Name);
-                    break;
+                    _loadMenuScrollDragging = true;
+                    _loadMenuScrollGrabOffset = thumb.Contains(mouse.X, mouse.Y) ? mouse.Y - thumb.Y : thumb.Height / 2f;
+                }
+
+                if (_loadMenuScrollDragging)
+                {
+                    float newPx = Necroking.UI.VScrollbar.ScrollFromDrag(mouse.Y, _loadMenuScrollGrabOffset,
+                        view.ScrollY, view.ScrollViewH, view.ScrollContentH);
+                    _loadMenuScrollPx = view.ClampScroll(newPx);
+                }
+            }
+
+            // Wheel scroll (half a row per notch), clamped to the layout height.
+            if (!_loadMenuScrollDragging && _input.ScrollDelta != 0)
+            {
+                _loadMenuScrollPx += (_input.ScrollDelta > 0 ? -1 : 1) * view.RowStride * 0.5f;
+                _loadMenuScrollPx = view.ClampScroll(_loadMenuScrollPx);
+            }
+
+            // Row / back-button clicks (skipped while dragging the scrollbar).
+            if (_input.LeftPressed && !_loadMenuScrollDragging)
+            {
+                // Only clicks inside the scrolled list window count — a partially
+                // clipped bottom row must not be clickable in the gap below it.
+                bool inListWindow = mouse.Y >= view.ScrollY && mouse.Y < view.ScrollY + view.ScrollViewH;
+                if (inListWindow)
+                {
+                    for (int i = 0; i < view.RowRects.Length; i++)
+                    {
+                        if (!view.RowRects[i].Contains(mouse.X, mouse.Y)) continue;
+                        // On success StartGame has switched _menuState to None; on a
+                        // validation failure (logged) we simply stay on this menu.
+                        LoadSaveGame(_loadMenuSaves[i].Name);
+                        break;
+                    }
                 }
 
                 if (_menuState == MenuState.LoadMenu && view.BackRect.Contains(mouse.X, mouse.Y))
