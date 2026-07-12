@@ -921,6 +921,32 @@ partial class GameRenderer
         DrawText(_g._smallFont, "MonoGame Port v0.1", new Vector2(10, screenH - 20), new Color(80, 80, 100));
     }
 
+    internal void DrawSaveGameText(Rectangle dest, SaveGameInfo s)
+    {
+        var r1 = dest;
+        r1.Width = dest.Width - 172;
+        var r2 = dest;
+        r2.X = r1.Right;
+        r2.Width = 172;
+
+
+        _g.Scope.Draw(_g._pixel, r2, new Color(200, 200, 200, 15));
+
+        DrawMenuButtonTextAt($"{s.Name}",
+            r1.X + 8, r1.Y, r1.Width - 12, r1.Height, new Vector2(0, 0.5f));
+
+        int curY = r2.Y;
+
+        curY += (int)DrawTextAt($"map: {s.MapName}",
+            r2.X + 4, curY, r2.Width - 12, r2.Height, new Vector2(0, 0), _g._smallFont, new Color(150, 150, 255)).Y;
+
+        curY += (int)DrawTextAt($"date: {s.SavedAt.ToLocalTime():yyyy-MM-dd HH:mm}",
+            r2.X + 4, curY, r2.Width - 12, r2.Height, new Vector2(0, 0), _g._smallFont, new Color(250, 250, 250)).Y;
+
+        curY += (int)DrawTextAt($"version: {s.Version}",
+            r2.X + 4, curY, r2.Width - 12, r2.Height, new Vector2(0, 0), _g._smallFont, new Color(180, 180, 180)).Y;
+    }
+
     // Placeholder save-preview card: necromancer-form portrait on top, the first
     // 4 spellbar spells (Q/E/1/2) as an icon row below. The ONE place save
     // previews are drawn — SaveGameWindow reaches it via a delegate wired in
@@ -1072,8 +1098,8 @@ partial class GameRenderer
             var r = view.RowRects[i];
             DrawMenuButtonAt("", r.X, r.Y, r.Width, r.Height);
             DrawSavePreviewCard(new Rectangle(r.X + 4, r.Y + 4, SaveGameWindow.CardW, SaveGameWindow.RowH - 8), s.FormId, s.SpellBar, s.Inventory);
-            DrawMenuButtonTextAt($"{s.Name}    {s.MapName}    {s.SavedAt.ToLocalTime():yyyy-MM-dd HH:mm}",
-               r.X + SaveGameWindow.CardW + 2, r.Y, r.Width - (SaveGameWindow.CardW + 2), r.Height);
+
+            DrawSaveGameText(new(r.X + SaveGameWindow.CardW + 2, r.Y, r.Width - (SaveGameWindow.CardW + 2), r.Height), s);
         }
         if (saves.Count > view.Shown && _g._font != null)
             DrawText(_g._font, $"(+{saves.Count - view.Shown} more)", new Vector2(view.BackRect.X, view.BackRect.Y - 22), new Color(140, 140, 160));
@@ -1289,14 +1315,24 @@ partial class GameRenderer
         DrawMenuButtonTextAt(text, x, y, w, h);
     }
 
-    private void DrawMenuButtonTextAt(string text, int x, int y, int w, int h) {
+    private Vector2 DrawTextAt(string text, int x, int y, int w, int h, Vector2 pivot, SpriteFont font, Color color)
+    {
+        var textSize = font.MeasureString(text);
+        DrawText(font, text,
+            new Vector2((int)(x + (w - textSize.X) * pivot.X), (int)(y + (h - textSize.Y) * pivot.Y)),
+            color, 1);
+        return textSize;
+    }
+
+    private void DrawMenuButtonTextAt(string text, int x, int y, int w, int h, Vector2? pivot=null) {
        if (_g._font != null)
        {
+           var p = pivot ?? new Vector2(0.5f, 0.5f);
           // Shrink overly long scenario names to fit inside the narrower grid cell.
           var textSize = _g._font.MeasureString(text);
           float scale = textSize.X > w - 12 ? (w - 12) / textSize.X : 1f;
           DrawText(_g._font, text,
-             new Vector2((int)(x + w / 2f - textSize.X * scale / 2f), (int)(y + (h - textSize.Y * scale) / 2f)),
+             new Vector2((int)(x + (w - textSize.X * scale) * p.X), (int)(y + (h - textSize.Y * scale) * p.Y)),
              new Color(255, 245, 220), scale);
        }
     }

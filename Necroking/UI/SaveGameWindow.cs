@@ -117,13 +117,16 @@ public class SaveGameWindow
             for (int i = 0; i < shown; i++)
             {
                 var s = _saves[i];
-                string rowText = $"{s.Name}    {s.MapName}    {s.SavedAt.ToLocalTime():yyyy-MM-dd HH:mm}";
-                if (_ui.DrawButton(rowText, x, rowsY, w, RowH))
+                if (_ui.DrawButton("", x, rowsY, w, RowH))
                 {
                     _name = s.Name;
                     pickedRow = true;
                 }
-                Game1.Instance._gameRenderer.DrawSavePreviewCard(new Rectangle(x + 4, rowsY + 4, CardW, RowH - 8), s.FormId, s.SpellBar, s.Inventory);
+
+                var cardRect = new Rectangle(x + 4, rowsY + 4, CardW, RowH - 8);
+                Game1.Instance._gameRenderer.DrawSavePreviewCard(cardRect, s.FormId, s.SpellBar, s.Inventory);
+                Game1.Instance._gameRenderer.DrawSaveGameText(
+                    new(x + SaveGameWindow.CardW + 2, rowsY, w - (SaveGameWindow.CardW + 2), RowH), s);
                 rowsY += RowH + 6;
             }
             if (_saves.Count > shown)

@@ -69,6 +69,7 @@ public partial class Game1
                 savedAt = File.GetLastWriteTimeUtc(file);
             result.Add(new SaveGameInfo
             {
+                Version = data.Version,
                 Name = Path.GetFileNameWithoutExtension(file),
                 MapName = data.MapName,
                 SavedAt = savedAt,
