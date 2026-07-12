@@ -176,9 +176,22 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
   precedents are UIEditorWindow's RI15 inline 18px texture thumbnails in a *list*, the wall
   editor's 3x3 *button* grid, and `ReflectionPropertyRenderer.DrawCheckboxGridField`
   (text checkbox grid). `TextureFileBrowser` is a file list + single preview, not a grid.
-  **No hover-tooltip helper exists in `EditorBase` either** — editors hand-roll
-  (rect + `DrawText` after the hovered content so it draws on top); the runtime
-  `HUDRenderer.DrawCursorTooltip` is private HUD code, not usable from editors.
+- **Hover-tooltip helper (canonical, use this — do NOT hand-roll):** `Game1.Tooltips`
+  (static `UI/TooltipSystem.cs`, public field on `Game1`) is a frame-scoped request queue
+  drained by `TooltipHostLayer` in the topmost `UIBand.Tooltip` **after every scissor clip
+  closes** — so an editor can request a tooltip from inside its `BeginClip` tab body and the
+  box still draws unclipped on top. Two simple paths + an escape hatch:
+  `RequestText(string, Rectangle anchor)` (one line, centered above the anchor rect, flips
+  below when clipped), `RequestLines(params string[])` (multi-line, cursor-anchored), and
+  `RequestCustom(Action<UICtx>)` (defer an arbitrary draw — e.g. a `UI/RichTip.cs` box).
+  Request during Draw or Update; requests never survive the frame. **Precedent:**
+  `MapEditorWindow.DrawGridCellTooltip(text, anchorCell)` → `Game1.Tooltips.RequestText(...)`,
+  gated on `Game1.Popups.IsEmpty && !_eb.IsColorPickerOpen && !_eb.IsDropdownOpen` so the
+  tooltip (which sits ABOVE the Popup band) doesn't paint over an open dropdown/color-picker.
+  Hover detection = `EditorBase.HitTest(rect)` (clip-aware: rect AND inside `_activeClip`, so
+  a scrolled-out row won't false-trigger); cursor = `EditorBase.MousePos`. The old
+  "editors hand-roll rect + `DrawText`" pattern and the private `HUDRenderer.DrawCursorTooltip`
+  are both superseded by this service.
 - **Def-dropdown precedent**: `DrawZoneSpawnPanel` rows use `_eb.DrawCombo` with cached
   filtered id arrays (`GetZoneForagableIdOptions` filters `_envSystem` defs by `IsForagable`,
   cache invalidated on `DefCount` change) — copy this for any "pick an env def" UI.
