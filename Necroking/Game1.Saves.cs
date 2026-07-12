@@ -120,6 +120,7 @@ public partial class Game1
                     Permanent = b.Permanent,
                     Stacks = b.StackCount,
                 }).ToList(),
+                Inventory = SnapshotInventory(),
             },
             SpellBar = _spellBarState.Slots.Select(s => s.SpellID ?? "").ToList(),
         };
@@ -127,6 +128,21 @@ public partial class Game1
         bool ok = JsonFile.Save(SaveFilePath(name), data, JsonDefaults.Indented);
         if (ok) DebugLog.Log("saves", $"Saved game '{name}' (map {data.MapName})");
         return ok;
+    }
+
+    /// <summary>Non-empty inventory slots, each tagged with its index so exact
+    /// layout round-trips. Returns an empty list when there is no inventory.</summary>
+    private List<SavedInventorySlot> SnapshotInventory()
+    {
+        var result = new List<SavedInventorySlot>();
+        if (_inventory == null) return result;
+        for (int i = 0; i < _inventory.SlotCount; i++)
+        {
+            var slot = _inventory.GetSlot(i);
+            if (slot.IsEmpty) continue;
+            result.Add(new SavedInventorySlot { Slot = i, ItemId = slot.ItemId, Quantity = slot.Quantity });
+        }
+        return result;
     }
 
     /// <summary>Load saves/{name}.json: start its map through the normal flow,
@@ -198,6 +214,22 @@ public partial class Game1
             float duration = b.Permanent ? 0f : b.Remaining;
             for (int s = 0; s < Math.Max(1, b.Stacks); s++)
                 BuffSystem.ApplyBuffWithDuration(_sim.UnitsMut, idx, def, duration, _gameData);
+        }
+
+        // Inventory: StartGame recreated + cleared _inventory, so restore the
+        // saved slots verbatim (SetSlot preserves exact positions). Validate ids
+        // against the live registry so a removed item doesn't break the load.
+        if (_inventory != null)
+        {
+            foreach (var s in save.Player.Inventory)
+            {
+                if (_gameData.Items.Get(s.ItemId) == null)
+                {
+                    DebugLog.Log("saves", $"Saved item '{s.ItemId}' not in item registry — slot {s.Slot} skipped");
+                    continue;
+                }
+                _inventory.SetSlot(s.Slot, s.ItemId, s.Quantity);
+            }
         }
 
         // Spellbar: overwrite the slots StartGame loaded from user settings.

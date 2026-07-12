@@ -5,12 +5,12 @@ using System.Text.Json.Serialization;
 namespace Necroking.Data;
 
 /// <summary>JSON shape of a save-game file (saves/{name}.json). Initial version
-/// captures only the play-session essentials: which map, where the player is,
-/// which form they wear, their active buffs, and the spellbar layout. Loading
-/// runs the normal StartGame(mapName) flow and then applies this on top.
-/// Deliberately NOT covered yet (future extensions): mana/NecromancerState,
-/// inventory, SkillBookState (incl. the "morphed:&lt;id&gt;" passive), horde
-/// units, and world/corpse state.</summary>
+/// captures the play-session essentials: which map, where the player is,
+/// which form they wear, their active buffs, the spellbar layout, and the
+/// player's inventory. Loading runs the normal StartGame(mapName) flow and then
+/// applies this on top. Deliberately NOT covered yet (future extensions):
+/// mana/NecromancerState, SkillBookState (incl. the "morphed:&lt;id&gt;"
+/// passive), horde units, and world/corpse state.</summary>
 public class SaveGameData
 {
     [JsonPropertyName("version")] public int Version { get; set; } = 1;
@@ -31,6 +31,16 @@ public class SavedPlayer
     // Buffs live on the owning entity, not at the save root — other things
     // (horde units, world objects) will carry their own buff lists later.
     [JsonPropertyName("buffs")] public List<SavedBuff> Buffs { get; set; } = new();
+    /// <summary>Non-empty inventory slots. Each carries its slot index so the
+    /// exact grid layout (gaps included) round-trips; empty slots are omitted.</summary>
+    [JsonPropertyName("inventory")] public List<SavedInventorySlot> Inventory { get; set; } = new();
+}
+
+public class SavedInventorySlot
+{
+    [JsonPropertyName("slot")] public int Slot { get; set; }
+    [JsonPropertyName("itemId")] public string ItemId { get; set; } = "";
+    [JsonPropertyName("qty")] public int Quantity { get; set; } = 1;
 }
 
 public class SavedBuff

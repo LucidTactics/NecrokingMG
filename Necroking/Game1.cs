@@ -1451,8 +1451,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (corpsesIdx >= 0 && corpsesIdx < _atlases.Length)
                 _gameData.Corpse.ApplyToAtlas(_atlases[corpsesIdx]);
         }
-        
-        ResetWorldState();
 
         base.Initialize();
     }
@@ -3679,7 +3677,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             {
                 CheatAddAllSkillcounters(necroIdx, 10);
             }
-            
+
             // Potions are Construction spells (assignable to any spell slot) —
             // the old dedicated potion slots and their throw-on-click flow are
             // gone; casting routes through CastPotionSpell.
@@ -4239,7 +4237,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         u.Subroutine = AI.WorkRoutine.WorkEnd;
     }
 
-    private void CheatAddAllSkillcounters(int necroIdx, int amount) 
+    private void CheatAddAllSkillcounters(int necroIdx, int amount)
     {
        if (necroIdx < 0 || _gameData == null) return;
 
