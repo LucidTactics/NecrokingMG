@@ -26,6 +26,15 @@ public class LightningRenderer
     private GraphicsDevice _graphicsDevice = null!;
     private float _gameTime;
     private GodRayRenderer _godRayRenderer = null!;
+    // Bolt/tendril ribbons: collected during Draw() (inside the additive sprite
+    // batch callback), flushed post-batch in DrawTriangleEffects(). See HdrStripBatch.
+    private readonly HdrStripBatch _strips = new();
+
+    // Cross-section softness (PolylineStrip edgeSoft): the core keeps a crisp
+    // flat middle with a thin anti-aliasing ramp; the glow is nearly a full tent
+    // so it reads as a real falloff instead of a hard box.
+    private const float CoreEdgeSoft = 0.5f;
+    private const float GlowEdgeSoft = 0.9f;
 
     public void Init(SpriteBatch spriteBatch, Texture2D pixel, Texture2D glowTex,
                      Game1 game, Camera25D camera, Renderer renderer, GraphicsDevice graphicsDevice,
@@ -40,6 +49,7 @@ public class LightningRenderer
         _graphicsDevice = graphicsDevice;
         _godRayRenderer = new GodRayRenderer();
         _godRayRenderer.Init(graphicsDevice, hdrIntensityEffect);
+        _strips.Init(graphicsDevice, hdrIntensityEffect);
     }
 
     public void SetGameTime(float gameTime) => _gameTime = gameTime;
@@ -47,6 +57,7 @@ public class LightningRenderer
     public void Draw()
     {
         _godRayRenderer.PendingGodRays.Clear();
+        _strips.Clear();
 
         // Draw active strikes
         foreach (var strike in _sim.Lightning.Strikes)
@@ -90,7 +101,7 @@ public class LightningRenderer
                     // Procedural lightning bolt from sky (start above top of screen)
                     float skyY = -50f; // well above screen edge
                     float skyX = sp.X - 50f + (sp.Y - skyY) * 0.05f; // slight angle
-                    DrawLightningBolt(new Vector2(skyX, skyY), sp, strike.Style, fade);
+                    AddBoltStrips(new Vector2(skyX, skyY), sp, strike.Style, fade);
                 }
             }
         }
@@ -105,7 +116,7 @@ public class LightningRenderer
             var startSp = _renderer.WorldToScreenPx(zap.StartPos, zap.StartHeight * _camera.Zoom, _camera);
             var endSp = _renderer.WorldToScreen(zap.EndPos, zap.EndHeight, _camera);
             float fade = 1f - zap.Timer / zap.Duration;
-            DrawLightningBolt(startSp, endSp, zap.Style, fade);
+            AddBoltStrips(startSp, endSp, zap.Style, fade);
         }
 
         // Draw active beams
@@ -124,7 +135,7 @@ public class LightningRenderer
             var startSp = _renderer.WorldToScreenPx(_sim.Units[casterIdx].EffectSpawnPos2D,
                 _sim.Units[casterIdx].EffectSpawnHeight * _camera.Zoom, _camera);
             var endSp = _renderer.WorldToScreen(_sim.Units[targetIdx].Position, 1f, _camera);
-            DrawLightningBolt(startSp, endSp, beam.Style, 1f);
+            AddBoltStrips(startSp, endSp, beam.Style, 1f);
         }
 
         // Draw active drains
@@ -147,26 +158,29 @@ public class LightningRenderer
                 _sim.Units[casterIdx].EffectSpawnHeight * _camera.Zoom, _camera);
             var endSp = _renderer.WorldToScreen(targetPos, 1f, _camera);
 
-            DrawDrainTendrils(_spriteBatch, _pixel, startSp, endSp, drain.Visuals, drain.Elapsed);
+            AddDrainTendrilStrips(startSp, endSp, drain.Visuals, drain.Elapsed);
         }
     }
 
     /// <summary>
-    /// Draw god rays in a separate pass. Must be called AFTER the additive SpriteBatch.End().
+    /// Triangle passes with their own device state (bolt/tendril ribbons + god rays).
+    /// Must be called AFTER the additive SpriteBatch.End(), while the scene RT is
+    /// still bound — additive blending makes the batch/post-batch ordering moot.
     /// </summary>
-    public void DrawGodRays() => _godRayRenderer.DrawAll();
+    public void DrawTriangleEffects()
+    {
+        _strips.DrawAll();
+        _godRayRenderer.DrawAll();
+    }
     public GodRayRenderer GetGodRayRenderer() => _godRayRenderer;
 
-    private void DrawLightningBolt(Vector2 start, Vector2 end, LightningStyle style, float fade)
-        => DrawLightningBoltStatic(_spriteBatch, _pixel, start, end, style, fade, _gameTime);
-
     /// <summary>
-    /// Draw a procedural lightning bolt with branches. Callable from any SpriteBatch context.
-    /// Requires HdrSprite.fx active on the batch for proper HDR encoding.
+    /// Shared bolt-shape step (flicker, jitter-quantized reseed, midpoint
+    /// displacement, branches) for the in-game ribbon path (AddBoltStrips) and the
+    /// SpriteBatch path below. Returns the flicker brightness multiplier.
     /// </summary>
-    public static void DrawLightningBoltStatic(SpriteBatch batch, Texture2D pixel,
-        Vector2 start, Vector2 end, LightningStyle style, float fade, float gameTime,
-        float widthScale = 1f)
+    private static float ComputeBoltShape(Vector2 start, Vector2 end, LightningStyle style,
+        float gameTime, out List<Vector2> mainPoints, out List<List<Vector2>> branches)
     {
         // JitterHz: control how often the bolt reshapes (0 = every frame)
         float jitterTime = gameTime;
@@ -180,26 +194,62 @@ public class LightningRenderer
             float t = MathF.Sin(gameTime * style.FlickerHz * 2f * MathF.PI) * 0.5f + 0.5f;
             flicker = style.FlickerMin + (style.FlickerMax - style.FlickerMin) * t;
         }
-        float effectiveFade = fade * flicker;
 
         uint seed = (uint)(start.X * 1000 + end.Y * 7 + jitterTime * 60);
-        var mainPoints = GenerateBoltPoints(start, end, style.Subdivisions, style.Displacement, ref seed);
+        mainPoints = GenerateBoltPoints(start, end, style.Subdivisions, style.Displacement, ref seed);
+        branches = mainPoints.Count >= 2
+            ? GenerateBranches(mainPoints, style, ref seed)
+            : new List<List<Vector2>>();
+        return flicker;
+    }
+
+    private void AddBoltStrips(Vector2 start, Vector2 end, LightningStyle style, float fade)
+        => AddBoltStripsStatic(_strips, start, end, style, fade, _gameTime);
+
+    /// <summary>
+    /// Collect a bolt (main + branches) as miter-joined ribbons into a strip batch;
+    /// the caller flushes with strips.DrawAll() after its sprite batch ends. THE
+    /// single bolt rasterizer — the in-game renderer and SpellPreview both use it,
+    /// so the editor preview always matches the real render.
+    /// Brightness: contribution = tint.rgb * intensity * fade, with the style
+    /// intensity applied via the strip batch's per-bucket Intensity uniform.
+    /// </summary>
+    public static void AddBoltStripsStatic(HdrStripBatch strips, Vector2 start, Vector2 end,
+        LightningStyle style, float fade, float gameTime, float widthScale = 1f)
+    {
+        float flicker = ComputeBoltShape(start, end, style, gameTime, out var mainPoints, out var branches);
         if (mainPoints.Count < 2) return;
+        float ef = fade * flicker;
+        if (ef <= 0.001f) return;
 
-        var branches = GenerateBranches(mainPoints, style, ref seed);
+        var coreTint = style.CoreColor.ToColor();
+        var glowTint = style.GlowColor.ToColor();
+        // Clamp to MaxHdrIntensity for parity with the retired sprite path:
+        // ToHdrVertex encoded intensity/Max into a byte, so styles authored above
+        // the cap (e.g. sky_lightning's 15) have always rendered at the cap.
+        var coreVerts = strips.GetBucket(MathF.Min(style.CoreColor.Intensity, HdrColor.MaxHdrIntensity));
+        var glowVerts = strips.GetBucket(MathF.Min(style.GlowColor.Intensity, HdrColor.MaxHdrIntensity));
 
-        float branchCoreW = style.CoreWidth * style.BranchDecay * widthScale;
-        float branchGlowW = style.GlowWidth * style.BranchDecay * widthScale;
+        // Width scales with fade like the old sprite path (the bolt thins as it dies).
+        float coreW = style.CoreWidth * widthScale * ef;
+        float glowW = style.GlowWidth * widthScale * ef;
 
         foreach (var branch in branches)
         {
-            DrawBoltPolylineStatic(batch, pixel, branch, style.CoreColor, style.GlowColor,
-                branchCoreW * effectiveFade, branchGlowW * effectiveFade, effectiveFade * 0.7f, effectiveFade * 0.2f);
+            // Branches taper to a third of their base width and dim toward the tip,
+            // so forks visibly thin out as they split off the main channel.
+            float bCoreW = coreW * style.BranchDecay;
+            float bGlowW = glowW * style.BranchDecay;
+            PolylineStrip.Build(glowVerts, branch, glowTint, ef * 0.2f, ef * 0.1f,
+                bGlowW, bGlowW * 0.35f, GlowEdgeSoft);
+            PolylineStrip.Build(coreVerts, branch, coreTint, ef * 0.7f, ef * 0.35f,
+                bCoreW, bCoreW * 0.35f, CoreEdgeSoft);
         }
 
-        DrawBoltPolylineStatic(batch, pixel, mainPoints, style.CoreColor, style.GlowColor,
-            style.CoreWidth * widthScale * effectiveFade, style.GlowWidth * widthScale * effectiveFade,
-            effectiveFade, effectiveFade * 0.4f);
+        PolylineStrip.Build(glowVerts, mainPoints, glowTint, ef * 0.4f, ef * 0.4f,
+            glowW, glowW, GlowEdgeSoft);
+        PolylineStrip.Build(coreVerts, mainPoints, coreTint, ef, ef,
+            coreW, coreW, CoreEdgeSoft);
     }
 
     /// <summary>
@@ -292,67 +342,14 @@ public class LightningRenderer
         return branches;
     }
 
-    /// <summary>
-    /// <summary>
-    /// Draw a polyline as glow + core segments using HDR vertex encoding.
-    /// Alpha values are 0-1 fade multipliers (encoded into HDR vertex format for HdrSprite.fx).
-    /// </summary>
-    public static void DrawBoltPolylineStatic(SpriteBatch batch, Texture2D pixel,
-        List<Vector2> points, HdrColor coreHdr, HdrColor glowHdr,
-        float coreWidth, float glowWidth, float coreFade, float glowFade)
+    // Scratch for tendril polylines (render thread only).
+    private static readonly List<Vector2> _tendrilPts = new();
+
+    /// <summary>Shared tendril shape (arc + travelling wave) for the ribbon and
+    /// sprite paths. Fills outPts; empty when start/end are too close.</summary>
+    private static void BuildTendrilPoints(Vector2 start, Vector2 end, float time, List<Vector2> outPts)
     {
-        var glowColor = HdrColor.ToHdrVertex(glowHdr.ToColor(), glowFade, glowHdr.Intensity);
-        var coreColor = HdrColor.ToHdrVertex(coreHdr.ToColor(), coreFade, coreHdr.Intensity);
-
-        for (int i = 0; i < points.Count - 1; i++)
-        {
-            var segDir = points[i + 1] - points[i];
-            float segLen = segDir.Length();
-            if (segLen < 0.5f) continue;
-            float angle = MathF.Atan2(segDir.Y, segDir.X);
-
-            batch.Draw(pixel, points[i], null, glowColor,
-                angle, new Vector2(0, 0.5f), new Vector2(segLen, glowWidth),
-                SpriteEffects.None, 0f);
-
-            batch.Draw(pixel, points[i], null, coreColor,
-                angle, new Vector2(0, 0.5f), new Vector2(segLen, coreWidth),
-                SpriteEffects.None, 0f);
-        }
-    }
-
-
-    /// <summary>
-    /// Draw a complete drain effect (multiple tendrils with sway and pulse).
-    /// Callable from any SpriteBatch context with HdrSprite.fx active.
-    /// </summary>
-    public static void DrawDrainTendrils(SpriteBatch batch, Texture2D pixel,
-        Vector2 start, Vector2 end, DrainVisualParams v, float elapsed)
-    {
-        float pulse = 1f + v.PulseStrength * MathF.Sin(elapsed * v.PulseHz * 2f * MathF.PI);
-
-        for (int t = 0; t < v.TendrilCount; t++)
-        {
-            float offset = (t - v.TendrilCount / 2f) * v.SwayAmplitude;
-            float sway = MathF.Sin(elapsed * v.SwayHz * 2f * MathF.PI + t * 2f) * v.SwayAmplitude * 0.75f;
-            var swayStart = new Vector2(start.X + offset, start.Y);
-            var swayEnd = new Vector2(end.X + sway, end.Y);
-            DrawTendrilStatic(batch, pixel, swayStart, swayEnd, v.CoreColor, v.GlowColor, elapsed,
-                glowWidth: v.GlowWidth * pulse, coreWidth: v.CoreWidth * pulse);
-        }
-    }
-
-    private void DrawTendril(Vector2 start, Vector2 end, HdrColor coreColor, HdrColor glowColor, float time)
-        => DrawTendrilStatic(_spriteBatch, _pixel, start, end, coreColor, glowColor, time);
-
-    /// <summary>
-    /// Draw an arcing tendril (used for drain spells). Callable from any SpriteBatch context.
-    /// Requires HdrSprite.fx active on the batch for proper HDR encoding.
-    /// </summary>
-    public static void DrawTendrilStatic(SpriteBatch batch, Texture2D pixel,
-        Vector2 start, Vector2 end, HdrColor coreColor, HdrColor glowColor, float time,
-        float glowWidth = 4f, float coreWidth = 1.5f)
-    {
+        outPts.Clear();
         var dir = end - start;
         float length = dir.Length();
         if (length < 1f) return;
@@ -360,33 +357,48 @@ public class LightningRenderer
         var perp = new Vector2(-norm.Y, norm.X);
 
         int segments = Math.Max(3, (int)(length / 20f));
-        var points = new Vector2[segments + 1];
-        points[0] = start;
-        points[segments] = end;
-
-        for (int i = 1; i < segments; i++)
+        for (int i = 0; i <= segments; i++)
         {
             float t = i / (float)segments;
             var basePos = Vector2.Lerp(start, end, t);
             float arc = MathF.Sin(t * MathF.PI) * 20f;
             float wave = MathF.Sin(time * 4f + t * 8f) * 5f;
-            points[i] = basePos + perp * (arc + wave);
+            outPts.Add(basePos + perp * (arc + wave));
         }
+    }
 
-        var glowVtx = HdrColor.ToHdrVertex(glowColor.ToColor(), 120f / 255f, glowColor.Intensity);
-        var coreVtx = HdrColor.ToHdrVertex(coreColor.ToColor(), 200f / 255f, coreColor.Intensity);
+    private void AddDrainTendrilStrips(Vector2 start, Vector2 end, DrainVisualParams v, float elapsed)
+        => AddDrainTendrilStripsStatic(_strips, start, end, v, elapsed);
 
-        for (int i = 0; i < segments; i++)
+    /// <summary>
+    /// Collect a drain effect (multiple arcing tendrils with sway and pulse) as
+    /// ribbons into a strip batch. THE single tendril rasterizer — used by the
+    /// in-game renderer and SpellPreview alike.
+    /// </summary>
+    public static void AddDrainTendrilStripsStatic(HdrStripBatch strips,
+        Vector2 start, Vector2 end, DrainVisualParams v, float elapsed)
+    {
+        float pulse = 1f + v.PulseStrength * MathF.Sin(elapsed * v.PulseHz * 2f * MathF.PI);
+
+        var coreTint = v.CoreColor.ToColor();
+        var glowTint = v.GlowColor.ToColor();
+        // Same MaxHdrIntensity clamp as AddBoltStripsStatic (sprite-encode parity).
+        var coreVerts = strips.GetBucket(MathF.Min(v.CoreColor.Intensity, HdrColor.MaxHdrIntensity));
+        var glowVerts = strips.GetBucket(MathF.Min(v.GlowColor.Intensity, HdrColor.MaxHdrIntensity));
+
+        for (int t = 0; t < v.TendrilCount; t++)
         {
-            var segDir = points[i + 1] - points[i];
-            float segLen = segDir.Length();
-            if (segLen < 0.5f) continue;
-            float angle = MathF.Atan2(segDir.Y, segDir.X);
+            float offset = (t - v.TendrilCount / 2f) * v.SwayAmplitude;
+            float sway = MathF.Sin(elapsed * v.SwayHz * 2f * MathF.PI + t * 2f) * v.SwayAmplitude * 0.75f;
+            BuildTendrilPoints(new Vector2(start.X + offset, start.Y),
+                new Vector2(end.X + sway, end.Y), elapsed, _tendrilPts);
+            if (_tendrilPts.Count < 2) continue;
 
-            batch.Draw(pixel, points[i], null, glowVtx,
-                angle, new Vector2(0, 0.5f), new Vector2(segLen, glowWidth), SpriteEffects.None, 0f);
-            batch.Draw(pixel, points[i], null, coreVtx,
-                angle, new Vector2(0, 0.5f), new Vector2(segLen, coreWidth), SpriteEffects.None, 0f);
+            // Same fade constants as the retired sprite path (glow 120/255, core 200/255).
+            PolylineStrip.Build(glowVerts, _tendrilPts, glowTint, 120f / 255f, 120f / 255f,
+                v.GlowWidth * pulse, v.GlowWidth * pulse, GlowEdgeSoft);
+            PolylineStrip.Build(coreVerts, _tendrilPts, coreTint, 200f / 255f, 200f / 255f,
+                v.CoreWidth * pulse, v.CoreWidth * pulse, CoreEdgeSoft);
         }
     }
 }

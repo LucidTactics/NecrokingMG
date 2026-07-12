@@ -54,9 +54,12 @@ tooltips) are drawn INSIDE `HUDRenderer.Draw`, which is called by **`HudChromeLa
 (`UI/Layers/HudLayers.cs`) — registered FIRST in the Hud band (`Game1` ctor, ~line 890),
 so `SpellBarLayer`, `TimeControlsLayer` and **`AggressionBarLayer`** (registered after,
 same band) all draw ON TOP of those tooltips. The aggro bar sits just above the spell bar,
-so the spell-slot tooltip can render behind it. The **`UIBand.Tooltip` (=900) band exists
-and is currently EMPTY** — no layer uses it; that's the natural seat for a draw-only
-topmost tooltip layer. Note `HudChromeLayer.Draw` parks `MousePos` off-screen when a
+so the spell-slot tooltip can render behind it. The **`UIBand.Tooltip` (=900) band is now
+seated by `TooltipHostLayer`** (`UI/Layers/HudLayers.cs`, registered in the `Game1` ctor),
+which drains the global `Game1.Tooltips` (`UI/TooltipSystem.cs`) request queue topmost after
+every other layer + scissor clip — the canonical draw-only topmost tooltip service any
+HUD/panel/editor code can `RequestText`/`RequestLines`/`RequestCustom` into. Note
+`HudChromeLayer.Draw` parks `MousePos` off-screen when a
 higher band owns the hover (so `_hoverSlotSpell` never gets set under a covering panel) —
 any extracted tooltip layer keeps working because the hover *state* is still populated
 during the Hud-band `DrawSpellBar`, and tooltip draws are no-ops when that state is null.

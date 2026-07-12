@@ -1775,6 +1775,86 @@ public partial class Game1 {
                break;
             }
 
+            // Spawn a lightning visual directly in the sim (no cast pipeline, no
+            // windup, no damage) so screenshots can be timed deterministically.
+            // devctl: cmd spawn_lightning <zap|strike|beam|drain> <spellID> <x> <y>
+            //         [duration=5] [width_scale=1]
+            // beam/drain anchor caster=necromancer, target=unit closest to (x,y).
+            case "spawn_lightning": {
+               if (c.Args.Length < 4) {
+                  c.Complete(Necroking.Dev.DevServer.Error(
+                     "spawn_lightning needs: <zap|strike|beam|drain> <spellID> <x> <y> [duration=5] [width_scale=1]"));
+                  break;
+               }
+               string kind = c.Args[0].ToLowerInvariant();
+               var lSpell = _gameData.Spells.Get(c.Args[1]);
+               if (lSpell == null) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"unknown spell: {c.Args[1]}"));
+                  break;
+               }
+               int lNecro = _sim.NecromancerIndex;
+               if (lNecro < 0) {
+                  c.Complete(Necroking.Dev.DevServer.Error("no necromancer in world"));
+                  break;
+               }
+               var lTarget = new Vec2(DevFloat(c.Args[2]), DevFloat(c.Args[3]));
+               float lDur = c.Opt("duration") != null ? DevFloat(c.Opt("duration")!) : 5f;
+               float lScale = c.Opt("width_scale") != null ? DevFloat(c.Opt("width_scale")!) : 1f;
+
+               // Closest unit to the target point (any faction, not the necro) for
+               // the unit-anchored kinds.
+               int lUnitIdx = -1; float lBest = float.MaxValue;
+               for (int i = 0; i < _sim.Units.Count; i++) {
+                  if (i == lNecro || !_sim.Units[i].Alive) continue;
+                  float d = (_sim.Units[i].Position - lTarget).LengthSq();
+                  if (d < lBest) { lBest = d; lUnitIdx = i; }
+               }
+
+               string? lErr = null;
+               switch (kind) {
+                  case "zap": {
+                     var st = lSpell.BuildStrikeStyle();
+                     st.CoreWidth *= lScale; st.GlowWidth *= lScale;
+                     _sim.Lightning.SpawnZap(_sim.Units[lNecro].EffectSpawnPos2D, lTarget,
+                        lDur, st, _sim.Units[lNecro].EffectSpawnHeight, 1f);
+                     break;
+                  }
+                  case "strike": {
+                     var st = lSpell.BuildStrikeStyle();
+                     st.CoreWidth *= lScale; st.GlowWidth *= lScale;
+                     _sim.Lightning.SpawnStrike(lTarget, 0f, lDur, 0f, 0, st, lSpell.Id,
+                        telegraphVisible: false);
+                     break;
+                  }
+                  case "beam": {
+                     if (lUnitIdx < 0) { lErr = "beam needs a target unit"; break; }
+                     var st = lSpell.BuildBeamStyle();
+                     st.CoreWidth *= lScale; st.GlowWidth *= lScale;
+                     _sim.Lightning.SpawnBeam(_sim.Units[lNecro].Id, _sim.Units[lUnitIdx].Id,
+                        lSpell.Id, 0, 999f, 0f, st, lDur);
+                     break;
+                  }
+                  case "drain": {
+                     if (lUnitIdx < 0) { lErr = "drain needs a target unit"; break; }
+                     var vis = lSpell.BuildDrainVisuals();
+                     vis.CoreWidth *= lScale; vis.GlowWidth *= lScale;
+                     _sim.Lightning.SpawnDrain(_sim.Units[lNecro].Id, _sim.Units[lUnitIdx].Id,
+                        lSpell.Id, 0, 999f, 0f, 0, false, lDur, vis);
+                     break;
+                  }
+                  default:
+                     lErr = $"unknown kind: {kind}";
+                     break;
+               }
+               if (lErr != null)
+                  c.Complete(Necroking.Dev.DevServer.Error(lErr));
+               else
+                  c.Complete(Necroking.Dev.DevServer.Ok(
+                     $"spawned {kind} ({lSpell.Id}) dur={lDur} scale={lScale}" +
+                     (lUnitIdx >= 0 && (kind == "beam" || kind == "drain") ? $" targetIdx={lUnitIdx}" : "")));
+               break;
+            }
+
             // Simulate a world mouse click at a world point (the Game1.WorldClicks
             // dispatch: LMB = open building panel / pile gather / attack clicked
             // enemy; RMB = forage / pile gather / attack). Runs the same handlers

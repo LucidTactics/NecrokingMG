@@ -43,6 +43,12 @@ public class SpellPreview
     private BloomRenderer? _bloom;
     private Microsoft.Xna.Framework.Content.ContentManager? _content;
     private bool _initialized;
+    // Bolts/tendrils and god rays use the SAME renderers as the game
+    // (LightningRenderer.Add*StripsStatic + GodRayRenderer), collected during the
+    // additive pass and flushed as triangle passes before bloom — so the preview
+    // cannot drift from the in-game look.
+    private readonly Render.HdrStripBatch _strips = new();
+    private GodRayRenderer? _godRays;
 
     // Timing
     private float _elapsed;
@@ -229,6 +235,20 @@ public class SpellPreview
 
         // Shared radial glow texture (cached in TextureUtil — matches Game1's _glowTex).
         _glowTex = TextureUtil.GetRadialGlow(gd);
+
+        // HdrIntensity.fx drives the ribbon/god-ray triangle passes. ContentManager
+        // caches loads, so this is the same Effect instance the game uses (params
+        // are set per draw). Null content → HdrStripBatch/GodRayRenderer fall back
+        // to BasicEffect (LDR, no bloom pickup) rather than failing.
+        Microsoft.Xna.Framework.Graphics.Effect? hdrIntensity = null;
+        if (content != null)
+        {
+            try { hdrIntensity = content.Load<Microsoft.Xna.Framework.Graphics.Effect>("HdrIntensity"); }
+            catch { }
+        }
+        _strips.Init(gd, hdrIntensity);
+        _godRays = new GodRayRenderer();
+        _godRays.Init(gd, hdrIntensity);
 
         _initialized = true;
     }
@@ -512,6 +532,8 @@ public class SpellPreview
             Render.Materials.NoteAdHocBatch(); // additive pass — colors pass through raw
         }
 
+        _strips.Clear();
+        _godRays?.PendingGodRays.Clear();
         DrawStrikes();
         DrawBeams();
         DrawDrains();
@@ -519,6 +541,11 @@ public class SpellPreview
         DrawProjectileGlows();
         DrawHitGlows();
         _sb.End();
+
+        // Ribbon bolts/tendrils + god rays: the same post-batch triangle passes as
+        // the game's LightningTris pass, flushed onto the scene RT before bloom.
+        _strips.DrawAll();
+        _godRays?.DrawAll();
 
         // Bloom composites scene + bloom → preview RT; without bloom, already on preview RT
         if (useBloom)
@@ -748,16 +775,16 @@ public class SpellPreview
                 float fade = 1f - s.EffectTimer / Math.Max(0.01f, s.EffectDuration);
                 var groundPos = new Vector2(screen.X, groundY);
 
-                if (s.IsGodRay && s.GodRay != null)
+                if (s.IsGodRay && s.GodRay != null && _godRays != null)
                 {
                     var skyPos = new Vector2(screen.X - _previewWidth * 0.1f, groundY - _previewHeight * 0.6f);
-                    GodRayRenderer.DrawGodRaySpriteBatch(_sb, _pixel, skyPos, groundPos,
-                        s.Style, s.GodRay, _elapsed, s.EffectTimer, s.EffectDuration);
+                    _godRays.PendingGodRays.Add((skyPos, groundPos,
+                        s.Style, s.GodRay, _elapsed, s.EffectTimer, s.EffectDuration));
                 }
                 else
                 {
                     var skyPos = new Vector2(screen.X - 20f, 5f);
-                    LightningRenderer.DrawLightningBoltStatic(_sb, _pixel, skyPos, groundPos,
+                    LightningRenderer.AddBoltStripsStatic(_strips, skyPos, groundPos,
                         s.Style, fade, _elapsed);
 
                     // Impact glow
@@ -779,7 +806,7 @@ public class SpellPreview
             float fade = 1f - z.Timer / Math.Max(0.01f, z.Duration);
             var startScreen = WorldToScreenWithHeight(z.StartPos.X, z.StartPos.Y, 1.5f);
             var endScreen = WorldToScreenWithHeight(z.EndPos.X, z.EndPos.Y, 1.0f);
-            LightningRenderer.DrawLightningBoltStatic(_sb, _pixel, startScreen, endScreen,
+            LightningRenderer.AddBoltStripsStatic(_strips, startScreen, endScreen,
                 z.Style, fade, _elapsed);
         }
     }
@@ -792,7 +819,7 @@ public class SpellPreview
             var startScreen = WorldToScreenWithHeight(b.StartPos.X, b.StartPos.Y, 1.5f);
             var endScreen = WorldToScreenWithHeight(b.EndPos.X, b.EndPos.Y, 1.0f);
             float pulse = 1f + 0.3f * MathF.Sin(_elapsed * 8f);
-            LightningRenderer.DrawLightningBoltStatic(_sb, _pixel, startScreen, endScreen,
+            LightningRenderer.AddBoltStripsStatic(_strips, startScreen, endScreen,
                 b.Style, 1f, _elapsed, widthScale: pulse);
         }
     }
@@ -804,7 +831,7 @@ public class SpellPreview
             if (!d.Alive) continue;
             var srcScreen = WorldToScreenWithHeight(d.SourcePos.X, d.SourcePos.Y, 1.0f);
             var dstScreen = WorldToScreenWithHeight(d.DestPos.X, d.DestPos.Y, 1.5f);
-            LightningRenderer.DrawDrainTendrils(_sb, _pixel, srcScreen, dstScreen, d.Visuals, d.Elapsed);
+            LightningRenderer.AddDrainTendrilStripsStatic(_strips, srcScreen, dstScreen, d.Visuals, d.Elapsed);
         }
     }
 
