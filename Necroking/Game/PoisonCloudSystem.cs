@@ -6,7 +6,6 @@ using Necroking.Data.Registries;
 using Necroking.Game;
 using Necroking.Lib;
 using Necroking.Movement;
-using Necroking.Spatial;
 
 namespace Necroking.GameSystems;
 

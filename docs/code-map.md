@@ -25,7 +25,6 @@ is for and **where new code should go**.
 | `Core/`               | `Necroking.Core` | Core Imported Game Utilities everyone depends on (GameClock, GamePaths, JSON/file utils) |
 | `Lib/`                | `Necroking.Lib` | Inhouse implemented utilities and structs.                                               |
 | `Algorithm/`          | `Necroking.Algorithm` | Pure, standalone algorithms with no game-state knowledge (generic A*, scatter packing)   |
-| `Spatial/`            | `Necroking.Spatial` | Generic spatial-query data structures (Quadtree, AABB)                                   |
 | `Data/`               | `Necroking.Data` | Game-data model + `GameData` aggregate, map file schema, shared enums                    |
 | `Data/Registries/`    | `Necroking.Data.Registries` | The id-keyed `data/*.json` registries on `RegistryBase<TDef>`                            |
 | `World/`              | `Necroking.World` | Terrain/environment substrate: pathfinder, env objects, ground, walls, roads             |

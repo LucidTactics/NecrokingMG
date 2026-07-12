@@ -22,7 +22,7 @@ public ref struct AIContext
     // World queries (set by Simulation before AI tick)
     public GameData GameData;
     public World.Pathfinder? Pathfinder;
-    public Spatial.Quadtree? Quadtree;
+    public Quadtree? Quadtree;
     /// <summary>Central world-query engine (canonical nearest-of / in-radius scans —
     /// see <see cref="GameSystems.WorldQuery"/>). Set by Simulation.BuildAIContext;
     /// null in minimal contexts (OnSpawn, hand-built scenario/AIControl contexts) —

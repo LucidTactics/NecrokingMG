@@ -5,7 +5,6 @@ using Necroking.Data;
 using Necroking.Game;
 using Necroking.Lib;
 using Necroking.Movement;
-using Necroking.Spatial;
 using Necroking.World;
 
 namespace Necroking.GameSystems;

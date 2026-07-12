@@ -178,7 +178,7 @@ public class PhysicsSystem
     /// collisions query neighbors instead of scanning every unit per body.
     /// </summary>
     public void Update(float dt, UnitArrays units, float worldMaxX, float worldMaxY,
-        Spatial.Quadtree? quadtree = null)
+        Quadtree? quadtree = null)
     {
         if (_bodies.Count > 0 && dt > 0.05f)
             DebugLog.Log("physics", $"[FRAME] dt={dt * 1000:F0}ms bodies={_bodies.Count} — SLOW FRAME");
@@ -260,7 +260,7 @@ public class PhysicsSystem
     }
 
     private void CheckUnitCollisions(ref PhysicsBody body, int flyerIdx, UnitArrays units, float dt,
-        Spatial.Quadtree? quadtree)
+        Quadtree? quadtree)
     {
         float flyerSpeed = body.VelocityXY.Length();
         if (flyerSpeed < MinTransferSpeed) return; // too slow to register

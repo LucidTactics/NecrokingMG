@@ -7,7 +7,6 @@ using Necroking.GameSystems;
 using Necroking.Lib;
 using Necroking.Movement;
 using Necroking.Render;
-using Necroking.Spatial;
 
 namespace Necroking.Game;
 
