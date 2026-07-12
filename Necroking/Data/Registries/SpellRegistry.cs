@@ -459,50 +459,56 @@ public class SpellDef : INamedDef
     [EditorField(Label = "Glow Width", Group = "STRIKE", Order = 513, Step = 0.1f, Decimals = 1)]
     [JsonPropertyName("strikeGlowWidth")] public float StrikeGlowWidth { get; set; } = 8.0f;
 
+    // 0 = the bolt keeps full width for its whole life (only brightness fades);
+    // 1 = width shrinks with the fade (the classic collapse-to-a-thread look).
     [EditorVisible("Category", "Strike")]
-    [EditorField(Label = "Flicker Min", Group = "STRIKE", Order = 514, Step = 0.01f, Decimals = 2)]
+    [EditorField(Label = "Width Fade", Group = "STRIKE", Order = 514, Step = 0.01f, Decimals = 2)]
+    [JsonPropertyName("strikeWidthFade")] public float StrikeWidthFade { get; set; } = 1.0f;
+
+    [EditorVisible("Category", "Strike")]
+    [EditorField(Label = "Flicker Min", Group = "STRIKE", Order = 515, Step = 0.01f, Decimals = 2)]
     [JsonPropertyName("strikeFlickerMin")] public float StrikeFlickerMin { get; set; } = 1.0f;
 
     [EditorVisible("Category", "Strike")]
-    [EditorField(Label = "Flicker Max", Group = "STRIKE", Order = 515, Step = 0.01f, Decimals = 2)]
+    [EditorField(Label = "Flicker Max", Group = "STRIKE", Order = 516, Step = 0.01f, Decimals = 2)]
     [JsonPropertyName("strikeFlickerMax")] public float StrikeFlickerMax { get; set; } = 1.0f;
 
     [EditorVisible("Category", "Strike")]
-    [EditorField(Label = "Flicker Hz", Group = "STRIKE", Order = 516, Step = 0.1f, Decimals = 1)]
+    [EditorField(Label = "Flicker Hz", Group = "STRIKE", Order = 517, Step = 0.1f, Decimals = 1)]
     [JsonPropertyName("strikeFlickerHz")] public float StrikeFlickerHz { get; set; }
 
     [EditorVisible("Category", "Strike")]
-    [EditorField(Label = "Jitter Hz", Group = "STRIKE", Order = 517, Step = 0.1f, Decimals = 1)]
+    [EditorField(Label = "Jitter Hz", Group = "STRIKE", Order = 518, Step = 0.1f, Decimals = 1)]
     [JsonPropertyName("strikeJitterHz")] public float StrikeJitterHz { get; set; }
 
     [EditorVisible("Category", "Strike")]
-    [EditorField(Label = "Core Color", Group = "STRIKE", Order = 518, Compact = true)]
+    [EditorField(Label = "Core Color", Group = "STRIKE", Order = 519, Compact = true)]
     [JsonPropertyName("strikeCoreColor")] [JsonConverter(typeof(HdrColorJsonConverter))] public HdrColor StrikeCoreColor { get; set; } = new(255, 255, 255, 255, 4.0f);
 
     [EditorVisible("Category", "Strike")]
-    [EditorField(Label = "Glow Color", Group = "STRIKE", Order = 519, Compact = true)]
+    [EditorField(Label = "Glow Color", Group = "STRIKE", Order = 520, Compact = true)]
     [JsonPropertyName("strikeGlowColor")] [JsonConverter(typeof(HdrColorJsonConverter))] public HdrColor StrikeGlowColor { get; set; } = new(140, 180, 255, 200, 2.5f);
 
     // God Ray sub-fields
     [EditorVisible("Category", "Strike")]
     [EditorVisible("StrikeVisualType", "GodRay")]
     [EditorHeader("GOD RAY", ColorR = 255, ColorG = 220, ColorB = 100)]
-    [EditorField(Label = "Edge Softness", Group = "STRIKE", Order = 520, Step = 0.01f, Decimals = 2)]
+    [EditorField(Label = "Edge Softness", Group = "STRIKE", Order = 521, Step = 0.01f, Decimals = 2)]
     [JsonPropertyName("godRayEdgeSoftness")] public float GodRayEdgeSoftness { get; set; } = 0.4f;
 
     [EditorVisible("Category", "Strike")]
     [EditorVisible("StrikeVisualType", "GodRay")]
-    [EditorField(Label = "Noise Strength", Group = "STRIKE", Order = 521, Step = 0.01f, Decimals = 2)]
+    [EditorField(Label = "Noise Strength", Group = "STRIKE", Order = 522, Step = 0.01f, Decimals = 2)]
     [JsonPropertyName("godRayNoiseStrength")] public float GodRayNoiseStrength { get; set; } = 0.35f;
 
     [EditorVisible("Category", "Strike")]
     [EditorVisible("StrikeVisualType", "GodRay")]
-    [EditorField(Label = "Noise Speed", Group = "STRIKE", Order = 522, Step = 0.1f, Decimals = 1)]
+    [EditorField(Label = "Noise Speed", Group = "STRIKE", Order = 523, Step = 0.1f, Decimals = 1)]
     [JsonPropertyName("godRayNoiseSpeed")] public float GodRayNoiseSpeed { get; set; } = 1.5f;
 
     [EditorVisible("Category", "Strike")]
     [EditorVisible("StrikeVisualType", "GodRay")]
-    [EditorField(Label = "Noise Scale", Group = "STRIKE", Order = 523, Step = 0.1f, Decimals = 1)]
+    [EditorField(Label = "Noise Scale", Group = "STRIKE", Order = 524, Step = 0.1f, Decimals = 1)]
     [JsonPropertyName("godRayNoiseScale")] public float GodRayNoiseScale { get; set; } = 3.0f;
 
     // ============ BEAM ============
@@ -795,6 +801,7 @@ public class SpellDef : INamedDef
         GlowColor = StrikeGlowColor,
         CoreWidth = StrikeCoreWidth,
         GlowWidth = StrikeGlowWidth,
+        WidthFade = StrikeWidthFade,
         Displacement = StrikeDisplacement,
         MaxBranches = StrikeBranches,
         FlickerMin = StrikeFlickerMin,

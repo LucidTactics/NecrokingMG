@@ -232,9 +232,12 @@ public class LightningRenderer
         var coreVerts = strips.GetBucket(MathF.Min(style.CoreColor.Intensity, HdrColor.MaxHdrIntensity));
         var glowVerts = strips.GetBucket(MathF.Min(style.GlowColor.Intensity, HdrColor.MaxHdrIntensity));
 
-        // Width scales with fade like the old sprite path (the bolt thins as it dies).
-        float coreW = style.CoreWidth * widthScale * ef;
-        float glowW = style.GlowWidth * widthScale * ef;
+        // Style.WidthFade controls how much the bolt's width follows the fade:
+        // 1 = full coupling (width*ef, the classic collapse-to-a-thread; also the
+        // pre-knob behavior), 0 = constant width with only brightness fading.
+        float wf = MathHelper.Lerp(1f, ef, Math.Clamp(style.WidthFade, 0f, 1f));
+        float coreW = style.CoreWidth * widthScale * wf;
+        float glowW = style.GlowWidth * widthScale * wf;
 
         foreach (var branch in branches)
         {

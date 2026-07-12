@@ -13,6 +13,10 @@ public class LightningStyle
     public HdrColor GlowColor = new(140, 180, 255, 200, 2.5f);
     public float CoreWidth = 2f;
     public float GlowWidth = 8f;
+    /// <summary>How much the bolt's WIDTH follows the lifetime fade: 1 = width
+    /// shrinks with fade (collapse-to-a-thread), 0 = constant width, only
+    /// brightness fades. Alpha always fades regardless.</summary>
+    public float WidthFade = 1f;
     public float FlickerMin = 1f;
     public float FlickerMax = 1f;
     public float FlickerHz;

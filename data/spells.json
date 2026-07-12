@@ -476,7 +476,7 @@
           "g": 247,
           "b": 215,
           "a": 47,
-          "intensity": 4.5
+          "intensity": 6.068182
         },
         "rotation": 0,
         "blendMode": "Additive",
@@ -485,27 +485,28 @@
       },
       "telegraphDuration": 0.3,
       "telegraphVisible": false,
-      "strikeDuration": 0.3,
+      "strikeDuration": 0.4,
       "strikeDisplacement": 0.25,
       "strikeBranches": 5,
       "strikeCoreWidth": 8,
       "strikeGlowWidth": 15,
-      "strikeFlickerMax": 1.5,
+      "strikeWidthFade": 0.25,
+      "strikeFlickerMax": 1.2,
       "strikeFlickerHz": 5,
       "strikeJitterHz": 0.1,
       "strikeCoreColor": {
-        "r": 255,
-        "g": 255,
-        "b": 255,
+        "r": 251,
+        "g": 247,
+        "b": 194,
         "a": 255,
-        "intensity": 15
+        "intensity": 10.022728
       },
       "strikeGlowColor": {
-        "r": 140,
-        "g": 180,
+        "r": 175,
+        "g": 224,
         "b": 255,
         "a": 200,
-        "intensity": 15
+        "intensity": 8.386364
       }
     },
     {
@@ -580,7 +581,7 @@
       "damage": 2,
       "beamDisplacement": 0.15,
       "beamCoreWidth": 1,
-      "beamGlowWidth": 2,
+      "beamGlowWidth": 3,
       "beamFlickerMin": 0.9,
       "beamFlickerMax": 1.2,
       "beamFlickerHz": 2,
@@ -590,7 +591,7 @@
         "g": 253,
         "b": 196,
         "a": 255,
-        "intensity": 10.295455
+        "intensity": 14.386363
       },
       "beamGlowColor": {
         "r": 149,
