@@ -651,13 +651,10 @@ public static class SpellEffectSystem
                 sim.Lightning.SpawnZap(origin, targetPos,
                     spell.ZapDuration > 0 ? spell.ZapDuration : spell.StrikeDuration,
                     style, originHeight, targetH);
-                // Magic-resistance gate: an MR-checked strike only lands if it
-                // penetrates the target's MR.
-                if (SpellPenetration.Affects(gameData, units, casterIdx, enemy, spell))
-                {
-                    sim.DealDamage(enemy, spell.Damage, casterIdx);
-                    FloatingText.AddDamage(damageNumbers, targetPos, spell.Damage, targetH);
-                }
+                // Standard spell pipeline: MR gate + opposed DRN damage roll. The
+                // damage event it emits already surfaces the floating number (the
+                // old flat path double-printed via an extra FloatingText here).
+                sim.ApplySpellDamage(enemy, spell.Damage, spell, casterIdx);
             }
         }
         else

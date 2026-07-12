@@ -816,50 +816,36 @@ public class Simulation
                 // kill tally (monster_kill / human_kill), exactly like a melee blow.
                 int casterIdx = UnitUtil.ResolveUnitIndex(_units, hit.OwnerID);
 
-                // Magic-resistance gate: an MR-checked spell projectile only damages
-                // a target whose MR its caster penetrates.
-                bool affects = true;
-                if (spellDef != null && spellDef.ChecksMagicResist)
+                // Plain arrows resolve Dominions-style (dodge roll + hit-location
+                // armor); spell projectiles auto-hit but run the standard spell
+                // pipeline (ApplySpellDamage: MR-gate DRN roll, then an opposed
+                // damage-vs-protection roll honoring the spell's AN flag).
+                if (hit.ProjectileType == ProjectileType.RegularHit
+                    && string.IsNullOrEmpty(hit.SpellID) && hit.Precision > 0)
+                    ResolveArrowHit(hit, casterIdx);
+                else if (spellDef != null)
                 {
-                    affects = GameSystems.SpellPenetration.Penetrates(_units, casterIdx, hit.UnitIdx,
-                        GameSystems.SpellPenetration.Compute(_gameData, _units, casterIdx, spellDef));
+                    // ApplySpellDamage doesn't fill a roll breakdown — log a NoteOnly
+                    // line so the impact is at least visible in the combat log
+                    // (Damage is the pre-mitigation amount).
+                    _combatLog.AddEntry(new CombatLogEntry
+                    {
+                        Outcome = CombatLogOutcome.NoteOnly,
+                        Timestamp = _gameTime,
+                        Note = $"{spellDef.DisplayName} hit {GetUnitDisplayName(hit.UnitIdx)} ({hit.Damage} dmg)",
+                    });
+                    ApplySpellDamage(hit.UnitIdx, hit.Damage, spellDef, casterIdx);
                 }
-                if (affects)
+                else
                 {
-                    // Plain arrows resolve Dominions-style (dodge roll + hit-location
-                    // armor); spell projectiles auto-hit but run the standard damage
-                    // pipeline (armor + toughness, honoring the spell's AN/DN flags).
-                    if (hit.ProjectileType == ProjectileType.RegularHit
-                        && string.IsNullOrEmpty(hit.SpellID) && hit.Precision > 0)
-                        ResolveArrowHit(hit, casterIdx);
-                    else if (spellDef != null)
+                    // No spellDef: a dev fireball (flat damage, no spell record).
+                    _combatLog.AddEntry(new CombatLogEntry
                     {
-                        // Spell projectiles auto-hit and run through DamageSystem, which
-                        // doesn't fill a roll breakdown — log a NoteOnly line so the
-                        // impact is at least visible in the combat log (Damage is the
-                        // pre-mitigation amount handed to Apply).
-                        _combatLog.AddEntry(new CombatLogEntry
-                        {
-                            Outcome = CombatLogOutcome.NoteOnly,
-                            Timestamp = _gameTime,
-                            Note = $"{spellDef.DisplayName} hit {GetUnitDisplayName(hit.UnitIdx)} ({hit.Damage} dmg)",
-                        });
-                        GameSystems.DamageSystem.Apply(_units, hit.UnitIdx, hit.Damage,
-                            GameSystems.DamageType.Physical,
-                            GameSystems.SpellEffectSystem.SpellDamageFlags(spellDef),
-                            _damageEvents, casterIdx);
-                    }
-                    else
-                    {
-                        // No spellDef: a dev fireball (flat damage, no spell record).
-                        _combatLog.AddEntry(new CombatLogEntry
-                        {
-                            Outcome = CombatLogOutcome.NoteOnly,
-                            Timestamp = _gameTime,
-                            Note = $"Unattributed projectile hit {GetUnitDisplayName(hit.UnitIdx)} ({hit.Damage} dmg)",
-                        });
-                        DealDamage(hit.UnitIdx, hit.Damage, casterIdx); // dev fireball: flat
-                    }
+                        Outcome = CombatLogOutcome.NoteOnly,
+                        Timestamp = _gameTime,
+                        Note = $"Unattributed projectile hit {GetUnitDisplayName(hit.UnitIdx)} ({hit.Damage} dmg)",
+                    });
+                    DealDamage(hit.UnitIdx, hit.Damage, casterIdx); // dev fireball: flat
                 }
             }
         }
@@ -874,21 +860,27 @@ public class Simulation
             if (ld.UnitIdx < 0 || ld.UnitIdx >= _units.Count) continue;
             if (ld.IsHeal)
             {
-                // Drain life transfer: clamped HP gain (sacrifice-heal convention)
-                // + a green floating number via the heal-flagged damage event.
-                if (!_units[ld.UnitIdx].Alive) continue;
-                int max = BuffSystem.EffectiveMaxHP(_units, ld.UnitIdx);
-                int before = _units[ld.UnitIdx].Stats.HP;
-                int after = Math.Min(max, before + ld.Damage);
-                if (after <= before) continue;
-                _units[ld.UnitIdx].Stats.HP = after;
-                var he = DamageEvent.Create(_units[ld.UnitIdx].Position, after - before);
-                he.IsHeal = true;
-                _damageEvents.Add(he);
+                ApplyDrainHeal(ld.UnitIdx, ld.Damage);
             }
             else
             {
-                DealDamage(ld.UnitIdx, ld.Damage, UnitUtil.ResolveUnitIndex(_units, ld.OwnerID));
+                // Route through the standard spell pipeline (MR gate + opposed
+                // DRN roll + AN flag); empty SpellID (dev spawns, reversed-drain
+                // self-cost) falls back to flat armor-negating damage.
+                int attackerIdx = UnitUtil.ResolveUnitIndex(_units, ld.OwnerID);
+                var ldSpell = _gameData != null && ld.SpellID.Length > 0
+                    ? _gameData.Spells.Get(ld.SpellID) : null;
+                int hpBefore = _units[ld.UnitIdx].Alive ? _units[ld.UnitIdx].Stats.HP : 0;
+                ApplySpellDamage(ld.UnitIdx, ld.Damage, ldSpell, attackerIdx);
+
+                // Drain coupling: the caster heals a share of what ACTUALLY landed —
+                // a resisted or fully-absorbed tick drains nothing.
+                if (ld.HealTargetIdx >= 0 && ld.HealPercent > 0f)
+                {
+                    int dealt = hpBefore - Math.Max(0, _units[ld.UnitIdx].Stats.HP);
+                    int heal = (int)MathF.Round(dealt * ld.HealPercent);
+                    ApplyDrainHeal(ld.HealTargetIdx, heal);
+                }
             }
         }
         PhaseEnd("lightning");
@@ -3388,6 +3380,64 @@ public class Simulation
         DamageSystem.Apply(_units, unitIdx, damage,
             GameSystems.DamageType.Physical, GameSystems.DamageFlags.ArmorNegating,
             _damageEvents, attackerIdx);
+
+    /// <summary>Drain life transfer heal: clamped HP gain (sacrifice-heal
+    /// convention) + a green floating number via the heal-flagged damage event.</summary>
+    private void ApplyDrainHeal(int unitIdx, int amount)
+    {
+        if (unitIdx < 0 || unitIdx >= _units.Count) return;
+        if (amount <= 0 || !_units[unitIdx].Alive) return;
+        int max = BuffSystem.EffectiveMaxHP(_units, unitIdx);
+        int before = _units[unitIdx].Stats.HP;
+        int after = Math.Min(max, before + amount);
+        if (after <= before) return;
+        _units[unitIdx].Stats.HP = after;
+        var he = DamageEvent.Create(_units[unitIdx].Position, after - before);
+        he.IsHeal = true;
+        _damageEvents.Add(he);
+    }
+
+    /// <summary>
+    /// Standard SPELL damage entry point — every non-melee magical hit (projectile
+    /// impact, zap, strike AoE, beam/drain tick) funnels through here so all spell
+    /// damage shares one resolution:
+    ///   1. MR gate — opposed DRN roll, only when the spell ChecksMagicResist; a
+    ///      resisted hit/tick does nothing.
+    ///   2. Damage roll, mirroring the melee formula minus its weapon concepts
+    ///      (hit locations, shields, piercing): damage + caster DRN vs
+    ///      BodyProtection + target DRN, remainder halved by Toughness. Spells
+    ///      auto-hit, so DefenseNegating plays no part here. ArmorNegating zeroes
+    ///      protection AND toughness but keeps the opposed rolls (melee AN
+    ///      convention) — even AN spell damage varies tick to tick.
+    /// Null spell = flat dev/utility source → legacy armor-negating DealDamage.
+    /// </summary>
+    public void ApplySpellDamage(int targetIdx, int damage, Data.Registries.SpellDef? spell,
+        int casterIdx)
+    {
+        if (targetIdx < 0 || targetIdx >= _units.Count || !_units[targetIdx].Alive) return;
+        if (damage <= 0) return;
+        if (spell == null) { DealDamage(targetIdx, damage, casterIdx); return; }
+
+        if (!SpellPenetration.Affects(_gameData, _units, casterIdx, targetIdx, spell)) return;
+
+        int casterDrn = casterIdx >= 0 && casterIdx < _units.Count ? _units[casterIdx].Stats.Drn : 2;
+        int dmgRoll = damage + UnitUtil.RollDRN(casterDrn);
+        int protDRN = UnitUtil.RollDRN(_units[targetIdx].Stats.Drn);
+
+        float protStat = spell.ArmorNegating ? 0f : _units[targetIdx].Stats.Armor.BodyProtection;
+        float toughness = spell.ArmorNegating ? 0f : BuffSystem.GetModifiedStat(_units, targetIdx,
+            BuffStat.Toughness, _units[targetIdx].Stats.Toughness);
+
+        int netDmg = DamageSystem.MitigateByToughness(dmgRoll - ((int)protStat + protDRN), toughness);
+        if (netDmg < 0) netDmg = 0; // glancing spell hits can deal zero, like melee
+
+        if (netDmg > 0) _units[targetIdx].HitReacting = true;
+        else _units[targetIdx].BlockReacting = true;
+        _units[targetIdx].LastHitTime = _gameTime;
+        DamageSystem.ApplyHitReactAnim(_units, targetIdx);
+
+        DamageSystem.ApplyDirect(_units, targetIdx, netDmg, _damageEvents, casterIdx);
+    }
 
     /// <summary>Build the per-unit AIContext shared by the archetype and PlayerControlled
     /// dispatch sites, so the field set can't drift — the PlayerControlled path previously

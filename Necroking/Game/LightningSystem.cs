@@ -146,6 +146,15 @@ public class LightningDamage
     /// <summary>True = Damage is a HEAL for UnitIdx (drain life transfer). Applied by
     /// Simulation as a clamped HP gain instead of going through DamageSystem.</summary>
     public bool IsHeal;
+    /// <summary>Source spell id — lets Simulation resolve the SpellDef and route the
+    /// damage through ApplySpellDamage (MR gate + opposed DRN roll + AN/DN flags).
+    /// Empty = flat armor-negating damage (dev spawns, reversed-drain self-cost).</summary>
+    public string SpellID = "";
+    /// <summary>Drain coupling: when >= 0, heal this unit by HealPercent of the
+    /// damage ACTUALLY dealt after MR/armor/toughness (a resisted or glancing tick
+    /// drains nothing).</summary>
+    public int HealTargetIdx = -1;
+    public float HealPercent;
 }
 
 public class LightningSystem
@@ -270,7 +279,8 @@ public class LightningSystem
                         {
                             int j = UnitUtil.ResolveUnitIndex(units, nid);
                             if (j < 0 || !units[j].Alive) continue;
-                            outDamage.Add(new LightningDamage { UnitIdx = j, Damage = s.Damage, OwnerID = s.OwnerID });
+                            outDamage.Add(new LightningDamage
+                            { UnitIdx = j, Damage = s.Damage, OwnerID = s.OwnerID, SpellID = s.SpellID });
                         }
                     }
                 }
@@ -327,7 +337,8 @@ public class LightningSystem
                         b.DamageAccumulator -= interval;
                         outDamage.Add(new LightningDamage
                         {
-                            UnitIdx = ti, Damage = b.DamagePerTick, OwnerID = b.CasterID
+                            UnitIdx = ti, Damage = b.DamagePerTick, OwnerID = b.CasterID,
+                            SpellID = b.SpellID
                         });
                     }
                 }
@@ -404,11 +415,13 @@ public class LightningSystem
                     {
                         int ti = UnitUtil.ResolveUnitIndex(units, d.TargetID);
                         if (ti < 0 || !units[ti].Alive) { d.Alive = false; break; }
+                        // Heal is coupled to the damage the tick ACTUALLY deals
+                        // (post MR/armor/toughness) — Simulation resolves both.
                         outDamage.Add(new LightningDamage
-                        { UnitIdx = ti, Damage = d.DamagePerTick, OwnerID = d.CasterID });
-                        if (heal > 0)
-                            outDamage.Add(new LightningDamage
-                            { UnitIdx = ci, Damage = heal, OwnerID = d.CasterID, IsHeal = true });
+                        {
+                            UnitIdx = ti, Damage = d.DamagePerTick, OwnerID = d.CasterID,
+                            SpellID = d.SpellID, HealTargetIdx = ci, HealPercent = d.HealPercent
+                        });
                     }
                 }
             }
