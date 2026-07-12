@@ -1451,6 +1451,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (corpsesIdx >= 0 && corpsesIdx < _atlases.Length)
                 _gameData.Corpse.ApplyToAtlas(_atlases[corpsesIdx]);
         }
+        
+        ResetWorldState();
 
         base.Initialize();
     }
@@ -2658,7 +2660,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         _saveGameWindow = new SaveGameWindow(_editorUi);
         _saveGameWindow.SetCallbacks(ListSaveGames, UniqueSaveName, SaveFileExists, WriteSaveGame, SanitizeSaveName);
-        _saveGameWindow.DrawPreviewCard = (dest, formId, spellIds) => _gameRenderer.DrawSavePreviewCard(dest, formId, spellIds);
 
         _settingsWindow = new SettingsWindow(_editorUi);
         System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.UserSettingsDir));

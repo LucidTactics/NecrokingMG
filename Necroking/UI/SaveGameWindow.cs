@@ -29,12 +29,6 @@ public class SaveGameWindow
     private Func<string, bool> _writeSave = _ => false;
     private Func<string, string> _sanitize = s => s;
 
-    /// <summary>Draws the shared save-preview card (form portrait + Q/E/1/2 spell
-    /// icons) — wired to GameRenderer.DrawSavePreviewCard in Game1.LoadContent so
-    /// this window needs no renderer reference. Safe: EditorBase and GameRenderer
-    /// share the same SpriteBatch.</summary>
-    public Action<Rectangle, string, IReadOnlyList<string>>? DrawPreviewCard;
-
     private List<SaveGameInfo> _saves = new();
     private string _name = "";
     private string _error = "";
@@ -42,11 +36,10 @@ public class SaveGameWindow
     private string _currentFormId = "";
     private List<string> _currentSpells = new();
 
-    private const int PanelW = 520;
-    private const int PanelH = 640;
+    public const int PanelW = 720;
     private const int MaxVisibleSaves = 6;
-    private const int RowH = 64;
-    private const int CardW = 88;
+    public const int RowH = 112;
+    public const int CardW = 176;
 
     public SaveGameWindow(EditorBase ui)
     {
@@ -80,6 +73,7 @@ public class SaveGameWindow
     {
         _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 180));
 
+        var PanelH = screenH - 50;
         int panelX = (screenW - PanelW) / 2;
         int panelY = (screenH - PanelH) / 2;
         _ui.DrawRect(new Rectangle(panelX, panelY, PanelW, PanelH), EditorBase.PanelBg);
@@ -95,7 +89,7 @@ public class SaveGameWindow
         int y = panelY + 36;
 
         // ── What you're saving: current-game preview card + name field ───
-        DrawPreviewCard?.Invoke(new Rectangle(x, y, CardW, RowH), _currentFormId, _currentSpells);
+        Game1.Instance._gameRenderer.DrawSavePreviewCard(new Rectangle(x, y, CardW, RowH), _currentFormId, _currentSpells);
         int fieldX = x + CardW + 12;
 
         // ── Existing saves (click to take that name → overwrite) ─────────
@@ -125,7 +119,7 @@ public class SaveGameWindow
                     _name = s.Name;
                     pickedRow = true;
                 }
-                DrawPreviewCard?.Invoke(new Rectangle(x + 4, rowsY + 4, CardW, RowH - 8), s.FormId, s.SpellBar);
+                Game1.Instance._gameRenderer.DrawSavePreviewCard(new Rectangle(x + 4, rowsY + 4, CardW, RowH - 8), s.FormId, s.SpellBar);
                 rowsY += RowH + 6;
             }
             if (_saves.Count > shown)

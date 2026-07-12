@@ -945,7 +945,7 @@ partial class GameRenderer
 
     internal LoadMenuView BuildLoadMenuLayout(int screenW, int screenH, int saveCount)
     {
-        int btnW = 560, btnH = 64, btnGap = 10;
+        int btnW = SaveGameWindow.PanelW, btnH = SaveGameWindow.RowH, btnGap = 10;
         int titleY = screenH / 20 + 20;
         int listY = titleY + 70;
         // Leave room for the back button + margin at the bottom.
@@ -991,8 +991,10 @@ partial class GameRenderer
         {
             var s = saves[i];
             var r = view.RowRects[i];
-            DrawMenuButtonAt($"{s.Name}    {s.MapName}    {s.SavedAt.ToLocalTime():yyyy-MM-dd HH:mm}", r.X, r.Y, r.Width, r.Height);
-            DrawSavePreviewCard(new Rectangle(r.X + 4, r.Y + 4, 88, r.Height - 8), s.FormId, s.SpellBar);
+            DrawMenuButtonAt("", r.X, r.Y, r.Width, r.Height);
+            DrawSavePreviewCard(new Rectangle(r.X + 4, r.Y + 4, SaveGameWindow.CardW, SaveGameWindow.RowH - 8), s.FormId, s.SpellBar);
+            DrawMenuButtonTextAt($"{s.Name}    {s.MapName}    {s.SavedAt.ToLocalTime():yyyy-MM-dd HH:mm}",
+               r.X + SaveGameWindow.CardW + 2, r.Y, r.Width - (SaveGameWindow.CardW + 2), r.Height);
         }
         if (saves.Count > view.Shown && _g._font != null)
             DrawText(_g._font, $"(+{saves.Count - view.Shown} more)", new Vector2(view.BackRect.X, view.BackRect.Y - 22), new Color(140, 140, 160));
@@ -1205,16 +1207,19 @@ partial class GameRenderer
         _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, h), bg);
         _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, 2), new Color(220, 180, 100, hover ? 255 : 120));
         _g.Scope.Draw(_g._pixel, new Rectangle(x, y + h - 2, w, 2), new Color(220, 180, 100, hover ? 255 : 60));
+        DrawMenuButtonTextAt(text, x, y, w, h);
+    }
 
-        if (_g._font != null)
-        {
-            // Shrink overly long scenario names to fit inside the narrower grid cell.
-            var textSize = _g._font.MeasureString(text);
-            float scale = textSize.X > w - 12 ? (w - 12) / textSize.X : 1f;
-            DrawText(_g._font, text,
-                new Vector2((int)(x + w / 2f - textSize.X * scale / 2f), (int)(y + (h - textSize.Y * scale) / 2f)),
-                new Color(255, 245, 220), scale);
-        }
+    private void DrawMenuButtonTextAt(string text, int x, int y, int w, int h) {
+       if (_g._font != null)
+       {
+          // Shrink overly long scenario names to fit inside the narrower grid cell.
+          var textSize = _g._font.MeasureString(text);
+          float scale = textSize.X > w - 12 ? (w - 12) / textSize.X : 1f;
+          DrawText(_g._font, text,
+             new Vector2((int)(x + w / 2f - textSize.X * scale / 2f), (int)(y + (h - textSize.Y * scale) / 2f)),
+             new Color(255, 245, 220), scale);
+       }
     }
 
     private void DrawMenuButton(string text, int x, ref int y, int w, int h, int gap)
