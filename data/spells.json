@@ -510,25 +510,25 @@
       "defenseNegating": false,
       "damage": 2,
       "beamDisplacement": 0.15,
-      "beamCoreWidth": 0.7,
-      "beamGlowWidth": 1.3,
-      "beamFlickerMin": 0.8,
+      "beamCoreWidth": 1,
+      "beamGlowWidth": 2,
+      "beamFlickerMin": 0.9,
       "beamFlickerMax": 1.2,
-      "beamFlickerHz": 0.7,
+      "beamFlickerHz": 2,
       "beamJitterHz": 7,
       "beamCoreColor": {
         "r": 255,
         "g": 253,
         "b": 196,
         "a": 255,
-        "intensity": 5.590909
+        "intensity": 10.295455
       },
       "beamGlowColor": {
         "r": 149,
         "g": 231,
         "b": 255,
         "a": 150,
-        "intensity": 5.181818
+        "intensity": 8.727272
       },
       "beamChainBranches": 2,
       "beamChainDepth": 2,
