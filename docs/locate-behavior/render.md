@@ -624,6 +624,61 @@ Look/edit here when: the reanimate/raise visual is wrong. Driven from `Game1.Spe
 - `Necroking/Render/WadingWakeSystem.cs` (`WakeParticle`) — water-wake particles behind
   units in water.
 
+## Debug F-key toggles & debug overlays
+
+**All the debug F-key handlers live in one block in `Necroking/Game1.cs` `Update`** (gated
+on `!anyTextInputActive` so typing into an editor field doesn't trip them). Each toggle
+just flips an `internal` field on Game1 (declared ~lines 724-844); the overlays are then
+drawn from `GameRenderer.Pipeline.cs` (world-space) and `GameRenderer.Draw.cs`
+(screen-space label). Census:
+
+| Key | Field (Game1) | Type / cycle | What it shows |
+|-----|---------------|--------------|---------------|
+| F2 | `_waterDebug` | `bool` | water debug (drawn `GameRenderer.Units.cs`/`Draw.cs`) |
+| F3 | `_showPerfReadout` | `bool` | bottom-left perf/zoom readout (`GameRenderer.Draw.cs`) |
+| F5 | `DeathFogSystem.DebugVisible` via `_deathFog.ToggleDebug()` | `bool` | death-fog overlay |
+| F6 | `_windDebug` | `bool` | wind debug (self-clears in `Pipeline.cs`) |
+| F7 | `_gameplayDebugMode` | `int`, `(x+1)%3` | Off → Horde → Unit Info |
+| F8 | `_collisionDebugMode` | `CollisionDebugMode` enum, `%Count` | Off/All/Chunks/CostField/UnitORCA/Velocity/OccupiedTiles (`Render/DebugDraw.cs`) |
+| F9-F12 | `_menuState` | `MenuState` | open/close the Unit / Spell / Map / UI editors (NOT overlays) |
+
+`CollisionDebugMode` enum + `DebugDraw.GetModeLabel` are in `Necroking/Render/DebugDraw.cs`.
+The dev-command mirror for F7 is `Game1.Dev.cs` (`gameplayDebugMode`). **A new debug-mode
+dropdown panel should write these same fields directly** (e.g. cycle/set `_collisionDebugMode`,
+`_gameplayDebugMode`, `_deathFog.ToggleDebug()`), reusing the existing input block's logic.
+
+## The player-data HUD (top-left status bars) — where to anchor a panel under it
+
+**`Necroking/UI/HUDRenderer.cs` `DrawStatusBars(necroIdx, sim)`** draws the top-left HP +
+Mana bars (the "player-data HUD"). Geometry constants at the top of `HUDRenderer.cs`:
+`BarX = 10`, `BarWidth = 200`, bars start at `y=30` with `barH=24`, mana bar at
+`y = 30 + barH + 4`. **Bottom edge of the block ≈ `30 + 24*2 + 4 = 82`px** — anchor a
+new left-side panel at roughly `(x=10, y≈88)`. (When `ShowDebugPanel` is set, `DrawDebugPanel`
+replaces the bars in the same top-left slot — a precedent for a left-side panel there.)
+`DrawStatusBars` is invoked from `HUDRenderer.Draw`, which `GameRenderer.Hud.cs` `DrawHUD`
+(the file the caller is editing) forwards into via `_g._hudRenderer.Draw(...)`.
+
+## Reusable dropdown / panel widgets
+
+- **There is NO raw-HUD dropdown/combo widget.** The canonical dropdown is
+  **`Necroking/Editor/EditorBase.cs` `DrawCombo(fieldId, label, value, options, x, y, …)`**,
+  used by settings tabs (e.g. `Editor/SettingsGeneralTab.cs` `ui.DrawCheckbox`/`DrawCombo`).
+  It requires an `EditorBase`-derived window (immediate-mode, owns `_activeFieldId`, pushes an
+  `ActionModalLayer` for the open-list overlay). It is NOT callable from `GameRenderer.Hud.cs`
+  (that draws raw HUD, not through an EditorBase). Two real options for the debug panel:
+  1. **Build it as a small `EditorBase` window** (like the settings editor) so you get
+     `DrawCombo`/`DrawCheckbox`/`DrawTextField` for free; seat it in the UI router via a
+     `PanelLayer`/editor seat (see [ui.md](ui.md) "THE UIRouter").
+  2. **Draw a lightweight custom dropdown in the HUD** using the HUD's own primitives —
+     `HUDRenderer` already declares `DropdownItemH`/`DropdownWidth` constants (currently
+     unused) and has `DrawStatBar`/`DrawPanel`/`DrawCursorTooltip` + `RuntimeWidgetRenderer`
+     for chrome. More work; no existing HUD combo to copy.
+- Panel chrome helpers for a raw-HUD panel: `GameRenderer.Hud.cs` `DrawPanel(rect, fill,
+  accent, …)`, `UI/NineSlice.cs`, and `UI/RuntimeWidgetRenderer.cs` (JSON widget defs).
+
+**Look/edit here when:** adding a debug-settings panel, wiring an F-key debug mode to a UI
+control, or positioning a new left-side HUD panel relative to the player status bars.
+
 ## Chain: how a visual effect reaches the screen
 1. **Art/id** — a `FlipbookDef` (id → sheet) in `Data/Registries/` defines the flipbook.
 2. **Spawn** — `_effectManager.SpawnSpellImpact(pos, scale, tint, flipbookID, …)` (or add a
