@@ -100,14 +100,14 @@ public partial class Game1
                 Y = unit.Position.Y,
                 Facing = unit.FacingAngle,
                 FormId = unit.UnitDefID,
+                Buffs = unit.ActiveBuffs.Select(b => new SavedBuff
+                {
+                    Id = b.BuffDefID,
+                    Remaining = b.RemainingDuration,
+                    Permanent = b.Permanent,
+                    Stacks = b.StackCount,
+                }).ToList(),
             },
-            Buffs = unit.ActiveBuffs.Select(b => new SavedBuff
-            {
-                Id = b.BuffDefID,
-                Remaining = b.RemainingDuration,
-                Permanent = b.Permanent,
-                Stacks = b.StackCount,
-            }).ToList(),
             SpellBar = _spellBarState.Slots.Select(s => s.SpellID ?? "").ToList(),
         };
         Directory.CreateDirectory(GamePaths.Resolve(GamePaths.SavesDir));
@@ -174,7 +174,7 @@ public partial class Game1
         // sentinel; timed buffs get their saved remaining time.
         foreach (string buffId in unit.ActiveBuffs.Select(b => b.BuffDefID).Distinct().ToList())
             BuffSystem.RemoveBuff(_sim.UnitsMut, idx, buffId);
-        foreach (var b in save.Buffs)
+        foreach (var b in save.Player.Buffs)
         {
             var def = _gameData.Buffs.Get(b.Id);
             if (def == null)

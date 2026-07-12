@@ -17,7 +17,6 @@ public class SaveGameData
     [JsonPropertyName("mapName")] public string MapName { get; set; } = "default";
     [JsonPropertyName("savedAtUtc")] public string SavedAtUtc { get; set; } = "";
     [JsonPropertyName("player")] public SavedPlayer Player { get; set; } = new();
-    [JsonPropertyName("buffs")] public List<SavedBuff> Buffs { get; set; } = new();
     /// <summary>Flat 10-entry array of SpellIDs, one per spellbar slot ("" = empty).</summary>
     [JsonPropertyName("spellBar")] public List<string> SpellBar { get; set; } = new();
 }
@@ -29,6 +28,9 @@ public class SavedPlayer
     [JsonPropertyName("facing")] public float Facing { get; set; } = 90f;
     /// <summary>The player Unit's UnitDefID (a PlayerForm UnitDef id, e.g. "wretched").</summary>
     [JsonPropertyName("formId")] public string FormId { get; set; } = "";
+    // Buffs live on the owning entity, not at the save root — other things
+    // (horde units, world objects) will carry their own buff lists later.
+    [JsonPropertyName("buffs")] public List<SavedBuff> Buffs { get; set; } = new();
 }
 
 public class SavedBuff
