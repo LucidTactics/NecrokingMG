@@ -109,7 +109,6 @@
       "primaryLevel": 1,
       "cooldown": 1,
       "damage": 3,
-      "gravityScale": 1,
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
         "fps": 3,
@@ -144,7 +143,6 @@
       "primaryLevel": 1,
       "cooldown": 1,
       "damage": 3,
-      "gravityScale": 1,
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
         "fps": 3,
