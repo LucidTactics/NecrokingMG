@@ -228,6 +228,17 @@ public class EditorBase
         => rect.Contains(_mouse.X, _mouse.Y)
            && (_activeClip == null || _activeClip.Value.Contains(_mouse.X, _mouse.Y));
 
+    /// <summary>Like <see cref="HitTest"/> but against the logical cursor
+    /// (<c>_input.MousePos</c>) instead of the raw MouseState. MousePos honours
+    /// the router's cursor-parking and the `mousepos` dev override, so use this
+    /// for hover-only UI (tooltips) that headless dev runs need to exercise.</summary>
+    public bool HitTestCursor(Rectangle rect)
+    {
+        int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
+        return rect.Contains(mx, my)
+            && (_activeClip == null || _activeClip.Value.Contains(mx, my));
+    }
+
     // Input layer system (0=main, 1=popup, 2=dropdown, 3=confirm dialog)
     private int _inputLayer;
     public int InputLayer { get => _inputLayer; set => _inputLayer = value; }

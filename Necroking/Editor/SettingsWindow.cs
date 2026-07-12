@@ -265,6 +265,19 @@ public class SettingsWindow
     // ----------------------------------------------------------------
     //  Bloom Tab
     // ----------------------------------------------------------------
+
+    /// <summary>Hover tooltip for a settings row: a plain-language line plus a
+    /// technical line, via the global tooltip service (draws topmost, after the
+    /// tab's scissor clip closes). Anchored to the whole row so hovering either
+    /// the label or the control shows it.</summary>
+    private void RowTip(int x, int y, int w, string plain, string tech)
+    {
+        if (!_ui.HitTestCursor(new Rectangle(x, y, w, 26))) return;
+        // The tooltip band draws above popups — don't paint over an open overlay.
+        if (!Game1.Popups.IsEmpty || _ui.IsColorPickerOpen || _ui.IsDropdownOpen) return;
+        Game1.Tooltips.RequestLines(plain, tech);
+    }
+
     private int DrawBloomTab(int x, int y, int w)
     {
         int startY = y;
@@ -274,6 +287,8 @@ public class SettingsWindow
         // SET01: Enabled
         bool enabled = _ui.DrawCheckbox("Enabled", bloom.Enabled, x, y);
         if (enabled != bloom.Enabled) { bloom.Enabled = enabled; MarkDirty(); }
+        RowTip(x, y, w, "Master switch for the glow around bright things.",
+            "Tech: toggles the whole bloom post-pass (extract, mip blur, composite).");
         y += rowH;
 
         y += 6; // spacing
@@ -281,32 +296,44 @@ public class SettingsWindow
         // SET02: Threshold (0.0 - 2.0)
         float threshold = _ui.DrawSliderFloat("set_bloom_threshold", "Threshold", bloom.Threshold, 0f, 2f, x, y, w);
         if (MathF.Abs(threshold - bloom.Threshold) > 0.0001f) { bloom.Threshold = threshold; MarkDirty(); }
+        RowTip(x, y, w, "How bright something must be before it starts to glow.",
+            "Tech: min max-channel brightness for extract; above 1 only HDR effects bloom.");
         y += rowH;
 
         // SET03: SoftKnee (0.0 - 1.0)
         float softKnee = _ui.DrawFloatField("set_bloom_softknee", "Soft Knee", bloom.SoftKnee, x, y, w, 0.05f);
         if (MathF.Abs(softKnee - bloom.SoftKnee) > 0.0001f) { bloom.SoftKnee = Math.Clamp(softKnee, 0f, 1f); MarkDirty(); }
+        RowTip(x, y, w, "Softens the edge between glowing and not glowing.",
+            "Tech: width of the quadratic ramp around Threshold (0 = hard cutoff).");
         y += rowH;
 
         // SET04: Intensity (0.0 - 15.0)
         float intensity = _ui.DrawSliderFloat("set_bloom_intensity", "Intensity", bloom.Intensity, 0f, 15f, x, y, w);
         if (MathF.Abs(intensity - bloom.Intensity) > 0.0001f) { bloom.Intensity = intensity; MarkDirty(); }
+        RowTip(x, y, w, "Overall strength of the glow.",
+            "Tech: multiplier on the blurred bloom before it is added to the scene.");
         y += rowH;
 
         // SET05: Scatter (0.0 - 1.0)
         float scatter = _ui.DrawFloatField("set_bloom_scatter", "Scatter", bloom.Scatter, x, y, w, 0.05f);
         if (MathF.Abs(scatter - bloom.Scatter) > 0.0001f) { bloom.Scatter = Math.Clamp(scatter, 0f, 1f); MarkDirty(); }
+        RowTip(x, y, w, "How far the glow spreads out from the bright spot.",
+            "Tech: additive blend weight per upsample step (higher = wider mips add more).");
         y += rowH;
 
         // SET06: Iterations (2 - 8)
         int iterations = _ui.DrawIntField("set_bloom_iterations", "Iterations", bloom.Iterations, x, y, w);
         iterations = Math.Clamp(iterations, 2, 8);
         if (iterations != bloom.Iterations) { bloom.Iterations = iterations; MarkDirty(); }
+        RowTip(x, y, w, "How many blur steps; more = wider, softer halo.",
+            "Tech: mip levels in the downsample/upsample chain (each is half-res).");
         y += rowH;
 
         // SET07: BicubicUpsampling
         bool bicubic = _ui.DrawCheckbox("Bicubic Upsampling", bloom.BicubicUpsampling, x, y);
         if (bicubic != bloom.BicubicUpsampling) { bloom.BicubicUpsampling = bicubic; MarkDirty(); }
+        RowTip(x, y, w, "Smoother, rounder glow at a small GPU cost.",
+            "Tech: Catmull-Rom filtering instead of bilinear on the upsample chain.");
         y += rowH;
 
         y += 6; // spacing
@@ -314,21 +341,29 @@ public class SettingsWindow
         // SET08: Tonemap (shoulder rolloff instead of hard clip at 1.0)
         bool tonemap = _ui.DrawCheckbox("Tonemap", bloom.Tonemap, x, y);
         if (tonemap != bloom.Tonemap) { bloom.Tonemap = tonemap; MarkDirty(); }
+        RowTip(x, y, w, "Keeps very bright effects colorful instead of washing out to flat white.",
+            "Tech: shoulder rolloff compressing HDR into [0,1]; off = hard clip at 1.0.");
         y += rowH;
 
         // SET09: Tonemap Shoulder (0.0 - 0.95) — rolloff start; below it the image is untouched
         float shoulder = _ui.DrawFloatField("set_bloom_tm_shoulder", "Shoulder", bloom.TonemapShoulder, x, y, w, 0.05f);
         if (MathF.Abs(shoulder - bloom.TonemapShoulder) > 0.0001f) { bloom.TonemapShoulder = Math.Clamp(shoulder, 0f, 0.95f); MarkDirty(); }
+        RowTip(x, y, w, "Brightness where the softening starts; everything below is untouched.",
+            "Tech: tonemap identity limit — rolloff runs from here up to White Point.");
         y += rowH;
 
         // SET10: Tonemap White Point (1.1 - 16) — HDR value that maps to pure white
         float whitePoint = _ui.DrawSliderFloat("set_bloom_tm_whitepoint", "White Point", bloom.TonemapWhitePoint, 1.1f, 16f, x, y, w);
         if (MathF.Abs(whitePoint - bloom.TonemapWhitePoint) > 0.0001f) { bloom.TonemapWhitePoint = whitePoint; MarkDirty(); }
+        RowTip(x, y, w, "How bright something must get to reach pure white.",
+            "Tech: HDR value the extended-Reinhard curve maps to 1.0.");
         y += rowH;
 
         // SET11: Tonemap Desaturate (0 - 1) — 0 keeps glow colored, 1 bleaches hot cores to white
         float desat = _ui.DrawSliderFloat("set_bloom_tm_desat", "Desaturate", bloom.TonemapDesaturate, 0f, 1f, x, y, w);
         if (MathF.Abs(desat - bloom.TonemapDesaturate) > 0.0001f) { bloom.TonemapDesaturate = desat; MarkDirty(); }
+        RowTip(x, y, w, "0 = bright glow keeps its color, 1 = it fades to white like a camera.",
+            "Tech: blends hue-preserving (max-channel) vs per-channel compression.");
         y += rowH;
 
         return y - startY;
