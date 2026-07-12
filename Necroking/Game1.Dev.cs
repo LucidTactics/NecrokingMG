@@ -1769,6 +1769,8 @@ public partial class Game1 {
                var lTarget = new Vec2(DevFloat(c.Args[2]), DevFloat(c.Args[3]));
                float lDur = c.Opt("duration") != null ? DevFloat(c.Opt("duration")!) : 5f;
                float lScale = c.Opt("width_scale") != null ? DevFloat(c.Opt("width_scale")!) : 1f;
+               // jitter_hz=<n> overrides the style's JitterHz (0 = frozen shape).
+               string? lJitterOpt = c.Opt("jitter_hz");
 
                // Closest unit to the target point (any faction, not the necro) for
                // the unit-anchored kinds.
@@ -1784,6 +1786,7 @@ public partial class Game1 {
                   case "zap": {
                      var st = lSpell.BuildStrikeStyle();
                      st.CoreWidth *= lScale; st.GlowWidth *= lScale;
+                     if (lJitterOpt != null) st.JitterHz = DevFloat(lJitterOpt);
                      _sim.Lightning.SpawnZap(_sim.Units[lNecro].EffectSpawnPos2D, lTarget,
                         lDur, st, _sim.Units[lNecro].EffectSpawnHeight, 1f);
                      break;
@@ -1791,6 +1794,7 @@ public partial class Game1 {
                   case "strike": {
                      var st = lSpell.BuildStrikeStyle();
                      st.CoreWidth *= lScale; st.GlowWidth *= lScale;
+                     if (lJitterOpt != null) st.JitterHz = DevFloat(lJitterOpt);
                      _sim.Lightning.SpawnStrike(lTarget, 0f, lDur, 0f, 0, st, lSpell.Id,
                         telegraphVisible: false);
                      break;
@@ -1799,6 +1803,7 @@ public partial class Game1 {
                      if (lUnitIdx < 0) { lErr = "beam needs a target unit"; break; }
                      var st = lSpell.BuildBeamStyle();
                      st.CoreWidth *= lScale; st.GlowWidth *= lScale;
+                     if (lJitterOpt != null) st.JitterHz = DevFloat(lJitterOpt);
                      _sim.Lightning.SpawnBeam(_sim.Units[lNecro].Id, _sim.Units[lUnitIdx].Id,
                         lSpell.Id, 0, 999f, 0f, st, lDur);
                      break;

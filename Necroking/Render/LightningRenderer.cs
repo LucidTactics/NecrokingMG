@@ -182,8 +182,10 @@ public class LightningRenderer
     private static float ComputeBoltShape(Vector2 start, Vector2 end, LightningStyle style,
         float gameTime, out List<Vector2> mainPoints, out List<List<Vector2>> branches)
     {
-        // JitterHz: control how often the bolt reshapes (0 = every frame)
-        float jitterTime = gameTime;
+        // JitterHz: how often the bolt reshapes. 0 = never — the shape seeds off
+        // the endpoints alone and stays frozen (matches the buff-aura convention
+        // where Hz 0 disables the behavior; want per-frame reshaping? set ~60).
+        float jitterTime = 0f;
         if (style.JitterHz > 0.01f)
             jitterTime = MathF.Floor(gameTime * style.JitterHz) / style.JitterHz;
 
