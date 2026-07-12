@@ -3422,77 +3422,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // --- Pause menu button clicks ---
         if (_menuState == MenuState.PauseMenu && _input.LeftPressed)
         {
-            int sw = GraphicsDevice.Viewport.Width;
-            int extraGaps = 3;
-            int sh = GraphicsDevice.Viewport.Height;
-            int btnW2 = 280, btnH2 = 40, btnGap2 = 10;
-            int gapSpace = (btnH2 + btnGap2) / 2;
-            int pauseBtnCount = 12;
-            int pauseControlLines = 4;
-            int pauseBoxH = 60 + pauseBtnCount * (btnH2 + btnGap2) + 10 + pauseControlLines * 16 + 20 + gapSpace * extraGaps;
-            int boxY2 = (sh - pauseBoxH) / 2 + 60;
-            int menuX2 = (sw - btnW2) / 2;
-            int y2 = boxY2;
-
-            // Resume
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.None; _clock.ClearAllPauses(); }
-            y2 += btnH2 + btnGap2;
-            y2 += gapSpace;
-            // Save Game
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-                OpenSaveMenu();
-            y2 += btnH2 + btnGap2;
-            // Load Game
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            {
-                _loadMenuSaves = ListSaveGames();
-                _loadMenuScrollPx = 0f;
-                _backMenuState = _menuState;
-                _menuState = MenuState.LoadMenu;
-                _prevKb = kb;
-                _prevMouse = mouse;
-                base.Update(gameTime);
-                return;
-            }
-            y2 += btnH2 + btnGap2;
-            y2 += gapSpace;
-            // Unit Editor
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.UnitEditor; _clock.ClearAllPauses(); }
-            y2 += btnH2 + btnGap2;
-            // Spell Editor
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.SpellEditor; _clock.ClearAllPauses(); }
-            y2 += btnH2 + btnGap2;
-            // Map Editor
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.MapEditor; _clock.ClearAllPauses(); _mapEditor.SuppressClicksUntilRelease(); }
-            y2 += btnH2 + btnGap2;
-            // UI Editor
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; _clock.ClearAllPauses(); }
-            y2 += btnH2 + btnGap2;
-            // Item Editor
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.ItemEditor; _clock.ClearAllPauses(); }
-            y2 += btnH2 + btnGap2;
-            // Settings
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.Settings; }
-            y2 += btnH2 + btnGap2;
-            // Multiplayer
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.Multiplayer; }
-            y2 += btnH2 + btnGap2;
-            y2 += gapSpace;
-            // Main Menu
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.MainMenu; _clock.ClearAllPauses(); _gameWorldLoaded = false; }
-            y2 += btnH2 + btnGap2;
-            // Quit
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-                Exit();
+            if (HandlePauseMenuClick(gameTime, mouse, kb)) return;
         }
 
         // --- Settings window close handling ---
@@ -4174,6 +4104,109 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _prevKb = kb;
         _prevMouse = mouse;
         base.Update(gameTime);
+    }
+
+    bool HandlePauseMenuClick(GameTime gameTime, MouseState mouse, KeyboardState kb) {
+        int sw = GraphicsDevice.Viewport.Width;
+        int extraGaps = 3;
+        int sh = GraphicsDevice.Viewport.Height;
+        int btnW2 = 280, btnH2 = 40, btnGap2 = 10;
+        int gapSpace = (btnH2 + btnGap2) / 2;
+        int pauseBtnCount = 12;
+        int pauseControlLines = 4;
+        int pauseBoxH = 60 + pauseBtnCount * (btnH2 + btnGap2) + 10 + pauseControlLines * 16 + 20 + gapSpace * extraGaps;
+        int boxY2 = (sh - pauseBoxH) / 2 + 60;
+        int menuX2 = (sw - btnW2) / 2;
+        int y2 = boxY2;
+
+        // Resume
+        if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2) {
+            _menuState = MenuState.None;
+            _clock.ClearAllPauses();
+        }
+
+        y2 += btnH2 + btnGap2;
+        y2 += gapSpace;
+        // Save Game
+        if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
+            OpenSaveMenu();
+        y2 += btnH2 + btnGap2;
+        // Load Game
+        if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2) {
+            _loadMenuSaves = ListSaveGames();
+            _loadMenuScrollPx = 0f;
+            _backMenuState = _menuState;
+            _menuState = MenuState.LoadMenu;
+            _prevKb = kb;
+            _prevMouse = mouse;
+            base.Update(gameTime);
+            return true;
+        }
+
+        y2 += btnH2 + btnGap2;
+        y2 += gapSpace;
+        // Unit Editor
+        if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2) {
+            _menuState = MenuState.UnitEditor;
+            _clock.ClearAllPauses();
+        }
+
+        y2 += btnH2 + btnGap2;
+        // Spell Editor
+        if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2) {
+            _menuState = MenuState.SpellEditor;
+            _clock.ClearAllPauses();
+        }
+
+        y2 += btnH2 + btnGap2;
+        // Map Editor
+        if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2) {
+            _menuState = MenuState.MapEditor;
+            _clock.ClearAllPauses();
+            _mapEditor.SuppressClicksUntilRelease();
+        }
+
+        y2 += btnH2 + btnGap2;
+        // UI Editor
+        if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2) {
+            EnsureUIEditorInitialized();
+            _menuState = MenuState.UIEditor;
+            _clock.ClearAllPauses();
+        }
+
+        y2 += btnH2 + btnGap2;
+        // Item Editor
+        if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2) {
+            _menuState = MenuState.ItemEditor;
+            _clock.ClearAllPauses();
+        }
+
+        y2 += btnH2 + btnGap2;
+        // Settings
+        if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2) {
+            _menuState = MenuState.Settings;
+        }
+
+        y2 += btnH2 + btnGap2;
+        // Multiplayer
+        if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2) {
+            _menuState = MenuState.Multiplayer;
+        }
+
+        y2 += btnH2 + btnGap2;
+        y2 += gapSpace;
+        // Main Menu
+        if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2) {
+            _menuState = MenuState.MainMenu;
+            _clock.ClearAllPauses();
+            _gameWorldLoaded = false;
+        }
+
+        y2 += btnH2 + btnGap2;
+        // Quit
+        if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
+            Exit();
+        return false;
     }
 
     /// <summary>Cached trap-target query passed to EnvironmentSystem.UpdateTraps
