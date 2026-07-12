@@ -175,7 +175,7 @@ public class ProjectileManager
     /// <paramref name="preferLob"/> returns the higher arc, WIP, this needs more work since
     /// realistic high arcs feel bad!</summary>
     public static float SolveLobTheta(float dist, float speed,
-        float minTheta = 0f, float maxTheta = Pi / 2f, float gravity = Gravity, bool preferLob=false)
+        float minTheta = -Pi / 2f, float maxTheta = Pi / 2f, float gravity = Gravity, bool preferLob=false)
     {
         float sinTwoTheta = MathF.Min(dist * gravity / (speed * speed), 1f);
         float res = MathUtil.Clamp(0.5f * MathF.Asin(sinTwoTheta), minTheta, maxTheta);
@@ -237,7 +237,7 @@ public class ProjectileManager
             target += new Vec2(MathF.Cos(scatterAngle), MathF.Sin(scatterAngle)) * scatterDist;
             dir = (target - from).Normalized();
             dist = (target - from).Length();
-            theta = SolveLobTheta(dist, speed, 10f * Deg2Rad, 45f * Deg2Rad, Gravity * gravityScale);
+            theta = SolveLobTheta(dist, speed, -45f * Deg2Rad, 45f * Deg2Rad, Gravity * gravityScale);
         }
         else
         {
