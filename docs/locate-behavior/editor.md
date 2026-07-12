@@ -284,29 +284,35 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
     wheel handler.
   - *Zones* — **does not scroll**: the list truncates with a `"... N more"` row at
     `contentY + contentH - 260`.
-- **Canonical scrollbar helper now EXISTS: `EditorBase.DrawVScrollbar(x, y, viewH,
-  contentH, scroll)`** — indicator-only (pure draw, no drag), 5px wide, faint track
-  `(30,30,45,120)` + proportional thumb `(100,100,140,180)`, `barH = Max(20,
-  viewH²/contentH)`, ratio clamped so overscroll can't push the thumb past the track,
-  no-op when content fits. Callers: `DrawScrollableList` (after its EndClip) and four
-  `MapEditorWindow` sites (Objects grid + Groups mode, Units grid, ProcGen). **This is the
-  SpellEditorWindow look** — the spell editor draws no bars itself; its list bar comes from
-  `DrawScrollableList` → `DrawVScrollbar` (detail panels are wheel-only via the id-keyed
-  `HandlePanelScroll`, no visible bar).
-- **Remaining hand-rolled copies (unification targets — thumb-only, no track, drifting
-  geometry):** the `EditorBase` dropdown overlay (`DrawDropdownOverlays`, 5px, `Max(12,…)`
-  thumb), `EditorBase.DrawTextArea` (5px, line-based `Max(12,…)`), `UnitEditorWindow`
-  property panel ("outside clip so it's always visible" — **6px wide at `x+w-8`**),
-  `TextureFileBrowser` (**7px at `px+listW-10`**). The ONLY **draggable** scrollbar is
-  `SettingsWindow` (track at `panelX+PanelW-18`, **8px** track+thumb, hot-highlight
-  `AccentColor`/`TextBright`, drag state `_scrollbarDragTab`/`_scrollbarDragGrabOffset`,
-  track-click jump, gated on `_ui.IsInputBlocked(0)`, calls `SetMouseOverUI`) — it pairs
-  with the id-keyed `EditorBase.HandlePanelScroll` + `SetPanelContentHeight` (record
-  content height after layout → next frame's wheel clamp; one-frame-stale by design).
-  If `DrawVScrollbar` is made draggable, do the drag **inside the EditorBase helper**
-  using EditorBase's own `_mouse`/`_prevMouse` (SettingsWindow precedent) —
-  MapEditorWindow's own `_prevMouse` is already overwritten during `Draw`, so edge
-  detection hand-rolled in a `Draw<X>Tab` is always-false.
+- **Canonical scrollbar — single source of truth is `Necroking/UI/VScrollbar.cs`**
+  (static `Necroking.UI.VScrollbar`): pure geometry + palette (`TrackColor`/`ThumbColor`/
+  `ThumbHotColor`, `Width = 5`, `Fits`, `TrackRect`, proportional `ThumbRect` with
+  `MinThumbH = 20` and overscroll-clamped ratio, padded `HitRect`, `ScrollFromDrag`).
+  Unitless — callers own input reading and rect fills.
+- **EditorBase wrappers** (`Editor/EditorBase.cs`):
+  - `DrawVScrollbar(x, y, viewH, contentH, scroll)` — **indicator-only** overload (pure
+    draw). Callers: the dropdown overlay (`DrawDropdownOverlays`) and `DrawTextArea`.
+  - `DrawVScrollbar(string id, x, y, viewH, contentH, scroll, layer)` — **interactive
+    draggable** variant: thumb-drag + track-click-jump (thumb centres on cursor), generous
+    `VScrollbarHitRect` hit zone, hot-highlight, returns the clamped scroll (0 when content
+    fits), inert under `IsInputBlocked`, calls `SetMouseOverUI`. Drag state
+    `_vscrollDragId`/`_vscrollDragGrabOffset` lives in EditorBase (mouse-up anywhere ends
+    the drag). Callers: `DrawScrollableList`, `ScrollPanel.End`, `SettingsWindow`
+    (per-tab, `TabScrollIds` — its old hand-rolled `_scrollbarDragTab` bar is gone),
+    `MapEditorWindow` (Objects grid + Groups, Units grid, generic per-tab), `TextureFileBrowser`.
+  - `BeginScrollPanel(panelId, rect, …)` / `ScrollPanel.End(curY)` — the full scroll-panel
+    scope: wheel (`HandlePanelScroll` clamped by last frame's `SetPanelContentHeight`),
+    scissor clip, content-height measurement, and the draggable bar; offset owned by
+    EditorBase `_scrollOffsets[panelId]`. Prefer this for new scrollable editor panels;
+    hand-rolling the height math has double-counted the offset before (feedback loop).
+- **Draggable scrollbar OUTSIDE EditorBase (raw HUD menus): the scenario-list precedent.**
+  `GameRenderer.Hud.cs` `ScenarioMenuView` (carries `ScrollX/ScrollY/ScrollViewH/
+  ScrollContentH` + `ClampScroll`) built by `BuildScenarioMenuLayout`; **input** in
+  `Game1.cs` `MenuState.ScenarioList` block (`_scenarioScrollPx`/`_scenarioScrollDragging`/
+  `_scenarioScrollGrabOffset`, thumb-grab + track-jump + wheel via the shared `VScrollbar`
+  statics, row clicks skipped while dragging, clicks gated to the scroll window); **draw**
+  in `DrawScenarioScrollbar` + scissor-clipped rows. Copy this pattern for any main-menu
+  family list (e.g. the load-game menu).
 - **Wheel-scroll logic census**: canonical = `EditorBase.HandlePanelScroll` (rect +
   maxScroll overload, or id-keyed panelId+viewH overload backed by `SetPanelContentHeight`;
   respects `IsInputBlocked`/`_scrollConsumed`, calls `ConsumeScroll`+`SetMouseOverUI`) —
