@@ -55,6 +55,7 @@ public class SavedBuff
 /// derived from the files on disk, never serialized itself.</summary>
 public class SaveGameInfo
 {
+    public int Version = -1;
     public string Name = "";
     public string MapName = "";
     public DateTime SavedAt;

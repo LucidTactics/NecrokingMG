@@ -5,6 +5,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Necroking.Core;
 using Necroking.Data.Registries;
 using Necroking.GameSystems;
+using Necroking.Lib;
 using Necroking.Render;
 
 namespace Necroking.Editor;
@@ -1055,7 +1056,7 @@ public class SpellPreview
                 float theta = ProjectileManager.DirectFireTheta;
                 p.Velocity = dir * speed * MathF.Cos(theta);
                 p.VelocityZ = speed * MathF.Sin(theta);
-                
+
                 ApplySwirl(ref p);
                 break;
             }

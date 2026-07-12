@@ -27,6 +27,7 @@ public class SaveGameWindow
     private Func<string, string> _uniqueName = b => b;
     private Func<string, bool> _fileExists = _ => false;
     private Func<string, bool> _writeSave = _ => false;
+    private Func<string, bool> _deleteSave = _ => false;
     private Func<string, string> _sanitize = s => s;
 
     private List<SaveGameInfo> _saves = new();
@@ -37,7 +38,6 @@ public class SaveGameWindow
     private List<string> _currentSpells = new();
 
     public const int PanelW = 720;
-    private const int MaxVisibleSaves = 6;
     public const int RowH = 112;
     public const int CardW = 176;
 
@@ -47,12 +47,14 @@ public class SaveGameWindow
     }
 
     public void SetCallbacks(Func<List<SaveGameInfo>> listSaves, Func<string, string> uniqueName,
-        Func<string, bool> fileExists, Func<string, bool> writeSave, Func<string, string> sanitize)
+        Func<string, bool> fileExists, Func<string, bool> writeSave, Func<string, bool> deleteSave,
+        Func<string, string> sanitize)
     {
         _listSaves = listSaves;
         _uniqueName = uniqueName;
         _fileExists = fileExists;
         _writeSave = writeSave;
+        _deleteSave = deleteSave;
         _sanitize = sanitize;
     }
 
@@ -66,6 +68,7 @@ public class SaveGameWindow
         _error = "";
         _currentFormId = currentFormId;
         _currentSpells = currentSpells;
+        _ui.SetScrollOffset("save_list", 0);
         WantsClose = false;
         data = Game1.Instance.GetSaveDataJson();
     }
@@ -102,8 +105,16 @@ public class SaveGameWindow
         // focused field (committing its old buffer), and taking that committed
         // buffer would stomp the row's name.
         int listY = y + RowH + 14;
-        int rowsY = listY + 22;
+        // Delete row sits at the very bottom; confirm/cancel row above it.
+        int deleteBtnY = panelY + PanelH - 42;
+        int btnY = deleteBtnY - 38;
+        // Scrollable list window: from below the header down to above the
+        // error line / confirm buttons. BeginScrollPanel owns wheel + clip +
+        // the draggable bar; rows are narrowed to keep clear of the bar column.
+        var listRect = new Rectangle(x, listY + 22, w, btnY - 28 - (listY + 22));
         bool pickedRow = false;
+        var sp = _ui.BeginScrollPanel("save_list", listRect, topPad: 0);
+        int rowsY = sp.ContentY;
         if (_saves.Count == 0)
         {
             _ui.DrawText("(no saves yet)", new Vector2(x, rowsY), EditorBase.TextDim);
@@ -111,34 +122,32 @@ public class SaveGameWindow
         }
         else
         {
-            // Newest-first from ListSaveGames; show the top rows. No scrollbar
-            // yet — add a VScrollbar if save counts outgrow this.
-            int shown = Math.Min(_saves.Count, MaxVisibleSaves);
-            for (int i = 0; i < shown; i++)
+            // Newest-first from ListSaveGames.
+            int rowW = w - 12;
+            for (int i = 0; i < _saves.Count; i++)
             {
                 var s = _saves[i];
-                string rowText = $"{s.Name}    {s.MapName}    {s.SavedAt.ToLocalTime():yyyy-MM-dd HH:mm}";
-                if (_ui.DrawButton(rowText, x, rowsY, w, RowH))
+                if (_ui.DrawButton("", x, rowsY, rowW, RowH, bgOverride: _name == s.Name ? new(100, 100, 85, 240) : null))
                 {
                     _name = s.Name;
                     pickedRow = true;
                 }
-                Game1.Instance._gameRenderer.DrawSavePreviewCard(new Rectangle(x + 4, rowsY + 4, CardW, RowH - 8), s.FormId, s.SpellBar, s.Inventory);
+
+                var cardRect = new Rectangle(x + 4, rowsY + 4, CardW, RowH - 8);
+                Game1.Instance._gameRenderer.DrawSavePreviewCard(cardRect, s.FormId, s.SpellBar, s.Inventory);
+                Game1.Instance._gameRenderer.DrawSaveGameText(
+                    new(x + SaveGameWindow.CardW + 2, rowsY, rowW - (SaveGameWindow.CardW + 2), RowH), s);
                 rowsY += RowH + 6;
             }
-            if (_saves.Count > shown)
-            {
-                _ui.DrawText($"(+{_saves.Count - shown} older saves)", new Vector2(x, rowsY), EditorBase.TextDim);
-                rowsY += 20;
-            }
         }
+        sp.End(rowsY);
 
         // Name field next to the current-game card (drawn after the rows so a
         // row click this frame wins — see comment above).
         string edited = _ui.DrawTextField("save_name", "Save name", _name, fieldX, y + (RowH - 20) / 2, w - CardW - 12);
         if (!pickedRow) _name = edited;
         _ui.DrawText("EXISTING SAVES", new Vector2(x, listY), EditorBase.AccentColor);
-        y = rowsY;
+        y = listRect.Bottom + 6;
 
         if (_error != "")
         {
@@ -151,7 +160,6 @@ public class SaveGameWindow
         bool overwrite = clean != "" && _fileExists(clean);
         string confirmLabel = overwrite ? "Overwrite Save" : "New Save";
         Color confirmBg = overwrite ? new Color(120, 50, 50, 240) : EditorBase.ButtonBg;
-        int btnY = panelY + PanelH - 42;
         if (_ui.DrawButton(confirmLabel, panelX + PanelW / 2 - 170, btnY, 200, 30, confirmBg))
         {
             if (clean == "") clean = _uniqueName("Quicksave");
@@ -167,5 +175,23 @@ public class SaveGameWindow
         }
         if (_ui.DrawButton("Cancel", panelX + PanelW / 2 + 50, btnY, 120, 30))
             WantsClose = true;
+
+        // ── Delete selected save (own row at the bottom) ─────────────────
+        bool canDelete = overwrite; // a save with this name exists
+        if (_ui.DrawButton(canDelete ? $"Delete \"{clean}\"" : "Delete Save",
+                panelX + PanelW / 2 - 110, deleteBtnY, 220, 30,
+                canDelete ? new Color(120, 50, 50, 240) : EditorBase.ButtonBg) && canDelete)
+        {
+            if (_deleteSave(clean))
+            {
+                _saves = _listSaves();
+                _name = _uniqueName("Quicksave");
+                _error = "";
+            }
+            else
+            {
+                _error = "Delete failed - see log";
+            }
+        }
     }
 }

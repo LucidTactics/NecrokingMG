@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using Necroking.Core;
 using Necroking.Data;
+using Necroking.Lib;
 using Necroking.Scenario;
 
 namespace Necroking;
@@ -1696,6 +1697,37 @@ public partial class Game1 {
                break;
             }
 
+            // Inject a full synthetic OS mouse state — position, held buttons and
+            // CUMULATIVE wheel value (MouseState-style). Unlike mousepos/ui_click
+            // this reaches the raw main-menu-family paths (main menu, scenario
+            // list, load menu) which read Mouse.GetState() directly, so headless
+            // runs can drive those menus: press/hold across frames for scrollbar
+            // drags, wheel deltas for scrolling. Persists until 'raw_mouse clear'.
+            // window.dev('raw_mouse',['640','300','left','-120']) ; buttons: left|right|none
+            case "raw_mouse": {
+               if (c.Args.Length >= 1 && c.Args[0].Equals("clear", StringComparison.OrdinalIgnoreCase)) {
+                  _devRawMouse = null;
+                  c.Complete(Necroking.Dev.DevServer.Ok("raw_mouse cleared"));
+                  break;
+               }
+               if (c.Args.Length < 2) {
+                  c.Complete(Necroking.Dev.DevServer.Error("raw_mouse needs: <x> <y> [left|right|none] [wheelValue]  (or 'clear')"));
+                  break;
+               }
+               int rmX = (int)DevFloat(c.Args[0]), rmY = (int)DevFloat(c.Args[1]);
+               string btn = c.Args.Length >= 3 ? c.Args[2].ToLowerInvariant() : "none";
+               int wheelVal = c.Args.Length >= 4 ? (int)DevFloat(c.Args[3])
+                  : (_devRawMouse?.ScrollWheelValue ?? 0);
+               _devRawMouse = new Microsoft.Xna.Framework.Input.MouseState(rmX, rmY, wheelVal,
+                  btn == "left" ? Microsoft.Xna.Framework.Input.ButtonState.Pressed : Microsoft.Xna.Framework.Input.ButtonState.Released,
+                  Microsoft.Xna.Framework.Input.ButtonState.Released,
+                  btn == "right" ? Microsoft.Xna.Framework.Input.ButtonState.Pressed : Microsoft.Xna.Framework.Input.ButtonState.Released,
+                  Microsoft.Xna.Framework.Input.ButtonState.Released,
+                  Microsoft.Xna.Framework.Input.ButtonState.Released);
+               c.Complete(Necroking.Dev.DevServer.Ok($"raw_mouse ({rmX},{rmY}) btn={btn} wheel={wheelVal}"));
+               break;
+            }
+
             // Set the F7 gameplay-debug overlay: 0=Off, 1=Horde, 2=Unit Info.
             // window.dev('gpdebug',['1'])  (no arg → Horde)
             case "gpdebug": {
@@ -2105,6 +2137,7 @@ public partial class Game1 {
          case "load_menu":
          case "loadmenu":
             _loadMenuSaves = ListSaveGames();
+            _loadMenuScrollPx = 0f;
             _menuState = MenuState.LoadMenu;
             return true;
       }

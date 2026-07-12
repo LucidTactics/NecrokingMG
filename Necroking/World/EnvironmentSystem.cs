@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Editor;
+using Necroking.Lib;
 using Necroking.Movement;
 
 namespace Necroking.World;
@@ -698,7 +699,7 @@ public class EnvironmentSystem
     /// <paramref name="positions"/> to also collect their world positions (used for
     /// keep-apart spacing when scattering new spawns).</summary>
     public int CountActiveOfDefInRect(int defIdx, float minX, float minY, float maxX, float maxY,
-        List<Necroking.Core.Vec2>? positions = null)
+        List<Vec2>? positions = null)
     {
         int n = 0;
         for (int i = 0; i < _objects.Count; i++)
@@ -713,7 +714,7 @@ public class EnvironmentSystem
                 if (rt.Collected && _defs[obj.DefIndex].RespawnTime <= 0f) continue;
             }
             n++;
-            positions?.Add(new Necroking.Core.Vec2(obj.X, obj.Y));
+            positions?.Add(new Vec2(obj.X, obj.Y));
         }
         return n;
     }

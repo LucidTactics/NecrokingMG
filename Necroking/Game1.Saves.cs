@@ -5,6 +5,7 @@ using System.Linq;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.GameSystems;
+using Necroking.Lib;
 
 namespace Necroking;
 
@@ -69,6 +70,7 @@ public partial class Game1
                 savedAt = File.GetLastWriteTimeUtc(file);
             result.Add(new SaveGameInfo
             {
+                Version = data.Version,
                 Name = Path.GetFileNameWithoutExtension(file),
                 MapName = data.MapName,
                 SavedAt = savedAt,
@@ -125,6 +127,28 @@ public partial class Game1
         };
         return data;
 
+    }
+
+    /// <summary>Delete saves/{name}.json. Returns false (logged) when the file
+    /// doesn't exist or deletion throws.</summary>
+    internal bool DeleteSaveGame(string name)
+    {
+        if (!SaveFileExists(name))
+        {
+            DebugLog.Log("saves", $"DeleteSaveGame: no save named '{name}'");
+            return false;
+        }
+        try
+        {
+            File.Delete(SaveFilePath(name));
+            DebugLog.Log("saves", $"Deleted save '{name}'");
+            return true;
+        }
+        catch (Exception e)
+        {
+            DebugLog.Log("saves", $"DeleteSaveGame failed for '{name}': {e.Message}");
+            return false;
+        }
     }
 
     /// <summary>Snapshot the current session into saves/{name}.json. Returns

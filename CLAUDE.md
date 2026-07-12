@@ -21,6 +21,7 @@ without opening it:
 - **If the branch is ahead of origin, surface it** and prompt to push (still ask permission) so the friend's clone stays in sync.
 - **Pull before fresh work**; if it won't fast-forward, stop and tell the user.
 - **Never commit `user settings/`** (gitignored per-machine `settings.json`/`weather.json`/`spellbar.json`).
+- **If a commit contains a new large file (above ~100kb), confirm with user before committing it, we probably want to gitignore it.
 
 ## Build
 ```bash
@@ -113,29 +114,18 @@ and how to test a cast on the empty test map. Most spells are pure data (a `Spel
 - `EditorBase.DrawText` already rounds internally, but any direct `DrawString` calls (e.g. in `Game1.cs`) must round manually
 - When centering text with `MeasureString`, the division produces floats — cast to `int` before passing to draw
 
-## Importing UI Designs (CSS / HTML / JSX mocks)
-Reproducing an HTML/CSS/JSX design (Claude Design or otherwise) in MonoGame? **Use the
-`import-ui-design` skill** (`/import-ui-design`) — it covers what translates cleanly vs.
-what needs a real shader, why `Necroking/Render/UIGfx.cs` is a flagged failed-attempt
-reference (not a reusable utility), and the read→flat-fill→ask→shader workflow.
-
-## Large File Safety
-- **NEVER** attempt to read or upload files larger than 15 MB directly — this causes context overflow loops
-- Before reading any data/log/binary file, check its size first (`ls -lh` or `wc -c`)
-- If a file exceeds 15 MB, create a Python script in `tools/` to split it into chunks (< 10 MB each)
-- For log files: process last chunk first (most recent entries are most relevant)
-- For data files: split logically (e.g., by section/record) and process one chunk at a time
-
 ## Architecture & Code Organization
 
-## Direct over Inject
+### Direct over Inject
 
-Don't pass delegates, instead use static references. Instead of SetCallbacks(ListSaveGames), just call
+Don't dependency inject functions, instead use static references. Instead of SetCallbacks(ListSaveGames), just call
 `Game1.Instance.ListSaveGames` or `_g.ListSaveGames` directly. We don't need these dependency injections,
 this is a very straightforward game project not a big corpo architectural monster.
 
 Also prefer passing Game1 and refer to items in Game1 rather than passing a long list of things that are in Game1.
 Game1 will always be there.
+
+Use delegates for map/reduce or other such functional jobs, but not for dependency injection.
 
 ### Principle: Single Source of Truth
 Every distinct behavior or pattern should have one canonical implementation. Before writing new code, check whether an existing system, utility, or pattern already solves the problem. The goal is fewer pieces of code doing the same function — when a bug is fixed, it's fixed in one place.
@@ -152,26 +142,6 @@ Every distinct behavior or pattern should have one canonical implementation. Bef
    pattern already solves the problem (the skill's docs often say so directly)
 3. **Reuse or extend** — prefer calling existing code (with different parameters or small improvements) over writing a parallel solution
 4. **If nothing exists** — build it in a way that could become the standard approach for that category of problem
-
-### When to Check with the User
-- **User-facing features** (UI, graphics, game systems): If a relevant standard exists but Claude thinks a one-off solution is better, check with the user first — they may prefer consistency. If Claude thinks the standard is the right call (possibly with tweaks or improvements), proceed with own judgement.
-- **Internal/deep systems** (utilities, data structures, helpers): Use own judgement. Reuse when it makes sense, create new when it doesn't.
-
-### When Proposing a New Standard
-If the user requests something that diverges from an established pattern, confirm whether this should become the new standard approach or is intentionally a one-off exception.
-
-### Consolidation Design
-When consolidating duplicate code and looking for consolidation opportunities:
-- For complex structures: Shared component should own the mechanics (scroll, layout, hit-testing); caller owns the data (what items, what fields)
-- Provide a **simple default path** (plain strings, int indices) and an **escape hatch** (custom render callback, item descriptors) for complex cases
-- Do NOT abstract when the variance is structural (different control flow, different state machines) rather than data-level — that creates frameworks, not utilities
-
-### Consolidation Opportunities
-When encountering ad-hoc duplicate solutions during a task:
-- **Small consolidation** — refactor it in place, mention it to the user
-- **Large consolidation** — mention it to the user, add it to `memory/consolidation_opportunities.md` for later review
-
-The consolidation list is reviewed periodically. Items are either consolidated or removed if consolidation isn't worthwhile.
 
 ### Standard Patterns Reference
 Canonical implementations of common patterns are tracked in `memory/standard_patterns.md`. Consult this when starting work that might overlap with an existing solution. Update it when a new standard is established.

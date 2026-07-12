@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
+using Necroking.Lib;
 
-namespace Necroking.Spatial;
+namespace Necroking.Lib;
 
 public struct AABB
 {

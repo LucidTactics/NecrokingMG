@@ -19,11 +19,13 @@ using Necroking.GameSystems;
 using Necroking.World;
 using Necroking.Scenario;
 using Necroking.Editor;
+using Necroking.Lib;
 using Necroking.UI;
 
 namespace Necroking;
 
-public enum MenuState { MainMenu, None, PauseMenu, Settings, Multiplayer, UnitEditor, SpellEditor, MapEditor, UIEditor, ItemEditor, ScenarioList, SaveMenu, LoadMenu }
+public enum MenuState { MainMenu, None, PauseMenu, Settings, Multiplayer, UnitEditor, SpellEditor, MapEditor, UIEditor,
+    ItemEditor, ScenarioList, SaveMenu, LoadMenu }
 
 /// <summary>
 /// The MonoGame app shell and orchestrator — everything platform- and presentation-side.
@@ -410,6 +412,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _tableMenuUI.DrawUnitIconCallback = (defId, rect) => _gameRenderer.DrawUnitIdleSprite(defId, rect);
         _graveRosterUI.Init(_spriteBatch, _pixel, _widgetRenderer, _workerSystem);
         _jobBoardUI.Init(_spriteBatch, _pixel, _widgetRenderer, _workerSystem);
+        _logPanel.Init(_spriteBatch, _pixel, _widgetRenderer, this);
         _unitInfoPanel.Init(_widgetRenderer, _gameData);
         _grimoireOverlay.Init(_widgetRenderer, _gameData,
             spell => SpellCaster.HasSpellRequirements(spell, _gameData, _sim.UnitsMut, FindNecromancer())
@@ -446,6 +449,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (!ReferenceEquals(opening, _grimoireOverlay) && _grimoireOverlay.IsVisible) _grimoireOverlay.Hide();
             if (!ReferenceEquals(opening, _characterStatsUI) && _characterStatsUI.IsVisible) _characterStatsUI.Close();
             if (!ReferenceEquals(opening, _jobBoardUI) && _jobBoardUI.IsVisible) _jobBoardUI.Close();
+            if (!ReferenceEquals(opening, _logPanel) && _logPanel.IsVisible) _logPanel.Close();
         }
         else
         {
@@ -600,6 +604,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// collision data.</summary>
     private MenuState _prevMenuState = MenuState.MainMenu;
     internal bool _gameWorldLoaded;
+    MenuState _backMenuState = MenuState.MainMenu;
     /// <summary>True while anything holds the game paused (forwarder for
     /// <see cref="Core.GameClock.Paused"/>). Write via <c>_clock.Pause / Resume /
     /// TogglePause / ClearAllPauses</c> with a <see cref="Core.GameClock.PauseSource"/>.</summary>
@@ -650,6 +655,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     // Dev cursor override for headless hover testing (set via the `mousepos` dev command).
     private Microsoft.Xna.Framework.Vector2? _devMouseOverride;
+    // Dev full-mouse-state injection (the `raw_mouse` dev command) — replaces
+    // Mouse.GetState() at the top of Update so headless runs can drive the raw
+    // main-menu-family input paths (buttons + wheel, not just the cursor).
+    private MouseState? _devRawMouse;
     // Menu state as of the last input capture — detects mode transitions so the
     // in-flight press gesture can be invalidated (see Update, ConsumeGesture).
     private MenuState _menuStateAtLastCapture;
@@ -854,6 +863,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal float _scenarioScrollPx;             // scenario-menu scroll, in pixels (smooth, sub-row)
     internal bool _scenarioScrollDragging;         // dragging the scenario-menu scrollbar thumb
     private float _scenarioScrollGrabOffset;        // Y within the thumb where the drag started
+    internal float _loadMenuScrollPx;              // load-menu scroll, in pixels (smooth, sub-row)
+    internal bool _loadMenuScrollDragging;          // dragging the load-menu scrollbar thumb
+    private float _loadMenuScrollGrabOffset;         // Y within the thumb where the drag started
 
     // --- Tethers / drag ropes (Shift+T target, Shift+R attach) ---
     // A tether connects two endpoints, each a live unit or a corpse. When a unit end is
@@ -900,6 +912,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private readonly Game.Jobs.WorkerSystem _workerSystem = new();
     internal readonly UI.GraveRosterUI _graveRosterUI = new();
     internal readonly UI.JobBoardUI _jobBoardUI = new();
+    internal readonly UI.LogPanel _logPanel = new();
     // (ForagableWiggleRange moved to GameRenderer.)
 
     // DamageNumber and PendingProjectileGroup moved to GameSystems.SpellEffectSystem
@@ -1008,6 +1021,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             (InputState inp, in Necroking.UI.UICtx c) => _craftingMenu.Update(inp, c.ScreenW, c.ScreenH, _clock.VisualDt))
             .WithDraw((in Necroking.UI.UICtx c) => _craftingMenu.Draw(),
                 () => ShowUIForDraw && _craftingMenu.IsVisible));
+        _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _logPanel,
+            Necroking.UI.UIBand.Panels, "popup.LogPanel",
+            () => _logPanel.IsVisible,
+            (InputState inp, in Necroking.UI.UICtx c) => _logPanel.Update(inp, c.ScreenW, c.ScreenH),
+            () => _logPanel.IsDragging)
+            .WithDraw((in Necroking.UI.UICtx c) => _logPanel.Draw(c.ScreenW, c.ScreenH),
+                () => ShowUIForDraw && _logPanel.IsVisible));
 
         // Blocking full overlay (Overlay band), then the HUD rows that sit
         // ABOVE it (HudTop band) — the declarative form of "menu buttons work
@@ -1453,6 +1473,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (corpsesIdx >= 0 && corpsesIdx < _atlases.Length)
                 _gameData.Corpse.ApplyToAtlas(_atlases[corpsesIdx]);
         }
+
+        _loadMenuSaves = ListSaveGames();
 
         base.Initialize();
     }
@@ -2659,7 +2681,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         Exiting += (s, e) => _net.Stop();
 
         _saveGameWindow = new SaveGameWindow(_editorUi);
-        _saveGameWindow.SetCallbacks(ListSaveGames, UniqueSaveName, SaveFileExists, WriteSaveGame, SanitizeSaveName);
+        _saveGameWindow.SetCallbacks(ListSaveGames, UniqueSaveName, SaveFileExists, WriteSaveGame, DeleteSaveGame, SanitizeSaveName);
 
         _settingsWindow = new SettingsWindow(_editorUi);
         System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.UserSettingsDir));
@@ -2818,6 +2840,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         var kb = Keyboard.GetState();
         var mouse = Mouse.GetState();
 
+        // Dev-injected mouse (the `raw_mouse` dev command): stands in for the OS
+        // mouse entirely so the raw menu paths below are drivable headless.
+        if (_devRawMouse.HasValue) mouse = _devRawMouse.Value;
+
         // Window unfocused or minimized (polled OS focus, not the unreliable
         // IsActive — see above). Exempt scenario / headless runs — automated runs
         // often lack window focus, and freezing them would break the test harness.
@@ -2858,12 +2884,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _menuStateAtLastCapture = _menuState;
         }
 
-        if (unfocused)
+        if (unfocused && !_devRawMouse.HasValue)
         {
             // Kept running (dev server or "run when unfocused"): feed NEUTRAL input — no
             // buttons, no keys, cursor parked at centre — so background/real clicks + keys
             // aren't consumed and the camera doesn't edge-drift. Dev-injected input is
-            // unaffected (it doesn't flow through here). Real states still reach
+            // unaffected (it doesn't flow through here) — except `raw_mouse`, which
+            // explicitly wants to be captured as if focused. Real states still reach
             // _prevMouse/_prevKb at the exit points, preserving refocus-click protection.
             var neutral = new MouseState(vpW / 2, vpH / 2, mouse.ScrollWheelValue,
                 ButtonState.Released, ButtonState.Released, ButtonState.Released,
@@ -2923,6 +2950,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // map load.
             _groundSystem.StampTerrainOnto(_sim.Grid);
             _envSystem.OnCollisionsDirty?.Invoke();
+        }
+
+        if (_menuState == MenuState.MainMenu)
+        {
+            _backMenuState = MenuState.MainMenu;
+            if (_prevMenuState != MenuState.MainMenu) _loadMenuSaves = ListSaveGames();
         }
         _prevMenuState = _menuState;
 
@@ -2998,63 +3031,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (_menuState == MenuState.MainMenu)
         {
             if (_input.LeftPressed)
-            {
-                int screenW2 = GraphicsDevice.Viewport.Width;
-                int screenH2 = GraphicsDevice.Viewport.Height;
-                int btnW = 320, btnH = 55, btnGap = 18;
-                int menuX = screenW2 / 2 - btnW / 2;
-                int menuY = screenH2 / 2 - 20;
-
-                // Play button
-                if (mouse.X >= menuX && mouse.X < menuX + btnW && mouse.Y >= menuY && mouse.Y < menuY + btnH)
-                {
-                    StartGame();
-                    _prevKb = kb;
-                    _prevMouse = mouse;
-                    base.Update(gameTime);
-                    return;
-                }
-                menuY += btnH + btnGap;
-
-                // Play Test Map button — loads assets/maps/testmap.json
-                if (mouse.X >= menuX && mouse.X < menuX + btnW && mouse.Y >= menuY && mouse.Y < menuY + btnH)
-                {
-                    StartGame("testmap");
-                    _prevKb = kb;
-                    _prevMouse = mouse;
-                    base.Update(gameTime);
-                    return;
-                }
-                menuY += btnH + btnGap;
-
-                // Scenarios button
-                if (mouse.X >= menuX && mouse.X < menuX + btnW && mouse.Y >= menuY && mouse.Y < menuY + btnH)
-                {
-                    _menuState = MenuState.ScenarioList;
-                    _scenarioScrollPx = 0f;
-                    _prevKb = kb;
-                    _prevMouse = mouse;
-                    base.Update(gameTime);
-                    return;
-                }
-                menuY += btnH + btnGap;
-
-                // Load Game button
-                if (mouse.X >= menuX && mouse.X < menuX + btnW && mouse.Y >= menuY && mouse.Y < menuY + btnH)
-                {
-                    _loadMenuSaves = ListSaveGames();
-                    _menuState = MenuState.LoadMenu;
-                    _prevKb = kb;
-                    _prevMouse = mouse;
-                    base.Update(gameTime);
-                    return;
-                }
-                menuY += btnH + btnGap;
-
-                // Quit button
-                if (mouse.X >= menuX && mouse.X < menuX + btnW && mouse.Y >= menuY && mouse.Y < menuY + btnH)
-                    Exit();
-            }
+                HandleMainMenuClick(mouse);
             _prevKb = kb;
             _prevMouse = mouse;
             base.Update(gameTime);
@@ -3147,25 +3124,73 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // Escape to go back
             if (_input.WasKeyPressed(Keys.Escape))
             {
-                _menuState = MenuState.MainMenu;
+                _menuState = _backMenuState;
+                _prevKb = kb;
+                _prevMouse = mouse;
+                base.Update(gameTime);
+                return;
             }
-            else if (_input.LeftPressed)
-            {
-                int screenW2 = GraphicsDevice.Viewport.Width;
-                int screenH2 = GraphicsDevice.Viewport.Height;
-                var view = _gameRenderer.BuildLoadMenuLayout(screenW2, screenH2, _loadMenuSaves.Count);
 
-                for (int i = 0; i < view.Shown; i++)
+            int screenW2 = GraphicsDevice.Viewport.Width;
+            int screenH2 = GraphicsDevice.Viewport.Height;
+            var view = _gameRenderer.BuildLoadMenuLayout(screenW2, screenH2, _loadMenuSaves.Count, _loadMenuScrollPx);
+
+            // Draggable scrollbar — same behaviour as the scenario menu (shared
+            // Necroking.UI.VScrollbar). The scroll offset is stored in pixels, so
+            // the thumb math and drag conversion are both pixel-native.
+            if (_loadMenuScrollDragging && mouse.LeftButton != ButtonState.Pressed)
+                _loadMenuScrollDragging = false;
+
+            bool hasBar = !Necroking.UI.VScrollbar.Fits(view.ScrollViewH, view.ScrollContentH);
+            if (hasBar)
+            {
+                var thumb = Necroking.UI.VScrollbar.ThumbRect(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH, _loadMenuScrollPx);
+                var hit = Necroking.UI.VScrollbar.HitRect(view.ScrollX, view.ScrollY, view.ScrollViewH);
+
+                // Grab the thumb, or click the track to jump (thumb centres on the cursor).
+                if (_input.LeftPressed && hit.Contains(mouse.X, mouse.Y))
                 {
-                    if (!view.RowRects[i].Contains(mouse.X, mouse.Y)) continue;
-                    // On success StartGame has switched _menuState to None; on a
-                    // validation failure (logged) we simply stay on this menu.
-                    LoadSaveGame(_loadMenuSaves[i].Name);
-                    break;
+                    _loadMenuScrollDragging = true;
+                    _loadMenuScrollGrabOffset = thumb.Contains(mouse.X, mouse.Y) ? mouse.Y - thumb.Y : thumb.Height / 2f;
+                }
+
+                if (_loadMenuScrollDragging)
+                {
+                    float newPx = Necroking.UI.VScrollbar.ScrollFromDrag(mouse.Y, _loadMenuScrollGrabOffset,
+                        view.ScrollY, view.ScrollViewH, view.ScrollContentH);
+                    _loadMenuScrollPx = view.ClampScroll(newPx);
+                }
+            }
+
+            // Wheel scroll (half a row per notch), clamped to the layout height.
+            if (!_loadMenuScrollDragging && _input.ScrollDelta != 0)
+            {
+                _loadMenuScrollPx += (_input.ScrollDelta > 0 ? -1 : 1) * view.RowStride * 0.5f;
+                _loadMenuScrollPx = view.ClampScroll(_loadMenuScrollPx);
+            }
+
+            // Row / back-button clicks (skipped while dragging the scrollbar).
+            if (_input.LeftPressed && !_loadMenuScrollDragging)
+            {
+                // Only clicks inside the scrolled list window count — a partially
+                // clipped bottom row must not be clickable in the gap below it.
+                bool inListWindow = mouse.Y >= view.ScrollY && mouse.Y < view.ScrollY + view.ScrollViewH;
+                if (inListWindow)
+                {
+                    for (int i = 0; i < view.RowRects.Length; i++)
+                    {
+                        if (!view.RowRects[i].Contains(mouse.X, mouse.Y)) continue;
+                        // On success StartGame has switched _menuState to None; on a
+                        // validation failure (logged) we simply stay on this menu.
+                        LoadSaveGame(_loadMenuSaves[i].Name);
+                        break;
+                    }
                 }
 
                 if (_menuState == MenuState.LoadMenu && view.BackRect.Contains(mouse.X, mouse.Y))
-                    _menuState = MenuState.MainMenu;
+                {
+                    _menuState = _backMenuState;
+                }
             }
             _prevKb = kb;
             _prevMouse = mouse;
@@ -3330,63 +3355,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 }
             }
         }
+        if (_menuState == MenuState.PauseMenu) _backMenuState = MenuState.PauseMenu;
 
         // --- Pause menu button clicks ---
         if (_menuState == MenuState.PauseMenu && _input.LeftPressed)
         {
-            int sw = GraphicsDevice.Viewport.Width;
-            int sh = GraphicsDevice.Viewport.Height;
-            int btnW2 = 280, btnH2 = 40, btnGap2 = 10;
-            int pauseBtnCount = 11;
-            int pauseControlLines = 4;
-            int pauseBoxH = 60 + pauseBtnCount * (btnH2 + btnGap2) + 10 + pauseControlLines * 16 + 20;
-            int boxY2 = (sh - pauseBoxH) / 2 + 60;
-            int menuX2 = (sw - btnW2) / 2;
-            int y2 = boxY2;
-
-            // Resume
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.None; _clock.ClearAllPauses(); }
-            y2 += btnH2 + btnGap2;
-            // Save Game
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-                OpenSaveMenu();
-            y2 += btnH2 + btnGap2;
-            // Unit Editor
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.UnitEditor; _clock.ClearAllPauses(); }
-            y2 += btnH2 + btnGap2;
-            // Spell Editor
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.SpellEditor; _clock.ClearAllPauses(); }
-            y2 += btnH2 + btnGap2;
-            // Map Editor
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.MapEditor; _clock.ClearAllPauses(); _mapEditor.SuppressClicksUntilRelease(); }
-            y2 += btnH2 + btnGap2;
-            // UI Editor
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; _clock.ClearAllPauses(); }
-            y2 += btnH2 + btnGap2;
-            // Item Editor
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.ItemEditor; _clock.ClearAllPauses(); }
-            y2 += btnH2 + btnGap2;
-            // Settings
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.Settings; }
-            y2 += btnH2 + btnGap2;
-            // Multiplayer
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.Multiplayer; }
-            y2 += btnH2 + btnGap2 + 10;
-            // Main Menu
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-            { _menuState = MenuState.MainMenu; _clock.ClearAllPauses(); _gameWorldLoaded = false; }
-            y2 += btnH2 + btnGap2;
-            // Quit
-            if (mouse.X >= menuX2 && mouse.X < menuX2 + btnW2 && mouse.Y >= y2 && mouse.Y < y2 + btnH2)
-                Exit();
+            if (HandlePauseMenuClick(gameTime, mouse, kb)) return;
         }
 
         // --- Settings window close handling ---
@@ -4074,6 +4048,104 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _prevKb = kb;
         _prevMouse = mouse;
         base.Update(gameTime);
+    }
+
+    // Hit-tests against the same layout DrawPauseMenu renders (BuildPauseMenuLayout).
+    bool HandlePauseMenuClick(GameTime gameTime, MouseState mouse, KeyboardState kb) {
+        int sw = GraphicsDevice.Viewport.Width;
+        int sh = GraphicsDevice.Viewport.Height;
+        var view = _gameRenderer.BuildPauseMenuLayout(sw, sh);
+        foreach (var b in view.Buttons) {
+            if (!b.Interactable || !b.Rect.Contains(mouse.X, mouse.Y)) continue;
+            switch (b.Id) {
+                case MenuButtonId.Resume:
+                    _menuState = MenuState.None;
+                    _clock.ClearAllPauses();
+                    break;
+                case MenuButtonId.SaveGame:
+                    OpenSaveMenu();
+                    break;
+                case MenuButtonId.LoadGame:
+                    _loadMenuSaves = ListSaveGames();
+                    _loadMenuScrollPx = 0f;
+                    _backMenuState = _menuState;
+                    _menuState = MenuState.LoadMenu;
+                    _prevKb = kb;
+                    _prevMouse = mouse;
+                    base.Update(gameTime);
+                    return true;
+                case MenuButtonId.UnitEditor:
+                    _menuState = MenuState.UnitEditor;
+                    _clock.ClearAllPauses();
+                    break;
+                case MenuButtonId.SpellEditor:
+                    _menuState = MenuState.SpellEditor;
+                    _clock.ClearAllPauses();
+                    break;
+                case MenuButtonId.MapEditor:
+                    _menuState = MenuState.MapEditor;
+                    _clock.ClearAllPauses();
+                    _mapEditor.SuppressClicksUntilRelease();
+                    break;
+                case MenuButtonId.UIEditor:
+                    EnsureUIEditorInitialized();
+                    _menuState = MenuState.UIEditor;
+                    _clock.ClearAllPauses();
+                    break;
+                case MenuButtonId.ItemEditor:
+                    _menuState = MenuState.ItemEditor;
+                    _clock.ClearAllPauses();
+                    break;
+                case MenuButtonId.Settings:
+                    _menuState = MenuState.Settings;
+                    break;
+                case MenuButtonId.Multiplayer:
+                    _menuState = MenuState.Multiplayer;
+                    break;
+                case MenuButtonId.ToMainMenu:
+                    _menuState = MenuState.MainMenu;
+                    _clock.ClearAllPauses();
+                    _gameWorldLoaded = false;
+                    break;
+                case MenuButtonId.Quit:
+                    Exit();
+                    break;
+            }
+        }
+        return false;
+    }
+
+    // Hit-tests against the same layout DrawMainMenu renders (BuildMainMenuLayout).
+    void HandleMainMenuClick(MouseState mouse) {
+        int sw = GraphicsDevice.Viewport.Width;
+        int sh = GraphicsDevice.Viewport.Height;
+        foreach (var b in _gameRenderer.BuildMainMenuLayout(sw, sh)) {
+            if (!b.Interactable || !b.Rect.Contains(mouse.X, mouse.Y)) continue;
+            switch (b.Id) {
+                case MenuButtonId.Continue:
+                    LoadSaveGame(_loadMenuSaves[0].Name);
+                    return;
+                case MenuButtonId.Play:
+                    StartGame();
+                    return;
+                case MenuButtonId.PlayTestMap: // loads assets/maps/testmap.json
+                    StartGame("testmap");
+                    return;
+                case MenuButtonId.Scenarios:
+                    _menuState = MenuState.ScenarioList;
+                    _scenarioScrollPx = 0f;
+                    return;
+                case MenuButtonId.LoadGame:
+                    _loadMenuSaves = ListSaveGames();
+                    _loadMenuScrollPx = 0f;
+                    _backMenuState = _menuState;
+                    _menuState = MenuState.LoadMenu;
+                    return;
+                case MenuButtonId.Quit:
+                    Exit();
+                    return;
+            }
+        }
     }
 
     /// <summary>Cached trap-target query passed to EnvironmentSystem.UpdateTraps

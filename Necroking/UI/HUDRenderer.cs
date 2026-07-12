@@ -61,10 +61,10 @@ public partial class HUDRenderer
     // HitTestMenuButtons returns these indices). Keep order in sync with
     // MenuButtonLabels and Game1.ToggleCoreMenu.
     public const int MenuInventory = 0, MenuCrafting = 1, MenuBuilding = 2,
-                     MenuGrimoire = 3, MenuSkills = 4, MenuCharacter = 5;
-    public const int MenuBtnCount = 6;
+                     MenuGrimoire = 3, MenuSkills = 4, MenuCharacter = 5, MenuLog = 6;
+    public const int MenuBtnCount = 7;
     public static readonly string[] MenuButtonLabels =
-        { "Inventory (I)", "Crafting (C)", "Building (B)", "Grimoire (J)", "Skills (K)", "Character (Tab)" };
+        { "Inventory (I)", "Crafting (C)", "Building (B)", "Grimoire (J)", "Skills (K)", "Character (Tab)", "Log" };
     private const int MenuBtnH = 24;
     private const int MenuBtnTop = 8;
     private const int MenuBtnPadX = 8;   // text padding per side

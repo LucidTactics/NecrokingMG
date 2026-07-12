@@ -2,6 +2,7 @@ using System;
 using Microsoft.Xna.Framework;
 using Necroking.Core;
 using Necroking.Data.Registries;
+using Necroking.Lib;
 using Necroking.World;
 
 namespace Necroking.Render;

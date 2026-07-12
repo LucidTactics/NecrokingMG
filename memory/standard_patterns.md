@@ -62,6 +62,14 @@ CLAUDE.md → "Standard Patterns Reference".)
   `contentH = curY + scroll - y` measurement or a `HandlePanelScroll`+
   `BeginClip`+`SetPanelContentHeight` sandwich (a hand-rolled copy once
   double-counted the scroll and broke thumb-dragging).
+- **Full-screen menu screens (main/pause/load/scenarios) — `Build<X>MenuLayout`**
+  (GameRenderer.Hud.cs, 2026-07-12): a builder declares the button list once
+  (ids + labels + group gaps) and returns resolved rects (`MenuButton[]` /
+  `PauseMenuView` / `LoadMenuView` / `ScenarioMenuView`); the draw renders those
+  rects and Game1's click handler hit-tests the SAME rects, switching on
+  `MenuButtonId`. NEVER write positional math (y-cursor advances, hardcoded
+  button counts) in a click handler — that's the draw/hit-test lockstep bug this
+  pattern killed.
 - **Scrollbars** — the canonical geometry + palette live in
   `Necroking/UI/VScrollbar.cs` (static: `Fits`/`TrackRect`/`ThumbRect`/`HitRect`/
   `ScrollFromDrag`, 5px track+thumb, the Spell-editor look). Callers own input

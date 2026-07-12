@@ -3,6 +3,7 @@ using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
 using Necroking.GameSystems;
+using Necroking.Lib;
 using Necroking.Movement;
 
 namespace Necroking.AI;

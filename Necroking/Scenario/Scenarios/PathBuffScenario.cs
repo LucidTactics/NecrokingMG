@@ -4,6 +4,7 @@ using Necroking.Data.Registries;
 using Necroking.Game;
 using Necroking.Game.SkillEffects;
 using Necroking.GameSystems;
+using Necroking.Lib;
 using Necroking.Movement;
 
 namespace Necroking.Scenario.Scenarios;

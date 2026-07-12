@@ -20,28 +20,28 @@ is for and **where new code should go**.
 
 ## All folders at a glance
 
-| Folder | Namespace(s) | Purpose |
-|---|---|---|
-| `Core/` | `Necroking.Core` | Engine-agnostic primitives everyone depends on (Vec2, GameClock, GamePaths, JSON/file utils) |
-| `Algorithm/` | `Necroking.Algorithm` | Pure, standalone algorithms with no game-state knowledge (generic A*, scatter packing) |
-| `Spatial/` | `Necroking.Spatial` | Generic spatial-query data structures (Quadtree, AABB) |
-| `Data/` | `Necroking.Data` | Game-data model + `GameData` aggregate, map file schema, shared enums |
-| `Data/Registries/` | `Necroking.Data.Registries` | The id-keyed `data/*.json` registries on `RegistryBase<TDef>` |
-| `World/` | `Necroking.World` | Terrain/environment substrate: pathfinder, env objects, ground, walls, roads |
-| `Movement/` | `Necroking.Movement` | Unit data model + how intent becomes motion (Locomotion, ORCA) |
-| `Game/` | `Necroking.Game` / `Necroking.GameSystems` / `Necroking` ⚠ | The gameplay core: `Simulation`, `GameSession`, and most per-tick gameplay systems |
-| `Game/Combat/` | `Necroking.GameSystems.Combat` ⚠ | Shared combat math (melee range, intercept) |
-| `Game/Jobs/` | `Necroking.Game.Jobs` | Worker economy: WorkerSystem brain, job defs/state |
-| `Game/SkillEffects/` | `Necroking.Game.SkillEffects` | Skill/passive effect application |
-| `AI/` | `Necroking.AI` | Per-unit AI: archetype handlers deciding what a unit *wants* to do |
-| `Render/` | `Necroking.Render` | Everything wired into the draw pipeline: atlases, camera, effects, anim state, HUD |
-| `UI/` | `Necroking.UI` | Player-facing overlays/panels with hit-testing, plus widget infra |
-| `Necroking/` (root) | `Necroking` | The app shell: `Program`, `Game1.*` partials (glue), `GameRenderer.*` partials (Draw) |
-| `Editor/` | `Necroking.Editor` | In-game developer/content editors on `EditorBase` |
-| `Dev/` | `Necroking.Dev` | `--devserver` HTTP transport (the pipe, not the verbs) |
-| `Net/` | `Necroking.Net` | Multiplayer transport/protocol — isolated and brittle, read its README first |
-| `Scenario/` | `Necroking.Scenario` | The coded headless-test harness (`--scenario`) |
-| `Scenario/Scenarios/` | `Necroking.Scenario.Scenarios` | One file per checked-in regression scenario (~126) |
+| Folder                | Namespace(s) | Purpose                                                                                  |
+|-----------------------|---|------------------------------------------------------------------------------------------|
+| `Core/`               | `Necroking.Core` | Core Imported Game Utilities everyone depends on (GameClock, GamePaths, JSON/file utils) |
+| `Lib/`                | `Necroking.Lib` | Inhouse implemented utilities and structs.                                               |
+| `Algorithm/`          | `Necroking.Algorithm` | Pure, standalone algorithms with no game-state knowledge (generic A*, scatter packing)   |
+| `Data/`               | `Necroking.Data` | Game-data model + `GameData` aggregate, map file schema, shared enums                    |
+| `Data/Registries/`    | `Necroking.Data.Registries` | The id-keyed `data/*.json` registries on `RegistryBase<TDef>`                            |
+| `World/`              | `Necroking.World` | Terrain/environment substrate: pathfinder, env objects, ground, walls, roads             |
+| `Movement/`           | `Necroking.Movement` | Unit data model + how intent becomes motion (Locomotion, ORCA)                           |
+| `Game/`               | `Necroking.Game` / `Necroking.GameSystems` / `Necroking` ⚠ | The gameplay core: `Simulation`, `GameSession`, and most per-tick gameplay systems       |
+| `Game/Combat/`        | `Necroking.GameSystems.Combat` ⚠ | Shared combat math (melee range, intercept)                                              |
+| `Game/Jobs/`          | `Necroking.Game.Jobs` | Worker economy: WorkerSystem brain, job defs/state                                       |
+| `Game/SkillEffects/`  | `Necroking.Game.SkillEffects` | Skill/passive effect application                                                         |
+| `AI/`                 | `Necroking.AI` | Per-unit AI: archetype handlers deciding what a unit *wants* to do                       |
+| `Render/`             | `Necroking.Render` | Everything wired into the draw pipeline: atlases, camera, effects, anim state, HUD       |
+| `UI/`                 | `Necroking.UI` | Player-facing overlays/panels with hit-testing, plus widget infra                        |
+| `Necroking/` (root)   | `Necroking` | The app shell: `Program`, `Game1.*` partials (glue), `GameRenderer.*` partials (Draw)    |
+| `Editor/`             | `Necroking.Editor` | In-game developer/content editors on `EditorBase`                                        |
+| `Dev/`                | `Necroking.Dev` | `--devserver` HTTP transport (the pipe, not the verbs)                                   |
+| `Net/`                | `Necroking.Net` | Multiplayer transport/protocol — isolated and brittle, read its README first             |
+| `Scenario/`           | `Necroking.Scenario` | The coded headless-test harness (`--scenario`)                                           |
+| `Scenario/Scenarios/` | `Necroking.Scenario.Scenarios` | One file per checked-in regression scenario (~126)                                       |
 
 ## Where do I put new code?
 

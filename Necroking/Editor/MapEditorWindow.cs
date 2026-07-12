@@ -12,6 +12,7 @@ using Necroking.Data;
 using Necroking.Render;
 using Necroking.World;
 using Necroking.GameSystems;
+using Necroking.Lib;
 
 namespace Necroking.Editor;
 

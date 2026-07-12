@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Necroking.Core;
+using Necroking.Lib;
 
 namespace Necroking.GameSystems;
 

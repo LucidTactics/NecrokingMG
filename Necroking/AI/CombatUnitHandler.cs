@@ -1,5 +1,6 @@
 using System;
 using Necroking.Core;
+using Necroking.Lib;
 using Necroking.Movement;
 
 namespace Necroking.AI;

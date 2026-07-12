@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
+using Necroking.Lib;
 using Necroking.Movement;
-using Necroking.Spatial;
 
 namespace Necroking.GameSystems;
 
@@ -28,6 +28,7 @@ public enum DamageFlags : byte
     None = 0,
     ArmorNegating = 1,    // Bypass armor/protection reduction
     DefenseNegating = 2,  // Bypass defense check (spells always have this)
+    MagicWeapon = 4,
 }
 
 /// <summary>

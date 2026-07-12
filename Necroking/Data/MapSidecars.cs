@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Necroking.Core;
 using Necroking.GameSystems;
+using Necroking.Lib;
 using Necroking.World;
 
 namespace Necroking.Data;

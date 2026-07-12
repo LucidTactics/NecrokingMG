@@ -17,9 +17,22 @@ using Necroking.GameSystems;
 using Necroking.World;
 using Necroking.Scenario;
 using Necroking.Editor;
+using Necroking.Lib;
 using Necroking.UI;
 
 namespace Necroking;
+
+// Button identities for the pause/main menu layouts (BuildPauseMenuLayout /
+// BuildMainMenuLayout). Game1's click handlers switch on these instead of
+// re-deriving button positions.
+internal enum MenuButtonId
+{
+    // Pause menu
+    Resume, SaveGame, LoadGame, UnitEditor, SpellEditor, MapEditor,
+    UIEditor, ItemEditor, Settings, Multiplayer, ToMainMenu, Quit,
+    // Main menu (LoadGame/Quit shared with the pause menu)
+    Continue, Play, PlayTestMap, Scenarios,
+}
 
 // Game1 partial: HUD, menus, skill toasts and debug overlays.
 partial class GameRenderer
@@ -688,6 +701,7 @@ partial class GameRenderer
         if (_g._grimoireOverlay.IsVisible) m |= 1 << HUDRenderer.MenuGrimoire;
         if (_g._skillBookOverlay.IsVisible) m |= 1 << HUDRenderer.MenuSkills;
         if (_g._characterStatsUI.IsVisible) m |= 1 << HUDRenderer.MenuCharacter;
+        if (_g._logPanel.IsVisible)         m |= 1 << HUDRenderer.MenuLog;
         return m;
     }
 
@@ -720,6 +734,10 @@ partial class GameRenderer
             case HUDRenderer.MenuCharacter:
                 if (!_g._characterStatsUI.IsVisible) _g.CloseSameSidePanels(Game1.PanelSide.Left, _g._characterStatsUI);
                 _g._characterStatsUI.Toggle();
+                break;
+            case HUDRenderer.MenuLog:
+                if (!_g._logPanel.IsVisible) _g.CloseSameSidePanels(Game1.PanelSide.Left, _g._logPanel);
+                _g._logPanel.Toggle(screenW, screenH);
                 break;
         }
     }
@@ -832,57 +850,129 @@ partial class GameRenderer
         });
     }
 
+    // One resolved menu button: identity, label and rect. Drawing and Game1's
+    // click handlers both consume the same array, so they can't drift apart.
+    internal struct MenuButton
+    {
+        public MenuButtonId Id;
+        public string Label;
+        public Rectangle Rect;
+        public bool Interactable;
+    }
+
+    internal struct PauseMenuView
+    {
+        public Rectangle Box;
+        public MenuButton[] Buttons;
+        public int ControlsY; // top of the controls-reference text block
+    }
+
+    private static readonly string[] PauseControls = {
+        "WASD - Move     Space - Jump",
+        "Q/E/1-8 - Cast spells",
+        "Shift - Run    G - Ghost mode",
+        "+/- - Speed   Scroll - Zoom"
+    };
+
+    // The ONE definition of the pause-menu layout — DrawPauseMenu and
+    // Game1.HandlePauseMenuClick both consume it.
+    internal PauseMenuView BuildPauseMenuLayout(int screenW, int screenH)
+    {
+        // (id, label, group gap before this button)
+        (MenuButtonId id, string label, bool gapBefore)[] items = {
+            (MenuButtonId.Resume, "Resume", false),
+            (MenuButtonId.SaveGame, "Save Game", true),
+            (MenuButtonId.LoadGame, "Load Game", false),
+            (MenuButtonId.UnitEditor, "Unit Editor (F9)", true),
+            (MenuButtonId.SpellEditor, "Spell Editor (F10)", false),
+            (MenuButtonId.MapEditor, "Map Editor (F11)", false),
+            (MenuButtonId.UIEditor, "UI Editor (F12)", false),
+            (MenuButtonId.ItemEditor, "Item Editor", false),
+            (MenuButtonId.Settings, "Settings", false),
+            (MenuButtonId.Multiplayer, "Multiplayer", false),
+            (MenuButtonId.ToMainMenu, "Main Menu", true),
+            (MenuButtonId.Quit, "Quit", false),
+        };
+
+        int boxW = 350;
+        int btnW = 280, btnH = 40, btnGap = 10;
+        int gapSpace = 25;
+        int extraGaps = items.Count(i => i.gapBefore);
+        int boxH = 60 + items.Length * (btnH + btnGap) + 10 + PauseControls.Length * 16 + 20 + gapSpace * extraGaps;
+        int boxX = (screenW - boxW) / 2;
+        int boxY = (screenH - boxH) / 2;
+
+        var view = new PauseMenuView
+        {
+            Box = new Rectangle(boxX, boxY, boxW, boxH),
+            Buttons = new MenuButton[items.Length],
+        };
+        int x = boxX + (boxW - btnW) / 2;
+        int y = boxY + 60;
+        for (int i = 0; i < items.Length; i++)
+        {
+            if (items[i].gapBefore) y += gapSpace;
+            view.Buttons[i] = new MenuButton
+                { Id = items[i].id, Label = items[i].label, Rect = new Rectangle(x, y, btnW, btnH), Interactable = true };
+            y += btnH + btnGap;
+        }
+        view.ControlsY = y + 10;
+        return view;
+    }
+
+    // The ONE definition of the main-menu layout — DrawMainMenu and
+    // Game1.HandleMainMenuClick both consume it.
+    // Buttons (55+18 tall each) must fit below screenH/2 at 720p.
+    internal MenuButton[] BuildMainMenuLayout(int screenW, int screenH)
+    {
+        bool hasSaves = _g._loadMenuSaves.Count > 0;
+        (MenuButtonId id, string label, bool gapBefore, bool interactable)[] items = {
+            (MenuButtonId.Continue, hasSaves ? $"Continue {_g._loadMenuSaves[0].Name}" : "Continue", false, hasSaves),
+            (MenuButtonId.Play, "Play", true, true),
+            (MenuButtonId.PlayTestMap, "Play Test Map", false, true),
+            (MenuButtonId.LoadGame, "Load Game", true, true),
+            (MenuButtonId.Scenarios, "Scenarios", false, true),
+            (MenuButtonId.Quit, "Quit", true, true),
+        };
+
+        int btnW = 320, btnH = 55, btnGap = 12;
+        int gapSpace = 25;
+        int x = screenW / 2 - btnW / 2;
+        int y = screenH / 2 - 20 - btnH;
+        var buttons = new MenuButton[items.Length];
+        for (int i = 0; i < items.Length; i++)
+        {
+            if (items[i].gapBefore) y += gapSpace;
+            buttons[i] = new MenuButton
+                { Id = items[i].id, Label = items[i].label, Rect = new Rectangle(x, y, btnW, btnH), Interactable = items[i].interactable };
+            y += btnH + btnGap;
+        }
+        return buttons;
+    }
+
     internal void DrawPauseMenu(int screenW, int screenH)
     {
         if (_g._gameData.Settings.General.PauseDimBackground)
             _g.Scope.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
 
-        int boxW = 350;
-        int btnCount = 11; // Resume + Save Game + 5 editors + Settings + Multiplayer + Main Menu + Quit (hit-tests: Game1.cs pause-menu click block — keep in lockstep!)
-        int btnH2 = 40, btnGap2 = 10;
-        int controlLines = 4;
-        int boxH = 60 + btnCount * (btnH2 + btnGap2) + 10 + controlLines * 16 + 20;
-        int boxX = (screenW - boxW) / 2;
-        int boxY = (screenH - boxH) / 2;
-        DrawPanel(new Rectangle(boxX, boxY, boxW, boxH), new Color(30, 30, 50, 235), new Color(100, 100, 180), 3);
+        var view = BuildPauseMenuLayout(screenW, screenH);
+        DrawPanel(view.Box, new Color(30, 30, 50, 235), new Color(100, 100, 180), 3);
 
         if (_g._largeFont != null)
         {
             string title = "PAUSED";
             var titleSize = _g._largeFont.MeasureString(title);
-            DrawText(_g._largeFont, title, new Vector2(boxX + boxW / 2f - titleSize.X / 2f, boxY + 15), Color.White);
+            DrawText(_g._largeFont, title, new Vector2(view.Box.X + view.Box.Width / 2f - titleSize.X / 2f, view.Box.Y + 15), Color.White);
         }
 
-        // Menu items
-        int btnW = 280, btnH = 40, btnGap = 10;
-        int menuX = boxX + (boxW - btnW) / 2;
-        int menuY = boxY + 60;
-
-        DrawMenuButton("Resume", menuX, ref menuY, btnW, btnH, btnGap);
-        DrawMenuButton("Save Game", menuX, ref menuY, btnW, btnH, btnGap);
-        DrawMenuButton("Unit Editor (F9)", menuX, ref menuY, btnW, btnH, btnGap);
-        DrawMenuButton("Spell Editor (F10)", menuX, ref menuY, btnW, btnH, btnGap);
-        DrawMenuButton("Map Editor (F11)", menuX, ref menuY, btnW, btnH, btnGap);
-        DrawMenuButton("UI Editor (F12)", menuX, ref menuY, btnW, btnH, btnGap);
-        DrawMenuButton("Item Editor", menuX, ref menuY, btnW, btnH, btnGap);
-        DrawMenuButton("Settings", menuX, ref menuY, btnW, btnH, btnGap);
-        DrawMenuButton("Multiplayer", menuX, ref menuY, btnW, btnH, btnGap);
-
-        menuY += 10;
-        DrawMenuButton("Main Menu", menuX, ref menuY, btnW, btnH, btnGap);
-        DrawMenuButton("Quit", menuX, ref menuY, btnW, btnH, btnGap);
+        foreach (var b in view.Buttons)
+            DrawMenuButtonAt(b.Label, b.Rect.X, b.Rect.Y, b.Rect.Width, b.Rect.Height, b.Interactable);
 
         // Controls reference
         if (_g._smallFont != null)
         {
-            string[] controls = {
-                "WASD - Move     Space - Jump",
-                "Q/E/1-8 - Cast spells",
-                "Shift - Run    G - Ghost mode",
-                "+/- - Speed   Scroll - Zoom"
-            };
-            for (int i = 0; i < controls.Length; i++)
-                DrawText(_g._smallFont, controls[i], new Vector2(boxX + 20, menuY + 10 + i * 16), new Color(140, 140, 160));
+            for (int i = 0; i < PauseControls.Length; i++)
+                DrawText(_g._smallFont, PauseControls[i], new Vector2(view.Box.X + 20, view.ControlsY + i * 16), new Color(140, 140, 160));
         }
     }
 
@@ -905,20 +995,37 @@ partial class GameRenderer
             DrawText(_g._font, subtitle, new Vector2(screenW / 2f - subSize.X / 2f, titleY + 30), new Color(180, 160, 120, 200));
         }
 
-        // Menu buttons (5 × (55+18) must fit below screenH/2 at 720p — hit-tests:
-        // Game1.cs main-menu click block — keep in lockstep!)
-        int btnW = 320, btnH = 55, btnGap = 18;
-        int menuX = screenW / 2 - btnW / 2;
-        int menuY = screenH / 2 - 20;
-
-        DrawMenuButton("Play", menuX, ref menuY, btnW, btnH, btnGap);
-        DrawMenuButton("Play Test Map", menuX, ref menuY, btnW, btnH, btnGap);
-        DrawMenuButton("Scenarios", menuX, ref menuY, btnW, btnH, btnGap);
-        DrawMenuButton("Load Game", menuX, ref menuY, btnW, btnH, btnGap);
-        DrawMenuButton("Quit", menuX, ref menuY, btnW, btnH, btnGap);
+        foreach (var b in BuildMainMenuLayout(screenW, screenH))
+            DrawMenuButtonAt(b.Label, b.Rect.X, b.Rect.Y, b.Rect.Width, b.Rect.Height, b.Interactable);
 
         // Version info
         DrawText(_g._smallFont, "MonoGame Port v0.1", new Vector2(10, screenH - 20), new Color(80, 80, 100));
+    }
+
+    internal void DrawSaveGameText(Rectangle dest, SaveGameInfo s)
+    {
+        var r1 = dest;
+        r1.Width = dest.Width - 172;
+        var r2 = dest;
+        r2.X = r1.Right;
+        r2.Width = 172;
+
+
+        _g.Scope.Draw(_g._pixel, r2, new Color(200, 200, 200, 15));
+
+        DrawMenuButtonTextAt($"{s.Name}",
+            r1.X + 8, r1.Y, r1.Width - 12, r1.Height, new Vector2(0, 0.5f));
+
+        int curY = r2.Y;
+
+        curY += (int)DrawTextAt($"map: {s.MapName}",
+            r2.X + 4, curY, r2.Width - 12, r2.Height, new Vector2(0, 0), _g._smallFont, new Color(150, 150, 255)).Y;
+
+        curY += (int)DrawTextAt($"date: {s.SavedAt.ToLocalTime():yyyy-MM-dd HH:mm}",
+            r2.X + 4, curY, r2.Width - 12, r2.Height, new Vector2(0, 0), _g._smallFont, new Color(250, 250, 250)).Y;
+
+        curY += (int)DrawTextAt($"version: {s.Version}",
+            r2.X + 4, curY, r2.Width - 12, r2.Height, new Vector2(0, 0), _g._smallFont, new Color(180, 180, 180)).Y;
     }
 
     // Placeholder save-preview card: necromancer-form portrait on top, the first
@@ -1012,34 +1119,51 @@ partial class GameRenderer
         Necroking.Render.DrawUtils.DrawRectBorder(_g._spriteBatch, _g._pixel, dest, new Color(100, 100, 180));
     }
 
-    // Fully-resolved load-menu layout for one frame: one rect per visible save row
-    // plus the back button. Drawing (DrawLoadMenu) and hit-testing (Game1's
+    // Fully-resolved load-menu layout for one frame: one rect per save row
+    // (positioned for the current scroll offset) plus the back button and the
+    // scrollbar geometry. Drawing (DrawLoadMenu) and hit-testing (Game1's
     // LoadMenu update block) both consume this, so they can't drift apart.
     internal struct LoadMenuView
     {
-        public Rectangle[] RowRects; // aligned with the first Shown entries of _loadMenuSaves
-        public int Shown;            // rows laid out (list may be longer)
+        public Rectangle[] RowRects; // aligned with _loadMenuSaves, scroll applied
         public Rectangle BackRect;
+        public int RowStride;        // row height + gap, for wheel scrolling
+        // Scrollbar column (pixel units, feeds the shared Necroking.UI.VScrollbar).
+        public int ScrollX;
+        public int ScrollY;
+        public int ScrollViewH;
+        public float ScrollContentH;
+
+        /// <summary>Clamp a pixel scroll offset to the valid range for this layout.</summary>
+        public float ClampScroll(float scrollPx) => Math.Clamp(scrollPx, 0f, Math.Max(0f, ScrollContentH - ScrollViewH));
     }
 
-    internal LoadMenuView BuildLoadMenuLayout(int screenW, int screenH, int saveCount)
+    internal LoadMenuView BuildLoadMenuLayout(int screenW, int screenH, int saveCount, float scrollPx)
     {
         int btnW = SaveGameWindow.PanelW, btnH = SaveGameWindow.RowH, btnGap = 10;
+        int stride = btnH + btnGap;
         int titleY = screenH / 20 + 20;
         int listY = titleY + 70;
         // Leave room for the back button + margin at the bottom.
-        int maxRows = System.Math.Max(1, (screenH - 80 - listY) / (btnH + btnGap));
-        int shown = System.Math.Min(saveCount, maxRows);
+        int maxRows = Math.Max(1, (screenH - 80 - listY) / stride);
+        int visRows = Math.Min(saveCount, maxRows);
+        int viewH = visRows * stride;
+        int scroll = (int)Math.Round(scrollPx);
 
-        var view = new LoadMenuView { Shown = shown, RowRects = new Rectangle[shown] };
-        int x = (screenW - btnW) / 2;
-        int y = listY;
-        for (int i = 0; i < shown; i++)
+        var view = new LoadMenuView
         {
-            view.RowRects[i] = new Rectangle(x, y, btnW, btnH);
-            y += btnH + btnGap;
-        }
-        view.BackRect = new Rectangle((screenW - 200) / 2, y + 14, 200, 45);
+            RowRects = new Rectangle[saveCount],
+            RowStride = stride,
+            ScrollY = listY,
+            ScrollViewH = viewH,
+            ScrollContentH = saveCount * stride,
+        };
+        int x = (screenW - btnW) / 2;
+        view.ScrollX = x + btnW + 8;
+        for (int i = 0; i < saveCount; i++)
+            view.RowRects[i] = new Rectangle(x, listY + i * stride - scroll, btnW, btnH);
+        // Back button fixed just below the visible window so it never scrolls away.
+        view.BackRect = new Rectangle((screenW - 200) / 2, listY + viewH + 14, 200, 45);
         return view;
     }
 
@@ -1057,7 +1181,7 @@ partial class GameRenderer
         }
 
         var saves = _g._loadMenuSaves;
-        var view = BuildLoadMenuLayout(screenW, screenH, saves.Count);
+        var view = BuildLoadMenuLayout(screenW, screenH, saves.Count, _g._loadMenuScrollPx);
 
         if (saves.Count == 0 && _g._font != null)
         {
@@ -1066,19 +1190,36 @@ partial class GameRenderer
             DrawText(_g._font, none, new Vector2((int)(screenW / 2f - size.X / 2f), titleY + 80), new Color(140, 140, 160));
         }
 
-        for (int i = 0; i < view.Shown; i++)
+        if (saves.Count > 0)
         {
-            var s = saves[i];
-            var r = view.RowRects[i];
-            DrawMenuButtonAt("", r.X, r.Y, r.Width, r.Height);
-            DrawSavePreviewCard(new Rectangle(r.X + 4, r.Y + 4, SaveGameWindow.CardW, SaveGameWindow.RowH - 8), s.FormId, s.SpellBar, s.Inventory);
-            DrawMenuButtonTextAt($"{s.Name}    {s.MapName}    {s.SavedAt.ToLocalTime():yyyy-MM-dd HH:mm}",
-               r.X + SaveGameWindow.CardW + 2, r.Y, r.Width - (SaveGameWindow.CardW + 2), r.Height);
+            // Clip the rows to their scroll window so partially-scrolled rows are
+            // cut at the edges (smooth sub-row scroll) rather than spilling into
+            // the title / back-button gaps — same mechanism as the scenario grid.
+            var device = _g.Scope.GraphicsDevice;
+            var prevScissor = device.ScissorRectangle;
+            device.ScissorRectangle = new Rectangle(0, view.ScrollY, screenW, view.ScrollViewH);
+            _g.Scope.PushMaterial(Materials.HudScissor);
+
+            for (int i = 0; i < view.RowRects.Length; i++)
+            {
+                var r = view.RowRects[i];
+                if (r.Bottom <= view.ScrollY || r.Y >= view.ScrollY + view.ScrollViewH) continue;
+                var s = saves[i];
+                DrawMenuButtonAt("", r.X, r.Y, r.Width, r.Height);
+                DrawSavePreviewCard(new Rectangle(r.X + 4, r.Y + 4, SaveGameWindow.CardW, SaveGameWindow.RowH - 8), s.FormId, s.SpellBar, s.Inventory);
+
+                DrawSaveGameText(new(r.X + SaveGameWindow.CardW + 2, r.Y, r.Width - (SaveGameWindow.CardW + 2), r.Height), s);
+            }
+
+            _g.Scope.PopMaterial();
+            device.ScissorRectangle = prevScissor;
         }
-        if (saves.Count > view.Shown && _g._font != null)
-            DrawText(_g._font, $"(+{saves.Count - view.Shown} more)", new Vector2(view.BackRect.X, view.BackRect.Y - 22), new Color(140, 140, 160));
 
         DrawMenuButtonAt("< Back", view.BackRect.X, view.BackRect.Y, view.BackRect.Width, view.BackRect.Height);
+
+        // Scrollbar — canonical look, draw only; input lives in Game1's LoadMenu block.
+        DrawMenuScrollbar(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH,
+            _g._loadMenuScrollPx, _g._loadMenuScrollDragging);
     }
 
     private void DrawScenarioList(int screenW, int screenH)
@@ -1131,21 +1272,22 @@ partial class GameRenderer
 
         // Scrollbar — same canonical look/behaviour as the editor panels (shared
         // Necroking.UI.VScrollbar geometry). Draw only; input lives in Game1.
-        DrawScenarioScrollbar(view);
+        DrawMenuScrollbar(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH,
+            _g._scenarioScrollPx, _g._scenarioScrollDragging);
     }
 
-    // Draws the scenario-menu scrollbar using the shared VScrollbar geometry. The
+    // Draws a main-menu-family scrollbar using the shared VScrollbar geometry. The
     // thumb goes "hot" while hovered or being dragged (drag state lives on Game1).
-    private void DrawScenarioScrollbar(ScenarioMenuView view)
+    private void DrawMenuScrollbar(int x, int y, int viewH, float contentH, float scrollPx, bool dragging)
     {
-        if (Necroking.UI.VScrollbar.Fits(view.ScrollViewH, view.ScrollContentH)) return;
+        if (Necroking.UI.VScrollbar.Fits(viewH, contentH)) return;
 
-        var track = Necroking.UI.VScrollbar.TrackRect(view.ScrollX, view.ScrollY, view.ScrollViewH);
-        var thumb = Necroking.UI.VScrollbar.ThumbRect(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH, _g._scenarioScrollPx);
+        var track = Necroking.UI.VScrollbar.TrackRect(x, y, viewH);
+        var thumb = Necroking.UI.VScrollbar.ThumbRect(x, y, viewH, contentH, scrollPx);
 
         int mx = (int)_g._input.MousePos.X, my = (int)_g._input.MousePos.Y;
         bool overThumb = thumb.Contains(mx, my);
-        bool hot = _g._scenarioScrollDragging || overThumb;
+        bool hot = dragging || overThumb;
 
         _g.Scope.Draw(_g._pixel, track, Necroking.UI.VScrollbar.TrackColor);
         _g.Scope.Draw(_g._pixel, thumb, hot ? Necroking.UI.VScrollbar.ThumbHotColor : Necroking.UI.VScrollbar.ThumbColor);
@@ -1278,45 +1420,39 @@ partial class GameRenderer
     }
 
     // Draws a menu button at an absolute position (grid-friendly; no advancing cursor).
-    private void DrawMenuButtonAt(string text, int x, int y, int w, int h)
+    private void DrawMenuButtonAt(string text, int x, int y, int w, int h, bool interactable = true)
     {
         int mx = (int)_g._input.MousePos.X, my = (int)_g._input.MousePos.Y;
         bool hover = mx >= x && mx < x + w && my >= y && my < y + h;
         Color bg = hover ? new Color(90, 60, 120, 240) : new Color(60, 40, 80, 220);
-        _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, h), bg);
-        _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, 2), new Color(220, 180, 100, hover ? 255 : 120));
-        _g.Scope.Draw(_g._pixel, new Rectangle(x, y + h - 2, w, 2), new Color(220, 180, 100, hover ? 255 : 60));
-        DrawMenuButtonTextAt(text, x, y, w, h);
+        _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, h), interactable ? bg : new Color(108, 88, 128));
+        _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, 2),
+            interactable ? new Color(220, 180, 100, hover ? 255 : 120) : new Color(180, 140, 100, 120));
+        _g.Scope.Draw(_g._pixel, new Rectangle(x, y + h - 2, w, 2),
+            interactable ? new Color(220, 180, 100, hover ? 255 : 60) : new Color(180, 140, 100, 60));
+        DrawMenuButtonTextAt(text, x, y, w, h, color: interactable ? null : new Color(192, 192, 192));
     }
 
-    private void DrawMenuButtonTextAt(string text, int x, int y, int w, int h) {
+    private Vector2 DrawTextAt(string text, int x, int y, int w, int h, Vector2 pivot, SpriteFont font, Color color)
+    {
+        var textSize = font.MeasureString(text);
+        DrawText(font, text,
+            new Vector2((int)(x + (w - textSize.X) * pivot.X), (int)(y + (h - textSize.Y) * pivot.Y)),
+            color, 1);
+        return textSize;
+    }
+
+    private void DrawMenuButtonTextAt(string text, int x, int y, int w, int h, Vector2? pivot=null, Color? color=null) {
        if (_g._font != null)
        {
+           var p = pivot ?? new Vector2(0.5f, 0.5f);
           // Shrink overly long scenario names to fit inside the narrower grid cell.
           var textSize = _g._font.MeasureString(text);
           float scale = textSize.X > w - 12 ? (w - 12) / textSize.X : 1f;
           DrawText(_g._font, text,
-             new Vector2((int)(x + w / 2f - textSize.X * scale / 2f), (int)(y + (h - textSize.Y * scale) / 2f)),
-             new Color(255, 245, 220), scale);
+             new Vector2((int)(x + (w - textSize.X * scale) * p.X), (int)(y + (h - textSize.Y * scale) * p.Y)),
+             color ?? new Color(255, 245, 220), scale);
        }
-    }
-
-    private void DrawMenuButton(string text, int x, ref int y, int w, int h, int gap)
-    {
-        int mx = (int)_g._input.MousePos.X, my = (int)_g._input.MousePos.Y;
-        bool hover = mx >= x && mx < x + w && my >= y && my < y + h;
-        Color bg = hover ? new Color(90, 60, 120, 240) : new Color(60, 40, 80, 220);
-        _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, h), bg);
-        _g.Scope.Draw(_g._pixel, new Rectangle(x, y, w, 2), new Color(220, 180, 100, hover ? 255 : 120));
-        _g.Scope.Draw(_g._pixel, new Rectangle(x, y + h - 2, w, 2), new Color(220, 180, 100, hover ? 255 : 60));
-
-        if (_g._font != null)
-        {
-            var textSize = _g._font.MeasureString(text);
-            DrawText(_g._font, text, new Vector2((int)(x + w / 2f - textSize.X / 2f), (int)(y + (h - textSize.Y) / 2f)),
-                new Color(255, 245, 220));
-        }
-        y += h + gap;
     }
 
     internal void DrawGameOver(int screenW, int screenH)

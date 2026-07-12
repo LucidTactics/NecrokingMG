@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
+using Necroking.Lib;
 using Necroking.Movement;
-using Necroking.Spatial;
 
 namespace Necroking.GameSystems;
 

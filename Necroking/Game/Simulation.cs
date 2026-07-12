@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Game;
+using Necroking.Lib;
 using Necroking.Movement;
-using Necroking.Spatial;
 using Necroking.World;
 
 namespace Necroking.GameSystems;
@@ -816,13 +816,19 @@ public class Simulation
                 // kill tally (monster_kill / human_kill), exactly like a melee blow.
                 int casterIdx = UnitUtil.ResolveUnitIndex(_units, hit.OwnerID);
 
-                // Plain arrows resolve Dominions-style (dodge roll + hit-location
-                // armor); spell projectiles auto-hit but run the standard spell
-                // pipeline (ApplySpellDamage: MR-gate DRN roll, then an opposed
-                // damage-vs-protection roll honoring the spell's AN flag).
-                if (hit.ProjectileType == ProjectileType.RegularHit
-                    && string.IsNullOrEmpty(hit.SpellID) && hit.Precision > 0)
-                    ResolveArrowHit(hit, casterIdx);
+                // Precision projectiles (plain arrows AND aimed spell projectiles)
+                // resolve Dominions-style — dodge roll + hit-location armor,
+                // honoring the spell's damage flags. Non-precision spell
+                // projectiles auto-hit and run the standard spell pipeline
+                // (ApplySpellDamage: MR-gate DRN roll, then an opposed
+                // damage-vs-protection roll honoring the spell's AN/AP flags).
+                if (hit.ProjectileType == ProjectileType.RegularHit && hit.Precision > 0)
+                {
+                    DamageFlags flags = default;
+                    if (spellDef != null) flags |= SpellEffectSystem.SpellDamageFlags(spellDef);
+
+                    ResolveArrowHit(hit, casterIdx, flags);
+                }
                 else if (spellDef != null)
                 {
                     // ApplySpellDamage doesn't fill a roll breakdown — log a NoteOnly
@@ -2522,6 +2528,10 @@ public class Simulation
             spawnHeight: _units[attackerIdx].EffectSpawnHeight);
     }
 
+    /// NOTE: Actual dominions arrow to hit calc. Size points is 3 for lone human, 10 at most.
+    /// Attacker: DRN + (Size points in the square)/2 +2 if magic weapon
+    /// Defender: DRN + (shield parry value x2) – (Fatigue / 20)
+
     /// <summary>
     /// Dominions-style ranged hit resolution (ported from the C++ resolveRangedAttack):
     /// an arrow that physically reaches its target can still be dodged/parried — opposed
@@ -2531,7 +2541,7 @@ public class Simulation
     /// flat shots rarely) + natural protection. Arrows count as piercing (15% armor
     /// reduction), and damage is weapon-only — no Strength behind a bowshot.
     /// </summary>
-    private void ResolveArrowHit(ProjectileHit hit, int attackerIdx)
+    private void ResolveArrowHit(ProjectileHit hit, int attackerIdx, DamageFlags flags)
     {
         int defenderIdx = hit.UnitIdx;
         var defStats = _units[defenderIdx].Stats;
@@ -2543,11 +2553,12 @@ public class Simulation
         // damage/prot rolls below keep each unit's own Drn tier. Roll order preserved
         // (shared RNG in RollDRN): attack, defense, then — on a hit — protection and
         // damage. Split out so each roll's DRN component can be recorded in the log.
-        int harassment = _units[defenderIdx].Harassment;
         int atkDrnRoll = UnitUtil.RollDRN(4);
-        int defBase = Math.Max(defStats.Defense / 2 - harassment, 0) + defStats.ShieldParry * 2;
+        int defShield = defStats.ShieldParry * 2;
+        int defBase = defShield;
         int defDrnRoll = UnitUtil.RollDRN(4);
-        int atkRoll = hit.Precision + atkDrnRoll;
+        int attackBase = (flags.HasFlag(DamageFlags.MagicWeapon) ? 2 : 0) + 2;
+        int atkRoll = attackBase + atkDrnRoll;
         int defRoll = defBase + defDrnRoll;
 
         // Ranged impacts reuse the melee combat-log schema so they appear in the same
@@ -2561,18 +2572,26 @@ public class Simulation
             AttackerFaction = attackerIdx >= 0 && attackerIdx < _units.Count ? FactionChar(attackerIdx) : '?',
             DefenderFaction = FactionChar(defenderIdx),
             WeaponName = hit.WeaponName,
-            AttackBase = hit.Precision,
+            AttackBase = attackBase,
             AttackDRN = atkDrnRoll,
             DefenseBase = defBase,
             DefenseDRN = defDrnRoll,
-            HarassmentPenalty = harassment,
+            DamageFlags = flags,
         };
 
         if (atkRoll < defRoll)
         {
-            logEntry.Outcome = CombatLogOutcome.Miss;
-            _combatLog.AddEntry(logEntry);
-            return;
+            if (atkRoll + defShield < defRoll)
+            {
+                logEntry.Outcome = CombatLogOutcome.Miss;
+                _combatLog.AddEntry(logEntry);
+                return;
+            }
+            logEntry.Outcome = CombatLogOutcome.Blocked;
+        }
+        else
+        {
+            logEntry.Outcome = CombatLogOutcome.Hit;
         }
 
         // Arrows count as piercing: 15% off armor AND toughness. Armor + prot roll
@@ -2580,6 +2599,10 @@ public class Simulation
         int armorProt = hit.HitLocation == HitLocation.Head
             ? defStats.Armor.HeadProtection : defStats.Armor.BodyProtection;
         float protStat = armorProt * 0.85f;
+        if (logEntry.Outcome == CombatLogOutcome.Blocked)
+        {
+            protStat += defStats.ShieldProtection;
+        }
         float toughness = BuffSystem.GetModifiedStat(_units, defenderIdx,
             BuffStat.Toughness, defStats.Toughness) * 0.85f;
         int protDrnRoll = UnitUtil.RollDRN(defStats.Drn);
@@ -2589,7 +2612,6 @@ public class Simulation
         int netDmg = DamageSystem.MitigateByToughness(postArmor, toughness);
         int toughnessMit = Math.Max(0, postArmor) - netDmg;
 
-        logEntry.Outcome = CombatLogOutcome.Hit;
         logEntry.HitLoc = hit.HitLocation;
         logEntry.HitLocationName = hit.HitLocation.ToString();
         logEntry.DamageBase = hit.Damage;
