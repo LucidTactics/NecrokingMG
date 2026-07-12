@@ -688,7 +688,7 @@ partial class GameRenderer
             MenuState.UIEditor    => 1 << HUDRenderer.EditorUi,
             _ => 0,
         };
-        if (_g._showDebugPanel) m |= 1 << HUDRenderer.EditorDebug;
+        if (_g._debugPanel.IsVisible) m |= 1 << HUDRenderer.EditorDebug;
         return m;
     }
 

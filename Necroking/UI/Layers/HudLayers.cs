@@ -202,31 +202,31 @@ public sealed class DebugSettingsPanelLayer : UILayer
 
     public override string Id => "hud.debug_panel";
     public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { }
-    public override bool Visible => _g._showDebugPanel && _g.HudVisible && _g._menuState == MenuState.None;
+    public override bool Visible => _g._debugPanel.IsVisible && _g.HudVisible && _g._menuState == MenuState.None;
 
     public override bool ContainsMouse(int mx, int my, in UICtx ctx)
-        => _g._gameRenderer.DebugPanelContains(mx, my);
+        => _g._debugPanel.ContainsMouse(mx, my);
 
     protected override void OnPointer(InputState input, in UICtx ctx)
     {
         if (!input.LeftPressed) return;
-        _g._gameRenderer.HandleDebugPanelClick((int)input.MousePos.X, (int)input.MousePos.Y);
+        _g._debugPanel.HandleClick((int)input.MousePos.X, (int)input.MousePos.Y);
     }
 
-    public override bool VisibleForDraw => _g._showDebugPanel && _g.ShowUIForDraw && _g._menuState == MenuState.None;
+    public override bool VisibleForDraw => _g._debugPanel.IsVisible && _g.ShowUIForDraw && _g._menuState == MenuState.None;
 
     public override void Draw(in UICtx ctx)
     {
         var input = _g._input;
         // Dismiss an open dropdown when a click lands outside the panel (this
         // layer only gets input while hovered, so close-on-outside lives here).
-        _g._gameRenderer.MaybeCloseDebugPanel((int)input.MousePos.X, (int)input.MousePos.Y,
+        _g._debugPanel.MaybeCloseOnOutsideClick((int)input.MousePos.X, (int)input.MousePos.Y,
             input.LeftPressed);
 
         // Hover highlights only when this layer owns the cursor.
         int mx = IsHovered ? (int)input.MousePos.X : -10000;
         int my = IsHovered ? (int)input.MousePos.Y : -10000;
-        _g._gameRenderer.DrawDebugSettingsPanel(mx, my);
+        _g._debugPanel.Draw(mx, my);
     }
 }
 

@@ -413,6 +413,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _graveRosterUI.Init(_spriteBatch, _pixel, _widgetRenderer, _workerSystem);
         _jobBoardUI.Init(_spriteBatch, _pixel, _widgetRenderer, _workerSystem);
         _logPanel.Init(_spriteBatch, _pixel, _widgetRenderer, this);
+        _debugPanel.Init(this);
         _unitInfoPanel.Init(_widgetRenderer, _gameData);
         _grimoireOverlay.Init(_widgetRenderer, _gameData,
             spell => SpellCaster.HasSpellRequirements(spell, _gameData, _sim.UnitsMut, FindNecromancer())
@@ -843,10 +844,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // Wind debug (F6): shows gust heatmap + direction arrow
     internal bool _windDebug;
 
-    // Left-side debug settings panel visibility — toggled by the "Debug" button
-    // in the top-right editor-launcher row. Off by default (opt-in dev tool).
-    internal bool _showDebugPanel;
-
     // Scenario state
     internal ScenarioBase? _activeScenario;
 
@@ -917,6 +914,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal readonly UI.GraveRosterUI _graveRosterUI = new();
     internal readonly UI.JobBoardUI _jobBoardUI = new();
     internal readonly UI.LogPanel _logPanel = new();
+    internal readonly UI.DebugSettingsPanel _debugPanel = new();
     // (ForagableWiggleRange moved to GameRenderer.)
 
     // DamageNumber and PendingProjectileGroup moved to GameSystems.SpellEffectSystem
@@ -3423,7 +3421,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         }
         // --- Slash? ---
         if (!anyTextInputActive && _input.WasKeyPressed(Keys.OemQuestion))
-            _showDebugPanel = !_showDebugPanel;
+            _debugPanel.Toggle();
 
         // Central UI hit-rect pass: catalogue every active UI region (popup
         // panels, HUD buttons/bars, toasts) and derive MouseOverUI from it in one
@@ -4474,7 +4472,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 break;
             case HUDRenderer.EditorDebug:
                 // Not an editor — just flips the left-side debug settings panel.
-                _showDebugPanel = !_showDebugPanel;
+                _debugPanel.Toggle();
                 break;
         }
     }
