@@ -910,7 +910,7 @@ partial class GameRenderer
         // Game1.cs main-menu click block — keep in lockstep!)
         int btnW = 320, btnH = 55, btnGap = 18;
         int menuX = screenW / 2 - btnW / 2;
-        int menuY = screenH / 2 - 20;
+        int menuY = screenH / 2 - 20 - btnH;
 
         DrawMenuButton(_g._loadMenuSaves.Count > 0 ? $"Continue {_g._loadMenuSaves[0].Name}" : "Continue", menuX,
             ref menuY, btnW, btnH, btnGap, interactable: _g._loadMenuSaves.Count > 0);
@@ -921,6 +921,8 @@ partial class GameRenderer
         DrawMenuButton("Play Test Map", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Scenarios", menuX, ref menuY, btnW, btnH, btnGap);
         DrawMenuButton("Load Game", menuX, ref menuY, btnW, btnH, btnGap);
+        // Extra gap.
+        menuY += btnGap * 2;
         DrawMenuButton("Quit", menuX, ref menuY, btnW, btnH, btnGap);
 
         // Version info

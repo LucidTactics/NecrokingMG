@@ -3023,7 +3023,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 int screenH2 = GraphicsDevice.Viewport.Height;
                 int btnW = 320, btnH = 55, btnGap = 18;
                 int menuX = screenW2 / 2 - btnW / 2;
-                int menuY = screenH2 / 2 - 20;
+                int menuY = screenH2 / 2 - 20 - btnH;
 
                 // Continue button
                 if (mouse.X >= menuX && mouse.X < menuX + btnW && mouse.Y >= menuY && mouse.Y < menuY + btnH)
@@ -3083,7 +3083,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     base.Update(gameTime);
                     return;
                 }
-                menuY += btnH + btnGap;
+                // Extra gap.
+                menuY += btnH + btnGap  + btnGap * 2;
 
                 // Quit button
                 if (mouse.X >= menuX && mouse.X < menuX + btnW && mouse.Y >= menuY && mouse.Y < menuY + btnH)
