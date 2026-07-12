@@ -999,6 +999,7 @@ partial class GameRenderer
             var cell = new Rectangle(skillBoxStart + i * cellW, rowY, cellW, iconRowH);
             _g.Scope.Draw(_g._pixel, cell, new Color(30, 30, 45, 230));
             _g.Scope.Draw(_g._pixel, new Rectangle(cell.X, cell.Y, 1, cell.Height), new Color(70, 70, 100));
+            _g.Scope.Draw(_g._pixel, new Rectangle(cell.X+1, cell.Y, 32, 1), new Color(70, 70, 100));
             string spellId = i < spellIds.Count ? spellIds[i] : "";
             string icon = string.IsNullOrEmpty(spellId) ? "" : spells.Get(spellId)?.Icon ?? "";
             // Not _widgetRenderer.DrawIcon — that renderer initializes lazily on
