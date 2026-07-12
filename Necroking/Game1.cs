@@ -2939,6 +2939,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _groundSystem.StampTerrainOnto(_sim.Grid);
             _envSystem.OnCollisionsDirty?.Invoke();
         }
+
+        if (_menuState == MenuState.MainMenu)
+        {
+            if (_prevMenuState != MenuState.MainMenu) _loadMenuSaves = ListSaveGames();
+        }
         _prevMenuState = _menuState;
 
         // Clock phase 1: derive this frame's time domains (see GameClock docs).
