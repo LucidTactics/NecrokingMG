@@ -701,6 +701,7 @@ partial class GameRenderer
         if (_g._grimoireOverlay.IsVisible) m |= 1 << HUDRenderer.MenuGrimoire;
         if (_g._skillBookOverlay.IsVisible) m |= 1 << HUDRenderer.MenuSkills;
         if (_g._characterStatsUI.IsVisible) m |= 1 << HUDRenderer.MenuCharacter;
+        if (_g._logPanel.IsVisible)         m |= 1 << HUDRenderer.MenuLog;
         return m;
     }
 
@@ -733,6 +734,10 @@ partial class GameRenderer
             case HUDRenderer.MenuCharacter:
                 if (!_g._characterStatsUI.IsVisible) _g.CloseSameSidePanels(Game1.PanelSide.Left, _g._characterStatsUI);
                 _g._characterStatsUI.Toggle();
+                break;
+            case HUDRenderer.MenuLog:
+                if (!_g._logPanel.IsVisible) _g.CloseSameSidePanels(Game1.PanelSide.Left, _g._logPanel);
+                _g._logPanel.Toggle(screenW, screenH);
                 break;
         }
     }

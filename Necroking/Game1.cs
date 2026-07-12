@@ -412,6 +412,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _tableMenuUI.DrawUnitIconCallback = (defId, rect) => _gameRenderer.DrawUnitIdleSprite(defId, rect);
         _graveRosterUI.Init(_spriteBatch, _pixel, _widgetRenderer, _workerSystem);
         _jobBoardUI.Init(_spriteBatch, _pixel, _widgetRenderer, _workerSystem);
+        _logPanel.Init(_spriteBatch, _pixel, _widgetRenderer, this);
         _unitInfoPanel.Init(_widgetRenderer, _gameData);
         _grimoireOverlay.Init(_widgetRenderer, _gameData,
             spell => SpellCaster.HasSpellRequirements(spell, _gameData, _sim.UnitsMut, FindNecromancer())
@@ -448,6 +449,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (!ReferenceEquals(opening, _grimoireOverlay) && _grimoireOverlay.IsVisible) _grimoireOverlay.Hide();
             if (!ReferenceEquals(opening, _characterStatsUI) && _characterStatsUI.IsVisible) _characterStatsUI.Close();
             if (!ReferenceEquals(opening, _jobBoardUI) && _jobBoardUI.IsVisible) _jobBoardUI.Close();
+            if (!ReferenceEquals(opening, _logPanel) && _logPanel.IsVisible) _logPanel.Close();
         }
         else
         {
@@ -910,6 +912,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private readonly Game.Jobs.WorkerSystem _workerSystem = new();
     internal readonly UI.GraveRosterUI _graveRosterUI = new();
     internal readonly UI.JobBoardUI _jobBoardUI = new();
+    internal readonly UI.LogPanel _logPanel = new();
     // (ForagableWiggleRange moved to GameRenderer.)
 
     // DamageNumber and PendingProjectileGroup moved to GameSystems.SpellEffectSystem
@@ -1018,6 +1021,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             (InputState inp, in Necroking.UI.UICtx c) => _craftingMenu.Update(inp, c.ScreenW, c.ScreenH, _clock.VisualDt))
             .WithDraw((in Necroking.UI.UICtx c) => _craftingMenu.Draw(),
                 () => ShowUIForDraw && _craftingMenu.IsVisible));
+        _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _logPanel,
+            Necroking.UI.UIBand.Panels, "popup.LogPanel",
+            () => _logPanel.IsVisible,
+            (InputState inp, in Necroking.UI.UICtx c) => _logPanel.Update(inp, c.ScreenW, c.ScreenH),
+            () => _logPanel.IsDragging)
+            .WithDraw((in Necroking.UI.UICtx c) => _logPanel.Draw(c.ScreenW, c.ScreenH),
+                () => ShowUIForDraw && _logPanel.IsVisible));
 
         // Blocking full overlay (Overlay band), then the HUD rows that sit
         // ABOVE it (HudTop band) — the declarative form of "menu buttons work
