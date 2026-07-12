@@ -44,7 +44,23 @@ What lives here: `SaveGameWindow` — pause-menu → Save submenu (existing-save
 field + confirm button). Pure UI over the shared `EditorBase`; file work is injected from
 `Game1.Saves.cs` via `SetCallbacks`. `OnOpen(formId, spells)` seeds the preview data.
 Follows the SettingsWindow/MultiplayerWindow `WantsClose`-polled pattern.
-Look/edit here when: the save dialog's list/name-field/confirm-button behaves wrong.
+`Draw(screenW, screenH)` renders everything: preview card, the scrollable
+`save_list` panel of existing-save rows (each an `EditorBase.DrawButton`), the
+`save_name` text field, and the bottom `New Save`/`Overwrite Save` + `Cancel`
+buttons anchored at `btnY = panelY + PanelH - 42`. **Selection tracking:** there is
+no selected-index — clicking a row just copies `_name = s.Name` (highlight = row
+whose `Name == _name`); the current target save IS `_sanitize(_name)`. File work is
+injected as `Func<>` callbacks via `SetCallbacks` (wired in `Game1.cs` ~line 2684:
+`SetCallbacks(ListSaveGames, UniqueSaveName, SaveFileExists, WriteSaveGame, SanitizeSaveName)`).
+**No delete-save capability exists** — no `File.Delete` helper in `Game1.Saves.cs`,
+no delete callback field/button in this window. To add a "Delete selected save"
+button: add a `DeleteSaveGame(name)` method in `Game1.Saves.cs` (delete
+`SaveFilePath(name)`, then refresh via `ListSaveGames`), add a `Func<string,bool>
+_deleteSave` field + a param to `SetCallbacks`, wire it in `Game1.cs`, and draw a
+new button in `Draw` below the confirm row (e.g. its own row under `btnY`, calling
+`_deleteSave(_sanitize(_name))` then `_saves = _listSaves()`).
+Look/edit here when: the save dialog's list/name-field/confirm-button behaves wrong,
+or adding save-row actions (delete/rename).
 
 ### Related
 - `Necroking/GameRenderer.Hud.cs` — draws the load-menu rows and the save-preview cards
