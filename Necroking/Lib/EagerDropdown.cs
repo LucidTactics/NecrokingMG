@@ -66,7 +66,10 @@ public sealed class EagerDropdown
         }
 
         if (itemIndex >= 0) { _armed = true; return; }
-        if (boxKey == OpenKey) { _wantHide = true; return; }
+        // Own box: close on release — but stay armed so a drag from the box
+        // onto an item still selects on release (selection wins over hide,
+        // matching the Unity OnPointerUp-before-OnPointerClick order).
+        if (boxKey == OpenKey) { _wantHide = true; _armed = true; return; }
         if (boxKey >= 0) { OpenKey = boxKey; _armed = true; _wantHide = false; return; }
         Close(); // press inside the owner but on nothing interactive
     }
