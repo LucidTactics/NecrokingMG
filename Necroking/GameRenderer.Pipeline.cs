@@ -54,8 +54,9 @@ partial class GameRenderer
         };
         _cbFxLightning ??= (SpriteScope _, int _, int _) =>
         {
-            // Lightning bolts and drains use HDR vertex encoding — drawn in the
-            // additive HDR batch.
+            // Telegraph circles and strike flashes draw here as HDR sprites; the
+            // bolts/tendrils themselves are collected as ribbon vertices and drawn
+            // post-batch by the LightningTris pass (additive = order-independent).
             _g._lightningRenderer.SetGameTime(_g._gameTime);
             _g._lightningRenderer.Draw();
         };
@@ -246,8 +247,9 @@ partial class GameRenderer
         };
         scene.Add(_fxPass);
 
-        // God ray pass (alpha blend + HDR intensity shader) — manages its own batch
-        scene.Add(new CustomPass("GodRays", ctx => _g._lightningRenderer.DrawGodRays()));
+        // Lightning ribbons + god rays (HDR intensity triangle passes) — manage
+        // their own device state, must run after the additive sprite batch ends.
+        scene.Add(new CustomPass("LightningTris", ctx => _g._lightningRenderer.DrawTriangleEffects()));
 
         scene.Add(new CustomPass("ForagablesDamageNumbers", ctx =>
         {
