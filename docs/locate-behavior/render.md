@@ -685,6 +685,12 @@ replaces the bars in the same top-left slot — a precedent for a left-side pane
      pair for any new raw-HUD dropdown panel.
 - `HUDRenderer`'s `DropdownItemH`/`DropdownWidth`/`Dropdown*` color constants are dead
   C++-port leftovers — nothing draws them; don't take them as an existing widget.
+- **Per-option hover tooltips**: neither renderer has them built in; pair with the global
+  `Game1.Tooltips` (`UI/TooltipSystem.cs`) — request inside the option-draw loop
+  (`EditorBase.DrawDropdownOverlays` `optHovered`, or `DebugSettingsPanel.Draw`'s open-list
+  loop); the Tooltip band drains after everything so the box draws above the expanded list.
+  Note `SettingsWindow.RowTip`'s `IsDropdownOpen` guard suppresses *row* tips under an open
+  overlay — option tips inside the overlay are the exception, not that pattern.
 - Panel chrome helpers for a raw-HUD panel: `GameRenderer.Hud.cs` `DrawPanel(rect, fill,
   accent, …)`, `UI/NineSlice.cs`, and `UI/RuntimeWidgetRenderer.cs` (JSON widget defs).
 
