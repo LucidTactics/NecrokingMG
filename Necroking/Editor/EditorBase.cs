@@ -1307,14 +1307,8 @@ public class EditorBase
         bool hovered = IsHovered(hitRect);
         bool clicked = hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
 
-        DrawRect(boxRect, InputBg);
-        DrawBorder(boxRect, hovered ? InputActive : InputBorder);
-
-        if (value)
-        {
-            DrawRect(new Rectangle(x + 3, y + 5, boxSize - 6, boxSize - 6), AccentColor);
-        }
-
+        DrawUtils.DrawCheckbox(_sb, _pixel, boxRect, value, hovered,
+            InputBg, InputBorder, InputActive, AccentColor);
         DrawText(label, new Vector2(x + boxSize + 6, y + 2), TextColor);
 
         return clicked ? !value : value;

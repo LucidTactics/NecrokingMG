@@ -60,6 +60,20 @@ public static class DrawUtils
         DrawLine(batch, pixel, b, c, color, thickness);
     }
 
+    /// <summary>Draw a checkbox glyph: a bg-filled square with a border (lit when
+    /// <paramref name="hovered"/>) and an accent-filled inner square when
+    /// <paramref name="value"/> is true. The canonical boolean-toggle visual,
+    /// shared by the editor property panels (<c>EditorBase.DrawCheckbox</c>) and
+    /// the debug settings panel — callers own the label + hit-testing.</summary>
+    public static void DrawCheckbox(SpriteScope batch, Texture2D pixel, Rectangle box,
+        bool value, bool hovered, Color bg, Color border, Color borderHover, Color accent)
+    {
+        batch.Draw(pixel, box, bg);
+        DrawRectBorder(batch, pixel, box, hovered ? borderHover : border);
+        if (value)
+            batch.Draw(pixel, new Rectangle(box.X + 3, box.Y + 3, box.Width - 6, box.Height - 6), accent);
+    }
+
     /// <summary>Draw a rectangle outline. The single canonical rect-stroke — replaces
     /// ~13 per-file DrawBorder/DrawRectOutline copies. Corners are non-overlapping (drawn
     /// once each) so the stroke is correct under a translucent color as well as solid.</summary>
