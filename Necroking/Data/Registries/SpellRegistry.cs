@@ -672,8 +672,33 @@ public class SpellDef : INamedDef
     [EditorField(Label = "Glow Color", Group = "DRAIN", Order = 719, Compact = true)]
     [JsonPropertyName("drainGlowColor")] [JsonConverter(typeof(HdrColorJsonConverter))] public HdrColor DrainGlowColor { get; set; } = new(40, 120, 20, 160, 1.5f);
 
+    /// <summary>Width multiplier at the flow-source end (the target on a normal drain):
+    /// 1 = uniform beam, >1 = Pugna-style funnel, narrow at the destination.</summary>
     [EditorVisible("Category", "Drain")]
-    [EditorField(Label = "Target Effect", Group = "DRAIN", Order = 720)]
+    [EditorField(Label = "Source Width x", Group = "DRAIN", Order = 720, Step = 0.1f, Decimals = 1)]
+    [JsonPropertyName("drainSourceWidthScale")] public float DrainSourceWidthScale { get; set; } = 1.0f;
+
+    /// <summary>Cloud puffs traveling along the beam from the flow source to the
+    /// destination. 0 = off.</summary>
+    [EditorVisible("Category", "Drain")]
+    [EditorField(Label = "Clouds", Group = "DRAIN", Order = 721)]
+    [JsonPropertyName("drainCloudCount")] public int DrainCloudCount { get; set; }
+
+    [EditorVisible("Category", "Drain")]
+    [EditorField(Label = "Cloud Size", Group = "DRAIN", Order = 722, Step = 0.5f, Decimals = 1)]
+    [JsonPropertyName("drainCloudSize")] public float DrainCloudSize { get; set; } = 10.0f;
+
+    /// <summary>Cloud travel speed in beam-lengths per second.</summary>
+    [EditorVisible("Category", "Drain")]
+    [EditorField(Label = "Cloud Speed", Group = "DRAIN", Order = 723, Step = 0.05f, Decimals = 2)]
+    [JsonPropertyName("drainCloudSpeed")] public float DrainCloudSpeed { get; set; } = 0.5f;
+
+    [EditorVisible("Category", "Drain")]
+    [EditorField(Label = "Cloud Color", Group = "DRAIN", Order = 724, Compact = true)]
+    [JsonPropertyName("drainCloudColor")] [JsonConverter(typeof(HdrColorJsonConverter))] public HdrColor DrainCloudColor { get; set; } = new(200, 255, 160, 255, 3f);
+
+    [EditorVisible("Category", "Drain")]
+    [EditorField(Label = "Target Effect", Group = "DRAIN", Order = 725)]
     [JsonPropertyName("drainTargetEffect")] public FlipbookRef? DrainTargetEffect { get; set; }
 
     // ============ CLOUD ============
@@ -844,6 +869,13 @@ public class SpellDef : INamedDef
         PulseStrength = DrainPulseStrength,
         CoreColor = DrainCoreColor,
         GlowColor = DrainGlowColor,
+        // Mechanic direction sets the visual flow; the visual knob flips it from there.
+        FlowReversed = DrainReversed ^ DrainVisualReversed,
+        SourceWidthScale = DrainSourceWidthScale,
+        CloudCount = DrainCloudCount,
+        CloudSize = DrainCloudSize,
+        CloudSpeed = DrainCloudSpeed,
+        CloudColor = DrainCloudColor,
     };
 
     /// <summary>Build GodRayParams from this spell's god ray fields.</summary>

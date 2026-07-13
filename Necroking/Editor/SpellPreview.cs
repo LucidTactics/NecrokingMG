@@ -124,11 +124,12 @@ public class SpellPreview
         public LightningStyle Style;
     }
 
-    // Drain state
+    // Drain state. Caster/target order matches the in-game renderer; the flow
+    // direction (and which end is wide) lives in Visuals.FlowReversed.
     private struct PreviewDrain
     {
-        public Vector2 SourcePos;
-        public Vector2 DestPos;
+        public Vector2 CasterPos;
+        public Vector2 TargetPos;
         public float Elapsed;
         public float MaxDuration;
         public bool Alive;
@@ -393,22 +394,10 @@ public class SpellPreview
 
             case "Drain":
             {
-                Vector2 src, dst;
-                if (spell.DrainReversed)
-                {
-                    src = new Vector2(CasterX, 0);
-                    dst = new Vector2(TargetX, 0);
-                }
-                else
-                {
-                    src = new Vector2(TargetX, 0);
-                    dst = new Vector2(CasterX, 0);
-                }
-
                 _drains.Add(new PreviewDrain
                 {
-                    SourcePos = src,
-                    DestPos = dst,
+                    CasterPos = new Vector2(CasterX, 0),
+                    TargetPos = new Vector2(TargetX, 0),
                     Elapsed = 0f,
                     MaxDuration = spell.DrainMaxDuration > 0f
                         ? Math.Min(spell.DrainMaxDuration, 3f) : 2f,
@@ -547,6 +536,7 @@ public class SpellPreview
         // the game's LightningTris pass, flushed onto the scene RT before bloom.
         _strips.DrawAll();
         _godRays?.DrawAll();
+        DrawDrainClouds();
 
         // Bloom composites scene + bloom → preview RT; without bloom, already on preview RT
         if (useBloom)
@@ -830,10 +820,46 @@ public class SpellPreview
         foreach (var d in _drains)
         {
             if (!d.Alive) continue;
-            var srcScreen = WorldToScreenWithHeight(d.SourcePos.X, d.SourcePos.Y, 1.0f);
-            var dstScreen = WorldToScreenWithHeight(d.DestPos.X, d.DestPos.Y, 1.5f);
-            LightningRenderer.AddDrainTendrilStripsStatic(_strips, srcScreen, dstScreen, d.Visuals, d.Elapsed);
+            // Caster end at hand height, target end at body height — same
+            // convention as LightningRenderer.Draw's drain loop.
+            var casterScreen = WorldToScreenWithHeight(d.CasterPos.X, d.CasterPos.Y, 1.5f);
+            var targetScreen = WorldToScreenWithHeight(d.TargetPos.X, d.TargetPos.Y, 1.0f);
+            LightningRenderer.AddDrainTendrilStripsStatic(_strips, casterScreen, targetScreen, d.Visuals, d.Elapsed);
         }
+    }
+
+    /// <summary>Drain cloud puffs — alpha-blended AFTER the tendril ribbons
+    /// flush, mirroring LightningRenderer.DrawDrainClouds (the puffs occlude
+    /// the beam; additively they'd dissolve into it).</summary>
+    private void DrawDrainClouds()
+    {
+        bool any = false;
+        foreach (var d in _drains) if (d.Alive && d.Visuals.CloudCount > 0) { any = true; break; }
+        if (!any) return;
+
+        if (_hdrSpriteEffect != null)
+        {
+            _hdrSpriteEffect.Parameters["AlphaMode"]?.SetValue(1f);
+            _sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
+                effect: _hdrSpriteEffect);
+        }
+        else
+        {
+            _sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        }
+        Render.Materials.NoteAdHocBatch(); // HDR-encoded colors — no tint conversion
+
+        Flipbook? cloudFb = null;
+        _flipbooks?.TryGetValue("cloud03", out cloudFb);
+
+        foreach (var d in _drains)
+        {
+            if (!d.Alive || d.Visuals.CloudCount <= 0) continue;
+            var casterScreen = WorldToScreenWithHeight(d.CasterPos.X, d.CasterPos.Y, 1.5f);
+            var targetScreen = WorldToScreenWithHeight(d.TargetPos.X, d.TargetPos.Y, 1.0f);
+            LightningRenderer.AddDrainCloudSprites(_sb, _glowTex, cloudFb, casterScreen, targetScreen, d.Visuals, d.Elapsed);
+        }
+        _sb.End();
     }
 
     private void DrawEffects()

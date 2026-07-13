@@ -742,7 +742,7 @@
       "armorNegating": true,
       "damage": 2,
       "drainMaxDuration": 2,
-      "drainVisualReversed": true,
+      "drainArcHeight": 14,
       "drainSwayHz": 1,
       "drainCoreWidth": 3,
       "drainGlowWidth": 5.5,
@@ -762,6 +762,17 @@
         "b": 128,
         "a": 27,
         "intensity": 5.9423075
+      },
+      "drainSourceWidthScale": 3,
+      "drainCloudCount": 7,
+      "drainCloudSize": 15,
+      "drainCloudSpeed": 0.7,
+      "drainCloudColor": {
+        "r": 215,
+        "g": 255,
+        "b": 185,
+        "a": 255,
+        "intensity": 2.2
       },
       "drainTargetEffect": {
         "flipbookID": "",
@@ -966,6 +977,18 @@
       "castingBuffID": "buff_4",
       "armorNegating": true,
       "damage": 5,
+      "drainArcHeight": 14,
+      "drainSourceWidthScale": 3,
+      "drainCloudCount": 7,
+      "drainCloudSize": 15,
+      "drainCloudSpeed": 0.7,
+      "drainCloudColor": {
+        "r": 215,
+        "g": 255,
+        "b": 185,
+        "a": 255,
+        "intensity": 2.2
+      },
       "drainTargetEffect": {
         "flipbookID": "",
         "fps": -1,

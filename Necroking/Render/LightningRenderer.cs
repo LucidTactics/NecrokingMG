@@ -139,28 +139,36 @@ public class LightningRenderer
             AddBoltStrips(startSp, endSp, beam.Style, 1f, beam.Seed);
         }
 
-        // Draw active drains
+        // Draw active drains (tendrils only — the cloud puffs are alpha-blended
+        // and draw after the ribbons flush, in DrawTriangleEffects).
         foreach (var drain in _sim.Lightning.Drains)
         {
             if (!drain.Alive) continue;
-            int casterIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.CasterID);
-            if (casterIdx < 0) continue;
-
-            int targetIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.TargetID);
-            // Target died mid-channel (no live unit, no corpse anchor): skip drawing rather
-            // than falling back to Vec2.Zero, which would draw tendrils to world origin.
-            if (targetIdx < 0 && drain.TargetCorpseIdx < 0) continue;
-            Vec2 targetPos = drain.TargetCorpseIdx >= 0 ? drain.CorpsePos : Vec2.Zero;
-            if (targetIdx >= 0) targetPos = _sim.Units[targetIdx].Position;
-
-            // Same casting-anchor convention as the beam above (sprite height, no
-            // YRatio foreshortening) so the drain channels from the caster's hand.
-            var startSp = _renderer.WorldToScreenPx(_sim.Units[casterIdx].EffectSpawnPos2D,
-                _sim.Units[casterIdx].EffectSpawnHeight * _camera.Zoom, _camera);
-            var endSp = _renderer.WorldToScreen(targetPos, 1f, _camera);
-
+            if (!TryGetDrainEndpoints(drain, out var startSp, out var endSp)) continue;
             AddDrainTendrilStrips(startSp, endSp, drain.Visuals, drain.Elapsed);
         }
+    }
+
+    /// <summary>Screen-space endpoints for a drain: caster hand anchor (sprite
+    /// height convention, no YRatio foreshortening — same as the beam) and the
+    /// target unit/corpse. False when either anchor is gone (target died
+    /// mid-channel with no corpse: skip drawing rather than falling back to
+    /// Vec2.Zero, which would draw tendrils to world origin).</summary>
+    private bool TryGetDrainEndpoints(ActiveDrain drain, out Vector2 startSp, out Vector2 endSp)
+    {
+        startSp = endSp = default;
+        int casterIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.CasterID);
+        if (casterIdx < 0) return false;
+
+        int targetIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.TargetID);
+        if (targetIdx < 0 && drain.TargetCorpseIdx < 0) return false;
+        Vec2 targetPos = drain.TargetCorpseIdx >= 0 ? drain.CorpsePos : Vec2.Zero;
+        if (targetIdx >= 0) targetPos = _sim.Units[targetIdx].Position;
+
+        startSp = _renderer.WorldToScreenPx(_sim.Units[casterIdx].EffectSpawnPos2D,
+            _sim.Units[casterIdx].EffectSpawnHeight * _camera.Zoom, _camera);
+        endSp = _renderer.WorldToScreen(targetPos, 1f, _camera);
+        return true;
     }
 
     /// <summary>
@@ -172,6 +180,31 @@ public class LightningRenderer
     {
         _strips.DrawAll();
         _godRayRenderer.DrawAll();
+        DrawDrainClouds();
+    }
+
+    /// <summary>Drain cloud puffs, alpha-blended AFTER the tendril ribbons so
+    /// they read as opaque clumps riding on the beam (additive puffs just
+    /// brighten the beam and disappear into it).</summary>
+    private void DrawDrainClouds()
+    {
+        bool any = false;
+        foreach (var d in _sim.Lightning.Drains)
+            if (d.Alive && d.Visuals.CloudCount > 0) { any = true; break; }
+        if (!any) return;
+
+        Flipbook? cloudFb = null;
+        _game._flipbooks?.TryGetValue("cloud03", out cloudFb);
+
+        var mat = Materials.HdrAlpha ?? Materials.Scene;
+        mat.Begin(_spriteBatch);
+        foreach (var drain in _sim.Lightning.Drains)
+        {
+            if (!drain.Alive || drain.Visuals.CloudCount <= 0) continue;
+            if (!TryGetDrainEndpoints(drain, out var startSp, out var endSp)) continue;
+            AddDrainCloudSprites(_spriteBatch, _glowTex, cloudFb, startSp, endSp, drain.Visuals, drain.Elapsed);
+        }
+        _spriteBatch.End();
     }
     public GodRayRenderer GetGodRayRenderer() => _godRayRenderer;
 
@@ -361,9 +394,16 @@ public class LightningRenderer
     // Scratch for tendril polylines (render thread only).
     private static readonly List<Vector2> _tendrilPts = new();
 
+    /// <summary>Perpendicular displacement of the tendril path at parameter t
+    /// (arc + travelling wave). Shared by the ribbon rasterizer and the cloud
+    /// sprites so the puffs ride exactly on the beam.</summary>
+    private static float TendrilLateral(float t, float time, float arcHeight)
+        => MathF.Sin(t * MathF.PI) * arcHeight + MathF.Sin(time * 4f + t * 8f) * 5f;
+
     /// <summary>Shared tendril shape (arc + travelling wave) for the ribbon and
     /// sprite paths. Fills outPts; empty when start/end are too close.</summary>
-    private static void BuildTendrilPoints(Vector2 start, Vector2 end, float time, List<Vector2> outPts)
+    private static void BuildTendrilPoints(Vector2 start, Vector2 end, float time,
+        float arcHeight, List<Vector2> outPts)
     {
         outPts.Clear();
         var dir = end - start;
@@ -377,9 +417,7 @@ public class LightningRenderer
         {
             float t = i / (float)segments;
             var basePos = Vector2.Lerp(start, end, t);
-            float arc = MathF.Sin(t * MathF.PI) * 20f;
-            float wave = MathF.Sin(time * 4f + t * 8f) * 5f;
-            outPts.Add(basePos + perp * (arc + wave));
+            outPts.Add(basePos + perp * TendrilLateral(t, time, arcHeight));
         }
     }
 
@@ -389,7 +427,10 @@ public class LightningRenderer
     /// <summary>
     /// Collect a drain effect (multiple arcing tendrils with sway and pulse) as
     /// ribbons into a strip batch. THE single tendril rasterizer — used by the
-    /// in-game renderer and SpellPreview alike.
+    /// in-game renderer and SpellPreview alike. start = caster anchor, end =
+    /// target; flow direction and the wide/narrow ends come from v.FlowReversed
+    /// and v.SourceWidthScale (Pugna funnel: narrow at the destination, wide at
+    /// the life-source end, tendrils fanning out toward the source).
     /// </summary>
     public static void AddDrainTendrilStripsStatic(HdrStripBatch strips,
         Vector2 start, Vector2 end, DrainVisualParams v, float elapsed)
@@ -402,19 +443,107 @@ public class LightningRenderer
         var coreVerts = strips.GetBucket(MathF.Min(v.CoreColor.Intensity, HdrColor.MaxHdrIntensity));
         var glowVerts = strips.GetBucket(MathF.Min(v.GlowColor.Intensity, HdrColor.MaxHdrIntensity));
 
+        // Source end of the flow: target (end) on a normal drain. Widths scale
+        // up and the tendril fan/sway anchors there; the destination end stays
+        // narrow and fixed at its anchor.
+        float srcScale = MathF.Max(0.1f, v.SourceWidthScale);
+        float wStartScale = v.FlowReversed ? srcScale : 1f;
+        float wEndScale = v.FlowReversed ? 1f : srcScale;
+
         for (int t = 0; t < v.TendrilCount; t++)
         {
             float offset = (t - v.TendrilCount / 2f) * v.SwayAmplitude;
             float sway = MathF.Sin(elapsed * v.SwayHz * 2f * MathF.PI + t * 2f) * v.SwayAmplitude * 0.75f;
-            BuildTendrilPoints(new Vector2(start.X + offset, start.Y),
-                new Vector2(end.X + sway, end.Y), elapsed, _tendrilPts);
+            var s = start;
+            var e = end;
+            if (v.FlowReversed) s.X += offset + sway;
+            else e.X += offset + sway;
+            BuildTendrilPoints(s, e, elapsed, v.ArcHeight, _tendrilPts);
             if (_tendrilPts.Count < 2) continue;
 
             // Same fade constants as the retired sprite path (glow 120/255, core 200/255).
             PolylineStrip.Build(glowVerts, _tendrilPts, glowTint, 120f / 255f, 120f / 255f,
-                v.GlowWidth * pulse, v.GlowWidth * pulse, GlowEdgeSoft);
+                v.GlowWidth * pulse * wStartScale, v.GlowWidth * pulse * wEndScale, GlowEdgeSoft);
             PolylineStrip.Build(coreVerts, _tendrilPts, coreTint, 200f / 255f, 200f / 255f,
-                v.CoreWidth * pulse, v.CoreWidth * pulse, CoreEdgeSoft);
+                v.CoreWidth * pulse * wStartScale, v.CoreWidth * pulse * wEndScale, CoreEdgeSoft);
+        }
+    }
+
+    /// <summary>
+    /// Cloud puffs riding the drain beam from the flow-source end toward the
+    /// destination (Pugna-style). Must be called while an ALPHA-blended HDR
+    /// sprite batch is open (Materials.HdrAlpha / AlphaMode=1 — colors encoded
+    /// via ToHdrVertexAlpha), after the tendril ribbons have flushed, so the
+    /// puffs occlude the beam instead of dissolving into it additively. Shared
+    /// by the in-game renderer and SpellPreview; start = caster anchor, end =
+    /// target, same as AddDrainTendrilStripsStatic.
+    /// </summary>
+    public static void AddDrainCloudSprites(SpriteBatch sb, Texture2D glowTex, Flipbook? cloudFb,
+        Vector2 start, Vector2 end, DrainVisualParams v, float elapsed)
+    {
+        if (v.CloudCount <= 0 || v.CloudSize <= 0f) return;
+        var dir = end - start;
+        float length = dir.Length();
+        if (length < 1f) return;
+        var norm = dir / length;
+        var perp = new Vector2(-norm.Y, norm.X);
+
+        var tint = v.CloudColor.ToColor();
+        float texHalf = glowTex.Width * 0.5f;
+        var glowOrigin = new Vector2(texHalf, texHalf);
+        bool useFb = cloudFb != null && cloudFb.IsLoaded && cloudFb.Texture != null;
+
+        for (int i = 0; i < v.CloudCount; i++)
+        {
+            // Deterministic per-cloud variation (same LCG as the bolt shape code).
+            uint h = (uint)(i + 1) * 2654435761u;
+            h = h * 1103515245u + 12345u; float rPhase = (h % 1000) / 1000f;
+            h = h * 1103515245u + 12345u; float rSize = (h % 1000) / 1000f;
+            h = h * 1103515245u + 12345u; float rLat = (h % 1000) / 500f - 1f;
+
+            // Progress 0→1 from source to destination: evenly staggered, with a
+            // little random phase so the stream doesn't read as a marching column.
+            float p = (elapsed * v.CloudSpeed + i / (float)v.CloudCount + rPhase * 0.35f) % 1f;
+            // Geometric t along start→end (start = caster = destination on a normal drain).
+            float t = v.FlowReversed ? p : 1f - p;
+
+            float lateral = TendrilLateral(t, elapsed, v.ArcHeight) + rLat * v.CloudSize * 0.8f;
+            var pos = Vector2.Lerp(start, end, t) + perp * lateral;
+
+            // Fade in/out near the ends; shrink as the puff nears the narrow end.
+            float fade = Math.Clamp(MathF.Min(p, 1f - p) * 6f, 0f, 1f);
+            if (fade <= 0.01f) continue;
+            float size = v.CloudSize * (0.75f + rSize * 0.5f) * MathHelper.Lerp(1.1f, 0.65f, p);
+
+            if (useFb)
+            {
+                // Real cloud art (the death-fog sheet): a lumpy silhouette reads
+                // as an opaque puff where a radial glow just reads as blur. Each
+                // puff holds a stable random frame, slowly cycling.
+                int frame = cloudFb!.GetFrameAtNormalizedTime((elapsed / 4f + rPhase) % 1f);
+                var src = cloudFb.GetFrameRect(frame);
+                var org = new Vector2(src.Width / 2f, src.Height / 2f);
+                float scl = size * 2f / Math.Max(src.Width, 1);
+                var flip = rLat < 0f ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
+                // Stacked twice: the cloud art's own alpha is soft, and a single
+                // layer reads as haze over the bright beam — two layers give the
+                // dense "opaque puff" body.
+                var puffColor = HdrColor.ToHdrVertexAlpha(tint, fade, v.CloudColor.Intensity);
+                sb.Draw(cloudFb.Texture, pos, src, puffColor, 0f, org, scl, flip, 0f);
+                sb.Draw(cloudFb.Texture, pos, src, puffColor, 0f, org, scl * 0.85f, flip, 0f);
+            }
+            else
+            {
+                // Fallback (no flipbook in this context): soft outer puff + a
+                // dense near-opaque core from the radial glow texture.
+                sb.Draw(glowTex, pos, null,
+                    HdrColor.ToHdrVertexAlpha(tint, fade * 0.55f, v.CloudColor.Intensity),
+                    0f, glowOrigin, size / texHalf, SpriteEffects.None, 0f);
+                sb.Draw(glowTex, pos, null,
+                    HdrColor.ToHdrVertexAlpha(tint, fade,
+                        MathF.Min(v.CloudColor.Intensity * 1.25f, HdrColor.MaxHdrIntensity)),
+                    0f, glowOrigin, size * 0.5f / texHalf, SpriteEffects.None, 0f);
+            }
         }
     }
 }

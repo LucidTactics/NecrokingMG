@@ -90,6 +90,36 @@
       "description": "Click to drink. Grants 10 potion skill points.",
       "skillPointPool": "potions",
       "skillPointAmount": 10
+    },
+    {
+      "id": "potion_reanimation",
+      "displayName": "Reanimation Potion",
+      "icon": "assets/Items/Potions/ZombiePotion.png",
+      "description": "On enemy: raises as zombie on death. On friendly: coats weapons with zombie curse. On corpse: raises after 1 second."
+    },
+    {
+      "id": "potion_enlargement",
+      "displayName": "Enlargement Potion",
+      "icon": "assets/Items/Potions/FrenzyPotion.png",
+      "description": "Swells the target — larger sprite, more HP, harder hits. Effect mechanics TBD; placeholder reuses Frenzy buff for now."
+    },
+    {
+      "id": "potion_greater_reanimation",
+      "displayName": "Greater Reanimation Potion",
+      "icon": "assets/Items/Potions/ZombiePotion.png",
+      "description": "A potent draught — raises every corpse in a wide radius around the impact. Effect mechanics TBD; placeholder reuses Zombie effect for now."
+    },
+    {
+      "id": "potion_death_evolution",
+      "displayName": "Death Evolution Potion",
+      "icon": "assets/Items/Potions/ZombiePotion.png",
+      "description": "A vile dark elixir. Used exclusively to fuel metamorphosis — drink five to ascend along the path. Free to brew once the recipe is known."
+    },
+    {
+      "id": "potion_death_poison",
+      "displayName": "Death Poison",
+      "icon": "assets/Items/Potions/PoisonPotion.png",
+      "description": "A vicious tincture — stronger DOT, longer duration. Effect mechanics TBD; placeholder reuses Poison effect for now."
     }
   ]
 }

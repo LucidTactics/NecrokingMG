@@ -113,6 +113,19 @@ public class DrainVisualParams
     public float PulseStrength = 0.4f;
     public HdrColor CoreColor = new(120, 255, 80, 255, 2.5f);
     public HdrColor GlowColor = new(40, 120, 20, 160, 1.5f);
+    // Visual flow direction. false = life flows target→caster (the normal drain);
+    // true = caster→target. Resolved in SpellDef.BuildDrainVisuals from
+    // DrainReversed XOR DrainVisualReversed, so the renderer never re-derives it.
+    public bool FlowReversed;
+    // Pugna-style funnel: width multiplier at the flow-SOURCE end (the end life is
+    // pulled from — the target on a normal drain). 1 = uniform width; >1 = beam
+    // fans out toward the source and stays narrow at the destination.
+    public float SourceWidthScale = 1f;
+    // Cloud puffs traveling source→destination along the beam. Count 0 = off.
+    public int CloudCount;
+    public float CloudSize = 10f;          // puff radius, screen px
+    public float CloudSpeed = 0.5f;        // beam-lengths per second
+    public HdrColor CloudColor = new(200, 255, 160, 255, 3f);
 }
 
 public class ActiveDrain
