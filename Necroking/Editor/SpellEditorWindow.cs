@@ -121,10 +121,33 @@ public class SpellEditorWindow : EditorWindow
     // Category options (no Command/Toggle for editing)
     // Option arrays still used by buff manager popup and FlipbookRefSection
     private static readonly string[] BlendOptions = { "Alpha", "Additive" };
+    private static readonly string[] BlendTips =
+    {
+        "Standard transparent blending: the sprite\ncovers what is behind it.",
+        "Colors add to the scene, overlaps get brighter.\nBest for glows, fire, magic. Dark pixels vanish.",
+    };
     private static readonly string[] AlignOptions = { "Ground", "Upright" };
+    private static readonly string[] AlignTips =
+    {
+        "Anchored at its center on the hit point,\nlike a splat lying on the ground.",
+        "Anchored at its bottom edge on the hit point,\nstanding up like a pillar or rising burst.",
+    };
     private static readonly string[] EffectTypeOptions = { "Set", "Add", "Multiply" };
+    private static readonly string[] EffectTypeTips =
+    {
+        "Forces the stat to exactly Value, overriding\nthe base value and any Add/Multiply effects.",
+        "Adds Value to the stat (times stack count).\nNegative subtracts. Applied before Multiply.",
+        "Scales the stat by Value (per stack).\n1.5 = +50%, 0.5 = half, 2 = double.",
+    };
     private static readonly string[] StatOptions =
         { "Strength", "Attack", "Defense", "MagicResist", "Toughness", "CombatSpeed", "MaxHP", "Encumbrance" };
+    private static readonly string?[] StatTips =
+    {
+        null, null, null, null,
+        "Halves incoming damage up to its value;\nheavy hits still punch through.",
+        null, null,
+        "Burden of gear: each attack builds fatigue\nequal to it, eroding defense over a long fight.",
+    };
     private static readonly string[] IntBlendOptions = { "Alpha", "Additive" };
 
     // Layout constants
@@ -602,13 +625,15 @@ public class SpellEditorWindow : EditorWindow
 
         // Blend Mode toggle
         string oldBlend = fb.BlendMode;
-        fb.BlendMode = _ui.DrawCombo(prefix + "_blend", "Blend", fb.BlendMode, BlendOptions, x, curY, w);
+        fb.BlendMode = _ui.DrawCombo(prefix + "_blend", "Blend", fb.BlendMode, BlendOptions, x, curY, w,
+            optionTooltips: BlendTips);
         if (fb.BlendMode != oldBlend) MarkDirty();
         curY += RowH;
 
         // Alignment toggle
         string oldAlign = fb.Alignment;
-        fb.Alignment = _ui.DrawCombo(prefix + "_align", "Alignment", fb.Alignment, AlignOptions, x, curY, w);
+        fb.Alignment = _ui.DrawCombo(prefix + "_align", "Alignment", fb.Alignment, AlignOptions, x, curY, w,
+            optionTooltips: AlignTips);
         if (fb.Alignment != oldAlign) MarkDirty();
         curY += RowH;
 
@@ -1132,12 +1157,14 @@ public class SpellEditorWindow : EditorWindow
 
             // Type dropdown (no label, inline)
             string oldType = eff.Type;
-            eff.Type = _ui.DrawCombo($"bf_eff{e}_type", "", eff.Type, EffectTypeOptions, contentX, cy, 90);
+            eff.Type = _ui.DrawCombo($"bf_eff{e}_type", "", eff.Type, EffectTypeOptions, contentX, cy, 90,
+                optionTooltips: EffectTypeTips);
             if (eff.Type != oldType) MarkDirty();
 
             // Stat dropdown
             string oldStat = eff.Stat;
-            eff.Stat = _ui.DrawCombo($"bf_eff{e}_stat", "", eff.Stat, StatOptions, contentX + 94, cy, 120);
+            eff.Stat = _ui.DrawCombo($"bf_eff{e}_stat", "", eff.Stat, StatOptions, contentX + 94, cy, 120,
+                optionTooltips: StatTips);
             if (eff.Stat != oldStat) MarkDirty();
 
             // Value
@@ -1397,7 +1424,8 @@ public class SpellEditorWindow : EditorWindow
     private int DrawIntBlendMode(string prefix, int value, int x, ref int cy, int w)
     {
         string current = value == 1 ? "Additive" : "Alpha";
-        string result = _ui.DrawCombo(prefix, "Blend", current, IntBlendOptions, x, cy, w);
+        string result = _ui.DrawCombo(prefix, "Blend", current, IntBlendOptions, x, cy, w,
+            optionTooltips: BlendTips);
         cy += RowH;
         return result == "Additive" ? 1 : 0;
     }

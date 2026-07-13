@@ -350,7 +350,7 @@ public class EditorBase
         public bool ShowFilter; // whether the filter text box is shown
         public string FilterText; // current filter string
         public int HighlightIdx; // keyboard highlight index into FilteredOptions
-        public string[] Tooltips; // per-option hover tooltips, indexed like Options (null = none)
+        public string?[]? Tooltips; // per-option hover tooltips, indexed like Options (null = none)
 
         // Pre-computed item layout — single source of truth for both click and draw
         public Rectangle[] ItemRects;
@@ -1433,7 +1433,7 @@ public class EditorBase
     private static readonly Color ComboHighlight = new(70, 90, 140, 240);
 
     public string DrawCombo(string fieldId, string label, string value, string[] options,
-        int x, int y, int w, bool allowNone = false, string[] optionTooltips = null)
+        int x, int y, int w, bool allowNone = false, string?[]? optionTooltips = null)
     {
         int labelW = 120;
         DrawText(label, new Vector2(x, y + 2), TextDim);
@@ -1445,7 +1445,7 @@ public class EditorBase
 
         // Build effective option list (prepend "(none)" when allowed)
         string[] effectiveOptions;
-        string[] effectiveTooltips = optionTooltips;
+        string?[]? effectiveTooltips = optionTooltips;
         if (allowNone)
         {
             effectiveOptions = new string[options.Length + 1];
@@ -1454,7 +1454,7 @@ public class EditorBase
             if (optionTooltips != null)
             {
                 // Keep tooltip indices aligned with effectiveOptions ("(none)" gets no tip)
-                effectiveTooltips = new string[optionTooltips.Length + 1];
+                effectiveTooltips = new string?[optionTooltips.Length + 1];
                 Array.Copy(optionTooltips, 0, effectiveTooltips, 1, optionTooltips.Length);
             }
         }
@@ -1856,8 +1856,9 @@ public class EditorBase
             if (optHovered && dd.Tooltips != null)
             {
                 int oi = dd.FilteredIndices[fi]; // filtered index -> effective option index
-                if (oi < dd.Tooltips.Length && !string.IsNullOrEmpty(dd.Tooltips[oi]))
-                    Game1.Tooltips.RequestLines(dd.Tooltips[oi].Split('\n'));
+                string? tip = oi < dd.Tooltips.Length ? dd.Tooltips[oi] : null;
+                if (!string.IsNullOrEmpty(tip))
+                    Game1.Tooltips.RequestLines(tip.Split('\n'));
             }
 
             if (isHighlighted)

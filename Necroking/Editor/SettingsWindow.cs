@@ -62,8 +62,13 @@ public class SettingsWindow
     private const int PanelW = 600;
     private const int PanelH = 500;
 
-    // Shadow mode options for combo
+    // Shadow mode options for combo (+ hover tooltips, index-aligned)
     private static readonly string[] ShadowModeOptions = { "Ellipse", "Shader" };
+    private static readonly string[] ShadowModeTips =
+    {
+        "Cheap fake shadow: a soft dark blob under each\nunit. Ignores Sun Angle, Length Scale and Squash.",
+        "Projects the real sprite silhouette, skewed by\nSun Angle and Length Scale. Sharper but costlier.",
+    };
 
     public SettingsWindow(EditorBase ui)
     {
@@ -409,7 +414,8 @@ public class SettingsWindow
         string currentMode = shadow.UnitShadowMode >= 0 && shadow.UnitShadowMode < ShadowModeOptions.Length
             ? ShadowModeOptions[shadow.UnitShadowMode]
             : ShadowModeOptions[0];
-        string newMode = _ui.DrawCombo("set_shadow_mode", "Shadow Mode", currentMode, ShadowModeOptions, x, y, w);
+        string newMode = _ui.DrawCombo("set_shadow_mode", "Shadow Mode", currentMode, ShadowModeOptions, x, y, w,
+            optionTooltips: ShadowModeTips);
         int newModeIdx = Array.IndexOf(ShadowModeOptions, newMode);
         if (newModeIdx >= 0 && newModeIdx != shadow.UnitShadowMode) { shadow.UnitShadowMode = newModeIdx; MarkDirty(); }
         y += rowH;
@@ -717,16 +723,33 @@ public class SettingsWindow
         if (t.ShowHoverHighlight)
         {
             string[] shapeNames = { "Circle", "Corners", "Rectangle", "Ground Box", "Diamond Box" };
+            string[] shapeTips =
+            {
+                "Flat ring on the ground under the object\n(RTS selection-ring look).",
+                "Four L-shaped corner brackets around the\nsprite's on-screen box.",
+                "Full box outline around the sprite's\non-screen bounding box.",
+                "Corner brackets on a flat ground rectangle\nunder the object.",
+                "Iso diamond footprint on the ground, aligned\nto the world grid (fits buildings).",
+            };
             string[] styleNames = { "Thick Solid", "Thin Solid", "Thick Faint", "Thin Faint" };
+            string[] styleTips =
+            {
+                "3px line, near-full opacity.",
+                "1px line, near-full opacity.",
+                "3px line at ~45% opacity.",
+                "1px line at ~45% opacity.",
+            };
 
             void MarkerRows(string id, Func<int> get, Action<int> set)
             {
                 int v = System.Math.Clamp(get(), 0, 19);
                 int shape = v / 4, style = v % 4;
-                string ns = _ui.DrawCombo(id + "_shape", "Shape", shapeNames[shape], shapeNames, x + 12, y, w - 12);
+                string ns = _ui.DrawCombo(id + "_shape", "Shape", shapeNames[shape], shapeNames, x + 12, y, w - 12,
+                    optionTooltips: shapeTips);
                 int nsi = System.Array.IndexOf(shapeNames, ns); if (nsi < 0) nsi = shape;
                 y += rowH;
-                string nst = _ui.DrawCombo(id + "_style", "Line style", styleNames[style], styleNames, x + 12, y, w - 12);
+                string nst = _ui.DrawCombo(id + "_style", "Line style", styleNames[style], styleNames, x + 12, y, w - 12,
+                    optionTooltips: styleTips);
                 int nsti = System.Array.IndexOf(styleNames, nst); if (nsti < 0) nsti = style;
                 y += rowH;
                 int nv = nsi * 4 + nsti;

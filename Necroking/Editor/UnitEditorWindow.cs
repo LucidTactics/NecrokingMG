@@ -176,6 +176,33 @@ public class UnitEditorWindow
     private static readonly string[] AINames = Enum.GetNames<AIBehavior>();
     private static readonly string[] FactionNames = Enum.GetNames<Faction>();
 
+    // Hover tooltips for the enum combos, built by switch over Enum.GetValues so
+    // they stay index-aligned with the Enum.GetNames option arrays by construction.
+    private static readonly string?[] AITips = Array.ConvertAll(Enum.GetValues<AIBehavior>(), v => v switch
+    {
+        AIBehavior.PlayerControlled =>
+            "Marks this unit AS the player: moves on your\ninput and runs player routines. Not a normal AI.",
+        AIBehavior.AttackClosest =>
+            "Default horde brain: chases and melees the nearest\nenemy; Undead follow the necromancer's formation.",
+        AIBehavior.MoveToPoint =>
+            "Dev/scenario primitive: walks straight to its\nMoveTarget and stops. Does not fight.",
+        AIBehavior.IdleAtPoint =>
+            "Dev/scenario primitive: holds position; chases\nenemies within ~10 units, then walks back.",
+        AIBehavior.Caster =>
+            "Legacy no-op (casting moved to the CasterUnit\narchetype). Behaves like AttackClosest.",
+        _ => null,
+    });
+    private static readonly string?[] FactionTips = Array.ConvertAll(Enum.GetValues<Faction>(), v => v switch
+    {
+        Faction.Undead =>
+            "The player's faction: the necromancer and horde.\nEverything not Undead is an enemy.",
+        Faction.Human =>
+            "AI enemy faction (villagers, soldiers). Hostile to\nnon-Humans; hidden by fog of war until seen.",
+        Faction.Animal =>
+            "Wildlife (deer, wolves, rats). Hostile to other\nfactions; calm or flee behavior comes from the AI archetype.",
+        _ => null,
+    });
+
     // --- Zombie type labels (from the unit registry itself) ---
     private static readonly string[] AngleOptions = { "30", "60", "300" };
 
@@ -1802,12 +1829,14 @@ public class UnitEditorWindow
         DrawSectionHeader("Identity", x, ref curY, w);
 
         // Faction
-        string newFaction = _ui.DrawCombo("unit_faction", "Faction", def.Faction, FactionNames, x, curY, w);
+        string newFaction = _ui.DrawCombo("unit_faction", "Faction", def.Faction, FactionNames, x, curY, w,
+            optionTooltips: FactionTips);
         if (newFaction != def.Faction) { def.Faction = newFaction; _unsavedChanges = true; }
         curY += RowH;
 
         // AI
-        string newAI = _ui.DrawCombo("unit_ai", "AI", def.AI, AINames, x, curY, w);
+        string newAI = _ui.DrawCombo("unit_ai", "AI", def.AI, AINames, x, curY, w,
+            optionTooltips: AITips);
         if (newAI != def.AI) { def.AI = newAI; _unsavedChanges = true; }
         curY += RowH;
 
@@ -2924,8 +2953,21 @@ public class UnitEditorWindow
 
         // Archetype dropdown — at most one per weapon (unlike bonuses).
         string[] archOptions = Enum.GetNames<WeaponArchetype>();
+        string?[] archTips = Array.ConvertAll(Enum.GetValues<WeaponArchetype>(), a => a switch
+        {
+            WeaponArchetype.None =>
+                "Default single-target melee swing on the\nweapon's cooldown.",
+            WeaponArchetype.Pounce =>
+                "Leap-then-melee: leaps at targets inside the\npounce range window, hit resolves on landing.",
+            WeaponArchetype.Sweep =>
+                "Arc AoE melee: hits every enemy within Sweep\nRadius inside the frontal arc.",
+            WeaponArchetype.Trample =>
+                "Charge, only vs smaller targets: phases through\nsmaller units and knocks down those it hits.",
+            _ => null,
+        });
         string archVal = string.IsNullOrEmpty(w.Archetype) ? "None" : w.Archetype;
-        string newArch = _ui.DrawCombo("w_arch", "Archetype", archVal, archOptions, x, curY, ww);
+        string newArch = _ui.DrawCombo("w_arch", "Archetype", archVal, archOptions, x, curY, ww,
+            optionTooltips: archTips);
         if (newArch != archVal) { w.Archetype = newArch; _unsavedChanges = true; }
         curY += RowH;
 
@@ -3012,9 +3054,20 @@ public class UnitEditorWindow
         _ui.DrawText("Bonuses:", new Vector2(x, curY + 2), EditorBase.AccentColor);
         curY += RowH;
         string[] bonusOptions = Enum.GetNames<WeaponBonus>();
+        string?[] bonusTips = Array.ConvertAll(Enum.GetValues<WeaponBonus>(), b => b switch
+        {
+            WeaponBonus.ArmorPiercing =>
+                "Halves the target's Protection for the hit.",
+            WeaponBonus.ArmorNegating =>
+                "Ignores armor entirely: Protection and\nToughness count as 0 for the hit.",
+            WeaponBonus.Knockdown =>
+                "Each hit rolls Str + Size*2 vs the same to knock\nthe target down (at most 1 size larger).",
+            _ => null,
+        });
         for (int i = 0; i < w.Bonuses.Count; i++)
         {
-            string newB = _ui.DrawCombo($"wb_{i}", $"  [{i}]", w.Bonuses[i], bonusOptions, x, curY, ww - 28);
+            string newB = _ui.DrawCombo($"wb_{i}", $"  [{i}]", w.Bonuses[i], bonusOptions, x, curY, ww - 28,
+                optionTooltips: bonusTips);
             if (newB != w.Bonuses[i]) { w.Bonuses[i] = newB; _unsavedChanges = true; }
             if (_ui.DrawButton("X", x + ww - 24, curY, 22, 20, EditorBase.DangerColor))
             {
@@ -3066,9 +3119,16 @@ public class UnitEditorWindow
         _ui.DrawText("Bonuses:", new Vector2(x, curY + 2), EditorBase.AccentColor);
         curY += RowH;
         string[] bonusOptions = Enum.GetNames<ArmorBonus>();
+        string?[] bonusTips = Array.ConvertAll(Enum.GetValues<ArmorBonus>(), b => b switch
+        {
+            ArmorBonus.Barbed =>
+                "Defined but not implemented yet: currently\nhas no combat effect.",
+            _ => null,
+        });
         for (int i = 0; i < a.Bonuses.Count; i++)
         {
-            string newB = _ui.DrawCombo($"ab_{i}", $"  [{i}]", a.Bonuses[i], bonusOptions, x, curY, ww - 28);
+            string newB = _ui.DrawCombo($"ab_{i}", $"  [{i}]", a.Bonuses[i], bonusOptions, x, curY, ww - 28,
+                optionTooltips: bonusTips);
             if (newB != a.Bonuses[i]) { a.Bonuses[i] = newB; _unsavedChanges = true; }
             if (_ui.DrawButton("X", x + ww - 24, curY, 22, 20, EditorBase.DangerColor))
             {

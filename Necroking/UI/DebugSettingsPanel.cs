@@ -33,6 +33,9 @@ public class DebugSettingsPanel
     {
         public string Label = "";
         public string[] Options = Array.Empty<string>();
+        // Per-option hover tooltips, index-aligned with Options (null entry = no tip,
+        // '\n' = line break). Shown while the row's dropdown list is expanded.
+        public string?[]? Tooltips;
         public Func<int> Get = () => 0;
         public Action<int> Set = _ => { };
     }
@@ -56,34 +59,67 @@ public class DebugSettingsPanel
         // On/Off options for the plain boolean toggles.
         string[] onOff = { "Off", "On" };
 
-        // Collision-mode option names, driven off the enum (minus the Count
-        // sentinel) so the panel never drifts from the F8 cycle.
+        // Collision-mode option names + tooltips, driven off the enum (minus the
+        // Count sentinel) so the panel never drifts from the F8 cycle.
         int collCount = (int)CollisionDebugMode.Count;
         var collOpts = new string[collCount];
+        var collTips = new string?[collCount];
         for (int i = 0; i < collCount; i++)
+        {
             collOpts[i] = DebugDraw.GetModeLabel((CollisionDebugMode)i);
+            collTips[i] = (CollisionDebugMode)i switch
+            {
+                CollisionDebugMode.All =>
+                    "Every collision overlay at once: cost field,\nORCA radii, velocity vectors, occupied tiles, chunks.",
+                CollisionDebugMode.Chunks =>
+                    "Pathfinder sectors (blue grid + labels), per-unit\nimaginary chunks (orange), each unit's sector tinted.",
+                CollisionDebugMode.CostField =>
+                    "Tints pathfinding tiles by move cost: red impassable,\nblue water/high cost, yellow rough. Open tiles blank.",
+                CollisionDebugMode.UnitORCA =>
+                    "Each unit's collision-radius circle: necromancer\nbright green (+ring), other undead green, humans red.",
+                CollisionDebugMode.Velocity =>
+                    "Per-unit velocity arrows: current velocity (green)\nand preferred/desired velocity (blue).",
+                CollisionDebugMode.OccupiedTiles =>
+                    "Env-object collision circles (magenta) + covered\ntiles, plus unit radius circles per faction.",
+                _ => null,
+            };
+        }
 
         return new List<DebugModeToggle>
         {
             new() { Label = "F2 Water",     Options = onOff, Get = () => _g._waterDebug ? 1 : 0,
-                    Set = v => _g._waterDebug = v == 1 },
+                    Set = v => _g._waterDebug = v == 1,
+                    Tooltips = new[] { null,
+                        "Per-unit wading overlay: body bounding box,\nwaterlines, and w/V/slope/angle text per unit." } },
             new() { Label = "F3 Perf",      Options = onOff, Get = () => _g._showPerfReadout ? 1 : 0,
-                    Set = v => _g._showPerfReadout = v == 1 },
+                    Set = v => _g._showPerfReadout = v == 1,
+                    Tooltips = new[] { null,
+                        "Bottom-left stats line: zoom, cam pos, speed, FPS,\nframe/sim/draw/ground/present ms + draw counts." } },
             new() { Label = "F5 Death Fog", Options = onOff, Get = () => _g._deathFog.DebugVisible ? 1 : 0,
                     // DeathFogSystem only exposes a toggle — flip only when the
                     // chosen state differs from the current one.
-                    Set = v => { if ((v == 1) != _g._deathFog.DebugVisible) _g._deathFog.ToggleDebug(); } },
+                    Set = v => { if ((v == 1) != _g._deathFog.DebugVisible) _g._deathFog.ToggleDebug(); },
+                    Tooltips = new[] { null,
+                        "Death-fog density heatmap (blue low to red high)\nplus per-tree corruption stress, DYING or DEAD." } },
             new() { Label = "F6 Wind",      Options = onOff, Get = () => _g._windDebug ? 1 : 0,
-                    Set = v => _g._windDebug = v == 1 },
+                    Set = v => _g._windDebug = v == 1,
+                    Tooltips = new[] { null,
+                        "Wind field: grid of gust-strength cells (blue still\nto white peak) + direction arrow and angle top-left." } },
             new() { Label = "F7 Gameplay",  Options = new[] { "Off", "Horde", "Unit Info" },
                     Get = () => _g._gameplayDebugMode,
-                    Set = v => _g._gameplayDebugMode = v },
+                    Set = v => _g._gameplayDebugMode = v,
+                    Tooltips = new[] { null,
+                        "Horde formation: formation/engage/leash rings,\nfacing arrow, slot lines colored by unit state.",
+                        "Per-unit text: AI + routine, velocity, anim, effort,\nmax speed; red target line and blue velocity arrow." } },
             new() { Label = "F8 Collision", Options = collOpts,
                     Get = () => (int)_g._collisionDebugMode,
-                    Set = v => _g._collisionDebugMode = (CollisionDebugMode)v },
+                    Set = v => _g._collisionDebugMode = (CollisionDebugMode)v,
+                    Tooltips = collTips },
             new() { Label = "UI Debug", Options = new[] { "Off", "DrawRegions" },
                     Get = () => _g._uiDebugDrawMode,
-                    Set = v => _g._uiDebugDrawMode = v },
+                    Set = v => _g._uiDebugDrawMode = v,
+                    Tooltips = new[] { null,
+                        "Outlines every registered UI hit-region with a\n1px yellow border." } },
         };
     }
 
@@ -241,6 +277,11 @@ public class DebugSettingsPanel
                 var r = OptionRect(_dd.OpenKey, o);
                 bool hover = r.Contains(mx, my);
                 bool sel = o == cur;
+                // Per-option tooltip via the global service: renders on the Tooltip
+                // band, above this list. Parked cursor (hover not owned) never hits.
+                string? tip = t.Tooltips != null && o < t.Tooltips.Length ? t.Tooltips[o] : null;
+                if (hover && !string.IsNullOrEmpty(tip))
+                    Game1.Tooltips.RequestLines(tip.Split('\n'));
                 Scope.Draw(_g._pixel, r, hover ? OptHover : sel ? OptSelBg : OptBg);
                 // Left-gutter checkmark on the current value so it reads at a
                 // glance; all options indent past the gutter to stay aligned.
