@@ -660,19 +660,31 @@ replaces the bars in the same top-left slot — a precedent for a left-side pane
 
 ## Reusable dropdown / panel widgets
 
-- **There is NO raw-HUD dropdown/combo widget.** The canonical dropdown is
-  **`Necroking/Editor/EditorBase.cs` `DrawCombo(fieldId, label, value, options, x, y, …)`**,
-  used by settings tabs (e.g. `Editor/SettingsGeneralTab.cs` `ui.DrawCheckbox`/`DrawCombo`).
-  It requires an `EditorBase`-derived window (immediate-mode, owns `_activeFieldId`, pushes an
-  `ActionModalLayer` for the open-list overlay). It is NOT callable from `GameRenderer.Hud.cs`
-  (that draws raw HUD, not through an EditorBase). Two real options for the debug panel:
-  1. **Build it as a small `EditorBase` window** (like the settings editor) so you get
-     `DrawCombo`/`DrawCheckbox`/`DrawTextField` for free; seat it in the UI router via a
-     `PanelLayer`/editor seat (see [ui.md](ui.md) "THE UIRouter").
-  2. **Draw a lightweight custom dropdown in the HUD** using the HUD's own primitives —
-     `HUDRenderer` already declares `DropdownItemH`/`DropdownWidth` constants (currently
-     unused) and has `DrawStatBar`/`DrawPanel`/`DrawCursorTooltip` + `RuntimeWidgetRenderer`
-     for chrome. More work; no existing HUD combo to copy.
+- **The dropdown interaction standard is EAGER: `Necroking/Lib/EagerDropdown.cs`**
+  (`class EagerDropdown` — engine-free press→drag→release state machine, ported from a
+  proven Unity component; `OnPress(boxKey, itemIndex)` / `OnPressOutside()` /
+  `OnRelease(itemIndex, gestureValid)` / `OpenKey`/`IsOpen`/`Close`). Press opens+arms,
+  release-over-item selects (single gesture); click-click still works as a degenerate case.
+  One instance covers N sibling dropdowns via an int key. The owner keeps all rects and
+  hit-testing and feeds hit results in. Selected option gets a **left-gutter checkmark**
+  via `Render/DrawUtils.cs` `DrawCheckmark` (options indent past the gutter).
+- **Two dropdown renderers exist, both already eager:**
+  1. **`Necroking/Editor/EditorBase.cs` `DrawCombo(fieldId, label, value, options, x, y, w,
+     allowNone)`** — the immediate-mode editor combo (used ~80× across
+     Map/Unit/Spell/Env/UI/Item editor windows + Settings tabs + `ReflectionPropertyRenderer`).
+     Internally uses `_comboEager` (an `EagerDropdown`, key always 0; the OPEN combo id stays
+     in `_activeFieldId`); list overlay deferred to `DrawDropdownOverlays()` (draws checkmark
+     gutter, filter box when ≥15 items, scrollbar, keyboard nav). Requires an EditorBase.
+  2. **Raw-HUD panel-owned dropdowns — reference implementation `Necroking/UI/DebugSettingsPanel.cs`**
+     (+ its thin router seat `DebugSettingsPanelLayer` in `UI/Layers/HudLayers.cs`): the panel
+     owns rect math (`BoxRect`/`OptionRect`), `ContainsMouse` (panel + open list), and one
+     `EagerDropdown _dd`; presses arrive via the layer's `OnPointer` → `HandlePress`, and
+     release-select + outside-press dismiss are **polled in `OnFrame` → `HandleFrame(input)`**
+     (releases are never routed by the UIRouter, and the layer only gets presses while
+     hovered). Pass `gestureValid = input.PressStartPos.X >= 0` to `OnRelease`. Copy this
+     pair for any new raw-HUD dropdown panel.
+- `HUDRenderer`'s `DropdownItemH`/`DropdownWidth`/`Dropdown*` color constants are dead
+  C++-port leftovers — nothing draws them; don't take them as an existing widget.
 - Panel chrome helpers for a raw-HUD panel: `GameRenderer.Hud.cs` `DrawPanel(rect, fill,
   accent, …)`, `UI/NineSlice.cs`, and `UI/RuntimeWidgetRenderer.cs` (JSON widget defs).
 
