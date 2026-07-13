@@ -203,7 +203,12 @@ public sealed class DebugSettingsPanelLayer : UILayer
     public DebugSettingsPanelLayer(Game1 g) { _g = g; Band = UIBand.Hud; }
 
     public override string Id => "hud.debug_panel";
-    public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { }
+    public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx)
+        // Register the panel footprint so it shows in ui_rects and the UI-debug
+        // overlay (router only calls this for visible layers). Mouse-blocking still
+        // runs through ContainsMouse below — it also covers the open dropdown list,
+        // which lives outside this rect.
+        => reg.Add(Id, _g._debugPanel.Bounds);
     public override bool Visible => _g._debugPanel.IsVisible && _g.HudVisible && _g._menuState == MenuState.None;
 
     public override bool ContainsMouse(int mx, int my, in UICtx ctx)

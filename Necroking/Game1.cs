@@ -844,6 +844,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // Wind debug (F6): shows gust heatmap + direction arrow
     internal bool _windDebug;
 
+    // UI debug overlay: 0=Off, 1=DrawRegions (1px yellow border per _uiHits entry).
+    // Drawn as an overlay after all UI (end of DrawHudBlock).
+    internal int _uiDebugDrawMode;
+
     // Scenario state
     internal ScenarioBase? _activeScenario;
 

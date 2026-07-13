@@ -320,5 +320,18 @@ partial class GameRenderer
         {
             DrawText(_g._smallFont, "[F2] Water Debug", new Vector2(10, screenH - 54), new Color(120, 220, 255));
         }
+
+        // UI-debug overlay — drawn last so it sits over every UI region. Outlines
+        // each _uiHits entry with a 1px yellow border drawn INSIDE the rect (via
+        // DrawRectBorder), so screen-edge rects still show a full box.
+        if (_g._uiDebugDrawMode == 1)
+        {
+            var scope = new SpriteScope(_g._spriteBatch, Materials.Hud);
+            foreach (var e in _g._uiHits.Entries)
+            {
+                if (e.FullScreen || e.Probe != null) continue; // no concrete rect to outline
+                DrawUtils.DrawRectBorder(scope, _g._pixel, e.Rect, Color.Yellow);
+            }
+        }
     }
 }

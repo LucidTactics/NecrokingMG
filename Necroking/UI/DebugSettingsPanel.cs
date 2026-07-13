@@ -81,6 +81,9 @@ public class DebugSettingsPanel
             new() { Label = "F8 Collision", Options = collOpts,
                     Get = () => (int)_g._collisionDebugMode,
                     Set = v => _g._collisionDebugMode = (CollisionDebugMode)v },
+            new() { Label = "UI Debug", Options = new[] { "Off", "DrawRegions" },
+                    Get = () => _g._uiDebugDrawMode,
+                    Set = v => _g._uiDebugDrawMode = v },
         };
     }
 
@@ -94,6 +97,10 @@ public class DebugSettingsPanel
     private const int Pad = 6;
     private const int BoxW = 108;     // dropdown box on the right of each row
     private const int OptH = 18;
+
+    /// <summary>Panel footprint (excludes any open dropdown list). Exposed so the
+    /// router layer can register it in <c>_uiHits</c> (ui_rects + UI-debug overlay).</summary>
+    public Rectangle Bounds => PanelRect();
 
     /// <summary>Panel rect. Height grows with the number of debug toggles.</summary>
     private Rectangle PanelRect()
