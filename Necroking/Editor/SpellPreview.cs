@@ -817,6 +817,8 @@ public class SpellPreview
 
     private void DrawDrains()
     {
+        Flipbook? cloudFb = null;
+        _flipbooks?.TryGetValue("cloud03", out cloudFb);
         foreach (var d in _drains)
         {
             if (!d.Alive) continue;
@@ -826,6 +828,8 @@ public class SpellPreview
             var targetScreen = WorldToScreenWithHeight(d.TargetPos.X, d.TargetPos.Y, 1.0f);
             LightningRenderer.AddDrainTendrilStripsStatic(_strips, casterScreen, targetScreen, d.Visuals, d.Elapsed);
             LightningRenderer.AddDrainFlareSprites(_sb, _glowTex, casterScreen, targetScreen, d.Visuals, d.Elapsed);
+            LightningRenderer.AddDrainCloudSprites(_sb, _glowTex, cloudFb, casterScreen, targetScreen,
+                d.Visuals, d.Elapsed, additivePass: true);
         }
     }
 
@@ -861,7 +865,8 @@ public class SpellPreview
             if (v.CloudCount <= 0 && v.ImpactPuffCount <= 0) continue;
             var casterScreen = WorldToScreenWithHeight(d.CasterPos.X, d.CasterPos.Y, 1.5f);
             var targetScreen = WorldToScreenWithHeight(d.TargetPos.X, d.TargetPos.Y, 1.0f);
-            LightningRenderer.AddDrainCloudSprites(_sb, _glowTex, cloudFb, casterScreen, targetScreen, v, d.Elapsed);
+            LightningRenderer.AddDrainCloudSprites(_sb, _glowTex, cloudFb, casterScreen, targetScreen, v, d.Elapsed,
+                additivePass: false);
             Flipbook? impactFb = cloudFb;
             if (v.ImpactFlipbookID != "cloud03" && _flipbooks != null)
                 _flipbooks.TryGetValue(v.ImpactFlipbookID, out impactFb);

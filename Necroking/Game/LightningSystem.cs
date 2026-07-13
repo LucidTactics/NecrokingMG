@@ -361,8 +361,9 @@ public class LightningSystem
 
                 // Damage ticks through the standard pipeline: emitted as
                 // LightningDamage and applied by Simulation.DealDamage with
-                // caster attribution — same as strike AoE damage.
-                if (b.Alive && b.DamagePerTick > 0)
+                // caster attribution — same as strike AoE damage. Base 0 still
+                // ticks (the opposed DRN roll can land); negative = visual-only.
+                if (b.Alive && b.DamagePerTick >= 0)
                 {
                     b.DamageAccumulator += dt;
                     float interval = b.TickRate > 0.01f ? b.TickRate : 0.25f;
@@ -403,7 +404,13 @@ public class LightningSystem
             //                  the corpse dissolves when the pool empties
             //  - reversed:     transfer — damage the CASTER, heal the friendly
             //                  target; stops before the caster would die
-            if (units != null && d.Alive && d.DamagePerTick > 0)
+            // Base 0 still ticks for the normal enemy mode — the emitted event goes
+            // through ApplySpellDamage's opposed DRN roll, which can land damage on
+            // its own. Negative = visual-only (dev spawn_lightning). Corpse and
+            // reversed modes stay >0-gated: their amounts are flat (pool pull /
+            // self-cost transfer), no roll is involved.
+            bool zeroTicks = d.DamagePerTick == 0 && d.TargetCorpseIdx < 0 && !d.Reversed;
+            if (units != null && d.Alive && (d.DamagePerTick > 0 || zeroTicks))
             {
                 d.DamageAccumulator += dt;
                 float interval = d.TickRate > 0.01f ? d.TickRate : 0.25f;

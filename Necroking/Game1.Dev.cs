@@ -1863,16 +1863,19 @@ public partial class Game1 {
                      var st = lSpell.BuildBeamStyle();
                      st.CoreWidth *= lScale; st.GlowWidth *= lScale;
                      if (lJitterOpt != null) st.JitterHz = DevFloat(lJitterOpt);
+                     // damagePerTick -1: visual-only sentinel — 0 now means "tick
+                     // and let the opposed DRN roll decide" (LightningSystem).
                      _sim.Lightning.SpawnBeam(_sim.Units[lNecro].Id, _sim.Units[lUnitIdx].Id,
-                        lSpell.Id, 0, 999f, 0f, st, lDur);
+                        lSpell.Id, -1, 999f, 0f, st, lDur);
                      break;
                   }
                   case "drain": {
                      if (lUnitIdx < 0) { lErr = "drain needs a target unit"; break; }
                      var vis = lSpell.BuildDrainVisuals();
                      vis.CoreWidth *= lScale; vis.GlowWidth *= lScale;
+                     // damagePerTick -1: visual-only sentinel (see beam above).
                      _sim.Lightning.SpawnDrain(_sim.Units[lNecro].Id, _sim.Units[lUnitIdx].Id,
-                        lSpell.Id, 0, 999f, 0f, 0, false, lDur, vis);
+                        lSpell.Id, -1, 999f, 0f, 0, false, lDur, vis);
                      break;
                   }
                   default:

@@ -3465,7 +3465,10 @@ public class Simulation
         int casterIdx, DamageType type = DamageType.Physical)
     {
         if (targetIdx < 0 || targetIdx >= _units.Count || !_units[targetIdx].Alive) return;
-        if (damage <= 0) return;
+        // Base 0 still resolves: the opposed DRN roll below can land damage on its
+        // own (a 0-damage armor-negating drain chips roughly half its ticks —
+        // the Dominions rule). Negative = explicitly no damage component.
+        if (damage < 0) return;
 
         if (spell != null && !SpellPenetration.Affects(_gameData, _units, casterIdx, targetIdx, spell)) return;
 

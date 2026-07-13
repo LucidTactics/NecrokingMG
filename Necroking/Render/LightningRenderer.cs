@@ -139,15 +139,20 @@ public class LightningRenderer
             AddBoltStrips(startSp, endSp, beam.Style, 1f, beam.Seed);
         }
 
-        // Draw active drains (tendrils + additive endpoint flares — the cloud
-        // puffs and impact cluster are alpha-blended and draw after the ribbons
-        // flush, in DrawTriangleEffects).
+        // Draw active drains (tendrils, additive endpoint flares, and the
+        // additive 2/3 of the traveling puffs — the dark-smoke third and the
+        // impact cluster are alpha-blended and draw after the ribbons flush,
+        // in DrawTriangleEffects).
+        Flipbook? drainCloudFb = null;
+        _game._flipbooks?.TryGetValue("cloud03", out drainCloudFb);
         foreach (var drain in _sim.Lightning.Drains)
         {
             if (!drain.Alive) continue;
             if (!TryGetDrainEndpoints(drain, out var startSp, out var endSp)) continue;
             AddDrainTendrilStrips(startSp, endSp, drain.Visuals, drain.Elapsed);
             AddDrainFlareSprites(_spriteBatch, _glowTex, startSp, endSp, drain.Visuals, drain.Elapsed);
+            AddDrainCloudSprites(_spriteBatch, _glowTex, drainCloudFb, startSp, endSp,
+                drain.Visuals, drain.Elapsed, additivePass: true);
         }
     }
 
@@ -206,7 +211,8 @@ public class LightningRenderer
             var v = drain.Visuals;
             if (v.CloudCount <= 0 && v.ImpactPuffCount <= 0) continue;
             if (!TryGetDrainEndpoints(drain, out var startSp, out var endSp)) continue;
-            AddDrainCloudSprites(_spriteBatch, _glowTex, cloudFb, startSp, endSp, v, drain.Elapsed);
+            AddDrainCloudSprites(_spriteBatch, _glowTex, cloudFb, startSp, endSp, v, drain.Elapsed,
+                additivePass: false);
             // Impact cluster last: frontmost, covering the beam/target junction.
             Flipbook? impactFb = cloudFb;
             if (v.ImpactFlipbookID != "cloud03" && _game._flipbooks != null)
@@ -617,15 +623,19 @@ public class LightningRenderer
 
     /// <summary>
     /// Cloud puffs riding the drain beam from the flow-source end toward the
-    /// destination (Pugna-style). Must be called while an ALPHA-blended HDR
-    /// sprite batch is open (Materials.HdrAlpha / AlphaMode=1 — colors encoded
-    /// via ToHdrVertexAlpha), after the tendril ribbons have flushed, so the
-    /// puffs occlude the beam instead of dissolving into it additively. Shared
-    /// by the in-game renderer and SpellPreview; start = caster anchor, end =
+    /// destination (Pugna-style). The stream is split by blend mode — 2 of every
+    /// 3 puffs are ADDITIVE (HDR glow, bloom feeds on them), 1 of every 3 is a
+    /// darker opaque smoke puff — so this must be called TWICE per drain:
+    /// once with additivePass=true while the additive HDR sprite batch is open
+    /// (colors via ToHdrVertex), and once with additivePass=false in the
+    /// alpha-blended pass after the tendril ribbons flush (ToHdrVertexAlpha,
+    /// smoke occludes the beam). Positions are deterministic in (i, elapsed),
+    /// so the two calls slot their subsets into one coherent stream. Shared by
+    /// the in-game renderer and SpellPreview; start = caster anchor, end =
     /// target, same as AddDrainTendrilStripsStatic.
     /// </summary>
     public static void AddDrainCloudSprites(SpriteBatch sb, Texture2D glowTex, Flipbook? cloudFb,
-        Vector2 start, Vector2 end, DrainVisualParams v, float elapsed)
+        Vector2 start, Vector2 end, DrainVisualParams v, float elapsed, bool additivePass)
     {
         if (v.CloudCount <= 0 || v.CloudSize <= 0f) return;
         var dir = end - start;
@@ -635,12 +645,17 @@ public class LightningRenderer
         var perp = new Vector2(-norm.Y, norm.X);
 
         var tint = v.CloudColor.ToColor();
+        // The smoke third: darker, desaturated toward soot, drawn opaque.
+        var smokeTint = new Color((byte)(tint.R * 0.32f), (byte)(tint.G * 0.38f),
+            (byte)(tint.B * 0.30f), tint.A);
         float texHalf = glowTex.Width * 0.5f;
         var glowOrigin = new Vector2(texHalf, texHalf);
         bool useFb = cloudFb != null && cloudFb.IsLoaded && cloudFb.Texture != null;
 
         for (int i = 0; i < v.CloudCount; i++)
         {
+            bool additive = i % 3 != 2; // 2/3 glow additively, 1/3 dark smoke
+            if (additive != additivePass) continue;
             // Deterministic per-cloud variation (same LCG as the bolt shape code).
             uint h = (uint)(i + 1) * 2654435761u;
             h = h * 1103515245u + 12345u; float rPhase = (h % 1000) / 1000f;
@@ -670,31 +685,43 @@ public class LightningRenderer
             if (useFb)
             {
                 // Real cloud art (the death-fog sheet): a lumpy silhouette reads
-                // as an opaque puff where a radial glow just reads as blur. Each
-                // puff holds a stable random frame, slowly cycling.
+                // as a puff where a radial glow just reads as blur. Each puff
+                // holds a stable random frame, slowly cycling.
                 int frame = cloudFb!.GetFrameAtNormalizedTime((elapsed / 4f + rPhase) % 1f);
                 var src = cloudFb.GetFrameRect(frame);
                 var org = new Vector2(src.Width / 2f, src.Height / 2f);
                 float scl = size * 2f / Math.Max(src.Width, 1);
                 var flip = rLat < 0f ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-                // Stacked twice: the cloud art's own alpha is soft, and a single
-                // layer reads as haze over the bright beam — two layers give the
-                // dense "opaque puff" body.
-                var puffColor = HdrColor.ToHdrVertexAlpha(tint, fade, v.CloudColor.Intensity);
-                sb.Draw(cloudFb.Texture, pos, src, puffColor, 0f, org, scl, flip, 0f);
-                sb.Draw(cloudFb.Texture, pos, src, puffColor, 0f, org, scl * 0.85f, flip, 0f);
+                if (additive)
+                {
+                    // Glowing puff: additive HDR so bloom feeds on it.
+                    var puffColor = HdrColor.ToHdrVertex(tint, fade * 0.9f,
+                        MathF.Min(v.CloudColor.Intensity, HdrColor.MaxHdrIntensity));
+                    sb.Draw(cloudFb.Texture, pos, src, puffColor, 0f, org, scl, flip, 0f);
+                }
+                else
+                {
+                    // Dark smoke: opaque, stacked twice for a dense body that
+                    // occludes the bright beam behind it.
+                    var puffColor = HdrColor.ToHdrVertexAlpha(smokeTint, fade, 0.8f);
+                    sb.Draw(cloudFb.Texture, pos, src, puffColor, 0f, org, scl, flip, 0f);
+                    sb.Draw(cloudFb.Texture, pos, src, puffColor, 0f, org, scl * 0.85f, flip, 0f);
+                }
+            }
+            else if (additive)
+            {
+                // Fallback (no flipbook in this context): soft additive glow puff.
+                sb.Draw(glowTex, pos, null,
+                    HdrColor.ToHdrVertex(tint, fade * 0.8f,
+                        MathF.Min(v.CloudColor.Intensity, HdrColor.MaxHdrIntensity)),
+                    0f, glowOrigin, size / texHalf, SpriteEffects.None, 0f);
             }
             else
             {
-                // Fallback (no flipbook in this context): soft outer puff + a
-                // dense near-opaque core from the radial glow texture.
+                // Fallback dark smoke: dense near-opaque radial blob.
                 sb.Draw(glowTex, pos, null,
-                    HdrColor.ToHdrVertexAlpha(tint, fade * 0.55f, v.CloudColor.Intensity),
-                    0f, glowOrigin, size / texHalf, SpriteEffects.None, 0f);
-                sb.Draw(glowTex, pos, null,
-                    HdrColor.ToHdrVertexAlpha(tint, fade,
-                        MathF.Min(v.CloudColor.Intensity * 1.25f, HdrColor.MaxHdrIntensity)),
-                    0f, glowOrigin, size * 0.5f / texHalf, SpriteEffects.None, 0f);
+                    HdrColor.ToHdrVertexAlpha(smokeTint, fade, 0.8f),
+                    0f, glowOrigin, size * 0.7f / texHalf, SpriteEffects.None, 0f);
             }
         }
     }
