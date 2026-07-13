@@ -1496,7 +1496,8 @@ public class SpellEditorWindow : EditorWindow
         }
 
         string currentName = currentIdx >= 0 ? names[currentIdx] : "";
-        string newName = _ui.DrawCombo(fieldId, label, currentName, names, x, curY, w, allowNone: true);
+        string newName = _ui.DrawCombo(fieldId, label, currentName, names, x, curY, w, allowNone: true,
+            optionTooltipFor: fi => DefTips.ForFlipbook(_gameData.Flipbooks.Get(fbIDs[fi])));
         curY += RowH;
 
         if (newName != currentName)

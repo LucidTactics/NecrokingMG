@@ -324,7 +324,8 @@ public class ReflectionPropertyRenderer
             else currentDisplay = currentId; // fallback to raw ID
         }
 
-        string newDisplay = _ui.DrawCombo(fieldId, label, currentDisplay, options, x, y, w, allowNone: true);
+        string newDisplay = _ui.DrawCombo(fieldId, label, currentDisplay, options, x, y, w, allowNone: true,
+            optionTooltipFor: i => DefTips.ForRegistryEntry(_gameData!, registryName, ids[i]));
 
         // Map back to ID
         string newId = "";

@@ -4617,7 +4617,10 @@ public class MapEditorWindow
 
             var e = z.Spawns[row];
             e.DefId = _eb.DrawCombo($"zone_spawn_def_{idx}_{row}", forage ? "Item" : "Unit",
-                e.DefId, options, x, y, fw);
+                e.DefId, options, x, y, fw,
+                // Options are raw unit ids (spawn zones) or env-object ids (foraging);
+                // only the unit variant has a stat def worth summarizing.
+                optionTooltipFor: oi => forage ? null : DefTips.ForUnit(_gameData.Units.Get(options[oi])));
             y += FieldHeight + 2;
             e.PerMinute = MathF.Max(0f, _eb.DrawFloatField($"zone_spawn_rate_{idx}_{row}",
                 "Per minute", e.PerMinute, x, y, fw, 0.1f));

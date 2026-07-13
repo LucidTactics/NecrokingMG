@@ -1902,7 +1902,19 @@ public class UnitEditorWindow
         var gDef2 = _gameData.UnitGroups.Get(def.ZombieTypeID);
         if (gDef2 != null)
             zombieDisplay = $"Group: {gDef2.DisplayName} [{def.ZombieTypeID}]";
-        string newZombieType = _ui.DrawCombo("unit_zombie", "Zombie Type", zombieDisplay, zombieTypes, x, curY, w, allowNone: true);
+        string newZombieType = _ui.DrawCombo("unit_zombie", "Zombie Type", zombieDisplay, zombieTypes, x, curY, w, allowNone: true,
+            optionTooltipFor: zi =>
+            {
+                // Mixed list: "-- section --" headers, raw unit ids, "Group: Name [id]".
+                string opt = zombieTypes[zi];
+                if (opt.StartsWith("-- ")) return null;
+                if (opt.StartsWith("Group: ") && opt.EndsWith("]"))
+                {
+                    int br = opt.LastIndexOf('[');
+                    return DefTips.ForUnitGroup(_gameData.UnitGroups.Get(opt[(br + 1)..^1]));
+                }
+                return DefTips.ForUnit(_gameData.Units.Get(opt));
+            });
         if (newZombieType != zombieDisplay && !newZombieType.StartsWith("-- "))
         {
             // allowNone returns "" when "(none)" is selected
@@ -2191,7 +2203,8 @@ public class UnitEditorWindow
         {
             if (spellIds[si] == def.SpellID) { currentSpellDisplay = spellDisplayNames[si]; break; }
         }
-        string newSpellDisplay = _ui.DrawCombo("unit_spell", "Spell", currentSpellDisplay, spellDisplayNames, x, curY, w, allowNone: true);
+        string newSpellDisplay = _ui.DrawCombo("unit_spell", "Spell", currentSpellDisplay, spellDisplayNames, x, curY, w, allowNone: true,
+            optionTooltipFor: si => DefTips.ForSpell(_gameData.Spells.Get(spellIds[si])));
         // Map display name back to ID
         if (newSpellDisplay != currentSpellDisplay)
         {
@@ -2392,7 +2405,8 @@ public class UnitEditorWindow
 
             // Weapon dropdown with display names
             string currentDisplay = MapIdToDisplay(wId, weaponDisplayNames, weaponIdList);
-            string newDisplay = _ui.DrawCombo($"weap_{i}", displayLabel, currentDisplay, weaponDisplayNames, x, curY, w - 28, allowNone: true);
+            string newDisplay = _ui.DrawCombo($"weap_{i}", displayLabel, currentDisplay, weaponDisplayNames, x, curY, w - 28, allowNone: true,
+                optionTooltipFor: wi => DefTips.ForWeapon(_gameData.Weapons.Get(weaponIdList[wi])));
             if (newDisplay != currentDisplay)
             {
                 slot.Id = string.IsNullOrEmpty(newDisplay) ? "" : MapDisplayToId(newDisplay, weaponDisplayNames, weaponIdList);
@@ -2468,7 +2482,8 @@ public class UnitEditorWindow
             string displayLabel = aDef != null ? $"  [{i}] {aDef.DisplayName}" : $"  [{i}]";
 
             string currentDisplay = MapIdToDisplay(aId, armorDisplayNames, armorIdList);
-            string newDisplay = _ui.DrawCombo($"arm_{i}", displayLabel, currentDisplay, armorDisplayNames, x, curY, w - 28, allowNone: true);
+            string newDisplay = _ui.DrawCombo($"arm_{i}", displayLabel, currentDisplay, armorDisplayNames, x, curY, w - 28, allowNone: true,
+                optionTooltipFor: ai => DefTips.ForArmor(_gameData.Armors.Get(armorIdList[ai])));
             if (newDisplay != currentDisplay)
             {
                 def.Armors[i] = string.IsNullOrEmpty(newDisplay) ? "" : MapDisplayToId(newDisplay, armorDisplayNames, armorIdList);
@@ -2517,7 +2532,8 @@ public class UnitEditorWindow
             string displayLabel = sDef != null ? $"  [{i}] {sDef.DisplayName}" : $"  [{i}]";
 
             string currentDisplay = MapIdToDisplay(sId, shieldDisplayNames, shieldIdList);
-            string newDisplay = _ui.DrawCombo($"shld_{i}", displayLabel, currentDisplay, shieldDisplayNames, x, curY, w - 28, allowNone: true);
+            string newDisplay = _ui.DrawCombo($"shld_{i}", displayLabel, currentDisplay, shieldDisplayNames, x, curY, w - 28, allowNone: true,
+                optionTooltipFor: si => DefTips.ForShield(_gameData.Shields.Get(shieldIdList[si])));
             if (newDisplay != currentDisplay)
             {
                 def.Shields[i] = string.IsNullOrEmpty(newDisplay) ? "" : MapDisplayToId(newDisplay, shieldDisplayNames, shieldIdList);
@@ -2739,7 +2755,8 @@ public class UnitEditorWindow
 
             // RU32: Unit ID dropdown with display names
             string currentDisplay = MapIdToDisplay(entry.UnitDefID, unitDisplayOptions, unitIdOptions);
-            string newDisplay = _ui.DrawCombo($"ge_uid_{i}", $"  [{i}] Unit", currentDisplay, unitDisplayOptions, x, curY, ww - 28);
+            string newDisplay = _ui.DrawCombo($"ge_uid_{i}", $"  [{i}] Unit", currentDisplay, unitDisplayOptions, x, curY, ww - 28,
+                optionTooltipFor: ui => DefTips.ForUnit(_gameData.Units.Get(unitIdOptions[ui])));
             if (newDisplay != currentDisplay)
             {
                 entry.UnitDefID = MapDisplayToId(newDisplay, unitDisplayOptions, unitIdOptions);

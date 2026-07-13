@@ -1642,7 +1642,8 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
             var spellIds = _spellRegistry.GetIDs();
             var spellOptions = new string[spellIds.Count];
             for (int si = 0; si < spellIds.Count; si++) spellOptions[si] = spellIds[si];
-            string newTrapSpell = _ui.DrawCombo("envdef_trapspell", "Trap Spell", def.TrapSpellId, spellOptions, fx, curY, fieldW, allowNone: true);
+            string newTrapSpell = _ui.DrawCombo("envdef_trapspell", "Trap Spell", def.TrapSpellId, spellOptions, fx, curY, fieldW, allowNone: true,
+                optionTooltipFor: si => DefTips.ForSpell(_spellRegistry.Get(spellIds[si])));
             if (newTrapSpell != def.TrapSpellId) def.TrapSpellId = newTrapSpell;
         }
         else

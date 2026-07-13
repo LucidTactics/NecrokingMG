@@ -91,7 +91,9 @@ public static class SettingsWeatherTab
         }
 
         string currentPreset = string.IsNullOrEmpty(weather.ActivePreset) ? presetNames[0] : weather.ActivePreset;
-        string selected = ui.DrawCombo("wthr_activePreset", "Active Preset", currentPreset, presetNames, x, curY, w);
+        string selected = ui.DrawCombo("wthr_activePreset", "Active Preset", currentPreset, presetNames, x, curY, w,
+            optionTooltipFor: pi => pi < presetIds.Count
+                ? DefTips.ForWeatherPreset(gameData.Weather.Get(presetIds[pi])) : null);
         if (selected != currentPreset)
         {
             weather.ActivePreset = selected;

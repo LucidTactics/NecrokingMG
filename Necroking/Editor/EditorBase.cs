@@ -351,6 +351,7 @@ public class EditorBase
         public string FilterText; // current filter string
         public int HighlightIdx; // keyboard highlight index into FilteredOptions
         public string?[]? Tooltips; // per-option hover tooltips, indexed like Options (null = none)
+        public Func<int, string?>? TooltipFor; // lazy tooltip provider, invoked with the hovered item's Options index only
 
         // Pre-computed item layout — single source of truth for both click and draw
         public Rectangle[] ItemRects;
@@ -1418,7 +1419,10 @@ public class EditorBase
     /// in one gesture; plain click-click still works.
     /// Pass <paramref name="optionTooltips"/> (parallel to <paramref name="options"/>,
     /// null/empty entries = no tip, '\n' = line break) to show a hover tooltip
-    /// per option in the expanded list.
+    /// per option in the expanded list. For large data-driven lists prefer
+    /// <paramref name="optionTooltipFor"/>: a lazy provider called only with the
+    /// hovered option's index into <paramref name="options"/> (so nothing is
+    /// built for the hundreds of rows nobody hovers).
     /// </summary>
     private const int ComboItemH = 20;
     private const int ComboFilterH = 22; // height of the filter text box row
@@ -1427,7 +1431,8 @@ public class EditorBase
     private static readonly Color ComboHighlight = new(70, 90, 140, 240);
 
     public string DrawCombo(string fieldId, string label, string value, string[] options,
-        int x, int y, int w, bool allowNone = false, string?[]? optionTooltips = null)
+        int x, int y, int w, bool allowNone = false, string?[]? optionTooltips = null,
+        Func<int, string?>? optionTooltipFor = null)
     {
         int labelW = 120;
         DrawText(label, new Vector2(x, y + 2), TextDim);
@@ -1440,6 +1445,7 @@ public class EditorBase
         // Build effective option list (prepend "(none)" when allowed)
         string[] effectiveOptions;
         string?[]? effectiveTooltips = optionTooltips;
+        Func<int, string?>? effectiveTooltipFor = optionTooltipFor;
         if (allowNone)
         {
             effectiveOptions = new string[options.Length + 1];
@@ -1451,6 +1457,10 @@ public class EditorBase
                 effectiveTooltips = new string?[optionTooltips.Length + 1];
                 Array.Copy(optionTooltips, 0, effectiveTooltips, 1, optionTooltips.Length);
             }
+            if (optionTooltipFor != null)
+                // Same alignment for the lazy provider: shift past "(none)" so the
+                // delegate always receives an index into the caller's options array.
+                effectiveTooltipFor = ei => ei == 0 ? null : optionTooltipFor(ei - 1);
         }
         else
         {
@@ -1771,6 +1781,7 @@ public class EditorBase
                 FilterText = filterText,
                 HighlightIdx = _comboHighlightIdx,
                 Tooltips = effectiveTooltips,
+                TooltipFor = effectiveTooltipFor,
                 ItemRects = itemRects,
                 DropRect = dropRect,
                 ItemsY = itemsY,
@@ -1847,10 +1858,11 @@ public class EditorBase
 
             // Per-option hover tooltip — routed through the global service so it
             // draws on the Tooltip band, above this scissor clip and the list.
-            if (optHovered && dd.Tooltips != null)
+            if (optHovered && (dd.Tooltips != null || dd.TooltipFor != null))
             {
                 int oi = dd.FilteredIndices[fi]; // filtered index -> effective option index
-                string? tip = oi < dd.Tooltips.Length ? dd.Tooltips[oi] : null;
+                string? tip = dd.Tooltips != null && oi < dd.Tooltips.Length ? dd.Tooltips[oi] : null;
+                tip ??= dd.TooltipFor?.Invoke(oi);
                 if (!string.IsNullOrEmpty(tip))
                     Game1.Tooltips.RequestLines(tip.Split('\n'));
             }
