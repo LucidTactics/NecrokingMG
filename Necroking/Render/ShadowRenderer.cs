@@ -279,7 +279,7 @@ public class ShadowRenderer
             // sprite shader uses, so the silhouette crop stays in sync with
             // the on-sprite waterline cut.
             var wading = WadingState.Compute(
-                sim.Units[i].RenderPos, sim.Units[i].FacingAngle,
+                sim.Units[i].RenderPos, sim.Units[i].Z, sim.Units[i].FacingAngle,
                 fr.Frame.Value, unitDef, animData.Ctrl, groundSystem, camera.YRatio);
             var (visibleTopV, visibleBottomV) = wading.GetVisibleBodyRange(fr.Frame.Value);
 

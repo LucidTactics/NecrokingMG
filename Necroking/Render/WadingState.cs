@@ -36,6 +36,13 @@ public static class WadingConfig
     /// <summary>Absolute clamp on the diagonal cut slope. Caps absurd values
     /// from facings near the N/S transition.</summary>
     public const float MaxBodySlope = 1.5f;
+
+    /// <summary>Unit height (world units, <see cref="Necroking.Movement.Unit.Z"/>)
+    /// at which the wading waterline has fully faded out — a unit flying this high
+    /// over the water is drawn un-submerged. Between 0 and this the waterline
+    /// recedes linearly as the unit rises, so a jump lifts cleanly out of the water
+    /// instead of dragging a submerged bottom across the arc.</summary>
+    public const float AirborneFadeHeight = 0.5f;
 }
 
 /// <summary>Default per-direction wading fractions. Applied when a unit def
@@ -139,6 +146,7 @@ public readonly struct WadingState
     /// and the per-direction wading fractions from <paramref name="unitDef"/>.</summary>
     public static WadingState Compute(
         Vec2 worldPos,
+        float unitZ,
         float facingAngle,
         in SpriteFrame frame,
         UnitDef unitDef,
@@ -153,6 +161,13 @@ public readonly struct WadingState
             : 0f;
         float waterness = MathHelper.Clamp(
             (waternessRaw - WadingConfig.ShorelineMidpoint) * 2f, 0f, 1f);
+
+        // Airborne units (a rogue/engine jump, a knockback) fly OVER the water, so
+        // the waterline must not submerge them. Fade it out as they lift off; above
+        // AirborneFadeHeight there is no wading at all. Waterness=0 makes the whole
+        // effect inactive below (no cut, no foam, full shadow).
+        if (unitZ > 0f)
+            waterness *= MathHelper.Clamp(1f - unitZ / WadingConfig.AirborneFadeHeight, 0f, 1f);
 
         int spriteAngle = animCtrl.ResolveAngle(facingAngle, out _);
 
