@@ -267,4 +267,69 @@ public static class TextureUtil
         _radialGlowCache[key] = tex;
         return tex;
     }
+
+    /// <summary>
+    /// Get or create a cached tileable streak-noise texture (256×64): value noise
+    /// from coarse random grids sampled bilinearly with wraparound, two octaves,
+    /// the base octave stretched horizontally so features read as streaks along U.
+    /// Wraps seamlessly on both axes (drain-beam scroll layers sample it with an
+    /// unbounded arc-length U). Grayscale in RGB, alpha follows luminance so it
+    /// works in both additive and alpha-blended passes. Deterministic (fixed seed).
+    /// Do NOT dispose the returned texture — it is shared/cached.
+    /// </summary>
+    private static readonly System.Collections.Generic.Dictionary<GraphicsDevice, Texture2D> _streakNoiseCache = new();
+
+    public static Texture2D GetStreakNoise(GraphicsDevice device)
+    {
+        if (_streakNoiseCache.TryGetValue(device, out var cached))
+        {
+            if (!cached.IsDisposed) return cached;
+            _streakNoiseCache.Remove(device);
+        }
+
+        const int W = 256, H = 64;
+        // Coarse random grids (wrap-sampled). Octave 1 is 8×4 over 256×64 —
+        // long 32px-long blobs; octave 2 adds finer 8px detail.
+        const int G1W = 8, G1H = 4, G2W = 32, G2H = 8;
+        uint seed = 0xBEEFCAFE;
+        float Rand() { seed = seed * 1103515245u + 12345u; return ((seed >> 8) & 0xFFFF) / 65535f; }
+        var g1 = new float[G1W * G1H];
+        var g2 = new float[G2W * G2H];
+        for (int i = 0; i < g1.Length; i++) g1[i] = Rand();
+        for (int i = 0; i < g2.Length; i++) g2[i] = Rand();
+
+        // Bilinear sample of a wrap-around grid at normalized (u,v), with
+        // smoothstep on the fractions so cell boundaries don't show as creases.
+        static float Sample(float[] grid, int gw, int gh, float u, float v)
+        {
+            float x = u * gw, y = v * gh;
+            int x0 = (int)System.MathF.Floor(x), y0 = (int)System.MathF.Floor(y);
+            float fx = x - x0, fy = y - y0;
+            fx = fx * fx * (3f - 2f * fx);
+            fy = fy * fy * (3f - 2f * fy);
+            int x1 = (x0 + 1) % gw, y1 = (y0 + 1) % gh;
+            x0 %= gw; y0 %= gh;
+            float a = grid[y0 * gw + x0], b = grid[y0 * gw + x1];
+            float c = grid[y1 * gw + x0], d = grid[y1 * gw + x1];
+            return (a + (b - a) * fx) * (1f - fy) + (c + (d - c) * fx) * fy;
+        }
+
+        var tex = new Texture2D(device, W, H);
+        var data = new Color[W * H];
+        for (int y = 0; y < H; y++)
+            for (int x = 0; x < W; x++)
+            {
+                float u = x / (float)W, v = y / (float)H;
+                float n = Sample(g1, G1W, G1H, u, v) * 0.65f
+                        + Sample(g2, G2W, G2H, u, v) * 0.35f;
+                // Push contrast so the streaks read as distinct bright bands
+                // instead of uniform gray mush.
+                n = System.Math.Clamp((n - 0.35f) * 2.2f, 0f, 1f);
+                byte b8 = (byte)(n * 255f);
+                data[y * W + x] = new Color(b8, b8, b8, b8); // premultiplied-style
+            }
+        tex.SetData(data);
+        _streakNoiseCache[device] = tex;
+        return tex;
+    }
 }

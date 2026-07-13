@@ -697,8 +697,53 @@ public class SpellDef : INamedDef
     [EditorField(Label = "Cloud Color", Group = "DRAIN", Order = 724, Compact = true)]
     [JsonPropertyName("drainCloudColor")] [JsonConverter(typeof(HdrColorJsonConverter))] public HdrColor DrainCloudColor { get; set; } = new(200, 255, 160, 255, 3f);
 
+    /// <summary>Beam core/glow color at the flow-source end (the target on a normal
+    /// drain) — the destination end uses drainCoreColor/drainGlowColor and the beam
+    /// lerps between them. Defaults match the base colors' defaults (no gradient).</summary>
     [EditorVisible("Category", "Drain")]
-    [EditorField(Label = "Target Effect", Group = "DRAIN", Order = 725)]
+    [EditorField(Label = "Src Core Color", Group = "DRAIN", Order = 725, Compact = true)]
+    [JsonPropertyName("drainSourceCoreColor")] [JsonConverter(typeof(HdrColorJsonConverter))] public HdrColor DrainSourceCoreColor { get; set; } = new(120, 255, 80, 255, 2.5f);
+
+    [EditorVisible("Category", "Drain")]
+    [EditorField(Label = "Src Glow Color", Group = "DRAIN", Order = 726, Compact = true)]
+    [JsonPropertyName("drainSourceGlowColor")] [JsonConverter(typeof(HdrColorJsonConverter))] public HdrColor DrainSourceGlowColor { get; set; } = new(40, 120, 20, 160, 1.5f);
+
+    /// <summary>Scrolling streak-noise overlay traveling from the flow source to
+    /// the destination. Speed in px/sec (0 = off).</summary>
+    [EditorVisible("Category", "Drain")]
+    [EditorField(Label = "Scroll Speed", Group = "DRAIN", Order = 727, Step = 5f, Decimals = 0)]
+    [JsonPropertyName("drainScrollSpeed")] public float DrainScrollSpeed { get; set; }
+
+    /// <summary>Pixels per repeat of the scroll noise texture.</summary>
+    [EditorVisible("Category", "Drain")]
+    [EditorField(Label = "Scroll Scale", Group = "DRAIN", Order = 728, Step = 5f, Decimals = 0)]
+    [JsonPropertyName("drainScrollScale")] public float DrainScrollScale { get; set; } = 90.0f;
+
+    [EditorVisible("Category", "Drain")]
+    [EditorField(Label = "Scroll Alpha", Group = "DRAIN", Order = 729, Step = 0.05f, Decimals = 2)]
+    [JsonPropertyName("drainScrollAlpha")] public float DrainScrollAlpha { get; set; } = 0.5f;
+
+    /// <summary>Flipbook puffs churning over the beam/target junction (drawn in
+    /// front of the beam, tinted like the source-end core color). 0 = off.</summary>
+    [EditorVisible("Category", "Drain")]
+    [EditorField(Label = "Impact Puffs", Group = "DRAIN", Order = 730)]
+    [JsonPropertyName("drainImpactPuffs")] public int DrainImpactPuffs { get; set; }
+
+    [EditorVisible("Category", "Drain")]
+    [EditorField(Label = "Impact Size", Group = "DRAIN", Order = 731, Step = 0.5f, Decimals = 1)]
+    [JsonPropertyName("drainImpactSize")] public float DrainImpactSize { get; set; } = 14.0f;
+
+    [EditorVisible("Category", "Drain")]
+    [EditorField(Label = "Impact Flipbook", Group = "DRAIN", Order = 732)]
+    [JsonPropertyName("drainImpactFlipbook")] public string DrainImpactFlipbook { get; set; } = "cloud03";
+
+    /// <summary>Additive flare size multiplier at the beam endpoints (0 = off).</summary>
+    [EditorVisible("Category", "Drain")]
+    [EditorField(Label = "Impact Flare x", Group = "DRAIN", Order = 733, Step = 0.1f, Decimals = 1)]
+    [JsonPropertyName("drainImpactFlareScale")] public float DrainImpactFlareScale { get; set; } = 1.0f;
+
+    [EditorVisible("Category", "Drain")]
+    [EditorField(Label = "Target Effect", Group = "DRAIN", Order = 734)]
     [JsonPropertyName("drainTargetEffect")] public FlipbookRef? DrainTargetEffect { get; set; }
 
     // ============ CLOUD ============
@@ -876,6 +921,15 @@ public class SpellDef : INamedDef
         CloudSize = DrainCloudSize,
         CloudSpeed = DrainCloudSpeed,
         CloudColor = DrainCloudColor,
+        SourceCoreColor = DrainSourceCoreColor,
+        SourceGlowColor = DrainSourceGlowColor,
+        ScrollSpeed = DrainScrollSpeed,
+        ScrollScale = Math.Max(8f, DrainScrollScale),
+        ScrollAlpha = DrainScrollAlpha,
+        ImpactPuffCount = DrainImpactPuffs,
+        ImpactSize = DrainImpactSize,
+        ImpactFlipbookID = string.IsNullOrEmpty(DrainImpactFlipbook) ? "cloud03" : DrainImpactFlipbook,
+        ImpactFlareScale = DrainImpactFlareScale,
     };
 
     /// <summary>Build GodRayParams from this spell's god ray fields.</summary>

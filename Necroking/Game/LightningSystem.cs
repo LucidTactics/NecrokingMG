@@ -126,6 +126,24 @@ public class DrainVisualParams
     public float CloudSize = 10f;          // puff radius, screen px
     public float CloudSpeed = 0.5f;        // beam-lengths per second
     public HdrColor CloudColor = new(200, 255, 160, 255, 3f);
+    // Beam color at the flow-SOURCE end (the target on a normal drain) — the
+    // destination end uses Core/GlowColor, RGB+intensity lerping along the arc
+    // (hotter/different at the victim, like the Dota reference). Defaults match
+    // Core/GlowColor's defaults, i.e. no gradient until authored.
+    public HdrColor SourceCoreColor = new(120, 255, 80, 255, 2.5f);
+    public HdrColor SourceGlowColor = new(40, 120, 20, 160, 1.5f);
+    // Scrolling streak-noise overlay traveling source→destination along the
+    // beam. Speed is px/sec (0 = off), Scale is px per texture repeat.
+    public float ScrollSpeed;
+    public float ScrollScale = 90f;
+    public float ScrollAlpha = 0.5f;
+    // Impact cluster at the flow-source end: flipbook puffs that churn over the
+    // beam/target junction (drawn in front of the beam, tinted SourceCoreColor)
+    // plus an additive flare. PuffCount 0 = off; FlareScale 0 = no flare.
+    public int ImpactPuffCount;
+    public float ImpactSize = 14f;         // cluster radius, screen px
+    public string ImpactFlipbookID = "cloud03";
+    public float ImpactFlareScale = 1f;
 }
 
 public class ActiveDrain

@@ -139,13 +139,15 @@ public class LightningRenderer
             AddBoltStrips(startSp, endSp, beam.Style, 1f, beam.Seed);
         }
 
-        // Draw active drains (tendrils only — the cloud puffs are alpha-blended
-        // and draw after the ribbons flush, in DrawTriangleEffects).
+        // Draw active drains (tendrils + additive endpoint flares — the cloud
+        // puffs and impact cluster are alpha-blended and draw after the ribbons
+        // flush, in DrawTriangleEffects).
         foreach (var drain in _sim.Lightning.Drains)
         {
             if (!drain.Alive) continue;
             if (!TryGetDrainEndpoints(drain, out var startSp, out var endSp)) continue;
             AddDrainTendrilStrips(startSp, endSp, drain.Visuals, drain.Elapsed);
+            AddDrainFlareSprites(_spriteBatch, _glowTex, startSp, endSp, drain.Visuals, drain.Elapsed);
         }
     }
 
@@ -190,7 +192,7 @@ public class LightningRenderer
     {
         bool any = false;
         foreach (var d in _sim.Lightning.Drains)
-            if (d.Alive && d.Visuals.CloudCount > 0) { any = true; break; }
+            if (d.Alive && (d.Visuals.CloudCount > 0 || d.Visuals.ImpactPuffCount > 0)) { any = true; break; }
         if (!any) return;
 
         Flipbook? cloudFb = null;
@@ -200,9 +202,16 @@ public class LightningRenderer
         mat.Begin(_spriteBatch);
         foreach (var drain in _sim.Lightning.Drains)
         {
-            if (!drain.Alive || drain.Visuals.CloudCount <= 0) continue;
+            if (!drain.Alive) continue;
+            var v = drain.Visuals;
+            if (v.CloudCount <= 0 && v.ImpactPuffCount <= 0) continue;
             if (!TryGetDrainEndpoints(drain, out var startSp, out var endSp)) continue;
-            AddDrainCloudSprites(_spriteBatch, _glowTex, cloudFb, startSp, endSp, drain.Visuals, drain.Elapsed);
+            AddDrainCloudSprites(_spriteBatch, _glowTex, cloudFb, startSp, endSp, v, drain.Elapsed);
+            // Impact cluster last: frontmost, covering the beam/target junction.
+            Flipbook? impactFb = cloudFb;
+            if (v.ImpactFlipbookID != "cloud03" && _game._flipbooks != null)
+                _game._flipbooks.TryGetValue(v.ImpactFlipbookID, out impactFb);
+            AddDrainImpactSprites(_spriteBatch, _glowTex, impactFb, startSp, endSp, v, drain.Elapsed);
         }
         _spriteBatch.End();
     }
@@ -432,16 +441,40 @@ public class LightningRenderer
     /// and v.SourceWidthScale (Pugna funnel: narrow at the destination, wide at
     /// the life-source end, tendrils fanning out toward the source).
     /// </summary>
+    /// <summary>RGB for a gradient endpoint drawn in a bucket of a (possibly
+    /// higher) shared intensity: scale the color down by its own intensity's
+    /// ratio so brightness varies along the strip while the uniform stays one
+    /// value. Both intensities are MaxHdrIntensity-clamped (encode parity).</summary>
+    private static Color ScaledTint(HdrColor c, float bucketIntensity)
+    {
+        float eff = MathF.Min(c.Intensity, HdrColor.MaxHdrIntensity);
+        float s = bucketIntensity > 0.001f ? eff / bucketIntensity : 1f;
+        var col = c.ToColor();
+        return new Color((byte)(col.R * s), (byte)(col.G * s), (byte)(col.B * s), col.A);
+    }
+
     public static void AddDrainTendrilStripsStatic(HdrStripBatch strips,
         Vector2 start, Vector2 end, DrainVisualParams v, float elapsed)
     {
         float pulse = 1f + v.PulseStrength * MathF.Sin(elapsed * v.PulseHz * 2f * MathF.PI);
 
-        var coreTint = v.CoreColor.ToColor();
-        var glowTint = v.GlowColor.ToColor();
-        // Same MaxHdrIntensity clamp as AddBoltStripsStatic (sprite-encode parity).
-        var coreVerts = strips.GetBucket(MathF.Min(v.CoreColor.Intensity, HdrColor.MaxHdrIntensity));
-        var glowVerts = strips.GetBucket(MathF.Min(v.GlowColor.Intensity, HdrColor.MaxHdrIntensity));
+        // Color gradient along the beam: the flow-source end (target on a normal
+        // drain) uses SourceCore/GlowColor, the destination end Core/GlowColor.
+        // Each strip draws in a bucket keyed to the brighter end's intensity,
+        // with the dimmer end's RGB scaled down — brightness AND hue shift along
+        // the arc while the per-bucket Intensity uniform stays a single value.
+        var coreStartC = v.FlowReversed ? v.SourceCoreColor : v.CoreColor;
+        var coreEndC = v.FlowReversed ? v.CoreColor : v.SourceCoreColor;
+        var glowStartC = v.FlowReversed ? v.SourceGlowColor : v.GlowColor;
+        var glowEndC = v.FlowReversed ? v.GlowColor : v.SourceGlowColor;
+        float coreI = MathF.Min(MathF.Max(coreStartC.Intensity, coreEndC.Intensity), HdrColor.MaxHdrIntensity);
+        float glowI = MathF.Min(MathF.Max(glowStartC.Intensity, glowEndC.Intensity), HdrColor.MaxHdrIntensity);
+        var coreTintStart = ScaledTint(coreStartC, coreI);
+        var coreTintEnd = ScaledTint(coreEndC, coreI);
+        var glowTintStart = ScaledTint(glowStartC, glowI);
+        var glowTintEnd = ScaledTint(glowEndC, glowI);
+        var coreVerts = strips.GetBucket(coreI);
+        var glowVerts = strips.GetBucket(glowI);
 
         // Source end of the flow: target (end) on a normal drain. Widths scale
         // up and the tendril fan/sway anchors there; the destination end stays
@@ -449,6 +482,14 @@ public class LightningRenderer
         float srcScale = MathF.Max(0.1f, v.SourceWidthScale);
         float wStartScale = v.FlowReversed ? srcScale : 1f;
         float wEndScale = v.FlowReversed ? 1f : srcScale;
+
+        // Scrolling streak overlay: arc-length U offset animated so the noise
+        // travels from the flow source toward the destination. Arc grows
+        // start→end, so flowing toward the START means features move to smaller
+        // arc — U = (arc + off)/scale; reversed flips the sign.
+        bool scroll = v.ScrollSpeed > 0.001f && v.ScrollAlpha > 0.001f;
+        float scrollOff = elapsed * v.ScrollSpeed * (v.FlowReversed ? -1f : 1f);
+        var scrollVerts = scroll ? strips.GetTexturedBucket(coreI) : null;
 
         for (int t = 0; t < v.TendrilCount; t++)
         {
@@ -462,10 +503,115 @@ public class LightningRenderer
             if (_tendrilPts.Count < 2) continue;
 
             // Same fade constants as the retired sprite path (glow 120/255, core 200/255).
-            PolylineStrip.Build(glowVerts, _tendrilPts, glowTint, 120f / 255f, 120f / 255f,
+            PolylineStrip.Build(glowVerts, _tendrilPts, glowTintStart, glowTintEnd,
+                120f / 255f, 120f / 255f,
                 v.GlowWidth * pulse * wStartScale, v.GlowWidth * pulse * wEndScale, GlowEdgeSoft);
-            PolylineStrip.Build(coreVerts, _tendrilPts, coreTint, 200f / 255f, 200f / 255f,
+            PolylineStrip.Build(coreVerts, _tendrilPts, coreTintStart, coreTintEnd,
+                200f / 255f, 200f / 255f,
                 v.CoreWidth * pulse * wStartScale, v.CoreWidth * pulse * wEndScale, CoreEdgeSoft);
+
+            if (scroll)
+            {
+                // Two noise layers at different scales/speeds (the classic
+                // anti-tiling trick) spanning most of the glow width.
+                float sw = v.GlowWidth * 0.9f * pulse;
+                PolylineStrip.BuildTextured(scrollVerts!, _tendrilPts,
+                    coreTintStart, coreTintEnd, v.ScrollAlpha, v.ScrollAlpha,
+                    sw * wStartScale, sw * wEndScale, GlowEdgeSoft,
+                    scrollOff, v.ScrollScale);
+                PolylineStrip.BuildTextured(scrollVerts!, _tendrilPts,
+                    coreTintStart, coreTintEnd, v.ScrollAlpha * 0.55f, v.ScrollAlpha * 0.55f,
+                    sw * wStartScale, sw * wEndScale, GlowEdgeSoft,
+                    scrollOff * 0.55f, v.ScrollScale * 1.9f);
+            }
+        }
+    }
+
+    /// <summary>Additive endpoint flares: a hot pulsing glow where the beam
+    /// meets the flow source (the victim) and a smaller one at the destination
+    /// hand. Must be called while the additive HDR sprite batch is open (colors
+    /// via ToHdrVertex). Shared by the in-game renderer and SpellPreview.</summary>
+    public static void AddDrainFlareSprites(SpriteBatch sb, Texture2D glowTex,
+        Vector2 start, Vector2 end, DrainVisualParams v, float elapsed)
+    {
+        if (v.ImpactFlareScale <= 0f) return;
+        var srcPos = v.FlowReversed ? start : end;
+        var dstPos = v.FlowReversed ? end : start;
+        float texHalf = glowTex.Width * 0.5f;
+        var origin = new Vector2(texHalf, texHalf);
+        float pulse = 1f + 0.18f * MathF.Sin(elapsed * MathF.Max(v.PulseHz, 0.5f) * 2f * MathF.PI);
+
+        float srcR = MathF.Max(v.ImpactSize * 1.6f,
+            v.GlowWidth * MathF.Max(1f, v.SourceWidthScale)) * v.ImpactFlareScale * pulse;
+        var srcC = v.SourceCoreColor;
+        float srcI = MathF.Min(srcC.Intensity, HdrColor.MaxHdrIntensity);
+        // Hot center + wider soft halo.
+        sb.Draw(glowTex, srcPos, null, HdrColor.ToHdrVertex(srcC.ToColor(), 0.9f, srcI),
+            0f, origin, srcR / texHalf, SpriteEffects.None, 0f);
+        sb.Draw(glowTex, srcPos, null, HdrColor.ToHdrVertex(srcC.ToColor(), 0.35f, srcI),
+            0f, origin, srcR * 1.9f / texHalf, SpriteEffects.None, 0f);
+
+        var dstC = v.CoreColor;
+        float dstI = MathF.Min(dstC.Intensity, HdrColor.MaxHdrIntensity);
+        sb.Draw(glowTex, dstPos, null, HdrColor.ToHdrVertex(dstC.ToColor(), 0.6f, dstI),
+            0f, origin, srcR * 0.45f / texHalf, SpriteEffects.None, 0f);
+    }
+
+    /// <summary>Impact puff cluster at the flow-source end: flipbook puffs
+    /// churning over the beam/target junction, tinted like the beam's source
+    /// end. Must be called in the alpha-blended HDR pass AFTER the beam ribbons
+    /// (and after the traveling clouds) so the cluster occludes the junction.
+    /// Shared by the in-game renderer and SpellPreview.</summary>
+    public static void AddDrainImpactSprites(SpriteBatch sb, Texture2D glowTex, Flipbook? fb,
+        Vector2 start, Vector2 end, DrainVisualParams v, float elapsed)
+    {
+        if (v.ImpactPuffCount <= 0 || v.ImpactSize <= 0f) return;
+        var srcPos = v.FlowReversed ? start : end;
+        var toDst = (v.FlowReversed ? end : start) - srcPos;
+        float len = toDst.Length();
+        if (len > 0.5f) toDst /= len;
+
+        var srcC = v.SourceCoreColor;
+        var tint = srcC.ToColor();
+        float intensity = MathF.Min(srcC.Intensity, HdrColor.MaxHdrIntensity);
+        bool useFb = fb != null && fb.IsLoaded && fb.Texture != null;
+        float texHalf = glowTex.Width * 0.5f;
+
+        for (int i = 0; i < v.ImpactPuffCount; i++)
+        {
+            uint h = (uint)(i + 11) * 2654435761u;
+            h = h * 1103515245u + 12345u; float rA = (h % 1000) / 1000f;
+            h = h * 1103515245u + 12345u; float rR = (h % 1000) / 1000f;
+            h = h * 1103515245u + 12345u; float rPh = (h % 1000) / 1000f;
+            h = h * 1103515245u + 12345u; float rSz = (h % 1000) / 1000f;
+
+            // Slow churn: each puff orbits the junction at its own speed and
+            // direction, breathing in and out a little.
+            float angle = rA * MathF.Tau + elapsed * (0.35f + rPh * 0.5f) * (i % 2 == 0 ? 1f : -1f);
+            float radius = v.ImpactSize * (0.25f + 0.75f * rR)
+                * (1f + 0.15f * MathF.Sin(elapsed * 2f + i * 1.7f));
+            var pos = srcPos
+                + new Vector2(MathF.Cos(angle), MathF.Sin(angle) * 0.7f) * radius
+                + toDst * v.ImpactSize * 0.3f; // bias the cluster over the beam end
+
+            float size = v.ImpactSize * (0.8f + 0.5f * rSz);
+            var color = HdrColor.ToHdrVertexAlpha(tint, 0.9f, intensity);
+
+            if (useFb)
+            {
+                int frame = fb!.GetFrameAtNormalizedTime((elapsed / 3f + rPh) % 1f);
+                var src = fb.GetFrameRect(frame);
+                var org = new Vector2(src.Width / 2f, src.Height / 2f);
+                float scl = size * 2f / Math.Max(src.Width, 1);
+                var flip = i % 2 == 0 ? SpriteEffects.None : SpriteEffects.FlipHorizontally;
+                sb.Draw(fb.Texture, pos, src, color, 0f, org, scl, flip, 0f);
+                sb.Draw(fb.Texture, pos, src, color, 0f, org, scl * 0.8f, flip, 0f);
+            }
+            else
+            {
+                sb.Draw(glowTex, pos, null, color, 0f, new Vector2(texHalf, texHalf),
+                    size / texHalf, SpriteEffects.None, 0f);
+            }
         }
     }
 
@@ -507,8 +653,14 @@ public class LightningRenderer
             // Geometric t along start→end (start = caster = destination on a normal drain).
             float t = v.FlowReversed ? p : 1f - p;
 
-            float lateral = TendrilLateral(t, elapsed, v.ArcHeight) + rLat * v.CloudSize * 0.8f;
+            // Smoke drift: puffs wobble across the beam and float upward as they
+            // age (p is age since spawning at the source), so they read as smoke
+            // boiling off the beam instead of beads threaded on it.
+            float wobble = MathF.Sin(elapsed * 1.7f + i * 2.4f) * v.CloudSize * 0.5f * p;
+            float lateral = TendrilLateral(t, elapsed, v.ArcHeight)
+                + rLat * v.CloudSize * 0.8f + wobble;
             var pos = Vector2.Lerp(start, end, t) + perp * lateral;
+            pos.Y -= p * v.CloudSize * 0.9f; // screen-up drift
 
             // Fade in/out near the ends; shrink as the puff nears the narrow end.
             float fade = Math.Clamp(MathF.Min(p, 1f - p) * 6f, 0f, 1f);

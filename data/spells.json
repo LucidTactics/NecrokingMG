@@ -774,6 +774,26 @@
         "a": 255,
         "intensity": 2.2
       },
+      "drainSourceCoreColor": {
+        "r": 220,
+        "g": 255,
+        "b": 120,
+        "a": 210,
+        "intensity": 4
+      },
+      "drainSourceGlowColor": {
+        "r": 120,
+        "g": 255,
+        "b": 80,
+        "a": 55,
+        "intensity": 3.2
+      },
+      "drainScrollSpeed": 160,
+      "drainScrollScale": 70,
+      "drainScrollAlpha": 0.55,
+      "drainImpactPuffs": 7,
+      "drainImpactSize": 20,
+      "drainImpactFlareScale": 0.5,
       "drainTargetEffect": {
         "flipbookID": "",
         "fps": 0,
@@ -989,6 +1009,26 @@
         "a": 255,
         "intensity": 2.2
       },
+      "drainSourceCoreColor": {
+        "r": 220,
+        "g": 255,
+        "b": 120,
+        "a": 210,
+        "intensity": 4
+      },
+      "drainSourceGlowColor": {
+        "r": 120,
+        "g": 255,
+        "b": 80,
+        "a": 55,
+        "intensity": 3.2
+      },
+      "drainScrollSpeed": 160,
+      "drainScrollScale": 70,
+      "drainScrollAlpha": 0.55,
+      "drainImpactPuffs": 7,
+      "drainImpactSize": 20,
+      "drainImpactFlareScale": 0.5,
       "drainTargetEffect": {
         "flipbookID": "",
         "fps": -1,
