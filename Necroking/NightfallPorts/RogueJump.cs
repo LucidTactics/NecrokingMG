@@ -99,6 +99,10 @@ public static class RogueJump
     /// animation loop checks this before calling <see cref="TickUnit"/>.</summary>
     public static bool IsJumping(uint unitId) => _active.ContainsKey(unitId);
 
+    /// <summary>True while <paramref name="unitId"/> has a rogue jump in flight. The
+    /// animation loop checks this before calling <see cref="TickUnit"/>.</summary>
+    public static Vec2 GetJumpDir(uint unitId) => _active[unitId].Dir;
+
     // --- Initiation ---
 
     /// <summary>
