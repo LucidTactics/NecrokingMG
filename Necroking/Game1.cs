@@ -3603,7 +3603,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     && !Necroking.NightfallPorts.RogueJump.IsJumping(mu[necroIdx].Id)
                     && !mu[necroIdx].Incap.IsLocked && !_pendingSpell.Active;
                 if (canJump)
-                    Necroking.NightfallPorts.RogueJump.BeginMomentumJump(mu, necroIdx);
+                    // slideThrough: keep the run momentum gliding through the squat +
+                    // landing anims and don't stop dead on landing.
+                    Necroking.NightfallPorts.RogueJump.BeginMomentumJump(mu, necroIdx, slideThrough: true);
             }
 
             // --- Beam/drain channel-hold ---
