@@ -156,6 +156,14 @@ public abstract class RegistryBase<TDef> where TDef : class, IHasId, new()
         return options;
     }
 
+    /// <summary>True when the last <see cref="Load"/> dropped entries (a malformed
+    /// element, or a file-level parse error after some entries were already read).
+    /// While set, <see cref="Save"/> refuses to write: the in-memory registry is
+    /// incomplete, and persisting it would silently delete the lost entries from
+    /// the file (a spells.json with one bad color object once lost 32 spells to a
+    /// --roundtrip-data save this way).</summary>
+    public bool LoadHadErrors { get; protected set; }
+
     public virtual bool Load(string path)
     {
         if (!File.Exists(path)) return false;
@@ -171,23 +179,47 @@ public abstract class RegistryBase<TDef> where TDef : class, IHasId, new()
 
             _defs.Clear();
             _orderedIDs.Clear();
+            LoadHadErrors = false;
 
             var options = CreateJsonOptions();
 
             foreach (var elem in arr.EnumerateArray())
             {
-                var def = DeserializeItem(elem, options);
+                TDef? def;
+                // Per-entry catch: one malformed entry shouldn't take down every
+                // entry after it — load the rest, but flag the loss for Save.
+                try { def = DeserializeItem(elem, options); }
+                catch (Exception ex)
+                {
+                    LoadHadErrors = true;
+                    string id = elem.ValueKind == JsonValueKind.Object
+                        && elem.TryGetProperty("id", out var idProp) ? idProp.ToString() : "<no id>";
+                    DebugLog.Log("error", $"Failed to load entry '{id}' in {path}: {ex.Message}");
+                    continue;
+                }
                 if (def == null || string.IsNullOrEmpty(def.Id)) continue;
                 _defs[def.Id] = def;
                 _orderedIDs.Add(def.Id);
             }
-            return true;
+            return !LoadHadErrors;
         }
-        catch (Exception ex) { DebugLog.Log("error", $"Failed to load {path}: {ex.Message}"); return false; }
+        catch (Exception ex)
+        {
+            LoadHadErrors = true;
+            DebugLog.Log("error", $"Failed to load {path}: {ex.Message}");
+            return false;
+        }
     }
 
     public virtual bool Save(string path)
     {
+        if (LoadHadErrors)
+        {
+            DebugLog.Log("error", $"Refusing to save {path}: the last load dropped entries "
+                + "(see earlier load errors) — saving would permanently delete them. "
+                + "Fix the file and reload first.");
+            return false;
+        }
         try
         {
             var options = CreateJsonOptions();
