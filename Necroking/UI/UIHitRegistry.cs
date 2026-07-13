@@ -10,13 +10,13 @@ namespace Necroking.UI;
 /// Update (Game1.RebuildUIHitRects) by asking each UI object for its footprint
 /// — popup layers via <see cref="IModalLayer.HitBounds"/> / PopupManager, HUD
 /// elements via HUDRenderer.AppendHitRects, plus Game1-level extras (toasts,
-/// aggression bar, spell dropdown). InputState.MouseOverUI is then derived from
+/// aggression bar). InputState.MouseOverUI is then derived from
 /// <see cref="Hit(int,int)"/> in ONE place instead of ad-hoc hit tests scattered
 /// through the update loop.
 ///
 /// Entry kinds:
 ///   rect        — a concrete rectangle (the normal case; inspectable via ui_rects)
-///   fullscreen  — blankets the whole screen (blocking modals, open spell dropdown)
+///   fullscreen  — blankets the whole screen (blocking modals, open editor dropdown)
 ///   probe       — a ContainsMouse delegate for layers that can't cheaply expose
 ///                 a rect yet (immediate-mode editor popups); still centrally
 ///                 registered and enumerable, just without dimensions.

@@ -313,26 +313,28 @@ bars render wrong. Corpse death-frame centroids are baked to `data/frame_centroi
 See also: `Game1.Render.Units.cs` (shared sprite-frame helpers), `Game1.Spells.cs` (reanimate
 queuing), `Core/` (corpse state).
 
-### `Necroking/Game1.Render.HUD.cs` — HUD, spellbar, menus, toasts & debug overlays
-What lives here: all on-screen UI drawing — the HUD/spellbar entry (`DrawHUD`), skill-learn toasts,
-the aggression bar + tooltip, core-menu toggle buttons, the main menu / pause menu / scenario list /
-game-over screens, generic menu-button + panel + backdrop helpers, rounded text helpers, and the
+### `Necroking/Game1.Render.HUD.cs` — HUD, toasts, save-preview widgets & debug overlays
+What lives here: on-screen UI drawing — the HUD/spellbar entry (`DrawHUD`), skill-learn toasts,
+the aggression bar + tooltip, core-menu toggle buttons, the game-over overlay, the save-preview
+widgets shared by the load menu + save window (`DrawSavePreviewCard`/`DrawSaveGameText`), and the
 debug overlays (weapon-attach, wind, horde rings, unit-info, world-hover info).
-Key members: `DrawHUD`, `DrawMainMenu`, `DrawPauseMenu`, `DrawScenarioList`, `DrawGameOver`,
+Key members: `DrawHUD`, `DrawGameOver`, `DrawSavePreviewCard`, `DrawSaveGameText`,
 `DrawAggressionBar`, `DrawAggressionTooltip`, `ToggleCoreMenu`, `BuildMenuOpenMask`,
-`DrawSkillLearnToasts`, `UpdateSkillLearnToasts`, `DrawMenuButton`, `DrawMenuButtonAt`, `DrawPanel`,
-`DrawMenuBackdrop`, `DrawText`, `DrawTextRounded`, `DrawWorldHoverInfo`, `DrawHordeDebug`,
+`DrawSkillLearnToasts`, `UpdateSkillLearnToasts`, `DrawPanel`,
+`DrawText`, `DrawTextRounded`, `DrawWorldHoverInfo`, `DrawHordeDebug`,
 `DrawUnitInfoDebug`, `DrawWindDebug`, `DrawWeaponAttachDebug`.
-Look/edit here when: the spellbar or HUD draws incorrectly; a menu/pause/scenario-list/game-over
-screen looks wrong or its buttons mis-hit; the aggression bar/tooltip is off; skill-learn toasts
+Look/edit here when: the spellbar or HUD draws incorrectly; the game-over overlay or a save-preview
+card looks wrong; the aggression bar/tooltip is off; skill-learn toasts
 mistime or mislay out; a debug overlay (horde rings, wind, world-hover) renders wrong; remember to
 round text positions to integer pixels (CLAUDE.md → UI Text Rendering).
-**Pause/main-menu layout is single-source:** `BuildPauseMenuLayout` / `BuildMainMenuLayout`
-(in `GameRenderer.Hud.cs`, same family as `BuildLoadMenuLayout`/`BuildScenarioMenuLayout`) each
-declare the button list (ids + labels + group gaps) once and return resolved rects; `DrawPauseMenu`/
-`DrawMainMenu` render them and `Game1.HandlePauseMenuClick`/`HandleMainMenuClick` hit-test the same
-rects and `switch` on `MenuButtonId`. To add/remove/reorder a button, edit the builder's item list
-and add a `switch` case — never write positional math in the click handler.
+**The full-screen menus moved out (2026-07):** main menu / pause menu / scenario list / load menu
+each live in their own class — `UI/MainMenuScreen.cs`, `UI/PauseMenuScreen.cs`,
+`UI/ScenarioListScreen.cs`, `UI/LoadMenuScreen.cs` — with the shared button/backdrop/scrollbar
+style + `MenuButtonId` in `UI/MenuCommon.cs` (`MenuDraw`). Each screen keeps the single-source
+rule: a private `BuildLayout` declares the button list once; `Draw` renders those rects and
+`Update`/`HandleClick` hit-tests the same rects and `switch`es on `MenuButtonId`. To add/remove/
+reorder a button, edit that screen's item list and add a `switch` case — never write positional
+math in the click handler.
 Submenus opened from pause (e.g. Settings) follow the
 `MenuState.Settings` + `Editor/SettingsWindow.cs` pattern: a window class driven by the shared
 `EditorBase` (`_editorUi`) widgets, `WantsClose` flag polled in `Game1.Update` to return to

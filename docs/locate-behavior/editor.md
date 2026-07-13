@@ -319,13 +319,14 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
     EditorBase `_scrollOffsets[panelId]`. Prefer this for new scrollable editor panels;
     hand-rolling the height math has double-counted the offset before (feedback loop).
 - **Draggable scrollbar OUTSIDE EditorBase (raw HUD menus): the scenario-list precedent.**
-  `GameRenderer.Hud.cs` `ScenarioMenuView` (carries `ScrollX/ScrollY/ScrollViewH/
-  ScrollContentH` + `ClampScroll`) built by `BuildScenarioMenuLayout`; **input** in
-  `Game1.cs` `MenuState.ScenarioList` block (`_scenarioScrollPx`/`_scenarioScrollDragging`/
-  `_scenarioScrollGrabOffset`, thumb-grab + track-jump + wheel via the shared `VScrollbar`
-  statics, row clicks skipped while dragging, clicks gated to the scroll window); **draw**
-  in `DrawScenarioScrollbar` + scissor-clipped rows. Copy this pattern for any main-menu
-  family list (e.g. the load-game menu).
+  `UI/ScenarioListScreen.cs` (and its twin `UI/LoadMenuScreen.cs`): the `View` struct
+  carries `ScrollX/ScrollY/ScrollViewH/ScrollContentH` + `ClampScroll`, built by the
+  screen's private `BuildLayout`; **input** in the screen's `Update()` (offset =
+  `Game1._scenarioScrollPx`, drag state `_scrollDragging`/`_scrollGrabOffset` on the
+  screen; thumb-grab + track-jump + wheel via the shared `VScrollbar` statics, row clicks
+  skipped while dragging, clicks gated to the scroll window); **draw** via
+  `MenuDraw.Scrollbar` (`UI/MenuCommon.cs`) + scissor-clipped rows. Copy this pattern for
+  any main-menu family list.
 - **Wheel-scroll logic census**: canonical = `EditorBase.HandlePanelScroll` (rect +
   maxScroll overload, or id-keyed panelId+viewH overload backed by `SetPanelContentHeight`;
   respects `IsInputBlocked`/`_scrollConsumed`, calls `ConsumeScroll`+`SetMouseOverUI`) —

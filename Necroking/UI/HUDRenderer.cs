@@ -46,9 +46,6 @@ public partial class HUDRenderer
     private const string SpellSlotWidget = "SpellSlot";
     private const float SlotIconRatio = 0.80f; // icon size as a fraction of the box
 
-    private const int DropdownItemH = 20;
-    private const int DropdownWidth = 164;
-
     private const int TcBtnW = 32;
     private const int TcBtnH = 22;
     private const int TcGap = 2;
@@ -105,11 +102,6 @@ public partial class HUDRenderer
     private static readonly Color CooldownOverlay = new(0, 0, 0, 150);
     private static readonly Color CooldownText = new(255, 200, 100);
     private static readonly Color LowManaOverlay = new(80, 0, 0, 80);
-    private static readonly Color DropdownBg = new(20, 20, 35, 100);
-    private static readonly Color DropdownNoneColor = new(150, 150, 170);
-    private static readonly Color DropdownSelectedColor = new(255, 220, 100);
-    private static readonly Color DropdownNormalColor = new(200, 200, 220);
-    private static readonly Color DropdownHoverBg = new(80, 80, 120, 120);
     // (Tooltip box colors moved to TooltipSystem — the one canonical style.)
     private static readonly Color ControlHintColor = new(120, 120, 140, 200);
     private static readonly Color InventoryHintColor = new(200, 220, 180);

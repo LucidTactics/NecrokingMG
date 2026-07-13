@@ -198,8 +198,8 @@ public sealed class EditorHostLayer : UILayer
 /// The pause-menu family (pause / settings / multiplayer) as one blocking
 /// layer. ESC walks back the way the old ActionModalLayers did: settings and
 /// multiplayer return to the pause menu; the pause menu unpauses to gameplay.
-/// Button clicks are still handled by the existing raw-mouse blocks in
-/// Game1.Update — this seat provides the blocking blanket + ESC routing.
+/// Button clicks are still handled from Game1.Update (PauseMenuScreen
+/// .HandleClick) — this seat provides the blocking blanket + ESC routing.
 /// </summary>
 public sealed class MenuHostLayer : UILayer
 {
@@ -247,7 +247,7 @@ public sealed class MenuHostLayer : UILayer
         switch (_g._menuState)
         {
             case MenuState.PauseMenu:
-                _g._gameRenderer.DrawPauseMenu(ctx.ScreenW, ctx.ScreenH);
+                _g._pauseMenu.Draw(ctx.ScreenW, ctx.ScreenH);
                 break;
             case MenuState.Settings:
                 _g._settingsWindow.Draw(ctx.ScreenW, ctx.ScreenH);

@@ -464,7 +464,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Deferred init for the UI editor (F12 / menu). LoadDefinitions bakes
     /// every harmonized widget/element texture (~4s of CPU work) — a dev-only tool
     /// that most launches never open, so it's paid on first open, not at startup.</summary>
-    private void EnsureUIEditorInitialized()
+    internal void EnsureUIEditorInitialized()
     {
         if (_uiEditorInitialized) return;
         _uiEditorInitialized = true;
@@ -605,7 +605,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// collision data.</summary>
     private MenuState _prevMenuState = MenuState.MainMenu;
     internal bool _gameWorldLoaded;
-    MenuState _backMenuState = MenuState.MainMenu;
+    internal MenuState _backMenuState = MenuState.MainMenu; // where the load menu's Back/ESC returns
     /// <summary>True while anything holds the game paused (forwarder for
     /// <see cref="Core.GameClock.Paused"/>). Write via <c>_clock.Pause / Resume /
     /// TogglePause / ClearAllPauses</c> with a <see cref="Core.GameClock.PauseSource"/>.</summary>
@@ -865,12 +865,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private int _devJobSeq;                        // id counter for batch jobs
     private Vec2? _devWalkTarget;                  // dev "walk_necro" goal; drives WASD-equivalent input, cancelled by any WASD press
     private bool _devWalkSprint;                   // dev "walk_necro" sprint=true opt: hold virtual Shift while auto-walking
+    // Menu scroll offsets stay here (dev commands poke them); the scrollbar
+    // drag state lives on the owning ScenarioListScreen / LoadMenuScreen.
     internal float _scenarioScrollPx;             // scenario-menu scroll, in pixels (smooth, sub-row)
-    internal bool _scenarioScrollDragging;         // dragging the scenario-menu scrollbar thumb
-    private float _scenarioScrollGrabOffset;        // Y within the thumb where the drag started
     internal float _loadMenuScrollPx;              // load-menu scroll, in pixels (smooth, sub-row)
-    internal bool _loadMenuScrollDragging;          // dragging the load-menu scrollbar thumb
-    private float _loadMenuScrollGrabOffset;         // Y within the thumb where the drag started
 
     // --- Tethers / drag ropes (Shift+T target, Shift+R attach) ---
     // A tether connects two endpoints, each a live unit or a corpse. When a unit end is
@@ -927,12 +925,25 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// Game1.Render*.cs partials). Reaches back into Game1 state via a reference to this.</summary>
     internal readonly GameRenderer _gameRenderer;
 
+    // Full-screen menu screens (UI/*Screen.cs): each owns its layout, drawing
+    // and click handling. Drawn from GameRenderer.Draw's early-outs
+    // (main/scenario/load) or MenuHostLayer (pause); updated from the matching
+    // _menuState blocks in Update.
+    internal readonly UI.MainMenuScreen _mainMenu;
+    internal readonly UI.PauseMenuScreen _pauseMenu;
+    internal readonly UI.LoadMenuScreen _loadMenu;
+    internal readonly UI.ScenarioListScreen _scenarioList;
+
     public Game1()
     {
         Popups = _popups;
         Tooltips = new Necroking.UI.TooltipSystem(this);
         Instance = this;
         _gameRenderer = new GameRenderer(this);
+        _mainMenu = new UI.MainMenuScreen(this);
+        _pauseMenu = new UI.PauseMenuScreen(this);
+        _loadMenu = new UI.LoadMenuScreen(this);
+        _scenarioList = new UI.ScenarioListScreen(this);
 
         // Editors read mouse state live through the shared InputState (see
         // EditorBase._mouse) — wire it up before any editor can draw so they
@@ -1599,7 +1610,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _groundVertexMapTex = null;
     }
 
-    private void StartGame(string mapName = "default")
+    internal void StartGame(string mapName = "default")
     {
         ResetWorldState();
         _currentMapName = mapName;
@@ -2176,7 +2187,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // Each case rides Game1's existing APIs / the same Simulation primitives that
     // scenarios use, so there's a single source of truth for world manipulation.
 
-    private void StartScenario(string scenarioName)
+    internal void StartScenario(string scenarioName)
     {
         var scenario = ScenarioRegistry.Create(scenarioName);
         if (scenario == null)
@@ -2768,8 +2779,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Rebuild the central UI hit-rect registry for this frame and derive
     /// the "cursor over UI" state from it in ONE place: popup layers (via
     /// PopupManager), the persistent HUD (spell bar, time controls, top-right
-    /// button rows), and Game1-level extras (spell dropdown, skill toasts,
-    /// aggression bar). Replaces the old scattering of per-element hit tests.
+    /// button rows), and Game1-level extras (skill toasts, aggression bar).
+    /// Replaces the old scattering of per-element hit tests.
     /// The map editor's OverGameplayHud flag is derived here too — the HUD rows
     /// render on top of the editor, and without this a click on e.g. "Crafting"
     /// painted/placed in the world underneath.</summary>
@@ -3034,171 +3045,29 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             return;
         }
 
-        // --- Main menu ---
+        // --- Full-screen menus (each screen owns its layout/draw/input —
+        // UI/MainMenuScreen.cs, UI/ScenarioListScreen.cs, UI/LoadMenuScreen.cs) ---
         if (_menuState == MenuState.MainMenu)
         {
-            if (_input.LeftPressed)
-                HandleMainMenuClick(mouse);
+            _mainMenu.Update();
             _prevKb = kb;
             _prevMouse = mouse;
             base.Update(gameTime);
             return;
         }
 
-        // --- Scenario list ---
         if (_menuState == MenuState.ScenarioList)
         {
-            // Escape to go back
-            if (_input.WasKeyPressed(Keys.Escape))
-            {
-                _menuState = MenuState.MainMenu;
-                _prevKb = kb;
-                _prevMouse = mouse;
-                base.Update(gameTime);
-                return;
-            }
-
-            int screenW2 = GraphicsDevice.Viewport.Width;
-            int screenH2 = GraphicsDevice.Viewport.Height;
-            var view = _gameRenderer.BuildScenarioMenuLayout(screenW2, screenH2, _scenarioScrollPx);
-
-            // Draggable scrollbar — same behaviour as the editor panels (shared
-            // Necroking.UI.VScrollbar). The scroll offset is stored in pixels, so the
-            // thumb math and drag conversion are both pixel-native (smooth, sub-row).
-            if (_scenarioScrollDragging && mouse.LeftButton != ButtonState.Pressed)
-                _scenarioScrollDragging = false;
-
-            bool hasBar = !Necroking.UI.VScrollbar.Fits(view.ScrollViewH, view.ScrollContentH);
-            if (hasBar)
-            {
-                var thumb = Necroking.UI.VScrollbar.ThumbRect(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH, _scenarioScrollPx);
-                var hit = Necroking.UI.VScrollbar.HitRect(view.ScrollX, view.ScrollY, view.ScrollViewH);
-
-                // Grab the thumb, or click the track to jump (thumb centres on the cursor).
-                if (_input.LeftPressed && hit.Contains(mouse.X, mouse.Y))
-                {
-                    _scenarioScrollDragging = true;
-                    _scenarioScrollGrabOffset = thumb.Contains(mouse.X, mouse.Y) ? mouse.Y - thumb.Y : thumb.Height / 2f;
-                }
-
-                if (_scenarioScrollDragging)
-                {
-                    float newPx = Necroking.UI.VScrollbar.ScrollFromDrag(mouse.Y, _scenarioScrollGrabOffset,
-                        view.ScrollY, view.ScrollViewH, view.ScrollContentH);
-                    _scenarioScrollPx = view.ClampScroll(newPx);
-                }
-            }
-
-            // Wheel scroll (one layout row per notch), clamped to the layout height.
-            if (!_scenarioScrollDragging && _input.ScrollDelta != 0)
-            {
-                _scenarioScrollPx += (_input.ScrollDelta > 0 ? -1 : 1) * view.RowStride * 0.5f;
-                _scenarioScrollPx = view.ClampScroll(_scenarioScrollPx);
-            }
-
-            // Grid / back-button clicks (skipped while dragging the scrollbar).
-            if (_input.LeftPressed && !_scenarioScrollDragging)
-            {
-                // Only clicks inside the scrolled grid window count — a partially
-                // clipped bottom row must not be clickable in the gap below it.
-                bool inGridWindow = mouse.Y >= view.ScrollY && mouse.Y < view.ScrollY + view.ScrollViewH;
-                foreach (var e in view.Entries)
-                {
-                    if (!e.Visible || e.IsHeader || !inGridWindow) continue;
-                    if (e.Rect.Contains(mouse.X, mouse.Y))
-                    {
-                        StartScenario(e.Text);
-                        _prevKb = kb;
-                        _prevMouse = mouse;
-                        base.Update(gameTime);
-                        return;
-                    }
-                }
-
-                // Back button (fixed below the visible grid)
-                if (view.BackRect.Contains(mouse.X, mouse.Y))
-                    _menuState = MenuState.MainMenu;
-            }
+            _scenarioList.Update();
             _prevKb = kb;
             _prevMouse = mouse;
             base.Update(gameTime);
             return;
         }
 
-        // --- Load-game menu (main-menu family, shared layout with DrawLoadMenu) ---
         if (_menuState == MenuState.LoadMenu)
         {
-            // Escape to go back
-            if (_input.WasKeyPressed(Keys.Escape))
-            {
-                _menuState = _backMenuState;
-                _prevKb = kb;
-                _prevMouse = mouse;
-                base.Update(gameTime);
-                return;
-            }
-
-            int screenW2 = GraphicsDevice.Viewport.Width;
-            int screenH2 = GraphicsDevice.Viewport.Height;
-            var view = _gameRenderer.BuildLoadMenuLayout(screenW2, screenH2, _loadMenuSaves.Count, _loadMenuScrollPx);
-
-            // Draggable scrollbar — same behaviour as the scenario menu (shared
-            // Necroking.UI.VScrollbar). The scroll offset is stored in pixels, so
-            // the thumb math and drag conversion are both pixel-native.
-            if (_loadMenuScrollDragging && mouse.LeftButton != ButtonState.Pressed)
-                _loadMenuScrollDragging = false;
-
-            bool hasBar = !Necroking.UI.VScrollbar.Fits(view.ScrollViewH, view.ScrollContentH);
-            if (hasBar)
-            {
-                var thumb = Necroking.UI.VScrollbar.ThumbRect(view.ScrollX, view.ScrollY, view.ScrollViewH, view.ScrollContentH, _loadMenuScrollPx);
-                var hit = Necroking.UI.VScrollbar.HitRect(view.ScrollX, view.ScrollY, view.ScrollViewH);
-
-                // Grab the thumb, or click the track to jump (thumb centres on the cursor).
-                if (_input.LeftPressed && hit.Contains(mouse.X, mouse.Y))
-                {
-                    _loadMenuScrollDragging = true;
-                    _loadMenuScrollGrabOffset = thumb.Contains(mouse.X, mouse.Y) ? mouse.Y - thumb.Y : thumb.Height / 2f;
-                }
-
-                if (_loadMenuScrollDragging)
-                {
-                    float newPx = Necroking.UI.VScrollbar.ScrollFromDrag(mouse.Y, _loadMenuScrollGrabOffset,
-                        view.ScrollY, view.ScrollViewH, view.ScrollContentH);
-                    _loadMenuScrollPx = view.ClampScroll(newPx);
-                }
-            }
-
-            // Wheel scroll (half a row per notch), clamped to the layout height.
-            if (!_loadMenuScrollDragging && _input.ScrollDelta != 0)
-            {
-                _loadMenuScrollPx += (_input.ScrollDelta > 0 ? -1 : 1) * view.RowStride * 0.5f;
-                _loadMenuScrollPx = view.ClampScroll(_loadMenuScrollPx);
-            }
-
-            // Row / back-button clicks (skipped while dragging the scrollbar).
-            if (_input.LeftPressed && !_loadMenuScrollDragging)
-            {
-                // Only clicks inside the scrolled list window count — a partially
-                // clipped bottom row must not be clickable in the gap below it.
-                bool inListWindow = mouse.Y >= view.ScrollY && mouse.Y < view.ScrollY + view.ScrollViewH;
-                if (inListWindow)
-                {
-                    for (int i = 0; i < view.RowRects.Length; i++)
-                    {
-                        if (!view.RowRects[i].Contains(mouse.X, mouse.Y)) continue;
-                        // On success StartGame has switched _menuState to None; on a
-                        // validation failure (logged) we simply stay on this menu.
-                        LoadSaveGame(_loadMenuSaves[i].Name);
-                        break;
-                    }
-                }
-
-                if (_menuState == MenuState.LoadMenu && view.BackRect.Contains(mouse.X, mouse.Y))
-                {
-                    _menuState = _backMenuState;
-                }
-            }
+            _loadMenu.Update();
             _prevKb = kb;
             _prevMouse = mouse;
             base.Update(gameTime);
@@ -3364,10 +3233,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         }
         if (_menuState == MenuState.PauseMenu) _backMenuState = MenuState.PauseMenu;
 
-        // --- Pause menu button clicks ---
+        // --- Pause menu button clicks (UI/PauseMenuScreen.cs) ---
         if (_menuState == MenuState.PauseMenu && _input.LeftPressed)
         {
-            if (HandlePauseMenuClick(gameTime, mouse, kb)) return;
+            if (_pauseMenu.HandleClick())
+            {
+                // Switched to the load menu — skip the rest of this frame so the
+                // new state doesn't fall through to gameplay input.
+                _prevKb = kb;
+                _prevMouse = mouse;
+                base.Update(gameTime);
+                return;
+            }
         }
 
         // --- Settings window close handling ---
@@ -4072,104 +3949,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _prevKb = kb;
         _prevMouse = mouse;
         base.Update(gameTime);
-    }
-
-    // Hit-tests against the same layout DrawPauseMenu renders (BuildPauseMenuLayout).
-    bool HandlePauseMenuClick(GameTime gameTime, MouseState mouse, KeyboardState kb) {
-        int sw = GraphicsDevice.Viewport.Width;
-        int sh = GraphicsDevice.Viewport.Height;
-        var view = _gameRenderer.BuildPauseMenuLayout(sw, sh);
-        foreach (var b in view.Buttons) {
-            if (!b.Interactable || !b.Rect.Contains(mouse.X, mouse.Y)) continue;
-            switch (b.Id) {
-                case MenuButtonId.Resume:
-                    _menuState = MenuState.None;
-                    _clock.ClearAllPauses();
-                    break;
-                case MenuButtonId.SaveGame:
-                    OpenSaveMenu();
-                    break;
-                case MenuButtonId.LoadGame:
-                    _loadMenuSaves = ListSaveGames();
-                    _loadMenuScrollPx = 0f;
-                    _backMenuState = _menuState;
-                    _menuState = MenuState.LoadMenu;
-                    _prevKb = kb;
-                    _prevMouse = mouse;
-                    base.Update(gameTime);
-                    return true;
-                case MenuButtonId.UnitEditor:
-                    _menuState = MenuState.UnitEditor;
-                    _clock.ClearAllPauses();
-                    break;
-                case MenuButtonId.SpellEditor:
-                    _menuState = MenuState.SpellEditor;
-                    _clock.ClearAllPauses();
-                    break;
-                case MenuButtonId.MapEditor:
-                    _menuState = MenuState.MapEditor;
-                    _clock.ClearAllPauses();
-                    _mapEditor.SuppressClicksUntilRelease();
-                    break;
-                case MenuButtonId.UIEditor:
-                    EnsureUIEditorInitialized();
-                    _menuState = MenuState.UIEditor;
-                    _clock.ClearAllPauses();
-                    break;
-                case MenuButtonId.ItemEditor:
-                    _menuState = MenuState.ItemEditor;
-                    _clock.ClearAllPauses();
-                    break;
-                case MenuButtonId.Settings:
-                    _menuState = MenuState.Settings;
-                    break;
-                case MenuButtonId.Multiplayer:
-                    _menuState = MenuState.Multiplayer;
-                    break;
-                case MenuButtonId.ToMainMenu:
-                    _menuState = MenuState.MainMenu;
-                    _clock.ClearAllPauses();
-                    _gameWorldLoaded = false;
-                    break;
-                case MenuButtonId.Quit:
-                    Exit();
-                    break;
-            }
-        }
-        return false;
-    }
-
-    // Hit-tests against the same layout DrawMainMenu renders (BuildMainMenuLayout).
-    void HandleMainMenuClick(MouseState mouse) {
-        int sw = GraphicsDevice.Viewport.Width;
-        int sh = GraphicsDevice.Viewport.Height;
-        foreach (var b in _gameRenderer.BuildMainMenuLayout(sw, sh)) {
-            if (!b.Interactable || !b.Rect.Contains(mouse.X, mouse.Y)) continue;
-            switch (b.Id) {
-                case MenuButtonId.Continue:
-                    LoadSaveGame(_loadMenuSaves[0].Name);
-                    return;
-                case MenuButtonId.Play:
-                    StartGame();
-                    return;
-                case MenuButtonId.PlayTestMap: // loads assets/maps/testmap.json
-                    StartGame("testmap");
-                    return;
-                case MenuButtonId.Scenarios:
-                    _menuState = MenuState.ScenarioList;
-                    _scenarioScrollPx = 0f;
-                    return;
-                case MenuButtonId.LoadGame:
-                    _loadMenuSaves = ListSaveGames();
-                    _loadMenuScrollPx = 0f;
-                    _backMenuState = _menuState;
-                    _menuState = MenuState.LoadMenu;
-                    return;
-                case MenuButtonId.Quit:
-                    Exit();
-                    return;
-            }
-        }
     }
 
     /// <summary>Cached trap-target query passed to EnvironmentSystem.UpdateTraps

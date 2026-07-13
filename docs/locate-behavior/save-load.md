@@ -63,23 +63,23 @@ Look/edit here when: the save dialog's list/name-field/confirm-button behaves wr
 or adding save-row actions (delete/rename).
 
 ### Related
-- `Necroking/GameRenderer.Hud.cs` — draws the load-menu rows and the save-preview cards
-  (`DrawSavePreviewCard` + `DrawSaveGameText`, form portrait + spell/inventory icons from
-  `SaveGameInfo`). Layout struct `LoadMenuView` built by `BuildLoadMenuLayout(screenW,
-  screenH, saveCount)` — one rect per visible row + `BackRect`; consumed by BOTH
-  `DrawLoadMenu` and Game1's hit-test so they can't drift.
-- `Necroking/Game1.cs` — the load menu is a `MenuState.LoadMenu` family entry (Update block
-  rebuilds `BuildLoadMenuLayout` and hit-tests `view.RowRects`); StartGame owns the
-  per-game reset (see `GameSession` + StartGame/StartScenario asymmetry in
-  [game1-partials.md](game1-partials.md)).
+- `Necroking/UI/LoadMenuScreen.cs` — the full-screen load menu (`MenuState.LoadMenu`
+  family entry): private `View` struct built by `BuildLayout(screenW, screenH, saveCount,
+  scrollPx)` — one rect per row (scroll applied) + `BackRect` — consumed by BOTH `Draw`
+  and `Update`'s hit-test so they can't drift; scrolls via the shared `VScrollbar`
+  pattern (see [editor.md](editor.md)). `Open()` refreshes `Game1._loadMenuSaves`, resets
+  `_loadMenuScrollPx` and records `_backMenuState` (main menu vs pause menu return).
+- `Necroking/GameRenderer.Hud.cs` — the save-preview widgets both save UIs share:
+  `DrawSavePreviewCard` + `DrawSaveGameText` (form portrait + spell/inventory icons from
+  `SaveGameInfo`), called by `LoadMenuScreen.Draw` and `UI/SaveGameWindow.cs`.
+- `Necroking/Game1.cs` — StartGame owns the per-game reset (see `GameSession` +
+  StartGame/StartScenario asymmetry in [game1-partials.md](game1-partials.md)).
 
-### Menu list scrolling (as of 2026-07)
-Neither menu scrolls — both **truncate**:
-- **Load menu**: `BuildLoadMenuLayout` caps rows at what fits (`maxRows`), `DrawLoadMenu`
-  prints `(+N more)`. To add scrolling, copy the **scenario-menu draggable-scrollbar
-  pattern** (same raw-HUD menu family): `ScenarioMenuView` + `_scenarioScrollPx` drag/wheel
-  input in `Game1.cs` + `DrawScenarioScrollbar`, all on the shared `Necroking/UI/VScrollbar.cs`
-  geometry — see [editor.md](editor.md) "Map-editor scrolling & scrollbars".
+### Menu list scrolling
+- **Load menu** (`UI/LoadMenuScreen.cs`): scrolls — the scenario-menu draggable-scrollbar
+  pattern (`_loadMenuScrollPx` on Game1, drag state on the screen, `MenuDraw.Scrollbar` +
+  scissor-clipped rows on the shared `Necroking/UI/VScrollbar.cs` geometry) — see
+  [editor.md](editor.md) "Map-editor scrolling & scrollbars".
 - **Save menu** (`UI/SaveGameWindow.cs`): shows `MaxVisibleSaves = 6`, prints
   `(+N older saves)`. It draws through `EditorBase`, so use
   `EditorBase.BeginScrollPanel`/`ScrollPanel.End` (or the interactive

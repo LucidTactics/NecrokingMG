@@ -37,12 +37,12 @@ partial class GameRenderer
         _g._hoverBoxObject = _g._hoverBoxCorpse = _g._hoverBoxUnit = null;
         _g._devMarkBoxes.Clear();
 
-        // --- Main menu ---
+        // --- Full-screen menus (each screen class owns its drawing — UI/*Screen.cs) ---
         if (_g._menuState == MenuState.MainMenu)
         {
             _g.GraphicsDevice.Clear(new Color(20, 15, 30));
             Materials.Hud.Begin(_g._spriteBatch);
-            DrawMainMenu(screenW, screenH);
+            _g._mainMenu.Draw(screenW, screenH);
             _g._spriteBatch.End();
             _g.CompletePendingDevScreenshot();
             _g.BaseDraw(gameTime);
@@ -53,7 +53,7 @@ partial class GameRenderer
         {
             _g.GraphicsDevice.Clear(new Color(20, 15, 30));
             Materials.Hud.Begin(_g._spriteBatch);
-            DrawScenarioList(screenW, screenH);
+            _g._scenarioList.Draw(screenW, screenH);
             _g._spriteBatch.End();
             _g.CompletePendingDevScreenshot();
             _g.BaseDraw(gameTime);
@@ -64,7 +64,7 @@ partial class GameRenderer
         {
             _g.GraphicsDevice.Clear(new Color(20, 15, 30));
             Materials.Hud.Begin(_g._spriteBatch);
-            DrawLoadMenu(screenW, screenH);
+            _g._loadMenu.Draw(screenW, screenH);
             _g._spriteBatch.End();
             _g.CompletePendingDevScreenshot();
             _g.BaseDraw(gameTime);
