@@ -446,6 +446,15 @@ public class SettingsWindow
     // (Off = 0, Explored = 1, FogOfWar = 2, Hybrid = 3).
     private static readonly string[] FogModeNames = { "Off", "Explored", "Fog of War", "Hybrid" };
 
+    // Hover tooltips for the mode options, index-aligned with FogModeNames.
+    private static readonly string[] FogModeTips =
+    {
+        "No fog - the whole map and all units are visible.",
+        "Unexplored terrain is dark; once seen it stays\nfully revealed. Enemies are never hidden.",
+        "Classic three-state fog: unexplored is hidden,\nexplored terrain dims outside current vision,\nand enemies show only while in vision.",
+        "Like Fog of War, but enemies in explored (dimmed)\nterrain stay visible - only unexplored hides them.",
+    };
+
     private int DrawFogOfWarTab(int x, int y, int w)
     {
         int startY = y;
@@ -454,7 +463,8 @@ public class SettingsWindow
 
         // Mode combo
         string currentMode = fog.Mode >= 0 && fog.Mode < FogModeNames.Length ? FogModeNames[fog.Mode] : FogModeNames[0];
-        string newMode = _ui.DrawCombo("set_fog_mode", "Mode", currentMode, FogModeNames, x, y, w);
+        string newMode = _ui.DrawCombo("set_fog_mode", "Mode", currentMode, FogModeNames, x, y, w,
+            optionTooltips: FogModeTips);
         int newModeIdx = Array.IndexOf(FogModeNames, newMode);
         if (newModeIdx >= 0 && newModeIdx != fog.Mode) { fog.Mode = newModeIdx; MarkDirty(); }
         y += rowH;
