@@ -62,6 +62,15 @@ public static class RogueJump
     /// arc, so longer leaps rise higher.</summary>
     private const float ArchGain = 10f / 8f * 3f;
 
+    // --- Momentum jump (Space): scale the leap by the unit's CURRENT speed s ---
+    //   flight time  = DurationSqrtCoeff · √s     (∝ √speed)
+    //   leap length  = DistancePow15Coeff · s^1.5 (∝ speed^1.5)
+    //   peak height  = time² · ArchGain           (∝ speed, since time ∝ √s)
+    // Tuned around the necromancer's ~8 u/s run: ≈0.8s aloft, ≈7u far, ≈2.3u high.
+    // A standing unit barely hops; a sprinter leaps far and high. Tune these two.
+    private const float DurationSqrtCoeff  = 0.28f;
+    private const float DistancePow15Coeff = 0.31f;
+
     // state: 0 = launch setup, 1 = crouch/spring (partial Standup) wait,
     //        2 = airborne slide + arc, 3 = landing recovery
     private sealed class JumpAction
@@ -84,19 +93,46 @@ public static class RogueJump
     // --- Initiation ---
 
     /// <summary>
-    /// Launch unit <paramref name="idx"/> on a leap to <paramref name="dest"/>.
-    /// Imperative (not queued), mirroring <c>JumpSystem.BeginJumpAttack</c>.
-    /// No-ops if the unit is dead, incap-locked, or already mid engine-jump.
+    /// Momentum jump (the Space-key leap): spring off in the direction the unit is
+    /// currently moving, scaled by its current speed. Duration ∝ √speed and distance
+    /// ∝ speed^1.5, so height (duration²·gain) ∝ speed — a standing unit barely hops,
+    /// a sprinting one leaps far and high. Reads <see cref="Unit.Velocity"/> at call
+    /// time (before the jump zeroes it); falls back to facing when near-stationary.
+    /// </summary>
+    public static void BeginMomentumJump(UnitArrays units, int idx)
+    {
+        if (idx < 0 || idx >= units.Count) return;
+        var u = units[idx];
+
+        float s = u.Velocity.Length();
+        Vec2 dir = s > 0.05f ? u.Velocity * (1f / s) : FacingUtil.ForwardDir(u);
+        float duration = DurationSqrtCoeff * MathF.Sqrt(s);
+        float distance = DistancePow15Coeff * MathF.Pow(s, 1.5f);
+
+        Register(units, idx, u.Position + dir * distance, duration, $"momentum s={s:F1}");
+    }
+
+    /// <summary>
+    /// Fixed-speed leap to an explicit <paramref name="dest"/> (used by the
+    /// <c>roguejump</c> dev command). Duration = distance / <paramref name="speed"/>.
     /// </summary>
     public static void BeginJump(UnitArrays units, int idx, Vec2 dest, float speed = DefaultJumpSpeed)
     {
         if (idx < 0 || idx >= units.Count) return;
+        float dist = (dest - units[idx].Position).Length();
+        Register(units, idx, dest, dist / MathF.Max(0.5f, speed), "cursor");
+    }
+
+    /// <summary>Register a jump on the unit with an explicit airborne
+    /// <paramref name="duration"/> (floored at <see cref="MinAirDuration"/>). Shared
+    /// by both initiators. No-ops if the unit is dead, incap-locked, or already mid
+    /// engine-jump (mirrors <c>JumpSystem.BeginJumpAttack</c>'s guard).</summary>
+    private static void Register(UnitArrays units, int idx, Vec2 dest, float duration, string tag)
+    {
         var u = units[idx];
         if (!u.Alive || u.Incap.IsLocked || u.JumpPhase != 0) return;
 
-        float dist = (dest - u.Position).Length();
-        float tc = MathF.Max(MinAirDuration, dist / MathF.Max(0.5f, speed));
-
+        float tc = MathF.Max(MinAirDuration, duration);
         _active[u.Id] = new JumpAction
         {
             Dest       = dest,
@@ -105,7 +141,8 @@ public static class RogueJump
             ArchHeight = tc * tc * ArchGain,
             State      = 0,
         };
-        DebugLog.Log("jump", $"[RogueJump] unit#{idx} id={u.Id} dist={dist:F2} tc={tc:F2}s arch={tc * tc * ArchGain:F2}");
+        DebugLog.Log("jump", $"[RogueJump {tag}] unit#{idx} id={u.Id} " +
+            $"dest=({dest.X:F1},{dest.Y:F1}) tc={tc:F2}s arch={tc * tc * ArchGain:F2}");
     }
 
     // --- Per-unit tick (called from Game1's per-unit animation loop) ---

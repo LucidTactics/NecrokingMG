@@ -3592,7 +3592,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 }
             }
 
-            // --- Jump input (Space = Nightfall rogue jump to cursor; NightfallPorts/RogueJump.cs) ---
+            // --- Jump input (Space = Nightfall rogue momentum jump; NightfallPorts/RogueJump.cs) ---
+            // Leap in the direction the necromancer is currently moving, scaled by
+            // current speed (far + high when running, a small hop when walking) —
+            // not a cursor-targeted jump.
             if (_input.WasKeyPressed(Keys.Space) && necroIdx >= 0)
             {
                 var mu = _sim.UnitsMut;
@@ -3600,17 +3603,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     && !Necroking.NightfallPorts.RogueJump.IsJumping(mu[necroIdx].Id)
                     && !mu[necroIdx].Incap.IsLocked && !_pendingSpell.Active;
                 if (canJump)
-                {
-                    // Leap toward the cursor, capped so an off-screen click can't
-                    // produce a multi-second, sky-high arc (flight time = dist/speed).
-                    const float MaxJumpDist = 12f;
-                    Vec2 toCursor = mouseWorld - mu[necroIdx].Position;
-                    float d = toCursor.Length();
-                    Vec2 dest = d > MaxJumpDist
-                        ? mu[necroIdx].Position + toCursor * (MaxJumpDist / d)
-                        : mouseWorld;
-                    Necroking.NightfallPorts.RogueJump.BeginJump(mu, necroIdx, dest);
-                }
+                    Necroking.NightfallPorts.RogueJump.BeginMomentumJump(mu, necroIdx);
             }
 
             // --- Beam/drain channel-hold ---
