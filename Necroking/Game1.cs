@@ -3584,7 +3584,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 // and swing the bag around mid-animation. WASD input is left
                 // ungated so cancel-by-WASD on routines still works through
                 // Simulation's existing path.
-                if (!_sim.Units[necroIdx].IsLockedByAction())
+                // Also skipped mid rogue-jump: the leap faces its travel direction
+                // (set at launch), so let that hold instead of snapping to the mouse.
+                if (!_sim.Units[necroIdx].IsLockedByAction()
+                    && !Necroking.NightfallPorts.RogueJump.IsJumping(_sim.Units[necroIdx].Id))
                 {
                     var necroPos = _sim.Units[necroIdx].Position;
                     var toMouse = mouseWorld - necroPos;
