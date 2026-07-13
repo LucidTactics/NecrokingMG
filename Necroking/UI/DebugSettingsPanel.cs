@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Necroking.Core;
+using Necroking.Editor;
 using Necroking.Lib;
 using Necroking.Render;
 
@@ -35,6 +36,9 @@ public class DebugSettingsPanel
         public string[] Options = Array.Empty<string>();
         public Func<int> Get = () => 0;
         public Action<int> Set = _ => { };
+
+        // Plain On/Off rows render as a click-to-flip switch, not a dropdown.
+        public bool IsBool => Options.Length == 2 && Options[0] == "Off" && Options[1] == "On";
     }
 
     private List<DebugModeToggle>? _toggles;
@@ -109,6 +113,15 @@ public class DebugSettingsPanel
         return new Rectangle(PanX, PanY, PanW, h);
     }
 
+    /// <summary>Full-width hit/hover rect for row <paramref name="i"/> (label +
+    /// control). Boolean rows toggle on a press anywhere in here; hovering it
+    /// lights the whole row.</summary>
+    private Rectangle RowRect(int i)
+    {
+        int rowY = PanY + HeaderH + Pad + i * RowH;
+        return new Rectangle(PanX + 2, rowY, PanW - 4, RowH);
+    }
+
     /// <summary>Clickable dropdown box for row <paramref name="i"/>.</summary>
     private Rectangle BoxRect(int i)
     {
@@ -153,11 +166,40 @@ public class DebugSettingsPanel
         return -1;
     }
 
-    /// <summary>A left press granted to the panel (layer's OnPointer). Opens /
-    /// arms / marks-for-close the eager dropdown; selection fires on release in
+    /// <summary>Boolean row whose whole row-rect (label + checkbox) contains the
+    /// cursor, or -1. Boolean rows toggle on a press anywhere in the row.</summary>
+    private int HitBoolRow(int mx, int my)
+    {
+        for (int i = 0; i < Toggles.Count; i++)
+            if (Toggles[i].IsBool && RowRect(i).Contains(mx, my)) return i;
+        return -1;
+    }
+
+    /// <summary>A left press granted to the panel (layer's OnPointer). Boolean
+    /// rows flip immediately (click anywhere in the row); the rest open / arm /
+    /// mark-for-close the eager dropdown, whose selection fires on release in
     /// <see cref="HandleFrame"/>.</summary>
     public void HandlePress(int mx, int my)
-        => _dd.OnPress(HitBox(mx, my), HitItem(mx, my));
+    {
+        int item = HitItem(mx, my);
+
+        // A press anywhere on a boolean row flips it now — but not when it lands
+        // on an open dropdown's option (selection wins, since an open list
+        // overlaps the rows below it).
+        if (item < 0)
+        {
+            int brow = HitBoolRow(mx, my);
+            if (brow >= 0)
+            {
+                var t = Toggles[brow];
+                t.Set(t.Get() == 1 ? 0 : 1);
+                _dd.Close();
+                return;
+            }
+        }
+
+        _dd.OnPress(HitBox(mx, my), item);
+    }
 
     /// <summary>Per-frame input poll (layer's OnFrame). Releases are never
     /// routed by the UI router and the layer only receives presses while
@@ -198,6 +240,8 @@ public class DebugSettingsPanel
     private static readonly Color OptBg       = new(20, 24, 30, 245);
     private static readonly Color OptHover    = new(60, 90, 70, 250);
     private static readonly Color OptSelBg    = new(32, 46, 38, 245);
+    // Subtle full-row wash when a boolean row is hovered (label + checkbox lift together).
+    private static readonly Color RowHover    = new(120, 200, 150, 28);
 
     /// <summary>Draw the panel. Runs inside the open HUD batch.
     /// <paramref name="mx"/>/<paramref name="my"/> are the cursor (parked
@@ -218,10 +262,20 @@ public class DebugSettingsPanel
             var t = toggles[i];
             int cur = Math.Clamp(t.Get(), 0, t.Options.Length - 1);
             int rowY = PanY + HeaderH + Pad + i * RowH;
+            var box = BoxRect(i);
+
+            if (t.IsBool)
+            {
+                // Whole-row target: hovering lights the label+checkbox strip and
+                // the press flips it (see HandlePress / HitBoolRow).
+                bool rowHover = RowRect(i).Contains(mx, my);
+                if (rowHover) Scope.Draw(_g._pixel, RowRect(i), RowHover);
+                Text(f, t.Label, panel.X + Pad, rowY + 4, LabelCol);
+                DrawCheckbox(box, cur == 1, rowHover);
+                continue;
+            }
 
             Text(f, t.Label, panel.X + Pad, rowY + 4, LabelCol);
-
-            var box = BoxRect(i);
             bool hover = box.Contains(mx, my);
             DrawPanel(box, hover ? BoxHover : BoxBg, BoxBorder, 1, bottomAccent: true);
             DrawUtils.DrawRectBorder(_g._spriteBatch, _g._pixel, box, BoxBorder);
@@ -259,6 +313,17 @@ public class DebugSettingsPanel
 
     private void Text(SpriteFont f, string s, int x, int y, Color c)
         => Scope.DrawString(f, s, new Vector2(x, y), c);
+
+    /// <summary>Draw the boolean row's checkbox (right-aligned in <paramref
+    /// name="box"/>'s slot) using the shared editor-style glyph + palette, so it
+    /// matches the toggles in the editor property panels.</summary>
+    private void DrawCheckbox(Rectangle box, bool on, bool hover)
+    {
+        const int CbSize = 16;
+        var cb = new Rectangle(box.Right - CbSize, box.Y + (box.Height - CbSize) / 2, CbSize, CbSize);
+        DrawUtils.DrawCheckbox(Scope, _g._pixel, cb, on, hover,
+            EditorBase.InputBg, EditorBase.InputBorder, EditorBase.InputActive, EditorBase.AccentColor);
+    }
 
     private void DrawPanel(Rectangle r, Color fill, Color accent, int accentH = 2, bool bottomAccent = false)
     {
