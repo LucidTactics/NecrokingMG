@@ -3461,14 +3461,29 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 // and swing the bag around mid-animation. WASD input is left
                 // ungated so cancel-by-WASD on routines still works through
                 // Simulation's existing path.
+                // Also skipped mid rogue-jump: the leap faces its travel direction
+                // (set at launch), so let that hold instead of snapping to the mouse.
                 if (!_sim.Units[necroIdx].IsLockedByAction())
                 {
-                    var necroPos = _sim.Units[necroIdx].Position;
-                    var toMouse = mouseWorld - necroPos;
-                    if (toMouse.LengthSq() > 0.01f)
+                    var necro = _sim.Units[necroIdx];
+                    if (Necroking.NightfallPorts.RogueJump.IsJumping(necro.Id))
                     {
-                        float mouseAngle = MathF.Atan2(toMouse.Y, toMouse.X) * 180f / MathF.PI;
-                        _sim.SetNecromancerFacing(mouseAngle);
+                        var dir = NightfallPorts.RogueJump.GetJumpDir(necro.Id);
+                        if (dir.X != 0 || dir.Y != 0)
+                        {
+                            float mouseAngle = MathF.Atan2(dir.Y, dir.X) * 180f / MathF.PI;
+                            _sim.SetNecromancerFacing(mouseAngle);
+                        }
+                    }
+                    else
+                    {
+                        var necroPos = _sim.Units[necroIdx].Position;
+                        var toMouse = mouseWorld - necroPos;
+                        if (toMouse.LengthSq() > 0.01f)
+                        {
+                            float mouseAngle = MathF.Atan2(toMouse.Y, toMouse.X) * 180f / MathF.PI;
+                            _sim.SetNecromancerFacing(mouseAngle);
+                        }
                     }
                 }
             }

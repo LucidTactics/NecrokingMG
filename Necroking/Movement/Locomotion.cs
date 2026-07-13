@@ -5,6 +5,7 @@ using Necroking.Data.Registries;
 using Necroking.Game;
 using Necroking.GameSystems;
 using Necroking.Lib;
+using Necroking.NightfallPorts;
 using Necroking.Render;
 using Necroking.World;
 
@@ -441,14 +442,14 @@ public static class Locomotion
                 float exitT  = profile.JogThreshold - profile.JogHysteresis;
                 if (u.FaceVelocityMode)
                 {
-                    if (speed <= exitT) u.FaceVelocityMode = false;
+                    if (speed <= exitT && !RogueJump.IsJumping(u.Id)) u.FaceVelocityMode = false;
                 }
                 else
                 {
                     // Sprint intent flips to velocity-facing early (EffortMult
                     // rising past 1 = the ramp is engaged), so a sprint start
                     // reads immediately even before speed crosses the jog line.
-                    if (speed >= enterT || (speed >= 0.2f && u.EffortMult > 1.05f))
+                    if (speed >= enterT || (speed >= 0.2f && u.EffortMult > 1.05f) || RogueJump.IsJumping(u.Id))
                         u.FaceVelocityMode = true;
                 }
 
