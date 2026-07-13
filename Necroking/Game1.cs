@@ -3592,16 +3592,24 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 }
             }
 
-            // --- Jump input (Space = jump attack) ---
+            // --- Jump input (Space = Nightfall rogue jump to cursor; NightfallPorts/RogueJump.cs) ---
             if (_input.WasKeyPressed(Keys.Space) && necroIdx >= 0)
             {
                 var mu = _sim.UnitsMut;
                 bool canJump = mu[necroIdx].Alive && mu[necroIdx].JumpPhase == 0
+                    && !Necroking.NightfallPorts.RogueJump.IsJumping(mu[necroIdx].Id)
                     && !mu[necroIdx].Incap.IsLocked && !_pendingSpell.Active;
                 if (canJump)
                 {
-                    var facingDir = Movement.FacingUtil.ForwardDir(mu[necroIdx]);
-                    JumpSystem.BeginJumpAttack(mu, necroIdx, mu[necroIdx].Position + facingDir * 4f);
+                    // Leap toward the cursor, capped so an off-screen click can't
+                    // produce a multi-second, sky-high arc (flight time = dist/speed).
+                    const float MaxJumpDist = 12f;
+                    Vec2 toCursor = mouseWorld - mu[necroIdx].Position;
+                    float d = toCursor.Length();
+                    Vec2 dest = d > MaxJumpDist
+                        ? mu[necroIdx].Position + toCursor * (MaxJumpDist / d)
+                        : mouseWorld;
+                    Necroking.NightfallPorts.RogueJump.BeginJump(mu, necroIdx, dest);
                 }
             }
 

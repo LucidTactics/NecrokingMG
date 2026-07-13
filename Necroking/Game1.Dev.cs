@@ -27,6 +27,33 @@ public partial class Game1 {
                c.Complete(Necroking.Dev.DevServer.Ok("pong"));
                break;
 
+            // Nightfall-ported rogue jump: the necromancer leaps to a point, reusing
+            // partial Standup/Fall animations rather than dedicated jump clips
+            // (NightfallPorts/RogueJump.cs). Handy for eyeballing the leap via drive-game.
+            //   window.dev('roguejump')              → jump 5u along current facing
+            //   window.dev('roguejump',['8'])        → jump 8u along facing
+            //   window.dev('roguejump',['12','7'])   → jump to world point (12,7)
+            case "roguejump": {
+               int ni = _sim.NecromancerIndex;
+               if (ni < 0) { c.Complete(Necroking.Dev.DevServer.Error("no necromancer in sim")); break; }
+               var mu = _sim.UnitsMut;
+               var inv = System.Globalization.CultureInfo.InvariantCulture;
+               var ns = System.Globalization.NumberStyles.Float;
+               Vec2 dest;
+               if (c.Args.Length >= 2
+                   && float.TryParse(c.Args[0], ns, inv, out float wx)
+                   && float.TryParse(c.Args[1], ns, inv, out float wy)) {
+                  dest = new Vec2(wx, wy);
+               } else {
+                  float dist = 5f;
+                  if (c.Args.Length >= 1) float.TryParse(c.Args[0], ns, inv, out dist);
+                  dest = mu[ni].Position + Movement.FacingUtil.ForwardDir(mu[ni]) * dist;
+               }
+               Necroking.NightfallPorts.RogueJump.BeginJump(mu, ni, dest);
+               c.Complete(Necroking.Dev.DevServer.Ok($"rogue jump unit#{ni} -> ({dest.X:F1},{dest.Y:F1})"));
+               break;
+            }
+
             // Toggle AI routine-transition tracing. Every transition (unit, archetype,
             // from → to routine, interrupt reason) is appended to log/ai_transition.log.
             //   window.dev('ai_trace',['on'|'off'])  → set;  no args → report current

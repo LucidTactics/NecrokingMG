@@ -427,6 +427,19 @@ public partial class Game1
                 }
             }
 
+            // --- Nightfall rogue jump (ported partial-animation leap; NightfallPorts/RogueJump.cs) ---
+            // Same ownership contract as JumpSystem above: while it owns the unit it
+            // drives ctrl + Position + Z itself, and returning true means "skip normal
+            // anim/movement this frame".
+            if (Necroking.NightfallPorts.RogueJump.IsJumping(uid))
+            {
+                if (Necroking.NightfallPorts.RogueJump.TickUnit(dt, _sim.UnitsMut, i, animData.Ctrl))
+                {
+                    _unitAnims[uid] = animData;
+                    continue;
+                }
+            }
+
             // Force out of work anims if interaction was cancelled (WASD override).
             // Exception: the reanimate_corpse spell channels through the ImbueTable
             // states via _pendingCastAnim (no CorpseInteractPhase), so don't yank the
