@@ -540,7 +540,7 @@ partial class GameRenderer
         // uses RenderPos, so sprite and shadow agree on the waterline during
         // lunges near a shoreline.
         WadingState wading = WadingState.Compute(
-            _g._sim.Units[i].RenderPos, _g._sim.Units[i].FacingAngle,
+            _g._sim.Units[i].RenderPos, _g._sim.Units[i].Z, _g._sim.Units[i].FacingAngle,
             fr.Frame.Value, unitDef, animData.Ctrl, _g._groundSystem, _g._camera.YRatio);
         if (wading.Active)
         {
