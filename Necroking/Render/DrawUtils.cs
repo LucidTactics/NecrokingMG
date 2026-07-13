@@ -48,6 +48,18 @@ public static class DrawUtils
             new Vector2(len, thickness), SpriteEffects.None, 0f);
     }
 
+    /// <summary>Draw a checkmark fitted inside <paramref name="cell"/> — two thick
+    /// strokes (short down-right, long up-right). The canonical "this option is
+    /// selected" glyph for dropdown lists (the SpriteFonts have no ✓ glyph).</summary>
+    public static void DrawCheckmark(SpriteScope batch, Texture2D pixel, Rectangle cell, Color color, float thickness = 2f)
+    {
+        var a = new Vector2(cell.X + cell.Width * 0.10f, cell.Y + cell.Height * 0.55f);
+        var b = new Vector2(cell.X + cell.Width * 0.40f, cell.Y + cell.Height * 0.85f);
+        var c = new Vector2(cell.X + cell.Width * 0.90f, cell.Y + cell.Height * 0.15f);
+        DrawLine(batch, pixel, a, b, color, thickness);
+        DrawLine(batch, pixel, b, c, color, thickness);
+    }
+
     /// <summary>Draw a rectangle outline. The single canonical rect-stroke — replaces
     /// ~13 per-file DrawBorder/DrawRectOutline copies. Corners are non-overlapping (drawn
     /// once each) so the stroke is correct under a translucent color as well as solid.</summary>

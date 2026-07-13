@@ -1844,8 +1844,14 @@ public class EditorBase
             else if (optHovered || isSelected)
                 DrawRect(optRect, optHovered ? ItemHover : ItemSelected);
 
+            // Left gutter: a checkmark flags the currently selected option so
+            // it reads at a glance; all items indent past it to stay aligned.
+            if (isSelected)
+                DrawUtils.DrawCheckmark(_sb, _pixel,
+                    new Rectangle(optRect.X + 4, optRect.Y + 5, 10, 10), AccentColor);
+
             Color textCol = isSelected ? TextBright : (isHighlighted ? TextBright : TextColor);
-            DrawText(dd.FilteredOptions[fi], new Vector2(optRect.X + 3, optRect.Y + 2), textCol);
+            DrawText(dd.FilteredOptions[fi], new Vector2(optRect.X + 18, optRect.Y + 2), textCol);
         }
 
         EndClip();

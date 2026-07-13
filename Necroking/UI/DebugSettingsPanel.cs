@@ -190,6 +190,7 @@ public class DebugSettingsPanel
     private static readonly Color ValOff      = new(140, 150, 160);
     private static readonly Color OptBg       = new(20, 24, 30, 245);
     private static readonly Color OptHover    = new(60, 90, 70, 250);
+    private static readonly Color OptSelBg    = new(32, 46, 38, 245);
 
     /// <summary>Draw the panel. Runs inside the open HUD batch.
     /// <paramref name="mx"/>/<paramref name="my"/> are the cursor (parked
@@ -232,8 +233,14 @@ public class DebugSettingsPanel
             {
                 var r = OptionRect(_dd.OpenKey, o);
                 bool hover = r.Contains(mx, my);
-                Scope.Draw(_g._pixel, r, hover ? OptHover : OptBg);
-                Text(f, t.Options[o], r.X + 5, r.Y + 1, o == cur ? HeaderCol : ValActive);
+                bool sel = o == cur;
+                Scope.Draw(_g._pixel, r, hover ? OptHover : sel ? OptSelBg : OptBg);
+                // Left-gutter checkmark on the current value so it reads at a
+                // glance; all options indent past the gutter to stay aligned.
+                if (sel)
+                    DrawUtils.DrawCheckmark(Scope, _g._pixel,
+                        new Rectangle(r.X + 4, r.Y + 4, 9, 9), HeaderCol);
+                Text(f, t.Options[o], r.X + 17, r.Y + 1, sel ? HeaderCol : ValActive);
             }
             var top = OptionRect(_dd.OpenKey, 0);
             DrawUtils.DrawRectBorder(_g._spriteBatch, _g._pixel,
