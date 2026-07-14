@@ -652,7 +652,10 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
                 case DragTarget.SliderIntensity:
                 {
                     float t = Math.Clamp((_mouse.X - sliderIRect.X) / (float)sliderIRect.Width, 0f, 1f);
-                    _currentColor.Intensity = t * 15f;  // RI05: range 0-15
+                    // Range 0..MaxHdrIntensity — the slider now matches what the
+                    // HDR pipeline can actually encode (values past the cap used
+                    // to be silently clamped at render time).
+                    _currentColor.Intensity = t * Necroking.Core.HdrColor.MaxHdrIntensity;
                     break;
                 }
             }
@@ -850,11 +853,13 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
             DrawText("I", new Vector2(cx, cy + 1), new Color(255, 220, 100));
             var baseCol = new Color((int)_currentColor.R, (int)_currentColor.G, (int)_currentColor.B);
             DrawIntensitySlider(sliderX, cy, sliderW, sliderH, baseCol);
-            DrawSliderCursor(sliderX, cy, sliderW, sliderH, _currentColor.Intensity / 15f);  // RI05: range 0-15
+            DrawSliderCursor(sliderX, cy, sliderW, sliderH,
+                _currentColor.Intensity / Necroking.Core.HdrColor.MaxHdrIntensity);
             if (HandleValueBox(new Rectangle(valueX, cy, valueBoxW, sliderH), _currentColor.Intensity.ToString("F1"), 4))
             {
                 if (float.TryParse(_editBuffer, out float parsed))
-                    _currentColor.Intensity = Math.Clamp(parsed, 0f, 15f);  // RI05: range 0-15
+                    _currentColor.Intensity = Math.Clamp(parsed, 0f,
+                        Necroking.Core.HdrColor.MaxHdrIntensity);
             }
             cy += sliderH + 6;
         }

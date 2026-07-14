@@ -282,9 +282,10 @@ public class LightningRenderer
 
         var coreTint = style.CoreColor.ToColor();
         var glowTint = style.GlowColor.ToColor();
-        // Clamp to MaxHdrIntensity for parity with the retired sprite path:
-        // ToHdrVertex encoded intensity/Max into a byte, so styles authored above
-        // the cap (e.g. sky_lightning's 15) have always rendered at the cap.
+        // Clamp to MaxHdrIntensity for parity with the sprite path's byte
+        // encoding, so the same style renders identically as ribbon or sprite.
+        // (Cap is 16 since the sqrt-encoding change; it was 4 before, which
+        // silently flattened styles like sky_lightning's ~14.)
         var coreVerts = strips.GetBucket(MathF.Min(style.CoreColor.Intensity, HdrColor.MaxHdrIntensity));
         var glowVerts = strips.GetBucket(MathF.Min(style.GlowColor.Intensity, HdrColor.MaxHdrIntensity));
 

@@ -242,6 +242,7 @@ public static class Materials
             // Parameters["AlphaMode"] flip between the alpha and additive passes.
             var alphaFx = hdrSprite.Clone();
             alphaFx.Parameters["MaxIntensity"]?.SetValue(HdrColor.MaxHdrIntensity);
+            alphaFx.Parameters["MaxAlphaIntensity"]?.SetValue(HdrColor.MaxHdrAlphaIntensity);
             alphaFx.Parameters["AlphaMode"]?.SetValue(1f);
             // premultiplyTint: false — HDR vertex colors are a special encoding
             // (HdrColor.ToHdrVertex* packs intensity into the channels); the
@@ -251,6 +252,7 @@ public static class Materials
 
             var addFx = hdrSprite.Clone();
             addFx.Parameters["MaxIntensity"]?.SetValue(HdrColor.MaxHdrIntensity);
+            addFx.Parameters["MaxAlphaIntensity"]?.SetValue(HdrColor.MaxHdrAlphaIntensity);
             addFx.Parameters["AlphaMode"]?.SetValue(0f);
             HdrAdditive = Register("HdrAdditive", addFx, BlendState.Additive, SamplerState.LinearClamp);
         }
