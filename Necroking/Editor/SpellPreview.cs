@@ -829,18 +829,19 @@ public class SpellPreview
             LightningRenderer.AddDrainTendrilStripsStatic(_strips, casterScreen, targetScreen, d.Visuals, d.Elapsed);
             LightningRenderer.AddDrainFlareSprites(_sb, _glowTex, casterScreen, targetScreen, d.Visuals, d.Elapsed);
             LightningRenderer.AddDrainCloudSprites(_sb, _glowTex, cloudFb, casterScreen, targetScreen,
-                d.Visuals, d.Elapsed, additivePass: true);
+                d.Visuals, d.Elapsed);
         }
     }
 
-    /// <summary>Drain cloud puffs — alpha-blended AFTER the tendril ribbons
-    /// flush, mirroring LightningRenderer.DrawDrainClouds (the puffs occlude
-    /// the beam; additively they'd dissolve into it).</summary>
+    /// <summary>Drain impact clusters — alpha-blended AFTER the tendril ribbons
+    /// flush, mirroring LightningRenderer.DrawDrainClouds (junction puffs
+    /// occlude the beam end; the traveling puffs are all additive and draw in
+    /// DrawDrains).</summary>
     private void DrawDrainClouds()
     {
         bool any = false;
         foreach (var d in _drains)
-            if (d.Alive && (d.Visuals.CloudCount > 0 || d.Visuals.ImpactPuffCount > 0)) { any = true; break; }
+            if (d.Alive && d.Visuals.ImpactPuffCount > 0) { any = true; break; }
         if (!any) return;
 
         if (_hdrSpriteEffect != null)
@@ -862,11 +863,9 @@ public class SpellPreview
         {
             if (!d.Alive) continue;
             var v = d.Visuals;
-            if (v.CloudCount <= 0 && v.ImpactPuffCount <= 0) continue;
+            if (v.ImpactPuffCount <= 0) continue;
             var casterScreen = WorldToScreenWithHeight(d.CasterPos.X, d.CasterPos.Y, 1.5f);
             var targetScreen = WorldToScreenWithHeight(d.TargetPos.X, d.TargetPos.Y, 1.0f);
-            LightningRenderer.AddDrainCloudSprites(_sb, _glowTex, cloudFb, casterScreen, targetScreen, v, d.Elapsed,
-                additivePass: false);
             Flipbook? impactFb = cloudFb;
             if (v.ImpactFlipbookID != "cloud03" && _flipbooks != null)
                 _flipbooks.TryGetValue(v.ImpactFlipbookID, out impactFb);
