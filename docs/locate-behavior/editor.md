@@ -349,6 +349,57 @@ or working on **auto-ground** (the `_autoGround*` fields + `StampAutoGround`/`St
 For **any new world-clicking tab**, gate world-affecting input on `!overPanel` (and reuse
 `overPanel`/`popupBlocking` computed once in `Update()`) — do not re-derive panel-hover per tab.
 
+## Spell editor & unit editor — where the editable fields live
+
+Two different field-declaration models; know which you're in before adding a field or
+per-field UI (tooltips, validation):
+
+### Spell editor (`Editor/SpellEditorWindow.cs`) — reflection-driven
+- **The field list is NOT in the editor** — it's the `[EditorField(...)]` attributes on
+  `SpellDef` properties in `Data/Registries/SpellRegistry.cs` (~166 annotations; `Group`,
+  `Order`, `Step`, `[EditorCombo]`, `[EditorVisible]`, `[EditorRegistryDropdown]`,
+  `[EditorCheckboxGrid]` — attribute classes in `Editor/EditorAttributes.cs`).
+- Rendered by **`Editor/ReflectionPropertyRenderer.cs`**: `SpellEditorWindow.DrawDetailPanel`
+  calls `_renderer.DrawAnnotatedProperties("sp", def, …)`, which iterates the cached layout
+  and calls `DrawField(fieldId, entry, obj, x, ref curY, w)` per property — **`DrawField` is
+  the single per-row chokepoint** (row rect = `(x, rowYbefore, w, curY-rowYbefore)`).
+  `EditorFieldAttribute` has **no tooltip property** (as of 2026-07).
+- Custom (non-reflection) spell sections still hand-drawn in `SpellEditorWindow.cs`:
+  `DrawFlipbookRefSection`, `DrawSpellPreviewSection`, the buff/flipbook manager popups
+  (`DrawBuffManagerPopup`/`DrawBuffDetail`, `DrawFlipbookManagerPopup`).
+
+### Unit editor (`Editor/UnitEditorWindow.cs`) — hand-rolled sections
+- No reflection. `DrawRightPanel` calls per-section methods, each a run of
+  `_ui.DrawTextField/DrawIntField/DrawFloatField/DrawCheckbox/DrawCombo` calls (~103 total):
+  `DrawNameIdFields`, `DrawIdentitySection`, `DrawStatsSection`,
+  `DrawLocomotionCalibrationSection`, `DrawCombatOverridesSection`, `DrawCasterSection`,
+  `DrawEquipmentSection`, `DrawColorSection`, `DrawAnimTimingSection`,
+  `DrawWeaponPointSection`; sub-editors `DrawWeaponDetail`/`DrawArmorDetail`/
+  `DrawShieldDetail` (via `RegistryCrudPanel`), `DrawGroupEditor`/`DrawGroupDetail`.
+- Rows are `RowH`-tall at `(x, y, w)` known at each call site — per-field hover UI must be
+  added per call (or via a shared helper).
+
+### Per-field hover tooltips — what exists
+- **Canonical service**: `Game1.Tooltips` (`UI/TooltipSystem.cs`) — see the Map-editor
+  section's "Hover-tooltip helper" bullet. Draws topmost after scissor clips.
+- **Editor-row precedent**: `Editor/SettingsWindow.cs` private
+  `RowTip(x, y, w, plain, tech)` — `_ui.HitTestCursor(rowRect)` gate + suppression when
+  `!Game1.Popups.IsEmpty || _ui.IsColorPickerOpen || _ui.IsDropdownOpen`, then
+  `Game1.Tooltips.RequestLines(plain, tech)`. Called after each settings row.
+- **Dropdown OPTION tooltips already exist**: `DrawCombo`'s `optionTooltipFor:` callback +
+  `Editor/DefTips.cs` (canonical def-summary builders, dispatched by
+  `ReflectionPropertyRenderer.DrawRegistryDropdown` via `DefTips.ForRegistryEntry`). This is
+  option-hover text, NOT per-field help.
+- **To add per-field tips to the spell editor**: add a `Tooltip` string to
+  `EditorFieldAttribute`, carry it on `FieldEntry` (built in
+  `ReflectionPropertyRenderer.GetOrBuildLayout`), hit-test the row in `DrawField` — one hook
+  covers every reflected field (also item editor, which shares the renderer). Unit editor
+  needs a per-call helper (promote `RowTip` into `EditorBase`).
+
+**Look/edit here when…** adding/reordering a spell-editor field (annotate `SpellDef` in
+`SpellRegistry.cs`), adding a unit-editor field (the section method in `UnitEditorWindow.cs`),
+adding per-field hover help (the `DrawField` chokepoint / `RowTip` precedent above).
+
 ## UI / widget editor
 
 ### `Editor/UIEditorWindow.cs` — main window + all data models + clone logic
