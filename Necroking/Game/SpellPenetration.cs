@@ -35,17 +35,28 @@ public static class SpellPenetration
         return pen;
     }
 
+    /// <summary>Caster-side DRN tier for a spell contest (damage roll, MR
+    /// penetration): the spell's authored drn override when set (1-4), else the
+    /// caster's own tier, else the default tier 2 (casterIdx may be -1 —
+    /// trap-fired spells, or the caster died before resolution; note a spell
+    /// override survives caster death, keeping the spell's dice deterministic).</summary>
+    public static int CasterRollTier(SpellDef? spell, UnitArrays units, int casterIdx)
+    {
+        if (spell != null && spell.Drn > 0) return spell.Drn > 4 ? 4 : spell.Drn;
+        return casterIdx >= 0 && casterIdx < units.Count ? units[casterIdx].Stats.Drn : 2;
+    }
+
     /// <summary>Roll the opposed penetration-vs-MR check. True = the spell gets
-    /// through. Target MR includes buff/debuff modifiers. Each side rolls with its
-    /// own DRN tier; casterIdx may be -1 (e.g. trap-fired spells) → default tier.</summary>
-    public static bool Penetrates(UnitArrays units, int casterIdx, int targetIdx, int penetration)
+    /// through. Target MR includes buff/debuff modifiers. The caster side rolls
+    /// at <see cref="CasterRollTier"/> (spell drn override, else the unit's
+    /// tier); the target always rolls its own tier.</summary>
+    public static bool Penetrates(UnitArrays units, int casterIdx, int targetIdx, int penetration,
+        SpellDef? spell = null)
     {
         if (targetIdx < 0 || targetIdx >= units.Count) return true;
         int mr = (int)BuffSystem.GetModifiedStat(units, targetIdx, BuffStat.MagicResist,
             units[targetIdx].Stats.MagicResist);
-        int casterDrn = casterIdx >= 0 && casterIdx < units.Count
-            ? units[casterIdx].Stats.Drn : 2;
-        return penetration + UnitUtil.RollDRN(casterDrn)
+        return penetration + UnitUtil.RollDRN(CasterRollTier(spell, units, casterIdx))
              > mr + UnitUtil.RollDRN(units[targetIdx].Stats.Drn);
     }
 
@@ -54,6 +65,6 @@ public static class SpellPenetration
     public static bool Affects(GameData gameData, UnitArrays units, int casterIdx, int targetIdx, SpellDef spell)
     {
         if (spell == null || !spell.ChecksMagicResist) return true;
-        return Penetrates(units, casterIdx, targetIdx, Compute(gameData, units, casterIdx, spell));
+        return Penetrates(units, casterIdx, targetIdx, Compute(gameData, units, casterIdx, spell), spell);
     }
 }

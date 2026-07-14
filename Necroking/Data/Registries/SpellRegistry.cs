@@ -229,6 +229,15 @@ public class SpellDef : INamedDef
     [EditorField(Label = "Damage", Order = 198)]
     [JsonPropertyName("damage")] public int Damage { get; set; }
 
+    /// <summary>Caster-side DRN tier override for this spell's contests (the
+    /// damage-vs-protection roll AND the MR penetration roll): 1-4, same tiers
+    /// as UnitStats.Drn (1=d3, 2=d6, 3=d6+one extra on 6, 4=open-ended d6).
+    /// 0 = unset, use the caster's own tier. Editor-visible for Evocation only
+    /// for now (by request) — the field works on any spell.</summary>
+    [EditorVisible("School", "Evocation")]
+    [EditorField(Label = "DRN (0=caster)", Order = 197)]
+    [JsonPropertyName("drn")] public int Drn { get; set; }
+
     // AoeRadius — compound conditions per category, handled manually
     [EditorHide]
     [JsonPropertyName("aoeRadius")] public float AoeRadius { get; set; }

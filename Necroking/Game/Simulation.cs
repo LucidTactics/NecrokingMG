@@ -3475,7 +3475,8 @@ public class Simulation
         bool an = spell?.ArmorNegating ?? false;
         bool ap = spell?.ArmorPiercing ?? false;
 
-        int casterDrn = casterIdx >= 0 && casterIdx < _units.Count ? _units[casterIdx].Stats.Drn : 2;
+        // Caster-side tier honors the spell's drn override (SpellDef.Drn > 0).
+        int casterDrn = SpellPenetration.CasterRollTier(spell, _units, casterIdx);
         int dmgRoll = damage + UnitUtil.RollDRN(casterDrn);
         int protDRN = UnitUtil.RollDRN(_units[targetIdx].Stats.Drn);
 

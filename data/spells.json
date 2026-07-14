@@ -740,6 +740,7 @@
       "cooldown": 1,
       "castingBuffID": "buff_4_copy",
       "armorNegating": true,
+      "drn": 1,
       "drainMaxDuration": 2,
       "drainArcHeight": 14,
       "drainSwayHz": 1,
