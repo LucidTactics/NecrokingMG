@@ -642,6 +642,14 @@ public class LightningRenderer
         var glowOrigin = new Vector2(texHalf, texHalf);
         bool useFb = cloudFb != null && cloudFb.IsLoaded && cloudFb.Texture != null;
 
+        // Beam width envelope (same ends as the tendril rasterizer): puffs
+        // converge with the funnel — full spread at the wide source end,
+        // pinched onto the thin beam as they near the destination.
+        float srcScale = MathF.Max(0.1f, v.SourceWidthScale);
+        float envStart = v.FlowReversed ? srcScale : 1f;
+        float envEnd = v.FlowReversed ? 1f : srcScale;
+        float envMax = MathF.Max(envStart, envEnd);
+
         for (int i = 0; i < v.CloudCount; i++)
         {
             // Deterministic per-cloud variation (same LCG as the bolt shape code).
@@ -656,19 +664,25 @@ public class LightningRenderer
             // Geometric t along start→end (start = caster = destination on a normal drain).
             float t = v.FlowReversed ? p : 1f - p;
 
+            // Normalized beam width at this point (1 at the wide end): scales the
+            // puff's lateral spread, wobble, upward drift, and size, so the
+            // stream narrows with the funnel instead of spilling past the thin
+            // beam near the destination.
+            float envelope = MathHelper.Lerp(envStart, envEnd, t) / envMax;
+
             // Smoke drift: puffs wobble across the beam and float upward as they
             // age (p is age since spawning at the source), so they read as smoke
             // boiling off the beam instead of beads threaded on it.
             float wobble = MathF.Sin(elapsed * 1.7f + i * 2.4f) * v.CloudSize * 0.5f * p;
             float lateral = TendrilLateral(t, elapsed, v.ArcHeight)
-                + rLat * v.CloudSize * 0.8f + wobble;
+                + (rLat * v.CloudSize * 0.8f + wobble) * envelope;
             var pos = Vector2.Lerp(start, end, t) + perp * lateral;
-            pos.Y -= p * v.CloudSize * 0.9f; // screen-up drift
+            pos.Y -= p * v.CloudSize * 0.9f * envelope; // screen-up drift
 
-            // Fade in/out near the ends; shrink as the puff nears the narrow end.
+            // Fade in/out near the ends; shrink with the beam width.
             float fade = Math.Clamp(MathF.Min(p, 1f - p) * 6f, 0f, 1f);
             if (fade <= 0.01f) continue;
-            float size = v.CloudSize * (0.75f + rSize * 0.5f) * MathHelper.Lerp(1.1f, 0.65f, p);
+            float size = v.CloudSize * (0.75f + rSize * 0.5f) * (0.55f + 0.55f * envelope);
 
             if (useFb)
             {
