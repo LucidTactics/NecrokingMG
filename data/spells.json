@@ -728,7 +728,7 @@
       }
     },
     {
-      "name": "Lifedrain",
+      "name": "Life Drain",
       "id": "lifedrain",
       "category": "Drain",
       "school": "Evocation",
@@ -772,7 +772,7 @@
         "g": 255,
         "b": 185,
         "a": 255,
-        "intensity": 2.2
+        "intensity": 4.363636
       },
       "drainSourceCoreColor": {
         "r": 220,
@@ -974,69 +974,6 @@
           "g": 120,
           "b": 40,
           "a": 128,
-          "intensity": 1
-        },
-        "rotation": 0,
-        "blendMode": "Alpha",
-        "alignment": "Ground",
-        "duration": -1
-      }
-    },
-    {
-      "name": "Life Drain",
-      "id": "life_drain",
-      "category": "Drain",
-      "school": "Evocation",
-      "tileTemplate": "evocation",
-      "icon": "assets/UI/Icons/Spells/life_drain.png",
-      "range": 25,
-      "manaCost": 5,
-      "primaryPath": "death",
-      "primaryLevel": 1,
-      "cooldown": 2,
-      "castingBuffID": "buff_4",
-      "armorNegating": true,
-      "drainArcHeight": 14,
-      "drainSourceWidthScale": 3,
-      "drainCloudCount": 7,
-      "drainCloudSize": 15,
-      "drainCloudSpeed": 0.7,
-      "drainCloudColor": {
-        "r": 215,
-        "g": 255,
-        "b": 185,
-        "a": 255,
-        "intensity": 2.2
-      },
-      "drainSourceCoreColor": {
-        "r": 220,
-        "g": 255,
-        "b": 120,
-        "a": 210,
-        "intensity": 4
-      },
-      "drainSourceGlowColor": {
-        "r": 120,
-        "g": 255,
-        "b": 80,
-        "a": 55,
-        "intensity": 3.2
-      },
-      "drainScrollSpeed": 160,
-      "drainScrollScale": 70,
-      "drainScrollAlpha": 0.55,
-      "drainImpactPuffs": 7,
-      "drainImpactSize": 20,
-      "drainImpactFlareScale": 0.5,
-      "drainTargetEffect": {
-        "flipbookID": "",
-        "fps": -1,
-        "scale": 1,
-        "color": {
-          "r": 255,
-          "g": 255,
-          "b": 255,
-          "a": 255,
           "intensity": 1
         },
         "rotation": 0,

@@ -17,7 +17,7 @@ namespace Necroking.Scenario.Scenarios;
 ///   Strike      — "sky_lightning"     (Sky Lightning)
 ///   Zap         — "lightning_zap"     (Lightning Zap)
 ///   Beam        — "lightning_beam"    (Lightning Beam)
-///   Drain       — "life_drain"       (Life Drain)
+///   Drain       — "lifedrain"        (Life Drain)
 ///   Buff        — "iron_skin"        (Iron Skin)
 ///   Summon      — "summon_abomination" (Summon Abomination)
 /// </summary>
@@ -274,13 +274,13 @@ public class SpellVisualTestScenario : ScenarioBase
                 ClearField(sim);
                 SpawnEnemyGroup(sim, new Vec2(CenterX + 7f, CenterY), 2);
                 ZoomOnLocation(CenterX + 3.5f, CenterY, Zoom);
-                DebugLog.Log(ScenarioLog, "--- Drain Test (life_drain) ---");
+                DebugLog.Log(ScenarioLog, "--- Drain Test (lifedrain) ---");
                 AdvanceTo(Phase.Drain_Cast);
                 break;
 
             case Phase.Drain_Cast:
                 if (_phaseTimer < SetupDelay) break;
-                CastDrain(sim, "life_drain", new Vec2(CenterX + 7f, CenterY));
+                CastDrain(sim, "lifedrain", new Vec2(CenterX + 7f, CenterY));
                 AdvanceTo(Phase.Drain_Wait);
                 break;
 

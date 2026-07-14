@@ -16,7 +16,7 @@ public class UISpellBarScenario : UIScenarioBase
     public override string[] DebugSpells => new[]
     {
         "summon_skeleton", "nether_blast", "raise_zombie", "lightning_zap",
-        "god_ray", "nether_darts", "sky_lightning", "life_drain",
+        "god_ray", "nether_darts", "sky_lightning", "lifedrain",
         "potion_frenzy", "potion_paralysis",
     };
 

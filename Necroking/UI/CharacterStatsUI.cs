@@ -48,7 +48,7 @@ public class CharacterStatsUI : IModalLayer
         ("Lightning Beam", "lightning_beam", SkillKind.ActiveSpell),
         ("Sky Lightning", "sky_lightning", SkillKind.ActiveSpell),
         ("Nether Blast", "nether_blast", SkillKind.ActiveSpell),
-        ("Life Drain", "life_drain", SkillKind.ActiveSpell),
+        ("Life Drain", "lifedrain", SkillKind.ActiveSpell),
         ("Necromantic Miasma", "necromantic_miasma", SkillKind.ActiveSpell),
         ("Raise Zombie", "raise_zombie", SkillKind.ActiveSpell),
         ("God Ray", "god_ray", SkillKind.ActiveSpell),
