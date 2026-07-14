@@ -939,6 +939,7 @@ public class UnitEditorWindow
         {
             RefreshAtlases();
         }
+        Tip(ctrlX, ctrlY, ctrlW - refreshBtnW - 4, "Sprite sheet this unit's art comes from.");
         ctrlY += RowH;
 
         // Sprite dropdown (unit names from the atlas)
@@ -952,11 +953,14 @@ public class UnitEditorWindow
             _unsavedChanges = true;
             SyncPreviewToSelected();
         }
+        Tip(ctrlX, ctrlY, ctrlW, "Which character art in the atlas this unit uses.");
         ctrlY += RowH;
 
         // Animation dropdown
         string[] animNames = GetAnimNamesForSprite(currentAtlas, currentSprite);
         _previewAnimName = _ui.DrawCombo("prev_anim", "Animation", _previewAnimName, animNames, ctrlX, ctrlY, ctrlW);
+        Tip(ctrlX, ctrlY, ctrlW, "Preview clip. Also selects which clip the timing and",
+            "weapon-point edits below apply to.");
         ctrlY += RowH;
 
         // --- U10-U13: Improved preview controls ---
@@ -1309,6 +1313,8 @@ public class UnitEditorWindow
             frame.Hilt.Y = newHiltY;
             _unsavedChanges = true;
         }
+        Tip(x, curY, halfW * 2, "Where the weapon's grip sits on this frame",
+            "(pixels from the sprite pivot).");
         curY += RowH;
 
         // U01: Tip coordinates (RU37: slightly wider fields)
@@ -1323,6 +1329,8 @@ public class UnitEditorWindow
             frame.Tip.Y = newTipY;
             _unsavedChanges = true;
         }
+        Tip(x, curY, halfW * 2, "Where the weapon's point ends on this frame",
+            "(pixels from the sprite pivot).");
         curY += RowH;
 
         // U04: Behind checkboxes
@@ -1342,6 +1350,8 @@ public class UnitEditorWindow
             frame.Tip.Behind = newTipBehind;
             _unsavedChanges = true;
         }
+        Tip(x, curY, w, "Draw the weapon behind the sprite on this frame",
+            "(e.g. a swing passing behind the body).");
         curY += RowH;
 
         // U03: Pick buttons + U06: Rapid edit
@@ -1365,11 +1375,15 @@ public class UnitEditorWindow
 
         // U06: Rapid edit toggle
         _rapidEditEnabled = _ui.DrawCheckbox("Rapid Edit", _rapidEditEnabled, pickBtnX + 8, curY);
+        Tip(pickBtnX + 8, curY, 100, "After each pick, auto-advance: hilt, then tip,",
+            "then on to the next frame.");
         curY += RowH;
 
         // U05: Weapon line color swatch
         bool colorChanged = _ui.DrawColorSwatch("wp_line_color", x, curY, 30, 18, ref _weaponLineColor, true);
         _ui.DrawText("Weapon Line Color", new Vector2(x + 36, curY + 2), EditorBase.TextDim);
+        Tip(x, curY, w, "Editor-only color of the weapon overlay line.",
+            "Not saved to the unit.");
         curY += RowH;
 
         return curY;
@@ -1545,6 +1559,8 @@ public class UnitEditorWindow
             _editingFrameMs = -1;
         }
         _frameMsFieldWasActive = frameMsFieldActive;
+        Tip(x, curY, w, "How long the current preview frame shows (ms).",
+            "* = an override is saved for this clip.");
         curY += RowH;
 
         if (_ui.DrawButton("Set All Frames", x, curY, 100, 20))
@@ -1598,6 +1614,8 @@ public class UnitEditorWindow
                 _unsavedChanges = true;
             }
         }
+        Tip(x, curY, effFieldW, "When this clip's effect fires (hit lands, projectile",
+            "spawns), in ms from the clip start. * = override.");
         curY += RowH;
 
         return curY;
@@ -1753,10 +1771,13 @@ public class UnitEditorWindow
         // Name
         string newName = _ui.DrawTextField("unit_name", "Name", def.DisplayName, x, curY, w);
         if (newName != def.DisplayName) { def.DisplayName = newName; _unsavedChanges = true; }
+        Tip(x, curY, w, "Display name shown in lists and in-game.");
         curY += RowH;
 
         // ID (editable with validation)
         string newId = _ui.DrawTextField("unit_id", "ID", def.Id, x, curY, w);
+        Tip(x, curY, w, "Unique internal id. Renaming updates all references",
+            "(zombie types, groups, summon spells).");
         if (newId != def.Id && !_ui.IsFieldActive("unit_id"))
         {
             // Field lost focus with a changed value — try to rename
@@ -1832,38 +1853,52 @@ public class UnitEditorWindow
         string newFaction = _ui.DrawCombo("unit_faction", "Faction", def.Faction, FactionNames, x, curY, w,
             optionTooltips: FactionTips);
         if (newFaction != def.Faction) { def.Faction = newFaction; _unsavedChanges = true; }
+        Tip(x, curY, w, "Which side the unit fights for.");
         curY += RowH;
 
         // AI
         string newAI = _ui.DrawCombo("unit_ai", "AI", def.AI, AINames, x, curY, w,
             optionTooltips: AITips);
         if (newAI != def.AI) { def.AI = newAI; _unsavedChanges = true; }
+        Tip(x, curY, w, "Brain archetype controlling movement and combat.");
         curY += RowH;
 
         // Vision & Awareness (base values — night/debuffs apply as multipliers at runtime)
         float newVision = _ui.DrawFloatField("unit_vision", "Vision Range", def.DetectionRange, x, curY, w, 1f);
         if (MathF.Abs(newVision - def.DetectionRange) > 0.01f) { def.DetectionRange = MathF.Max(0f, newVision); _unsavedChanges = true; }
+        Tip(x, curY, w, "Distance at which enemies are first noticed.",
+            "0 = never notices anyone on its own.");
         curY += RowH;
 
         float newBreak = _ui.DrawFloatField("unit_detbreak", "Break Range", def.DetectionBreakRange, x, curY, w, 1f);
         if (MathF.Abs(newBreak - def.DetectionBreakRange) > 0.01f) { def.DetectionBreakRange = MathF.Max(0f, newBreak); _unsavedChanges = true; }
+        Tip(x, curY, w, "A noticed threat is forgotten once it gets",
+            "further away than this.");
         curY += RowH;
 
         float newAlertDur = _ui.DrawFloatField("unit_alertdur", "Alert Duration", def.AlertDuration, x, curY, w, 0.1f);
         if (MathF.Abs(newAlertDur - def.AlertDuration) > 0.01f) { def.AlertDuration = MathF.Max(0f, newAlertDur); _unsavedChanges = true; }
+        Tip(x, curY, w, "Seconds spent alerted (noticed, not committed)",
+            "before turning fully aggressive.");
         curY += RowH;
 
         float newEscalate = _ui.DrawFloatField("unit_alertesc", "Alert Escalate", def.AlertEscalateRange, x, curY, w, 1f);
         if (MathF.Abs(newEscalate - def.AlertEscalateRange) > 0.01f) { def.AlertEscalateRange = MathF.Max(0f, newEscalate); _unsavedChanges = true; }
+        Tip(x, curY, w, "A threat inside this range triggers instant aggression",
+            "while alerted. 0 = only the timer escalates.");
         curY += RowH;
 
         float newGroupAlert = _ui.DrawFloatField("unit_grpalert", "Group Alert Rad", def.GroupAlertRadius, x, curY, w, 1f);
         if (MathF.Abs(newGroupAlert - def.GroupAlertRadius) > 0.01f) { def.GroupAlertRadius = MathF.Max(0f, newGroupAlert); _unsavedChanges = true; }
+        Tip(x, curY, w, "Getting alerted also alerts same-faction units",
+            "within this radius. 0 = no spreading.");
         curY += RowH;
 
         // ORCA Priority
         int newOrcaPri = _ui.DrawIntField("unit_orca", "ORCA Priority", def.OrcaPriority, x, curY, w);
         if (newOrcaPri != def.OrcaPriority) { def.OrcaPriority = newOrcaPri; _unsavedChanges = true; }
+        Tip(x, curY, w, "Crowd-shoving rank: allies with lower priority",
+            "step aside for this unit. Movement only.");
         curY += RowH;
 
         // U15: Size (auto-derives radius when changed)
@@ -1874,6 +1909,8 @@ public class UnitEditorWindow
             def.Radius = newSize * 0.25f; // auto-derive radius
             _unsavedChanges = true;
         }
+        Tip(x, curY, w, "Body size class. Feeds head-hit chance and knockdown",
+            "matchups; changing it auto-derives Radius.");
         curY += RowH;
 
         // Radius (show derived hint)
@@ -1882,16 +1919,21 @@ public class UnitEditorWindow
         // U15: Show derived radius hint
         float derivedRadius = def.Size * 0.25f;
         _ui.DrawText($"(auto: {derivedRadius:F2})", new Vector2(x + w - 90, curY + 2), EditorBase.TextDim);
+        Tip(x, curY, w, "Collision footprint (world units) for movement",
+            "and crowding. Not visual.");
         curY += RowH;
 
         // Sprite Scale
         float newScale = _ui.DrawFloatField("unit_sprscale", "Sprite Scale", def.SpriteScale, x, curY, w, 0.1f);
         if (Math.Abs(newScale - def.SpriteScale) > 0.001f) { def.SpriteScale = newScale; _unsavedChanges = true; }
+        Tip(x, curY, w, "Visual size multiplier on the sprite. No gameplay effect.");
         curY += RowH;
 
         // World Height
         float newHeight = _ui.DrawFloatField("unit_worldh", "World Height", def.SpriteWorldHeight, x, curY, w, 0.1f);
         if (Math.Abs(newHeight - def.SpriteWorldHeight) > 0.001f) { def.SpriteWorldHeight = newHeight; _unsavedChanges = true; }
+        Tip(x, curY, w, "How many world units tall the sprite is drawn",
+            "(also anchors the wading waterline math).");
         curY += RowH;
 
         // U16: Zombie Type dropdown with grouped items (units + groups)
@@ -1936,6 +1978,8 @@ public class UnitEditorWindow
                 _unsavedChanges = true;
             }
         }
+        Tip(x, curY, w, "What this unit raises as when reanimated (a unit, or",
+            "a random pick from a group). Empty = default skeleton.");
         curY += RowH;
 
         return curY;
@@ -1965,39 +2009,51 @@ public class UnitEditorWindow
 
         int newHP = _ui.DrawIntField("st_hp", "MaxHP", s.MaxHP, x, curY, w);
         if (newHP != s.MaxHP) { s.MaxHP = newHP; _unsavedChanges = true; }
+        Tip(x, curY, w, "Hit points. The unit dies at 0.");
         curY += RowH;
 
         int newStr = _ui.DrawIntField("st_str", "Strength", s.Strength, x, curY, w);
         if (newStr != s.Strength) { s.Strength = newStr; _unsavedChanges = true; }
+        Tip(x, curY, w, "Added to melee damage rolls; also feeds knockdown contests.");
         curY += RowH;
 
         int newAtk = _ui.DrawIntField("st_atk", "Attack", s.Attack, x, curY, w);
         if (newAtk != s.Attack) { s.Attack = newAtk; _unsavedChanges = true; }
+        Tip(x, curY, w, "Melee hit skill, rolled against the target's Defense.");
         curY += RowH;
 
         int newDef2 = _ui.DrawIntField("st_def", "Defense", s.Defense, x, curY, w);
         if (newDef2 != s.Defense) { s.Defense = newDef2; _unsavedChanges = true; }
+        Tip(x, curY, w, "Dodge/parry skill, rolled against incoming attacks.");
         curY += RowH;
 
         int newMR = _ui.DrawIntField("st_mr", "MagicResist", s.MagicResist, x, curY, w);
         if (newMR != s.MagicResist) { s.MagicResist = newMR; _unsavedChanges = true; }
+        Tip(x, curY, w, "Resists MR-checked spells. Higher = more spells",
+            "fizzle against this unit.");
         curY += RowH;
 
         int newMorale = _ui.DrawIntField("st_morale", "Morale", s.Morale, x, curY, w);
         if (newMorale != s.Morale) { s.Morale = newMorale; _unsavedChanges = true; }
+        Tip(x, curY, w, "Nerve. Low-morale units break and flee when the",
+            "fight turns bad. Mindless undead use ~50.");
         curY += RowH;
 
         // Dice tier: 1=d3, 2=d6, 3=d6 exploding once, 4=d6 open-ended
         int newDrn = _ui.DrawIntField("st_drn", "DRN Level", s.Drn, x, curY, w);
         if (newDrn != s.Drn) { s.Drn = Math.Clamp(newDrn, 1, 4); _unsavedChanges = true; }
+        Tip(x, curY, w, "Dice tier for damage/protection/morale rolls:",
+            "1=d3, 2=d6, 3=d6 exploding once, 4=open-ended.");
         curY += RowH;
 
         int newEnc = _ui.DrawIntField("st_enc", "Encumbrance", s.Encumbrance, x, curY, w);
         if (newEnc != s.Encumbrance) { s.Encumbrance = newEnc; _unsavedChanges = true; }
+        Tip(x, curY, w, "Fatigue gained per swing. Tired units hit and dodge worse.");
         curY += RowH;
 
         int newTough = _ui.DrawIntField("st_prot", "Toughness", s.Toughness, x, curY, w);
         if (newTough != s.Toughness) { s.Toughness = newTough; _unsavedChanges = true; }
+        Tip(x, curY, w, "Soaks up to half of the damage left after armor.");
         curY += RowH;
 
         // CombatSpeed input — shrunk to leave room for the suggestion hint and
@@ -2010,6 +2066,8 @@ public class UnitEditorWindow
         int csInputW = w - 200;
         float newCS = _ui.DrawFloatField("st_cs", "CombatSpeed", s.CombatSpeed, x, curY, csInputW, 0.5f);
         if (Math.Abs(newCS - s.CombatSpeed) > 0.001f) { s.CombatSpeed = newCS; _unsavedChanges = true; }
+        Tip(x, curY, csInputW, "Walk speed (world units/sec). The walk animation",
+            "auto-syncs so the feet stay locked to the ground.");
         // Suggested-walk-speed hint + Apply button to the right.
         float suggestedCS = ComputeSuggestedCombatSpeed(def);
         if (suggestedCS > 0f)
@@ -2060,6 +2118,8 @@ public class UnitEditorWindow
         bool newQuad = _ui.DrawCheckbox("Quadruped (subtract body length from stride)",
             def.IsQuadruped, x, curY);
         if (newQuad != def.IsQuadruped) { def.IsQuadruped = newQuad; _unsavedChanges = true; }
+        Tip(x, curY, w, "Four-legged stride math: body length is subtracted",
+            "from the footstep stride. Also enables wading waterlines.");
         curY += RowH;
 
         float curDuty = def.DutyCycle;
@@ -2071,6 +2131,8 @@ public class UnitEditorWindow
             def.DutyCycle = MathF.Max(0f, MathF.Min(0.95f, newDuty));
             _unsavedChanges = true;
         }
+        Tip(x, curY, w, "Fraction of a stride a foot stays planted.",
+            "Feeds the feet-locked walk speed calculation.");
         curY += RowH;
 
         float curTgt = def.TargetWalkCycle;
@@ -2082,6 +2144,8 @@ public class UnitEditorWindow
             def.TargetWalkCycle = MathF.Max(0f, newTgt);
             _unsavedChanges = true;
         }
+        Tip(x, curY, w, "Desired seconds per walk cycle for the suggested",
+            "CombatSpeed. 0 = keep the artist's authored timing.");
         curY += RowH;
 
         // Per-effort velocity multipliers. Drive both the unit's max velocity
@@ -2097,6 +2161,8 @@ public class UnitEditorWindow
             def.JogSpeedMultiplier = MathF.Max(0f, newJogMult);
             _unsavedChanges = true;
         }
+        Tip(x, curY, w, "Max speed at Hurry effort, as a multiple of CombatSpeed.",
+            "Also moves the walk/jog gait-switch threshold.");
         curY += RowH;
 
         float curSprintMult = def.SprintSpeedMultiplier;
@@ -2108,6 +2174,8 @@ public class UnitEditorWindow
             def.SprintSpeedMultiplier = MathF.Max(0f, newSprintMult);
             _unsavedChanges = true;
         }
+        Tip(x, curY, w, "Max speed at Sprint effort, as a multiple of CombatSpeed.",
+            "Also moves the jog/run gait-switch threshold.");
         curY += RowH;
 
         // Per-gait velocity overrides. Rarely needed now that the calibration
@@ -2125,13 +2193,16 @@ public class UnitEditorWindow
         curY += RowH;
         curY = DrawNullableFloat("loc_walk_ov", $"Walk velOverride (auto {AutoVel(autoWalkVel)})",
             def.AnimWalkVelOverride, x, curY, w, 0.1f,
-            v => { def.AnimWalkVelOverride = v; _unsavedChanges = true; });
+            v => { def.AnimWalkVelOverride = v; _unsavedChanges = true; },
+            "Manual anim velocity for the walk gait. Bigger = slower\nplayback at the same speed. Unchecked = auto-derived.");
         curY = DrawNullableFloat("loc_jog_ov", $"Jog velOverride (auto {AutoVel(autoJogVel)})",
             def.AnimJogVelOverride, x, curY, w, 0.1f,
-            v => { def.AnimJogVelOverride = v; _unsavedChanges = true; });
+            v => { def.AnimJogVelOverride = v; _unsavedChanges = true; },
+            "Manual anim velocity for the jog gait. Bigger = slower\nplayback at the same speed. Unchecked = auto-derived.");
         curY = DrawNullableFloat("loc_run_ov", $"Run velOverride (auto {AutoVel(autoRunVel)})",
             def.AnimRunVelOverride, x, curY, w, 0.1f,
-            v => { def.AnimRunVelOverride = v; _unsavedChanges = true; });
+            v => { def.AnimRunVelOverride = v; _unsavedChanges = true; },
+            "Manual anim velocity for the run gait. Bigger = slower\nplayback at the same speed. Unchecked = auto-derived.");
 
         return curY;
     }
@@ -2146,23 +2217,29 @@ public class UnitEditorWindow
         DrawSectionHeader("Combat Overrides", x, ref curY, w);
 
         curY = DrawNullableFloat("co_atkcd", "Attack Cooldown", def.AttackCooldown, x, curY, w, 0.5f,
-            v => { def.AttackCooldown = v; _unsavedChanges = true; });
+            v => { def.AttackCooldown = v; _unsavedChanges = true; },
+            "Seconds between attacks.\nUnchecked = the weapon's own timing.");
         curY = DrawNullableFloat("co_lockout", "Post-Attack Lockout", def.PostAttackLockout, x, curY, w, 0.1f,
-            v => { def.PostAttackLockout = v; _unsavedChanges = true; });
+            v => { def.PostAttackLockout = v; _unsavedChanges = true; },
+            "Seconds the unit stands locked in place after a swing.");
         curY = DrawNullableFloat("co_turn", "Turn Speed", def.TurnSpeed, x, curY, w, 10f,
-            v => { def.TurnSpeed = v; _unsavedChanges = true; });
+            v => { def.TurnSpeed = v; _unsavedChanges = true; },
+            "How fast the unit rotates to face things (deg/sec).");
         curY = DrawNullableFloat("co_accelh", "Accel Half Time", def.AccelHalfTime, x, curY, w, 0.1f,
-            v => { def.AccelHalfTime = v; _unsavedChanges = true; });
+            v => { def.AccelHalfTime = v; _unsavedChanges = true; },
+            "Seconds to reach half of max speed from a standstill.");
         curY = DrawNullableFloat("co_accel80", "Accel 80% Time", def.Accel80Time, x, curY, w, 0.1f,
-            v => { def.Accel80Time = v; _unsavedChanges = true; });
+            v => { def.Accel80Time = v; _unsavedChanges = true; },
+            "Seconds to reach 80% of max speed from a standstill.");
         curY = DrawNullableFloat("co_accelf", "Accel Full Time", def.AccelFullTime, x, curY, w, 0.5f,
-            v => { def.AccelFullTime = v; _unsavedChanges = true; });
+            v => { def.AccelFullTime = v; _unsavedChanges = true; },
+            "Seconds to reach full speed from a standstill.");
 
         return curY;
     }
 
     private int DrawNullableFloat(string id, string label, float? value, int x, int y, int w, float step,
-        Action<float?> setter)
+        Action<float?> setter, string? tip = null)
     {
         bool hasValue = value.HasValue;
         float displayVal = value ?? 0f;
@@ -2174,6 +2251,7 @@ public class UnitEditorWindow
             setter(newHas ? displayVal : null);
             hasValue = newHas;
         }
+        if (tip != null) Tip(x, y, w, tip.Split('\n'));
 
         if (hasValue)
         {
@@ -2221,17 +2299,21 @@ public class UnitEditorWindow
                 }
             }
         }
+        Tip(x, curY, w, "Spell this unit's AI casts in combat.");
         curY += RowH;
 
         // Max Mana
         float newMana = _ui.DrawFloatField("unit_mana", "Max Mana", def.MaxMana, x, curY, w, 1.0f);
         if (Math.Abs(newMana - def.MaxMana) > 0.001f) { def.MaxMana = newMana; _unsavedChanges = true; }
+        Tip(x, curY, w, "Mana pool. Casting spends it; regen refills it.");
         curY += RowH;
 
         // Player-form flag: only defs with this checked are valid morph
         // targets for Metamorphosis "Become X" skills (see SkillEffects).
         bool newPlayerForm = _ui.DrawCheckbox("Player Form", def.PlayerForm, x, curY);
         if (newPlayerForm != def.PlayerForm) { def.PlayerForm = newPlayerForm; _unsavedChanges = true; }
+        Tip(x, curY, w, "Marks this unit as a valid Metamorphosis",
+            "'Become X' morph target for the player.");
         curY += RowH;
 
         // Magic path strip (12 cells in 3 realms). Left-click a cell to increment
@@ -2243,6 +2325,7 @@ public class UnitEditorWindow
         int manaRegenX10 = (int)(def.ManaRegen * 10);
         int newRegenX10 = _ui.DrawIntField("unit_mregen", "Mana Regen x10", manaRegenX10, x, curY, w);
         if (newRegenX10 != manaRegenX10) { def.ManaRegen = newRegenX10 * 0.1f; _unsavedChanges = true; }
+        Tip(x, curY, w, "Mana regained per second, in tenths (10 = 1.0/sec).");
         // Show full mana time estimate
         if (def.MaxMana > 0 && def.ManaRegen > 0.001f)
         {
@@ -2279,6 +2362,9 @@ public class UnitEditorWindow
             var sz = _ui.MeasureText(realmNames[r]);
             _ui.DrawText(realmNames[r], new Vector2(rx + (groupW - sz.X) / 2, y), EditorBase.TextDim);
         }
+        _ui.RowTip(x0, y, cellW * 12 + realmGap * 2, realmHeaderH,
+            "Magic path levels. Left-click a cell to raise, right-click to lower.",
+            "Gates which spells the unit can cast and lowers their mana cost.");
 
         int iconY = y + realmHeaderH;
         int valY = iconY + cellH;
@@ -2433,6 +2519,8 @@ public class UnitEditorWindow
                     summary = $"M:d{wDef.Damage} a{wDef.AttackBonus} d{wDef.DefenseBonus}";
                 _ui.DrawText(summary, new Vector2(x + w - 180, curY + 2), EditorBase.TextDim);
             }
+            Tip(x, curY, w - 28, "Weapon in this slot. Its stats stack with the unit's;",
+                "the highest-Priority usable weapon swings first.");
             curY += RowH;
 
             // Per-slot anim override. "Default" means no override; else pin to a
@@ -2444,6 +2532,8 @@ public class UnitEditorWindow
                 slot.AnimOverride = (newAnim == "Default") ? null : newAnim;
                 _unsavedChanges = true;
             }
+            Tip(x, curY, w - 28, "Attack animation played when swinging this weapon.",
+                "Default = the weapon's own setting.");
             curY += RowH;
 
             // Cosmetic lunge distance for this unit/weapon combo. Zero = no lunge.
@@ -2455,6 +2545,8 @@ public class UnitEditorWindow
                 slot.LungeDist = MathF.Max(0f, newLunge);
                 _unsavedChanges = true;
             }
+            Tip(x, curY, w - 28, "Cosmetic hop toward the target on the hit frame.",
+                "Purely visual - 0 = none.");
             curY += RowH;
         }
         if (def.Weapons.Count < 4)
@@ -2505,6 +2597,7 @@ public class UnitEditorWindow
                 string summary = $"B{aDef.BodyProtection} H{aDef.HeadProtection} E{aDef.Encumbrance}";
                 _ui.DrawText(summary, new Vector2(x + w - 180, curY + 2), EditorBase.TextDim);
             }
+            Tip(x, curY, w - 28, "Armor worn. Adds Protection against body/head hits.");
             curY += RowH;
         }
         if (def.Armors.Count < 4)
@@ -2555,6 +2648,8 @@ public class UnitEditorWindow
                 string summary = $"P{sDef.Protection} Pa{sDef.Parry} D{sDef.Defense}";
                 _ui.DrawText(summary, new Vector2(x + w - 180, curY + 2), EditorBase.TextDim);
             }
+            Tip(x, curY, w - 28, "Shield carried. Catches hits that beat Defense",
+                "by less than its Parry value.");
             curY += RowH;
         }
         if (def.Shields.Count < 1)
@@ -2592,6 +2687,7 @@ public class UnitEditorWindow
         // Show read-only RGBA info next to swatch
         string info = $"({hdrColor.R},{hdrColor.G},{hdrColor.B},{hdrColor.A})";
         _ui.DrawText(info, new Vector2(x + 48, curY + 2), EditorBase.TextDim);
+        Tip(x, curY, w, "Tint applied to the unit's sprite in-game.");
 
         if (changed)
         {
@@ -2735,6 +2831,7 @@ public class UnitEditorWindow
         // Name field
         string newName = _ui.DrawTextField("g_name", "Name", g.DisplayName, x, curY, ww);
         if (newName != g.DisplayName) { g.DisplayName = newName; _unsavedChanges = true; }
+        Tip(x, curY, ww, "Display name of the group.");
         curY += RowH;
 
         // ID (read-only)
@@ -2762,6 +2859,7 @@ public class UnitEditorWindow
                 entry.UnitDefID = MapDisplayToId(newDisplay, unitDisplayOptions, unitIdOptions);
                 _unsavedChanges = true;
             }
+            Tip(x, curY, ww - 28, "Unit this entry can spawn when the group is rolled.");
 
             // Delete button
             if (_ui.DrawButton("X", x + ww - 24, curY, 22, 20, EditorBase.DangerColor))
@@ -2777,6 +2875,7 @@ public class UnitEditorWindow
             // Weight field
             float newWeight = _ui.DrawFloatField($"ge_wt_{i}", "    Weight", entry.Weight, x, curY, ww, 0.1f);
             if (Math.Abs(newWeight - entry.Weight) > 0.001f) { entry.Weight = newWeight; _unsavedChanges = true; }
+            Tip(x, curY, ww, "Random pick chance relative to the other entries.");
             curY += RowH;
         }
 
@@ -2880,6 +2979,7 @@ public class UnitEditorWindow
 
         string newName = _ui.DrawTextField("w_name", "Name", w.DisplayName, x, curY, ww);
         if (newName != w.DisplayName) { w.DisplayName = newName; _unsavedChanges = true; }
+        Tip(x, curY, ww, "Display name shown in equipment lists.");
         curY += RowH;
 
         // RU25: ID is read-only (registry key must not change)
@@ -2899,6 +2999,8 @@ public class UnitEditorWindow
             if (_ui.DrawButton("Ranged", x + 120 + toggleW + 4, curY, toggleW, toggleH, rangedColor))
             { w.IsRanged = true; _unsavedChanges = true; }
         }
+        Tip(x, curY, 116, "Melee swings in reach; Ranged fires projectiles",
+            "(and can still carry melee stats).");
         curY += RowH;
 
         if (!w.IsRanged)
@@ -2906,18 +3008,22 @@ public class UnitEditorWindow
             // Melee fields
             int newDmg = _ui.DrawIntField("w_dmg", "Damage", w.Damage, x, curY, ww);
             if (newDmg != w.Damage) { w.Damage = newDmg; _unsavedChanges = true; }
+            Tip(x, curY, ww, "Added to the wielder's Strength for the damage roll.");
             curY += RowH;
 
             int newAtk = _ui.DrawIntField("w_atk", "Attack Bonus", w.AttackBonus, x, curY, ww);
             if (newAtk != w.AttackBonus) { w.AttackBonus = newAtk; _unsavedChanges = true; }
+            Tip(x, curY, ww, "Added to the wielder's Attack in the hit roll.");
             curY += RowH;
 
             int newDefB = _ui.DrawIntField("w_defb", "Defense Bonus", w.DefenseBonus, x, curY, ww);
             if (newDefB != w.DefenseBonus) { w.DefenseBonus = newDefB; _unsavedChanges = true; }
+            Tip(x, curY, ww, "Added to the wielder's Defense while defending.");
             curY += RowH;
 
             int newLen = _ui.DrawIntField("w_len", "Length", w.Length, x, curY, ww);
             if (newLen != w.Length) { w.Length = newLen; _unsavedChanges = true; }
+            Tip(x, curY, ww, "Reach. Longer weapons land more head hits.");
             curY += RowH;
         }
         else
@@ -2925,47 +3031,59 @@ public class UnitEditorWindow
             // Ranged fields
             float newRange = _ui.DrawFloatField("w_rng", "Range", w.Range, x, curY, ww, 1.0f);
             if (Math.Abs(newRange - w.Range) > 0.001f) { w.Range = newRange; _unsavedChanges = true; }
+            Tip(x, curY, ww, "Max shot distance (world units).");
             curY += RowH;
 
             float newDR = _ui.DrawFloatField("w_dr", "Direct Range", w.DirectRange, x, curY, ww, 1.0f);
             if (Math.Abs(newDR - w.DirectRange) > 0.001f) { w.DirectRange = newDR; _unsavedChanges = true; }
+            Tip(x, curY, ww, "Inside this range the shot flies flat instead of lobbing.");
             curY += RowH;
 
             float newCD = _ui.DrawFloatField("w_cd", "Cooldown", w.Cooldown, x, curY, ww, 0.1f);
             if (Math.Abs(newCD - w.Cooldown) > 0.001f) { w.Cooldown = newCD; _unsavedChanges = true; }
+            Tip(x, curY, ww, "Seconds between shots.");
             curY += RowH;
 
             int newRDmg = _ui.DrawIntField("w_rdmg", "Ranged Damage", w.RangedDamage, x, curY, ww);
             if (newRDmg != w.RangedDamage) { w.RangedDamage = newRDmg; _unsavedChanges = true; }
+            Tip(x, curY, ww, "Damage the projectile carries (Strength not added).");
             curY += RowH;
 
             int newPrec = _ui.DrawIntField("w_prec", "Precision", w.Precision, x, curY, ww);
             if (newPrec != w.Precision) { w.Precision = newPrec; _unsavedChanges = true; }
+            Tip(x, curY, ww, "Shot accuracy: higher = tighter scatter around the aim.");
             curY += RowH;
 
             // Also show melee stats (weapons can have both)
             int newDmg2 = _ui.DrawIntField("w_dmg2", "Melee Damage", w.Damage, x, curY, ww);
             if (newDmg2 != w.Damage) { w.Damage = newDmg2; _unsavedChanges = true; }
+            Tip(x, curY, ww, "Added to the wielder's Strength for melee damage rolls.");
             curY += RowH;
 
             int newAtk2 = _ui.DrawIntField("w_atk2", "Attack Bonus", w.AttackBonus, x, curY, ww);
             if (newAtk2 != w.AttackBonus) { w.AttackBonus = newAtk2; _unsavedChanges = true; }
+            Tip(x, curY, ww, "Added to the wielder's Attack in the melee hit roll.");
             curY += RowH;
 
             int newDefB2 = _ui.DrawIntField("w_defb2", "Defense Bonus", w.DefenseBonus, x, curY, ww);
             if (newDefB2 != w.DefenseBonus) { w.DefenseBonus = newDefB2; _unsavedChanges = true; }
+            Tip(x, curY, ww, "Added to the wielder's Defense while defending.");
             curY += RowH;
         }
 
         // Cooldown (rounds) — applies to any weapon regardless of archetype.
         int newCdRounds = _ui.DrawIntField("w_cdr", "Cooldown (rounds)", w.CooldownRounds, x, curY, ww);
         if (newCdRounds != w.CooldownRounds) { w.CooldownRounds = Math.Max(1, newCdRounds); _unsavedChanges = true; }
+        Tip(x, curY, ww, "Attack cycle length in combat rounds. Each weapon",
+            "on a unit cools down independently.");
         curY += RowH;
 
         // Selection priority for multi-weapon units. Higher = checked first. Ties break
         // by weapon-list order. Prevents "flipping list order silently changes combat".
         int newPri = _ui.DrawIntField("w_pri", "Priority", w.Priority, x, curY, ww);
         if (newPri != w.Priority) { w.Priority = newPri; _unsavedChanges = true; }
+        Tip(x, curY, ww, "Multi-weapon pick order: the highest-priority",
+            "usable weapon is checked first.");
         curY += RowH;
 
         // Archetype dropdown — at most one per weapon (unlike bonuses).
@@ -2986,6 +3104,8 @@ public class UnitEditorWindow
         string newArch = _ui.DrawCombo("w_arch", "Archetype", archVal, archOptions, x, curY, ww,
             optionTooltips: archTips);
         if (newArch != archVal) { w.Archetype = newArch; _unsavedChanges = true; }
+        Tip(x, curY, ww, "Special attack pattern (leap, sweep, charge).",
+            "None = a normal single-target swing.");
         curY += RowH;
 
         // Pounce-archetype parameters (only shown when Archetype == Pounce).
@@ -2996,14 +3116,17 @@ public class UnitEditorWindow
 
             float newMin = _ui.DrawFloatField("w_pmin", "  Min Range", w.PounceMinRange, x, curY, ww, 0.5f);
             if (Math.Abs(newMin - w.PounceMinRange) > 0.001f) { w.PounceMinRange = newMin; _unsavedChanges = true; }
+            Tip(x, curY, ww, "Won't leap at targets closer than this.");
             curY += RowH;
 
             float newMax = _ui.DrawFloatField("w_pmax", "  Max Range", w.PounceMaxRange, x, curY, ww, 0.5f);
             if (Math.Abs(newMax - w.PounceMaxRange) > 0.001f) { w.PounceMaxRange = newMax; _unsavedChanges = true; }
+            Tip(x, curY, ww, "Max leap distance. The hit resolves on landing.");
             curY += RowH;
 
             float newArc = _ui.DrawFloatField("w_parc", "  Arc Peak", w.PounceArcPeak, x, curY, ww, 0.5f);
             if (Math.Abs(newArc - w.PounceArcPeak) > 0.001f) { w.PounceArcPeak = newArc; _unsavedChanges = true; }
+            Tip(x, curY, ww, "Height of the leap arc (visual trajectory).");
             curY += RowH;
         }
 
@@ -3015,34 +3138,42 @@ public class UnitEditorWindow
 
             float v = _ui.DrawFloatField("w_tmin", "  Min Range", w.TrampleMinRange, x, curY, ww, 0.25f);
             if (Math.Abs(v - w.TrampleMinRange) > 0.001f) { w.TrampleMinRange = MathF.Max(0f, v); _unsavedChanges = true; }
+            Tip(x, curY, ww, "Won't start a charge on targets closer than this.");
             curY += RowH;
 
             v = _ui.DrawFloatField("w_tmax", "  Max Range", w.TrampleMaxRange, x, curY, ww, 0.25f);
             if (Math.Abs(v - w.TrampleMaxRange) > 0.001f) { w.TrampleMaxRange = MathF.Max(w.TrampleMinRange, v); _unsavedChanges = true; }
+            Tip(x, curY, ww, "Max distance a charge can start from.");
             curY += RowH;
 
             v = _ui.DrawFloatField("w_tchase", "  Max Chase Dist", w.TrampleMaxChaseDistance, x, curY, ww, 0.5f);
             if (Math.Abs(v - w.TrampleMaxChaseDistance) > 0.001f) { w.TrampleMaxChaseDistance = MathF.Max(0.5f, v); _unsavedChanges = true; }
+            Tip(x, curY, ww, "The charge gives up after chasing this far.");
             curY += RowH;
 
             v = _ui.DrawFloatField("w_timp", "  Impact Range", w.TrampleImpactRange, x, curY, ww, 0.25f);
             if (Math.Abs(v - w.TrampleImpactRange) > 0.001f) { w.TrampleImpactRange = MathF.Max(0.25f, v); _unsavedChanges = true; }
+            Tip(x, curY, ww, "The hit triggers once the charge closes to this distance.");
             curY += RowH;
 
             v = _ui.DrawFloatField("w_tspd", "  Speed Bonus", w.TrampleSpeedBonus, x, curY, ww, 0.05f);
             if (Math.Abs(v - w.TrampleSpeedBonus) > 0.001f) { w.TrampleSpeedBonus = Math.Clamp(v, -0.9f, 3f); _unsavedChanges = true; }
+            Tip(x, curY, ww, "Extra charge speed: 0.5 = +50% of CombatSpeed.");
             curY += RowH;
 
             v = _ui.DrawFloatField("w_trad", "  Radius", w.TrampleRadius, x, curY, ww, 0.25f);
             if (Math.Abs(v - w.TrampleRadius) > 0.001f) { w.TrampleRadius = MathF.Max(0.25f, v); _unsavedChanges = true; }
+            Tip(x, curY, ww, "Units within this radius of the charger get trampled.");
             curY += RowH;
 
             v = _ui.DrawFloatField("w_tkbk", "  Knockback Force", w.TrampleKnockbackForce, x, curY, ww, 0.5f);
             if (Math.Abs(v - w.TrampleKnockbackForce) > 0.001f) { w.TrampleKnockbackForce = MathF.Max(0f, v); _unsavedChanges = true; }
+            Tip(x, curY, ww, "Radial shove on trampled units.");
             curY += RowH;
 
             v = _ui.DrawFloatField("w_timpf", "  Impact Force", w.TrampleImpactForce, x, curY, ww, 0.5f);
             if (Math.Abs(v - w.TrampleImpactForce) > 0.001f) { w.TrampleImpactForce = MathF.Max(0f, v); _unsavedChanges = true; }
+            Tip(x, curY, ww, "Forward shove along the charge direction.");
             curY += RowH;
         }
 
@@ -3055,15 +3186,18 @@ public class UnitEditorWindow
             float newArcDeg = _ui.DrawFloatField("w_sarc", "  Arc (deg)", w.SweepArcDegrees, x, curY, ww, 5f);
             if (Math.Abs(newArcDeg - w.SweepArcDegrees) > 0.001f)
             { w.SweepArcDegrees = Math.Clamp(newArcDeg, 5f, 360f); _unsavedChanges = true; }
+            Tip(x, curY, ww, "Full width of the frontal cone the sweep hits.");
             curY += RowH;
 
             float newR = _ui.DrawFloatField("w_srad", "  Radius", w.SweepRadius, x, curY, ww, 0.25f);
             if (Math.Abs(newR - w.SweepRadius) > 0.001f)
             { w.SweepRadius = MathF.Max(0.5f, newR); _unsavedChanges = true; }
+            Tip(x, curY, ww, "Reach of the sweep cone.");
             curY += RowH;
 
             bool newFF = _ui.DrawCheckbox("  Hits Allies", w.SweepHitsAllies, x, curY);
             if (newFF != w.SweepHitsAllies) { w.SweepHitsAllies = newFF; _unsavedChanges = true; }
+            Tip(x, curY, ww, "The sweep also damages friendlies caught in the cone.");
             curY += RowH;
         }
 
@@ -3086,6 +3220,7 @@ public class UnitEditorWindow
             string newB = _ui.DrawCombo($"wb_{i}", $"  [{i}]", w.Bonuses[i], bonusOptions, x, curY, ww - 28,
                 optionTooltips: bonusTips);
             if (newB != w.Bonuses[i]) { w.Bonuses[i] = newB; _unsavedChanges = true; }
+            Tip(x, curY, ww - 28, "Special property applied on every hit.");
             if (_ui.DrawButton("X", x + ww - 24, curY, 22, 20, EditorBase.DangerColor))
             {
                 w.Bonuses.RemoveAt(i); i--; _unsavedChanges = true;
@@ -3113,6 +3248,7 @@ public class UnitEditorWindow
 
         string newName = _ui.DrawTextField("a_name", "Name", a.DisplayName, x, curY, ww);
         if (newName != a.DisplayName) { a.DisplayName = newName; _unsavedChanges = true; }
+        Tip(x, curY, ww, "Display name shown in equipment lists.");
         curY += RowH;
 
         // RU25: ID is read-only (registry key must not change)
@@ -3122,14 +3258,18 @@ public class UnitEditorWindow
 
         int newBody = _ui.DrawIntField("a_body", "Body Prot", a.BodyProtection, x, curY, ww);
         if (newBody != a.BodyProtection) { a.BodyProtection = newBody; _unsavedChanges = true; }
+        Tip(x, curY, ww, "Protection subtracted from hits that land on the",
+            "body (chest, arms, legs).");
         curY += RowH;
 
         int newHead = _ui.DrawIntField("a_head", "Head Prot", a.HeadProtection, x, curY, ww);
         if (newHead != a.HeadProtection) { a.HeadProtection = newHead; _unsavedChanges = true; }
+        Tip(x, curY, ww, "Protection subtracted from hits that land on the head.");
         curY += RowH;
 
         int newEnc = _ui.DrawIntField("a_enc", "Encumbrance", a.Encumbrance, x, curY, ww);
         if (newEnc != a.Encumbrance) { a.Encumbrance = newEnc; _unsavedChanges = true; }
+        Tip(x, curY, ww, "Currently unused - has no combat effect.");
         curY += RowH;
 
         // Bonuses
@@ -3174,6 +3314,7 @@ public class UnitEditorWindow
 
         string newName = _ui.DrawTextField("s_name", "Name", s.DisplayName, x, curY, ww);
         if (newName != s.DisplayName) { s.DisplayName = newName; _unsavedChanges = true; }
+        Tip(x, curY, ww, "Display name shown in equipment lists.");
         curY += RowH;
 
         // RU25: ID is read-only (registry key must not change)
@@ -3183,14 +3324,19 @@ public class UnitEditorWindow
 
         int newProt = _ui.DrawIntField("s_prot", "Protection", s.Protection, x, curY, ww);
         if (newProt != s.Protection) { s.Protection = newProt; _unsavedChanges = true; }
+        Tip(x, curY, ww, "Extra protection when the shield catches a hit.");
         curY += RowH;
 
         int newParry = _ui.DrawIntField("s_parry", "Parry", s.Parry, x, curY, ww);
         if (newParry != s.Parry) { s.Parry = newParry; _unsavedChanges = true; }
+        Tip(x, curY, ww, "Hits that beat Defense by less than this strike",
+            "the shield instead of the body.");
         curY += RowH;
 
         int newDef = _ui.DrawIntField("s_def", "Defense", s.Defense, x, curY, ww);
         if (newDef != s.Defense) { s.Defense = newDef; _unsavedChanges = true; }
+        Tip(x, curY, ww, "Flat modifier to the wielder's Defense",
+            "(usually a small penalty for bulk).");
         curY += RowH;
 
         sp.End(curY);
@@ -3225,6 +3371,11 @@ public class UnitEditorWindow
 
     private void DrawSectionHeader(string text, int x, ref int y, int w)
         => _ui.DrawSectionHeader(text, x, ref y, w);
+
+    /// <summary>Hover tooltip for a field row — thin wrapper over the shared
+    /// <see cref="EditorBase.RowTip"/> with this editor's row height.</summary>
+    private void Tip(int x, int y, int w, params string[] lines)
+        => _ui.RowTip(x, y, w, RowH, lines);
 
     // =========================================================================
     //  HELPERS

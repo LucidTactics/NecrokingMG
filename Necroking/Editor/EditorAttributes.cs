@@ -34,6 +34,10 @@ public class EditorFieldAttribute : Attribute
 
     /// <summary>For HdrColor: use compact clickable swatch (1 row) instead of full editor (6 rows).</summary>
     public bool Compact { get; set; }
+
+    /// <summary>Hover tooltip: what the player-facing effect of adjusting this
+    /// field is. '\n' splits lines (sprite font is ASCII-only — no unicode).</summary>
+    public string Tooltip { get; set; } = "";
 }
 
 /// <summary>

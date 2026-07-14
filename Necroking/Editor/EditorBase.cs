@@ -239,6 +239,21 @@ public class EditorBase
             && (_activeClip == null || _activeClip.Value.Contains(mx, my));
     }
 
+    /// <summary>Hover tooltip for an editor field row, via the global tooltip
+    /// service (draws topmost, after all scissor clips close). Anchor the whole
+    /// row so hovering either the label or the control shows it. Gated on the
+    /// input-layer system: a covering overlay (sub-editor popup, dropdown,
+    /// color picker, confirm dialog) suppresses the tip — the tooltip band
+    /// draws above popups, so an ungated tip would paint over them. Calls made
+    /// inside a popup's own BeginOverlay scope still show their tips.</summary>
+    public void RowTip(int x, int y, int w, int h, params string[] lines)
+    {
+        if (!HitTestCursor(new Rectangle(x, y, w, h))) return;
+        if (IsInputBlocked(EffectiveLayer(0))) return;
+        if (IsColorPickerOpen || IsDropdownOpen) return;
+        Necroking.Game1.Tooltips.RequestLines(lines);
+    }
+
     // Input layer system (0=main, 1=popup, 2=dropdown, 3=confirm dialog)
     private int _inputLayer;
     public int InputLayer { get => _inputLayer; set => _inputLayer = value; }

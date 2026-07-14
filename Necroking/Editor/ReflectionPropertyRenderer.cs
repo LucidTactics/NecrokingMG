@@ -194,6 +194,27 @@ public class ReflectionPropertyRenderer
 
     private bool DrawField(string fieldId, FieldEntry entry, object obj, int x, ref int curY, int w)
     {
+        int rowY = curY;
+        bool changed = DrawFieldWidget(fieldId, entry, obj, x, ref curY, w);
+
+        if (entry.TooltipLines != null)
+        {
+            // Anchor the tip to the row(s) the widget actually drew. Nested
+            // annotated objects (FlipbookRef etc.) get only their label row —
+            // their child fields carry their own tooltips.
+            bool isNested = entry.CheckboxGrid == null && entry.ComboOptions == null
+                && entry.RegistryName == null && entry.Property.PropertyType.IsClass
+                && entry.Property.PropertyType != typeof(string)
+                && HasAnnotatedProperties(entry.Property.PropertyType);
+            int spanH = isNested ? RowH : Math.Max(RowH, curY - rowY);
+            _ui.RowTip(x, rowY, w, spanH, entry.TooltipLines);
+        }
+
+        return changed;
+    }
+
+    private bool DrawFieldWidget(string fieldId, FieldEntry entry, object obj, int x, ref int curY, int w)
+    {
         var prop = entry.Property;
         var value = prop.GetValue(obj);
 
@@ -552,6 +573,7 @@ public class ReflectionPropertyRenderer
                 HeaderText = headerAttr?.Text,
                 HeaderColor = headerAttr != null ? new Color(headerAttr.ColorR, headerAttr.ColorG, headerAttr.ColorB) : Color.White,
                 VisibilityRules = visRules,
+                TooltipLines = string.IsNullOrEmpty(editorAttr.Tooltip) ? null : editorAttr.Tooltip.Split('\n'),
             });
         }
 
@@ -590,6 +612,7 @@ public class ReflectionPropertyRenderer
         public string? HeaderText;
         public Color HeaderColor = Color.White;
         public Dictionary<string, HashSet<string>>? VisibilityRules;
+        public string[]? TooltipLines;
     }
 
     private class CheckboxGridInfo

@@ -272,16 +272,9 @@ public class SettingsWindow
     // ----------------------------------------------------------------
 
     /// <summary>Hover tooltip for a settings row: a plain-language line plus a
-    /// technical line, via the global tooltip service (draws topmost, after the
-    /// tab's scissor clip closes). Anchored to the whole row so hovering either
-    /// the label or the control shows it.</summary>
+    /// technical line. Thin wrapper over the shared <see cref="EditorBase.RowTip"/>.</summary>
     private void RowTip(int x, int y, int w, string plain, string tech)
-    {
-        if (!_ui.HitTestCursor(new Rectangle(x, y, w, 26))) return;
-        // The tooltip band draws above popups — don't paint over an open overlay.
-        if (!Game1.Popups.IsEmpty || _ui.IsColorPickerOpen || _ui.IsDropdownOpen) return;
-        Game1.Tooltips.RequestLines(plain, tech);
-    }
+        => _ui.RowTip(x, y, w, 26, plain, tech);
 
     private int DrawBloomTab(int x, int y, int w)
     {

@@ -549,6 +549,8 @@ public class SpellEditorWindow : EditorWindow
             float oldAoeR = def.AoeRadius;
             def.AoeRadius = _ui.DrawFloatField("sp_aoer", "AOE Radius", def.AoeRadius, x + 8, curY, fieldW, 0.1f);
             def.AoeRadius = MathF.Round(def.AoeRadius * 10f) / 10f;
+            _ui.RowTip(x + 8, curY, fieldW, RowH,
+                "Radius around the hit point that the effect covers.");
             curY += RowH;
             if (MathF.Abs(def.AoeRadius - oldAoeR) > 0.001f) MarkDirty();
         }
@@ -604,30 +606,37 @@ public class SpellEditorWindow : EditorWindow
 
         // Flipbook dropdown
         fb.FlipbookID = DrawFlipbookDropdown(prefix + "_fb", "Flipbook", fb.FlipbookID, x, ref curY, w);
+        _ui.RowTip(x, curY - RowH, w, RowH, "Which effect animation plays.");
 
         // FPS
         fb.FPS = DrawFloatField10x(prefix + "_fps", "FPS", fb.FPS, x, ref curY, w);
         if (fb.FPS < 0) _ui.DrawText("(default)", new Vector2(x + w - 70, curY - RowH + 4), new Color(120, 120, 140));
+        _ui.RowTip(x, curY - RowH, w, RowH,
+            "Playback speed (frames/sec). -1 = the flipbook's own rate.");
 
         // Scale
         fb.Scale = DrawFloatField100x(prefix + "_scl", "Scale", fb.Scale, x, ref curY, w);
+        _ui.RowTip(x, curY - RowH, w, RowH, "Size multiplier for the effect.");
 
         // Rotation
         float oldRot = fb.Rotation;
         fb.Rotation = _ui.DrawFloatField(prefix + "_rot", "Rotation", fb.Rotation, x, curY, w, 1f);
         if (MathF.Abs(fb.Rotation - oldRot) > 0.01f) MarkDirty();
+        _ui.RowTip(x, curY, w, RowH, "Rotates the effect sprite (degrees).");
         curY += RowH;
 
         // Color swatch
         var c = fb.Color;
         c = DrawHdrColorSwatch(prefix + "_col", "Color", c, x, ref curY, w);
         fb.Color = c;
+        _ui.RowTip(x, curY - RowH, w, RowH, "Tint color; intensity above 1 makes it glow.");
 
         // Blend Mode toggle
         string oldBlend = fb.BlendMode;
         fb.BlendMode = _ui.DrawCombo(prefix + "_blend", "Blend", fb.BlendMode, BlendOptions, x, curY, w,
             optionTooltips: BlendTips);
         if (fb.BlendMode != oldBlend) MarkDirty();
+        _ui.RowTip(x, curY, w, RowH, "Alpha = solid/smoky look; Additive = glowing light look.");
         curY += RowH;
 
         // Alignment toggle
@@ -635,11 +644,13 @@ public class SpellEditorWindow : EditorWindow
         fb.Alignment = _ui.DrawCombo(prefix + "_align", "Alignment", fb.Alignment, AlignOptions, x, curY, w,
             optionTooltips: AlignTips);
         if (fb.Alignment != oldAlign) MarkDirty();
+        _ui.RowTip(x, curY, w, RowH, "Ground = flat on the terrain; Upright = stands facing the camera.");
         curY += RowH;
 
         // Duration
         fb.Duration = DrawFloatField100x(prefix + "_dur", "Duration", fb.Duration, x, ref curY, w);
         if (fb.Duration < 0) _ui.DrawText("(default 0.4s)", new Vector2(x + w - 100, curY - RowH + 4), new Color(120, 120, 140));
+        _ui.RowTip(x, curY - RowH, w, RowH, "Seconds the effect lasts. -1 = one full playthrough.");
 
         return fb;
     }
