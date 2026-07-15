@@ -44,6 +44,7 @@ public static class ScenarioRegistry
         Register("cast_point_debug", "Combat", () => new Scenarios.CastPointDebugScenario());
         Register("whiff_on_escape", "Combat", () => new Scenarios.WhiffOnEscapeScenario());
         Register("balance_matrix", "Combat", () => new Scenarios.BalanceMatrixScenario());
+        Register("power_progression", "Combat", () => new Scenarios.PowerProgressionScenario());
 
         // --- AI & Movement ---
         Register("horde_engaged_kiting", "AI & Movement", () => new Scenarios.HordeEngagedKitingScenario());
