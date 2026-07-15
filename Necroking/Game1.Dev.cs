@@ -1071,6 +1071,47 @@ public partial class Game1 {
                break;
             }
 
+            // Assign a spell to a primary-bar slot ('-' clears it) so tests can
+            // stage the bar without touching user settings/spellbar.json.
+            case "set_spell_slot": {
+               if (c.Args.Length < 2) {
+                  c.Complete(Necroking.Dev.DevServer.Error("set_spell_slot needs: <slot 0-9> <spellID|->"));
+                  break;
+               }
+               if (!int.TryParse(c.Args[0], out int slot) || _spellBarState.Slots == null
+                   || slot < 0 || slot >= _spellBarState.Slots.Length) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"bad slot '{c.Args[0]}'"));
+                  break;
+               }
+               string spellId = c.Args[1] == "-" ? "" : c.Args[1];
+               if (spellId != "" && spellId != "melee_gather" && _gameData.Spells.Get(spellId) == null) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"unknown spell '{spellId}'"));
+                  break;
+               }
+               _spellBarState.Slots[slot].SpellID = spellId;
+               c.Complete(Necroking.Dev.DevServer.Ok($"slot {slot} = '{spellId}'"));
+               break;
+            }
+
+            // Add items to the player inventory (e.g. potions for consumable-spell
+            // tests). give_item <itemID> [qty]
+            case "give_item": {
+               if (c.Args.Length < 1) {
+                  c.Complete(Necroking.Dev.DevServer.Error("give_item needs: <itemID> [qty]"));
+                  break;
+               }
+               string itemId = c.Args[0];
+               if (_gameData.Items.Get(itemId) == null) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"unknown item '{itemId}'"));
+                  break;
+               }
+               int qty = c.Args.Length > 1 ? (int)DevFloat(c.Args[1]) : 1;
+               int added = _inventory.AddItem(itemId, qty);
+               c.Complete(Necroking.Dev.DevServer.Ok(
+                  $"added {added}/{qty} {itemId}, have {_inventory.GetItemCount(itemId)}"));
+               break;
+            }
+
             // Detailed dump of the first unit matching a selector.
             case "unit": {
                if (c.Args.Length < 1) {
@@ -2105,6 +2146,7 @@ public partial class Game1 {
                   "cast <spellID> <x> <y>", "fireball <x> <y> [dmg] [radius] [name]",
                   "reanim_at <x> <y> [defId] [riseSpeed] [fogSpeed]",
                   "reanim_into <zombieDefId> [x] [y]", "learn_skill <skillId>",
+                  "set_spell_slot <slot 0-9> <spellID|->", "give_item <itemID> [qty]",
                   // headless input (clicks / mouse / hover)
                   "click <x> <y> [right]", "mousepos <x> <y>|clear", "pile_click <x> <y>",
                   "hover <selector>|clear", "hover_obj <index>|clear",

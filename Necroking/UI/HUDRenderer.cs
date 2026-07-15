@@ -572,9 +572,13 @@ public partial class HUDRenderer
                     }
                     if (_smallFont != null)
                     {
+                        // WoW-style charge count at the bottom-right, outlined
+                        // so it reads on the icon art.
                         string q = qty.ToString();
                         var qs = _smallFont.MeasureString(q);
-                        Text(_smallFont, q, new Vector2(slot.Right - qs.X - 3, slot.Bottom - qs.Y - 2), PotionQtyColor);
+                        TextOutlined(_smallFont, q,
+                            new Vector2(inner.Right - qs.X - 1, inner.Bottom - qs.Y + 2),
+                            PotionQtyColor, KeyLabelOutline);
                     }
                 }
             }
@@ -583,8 +587,9 @@ public partial class HUDRenderer
             // melee_gather has no icon — label it.
             if (slotSpellId == "melee_gather")
                 Text(_smallFont, "Melee", new Vector2(inner.X + 1, inner.Center.Y - 6), SpellNameColor);
-            // Hotkey label, just inside the frame at the parchment's top-left.
-            TextOutlined(_smallFont, keys[s], new Vector2(inner.X + 3, inner.Y),
+            // Hotkey label, WoW-style at the parchment's top-right.
+            var ks = _smallFont.MeasureString(keys[s]);
+            TextOutlined(_smallFont, keys[s], new Vector2(inner.Right - ks.X - 3, inner.Y),
                 uncastable ? KeyLabelDim : KeyLabelColor, KeyLabelOutline);
         }
     }
