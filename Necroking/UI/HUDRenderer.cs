@@ -101,7 +101,8 @@ public partial class HUDRenderer
     private static readonly Color SlotFilledBg = new(50, 50, 70, 200);
     private static readonly Color SlotEmptyBg = new(30, 30, 40, 150);
     private static readonly Color SlotBorder = new(100, 100, 130, 200);
-    private static readonly Color KeyLabelColor = new(0x3e, 0x31, 0x11); // dark brown, reads on the parchment slot
+    private static readonly Color KeyLabelColor = new(0xff, 0xea, 0xbe); // bright parchment-cream, pops on spell icons
+    private static readonly Color KeyLabelOutline = new(0x2a, 0x1f, 0x0c); // dark rim so the label reads on any art
     private static readonly Color SpellNameColor = new(200, 200, 220);
     private static readonly Color CooldownOverlay = new(0, 0, 0, 150);
     private static readonly Color CooldownText = new(255, 200, 100);
@@ -557,7 +558,7 @@ public partial class HUDRenderer
             if (slotSpellId == "melee_gather")
                 Text(_smallFont, "Melee", new Vector2(inner.X + 1, inner.Center.Y - 6), SpellNameColor);
             // Hotkey label, just inside the frame at the parchment's top-left.
-            Text(_smallFont, keys[s], new Vector2(inner.X + 3, inner.Y), KeyLabelColor);
+            TextOutlined(_smallFont, keys[s], new Vector2(inner.X + 3, inner.Y), KeyLabelColor, KeyLabelOutline);
         }
     }
 
@@ -1011,6 +1012,20 @@ public partial class HUDRenderer
     {
         if (font != null)
             Scope.DrawString(font, text, new Vector2((int)pos.X, (int)pos.Y), color);
+    }
+
+    /// <summary>Text with a 1px 8-direction rim behind the face, for labels that
+    /// must stay legible over arbitrary art (spell icons). SpriteFont has no
+    /// stroke effect (unlike the FontStash widget path), hence the offset passes.</summary>
+    private void TextOutlined(SpriteFont? font, string text, Vector2 pos, Color color, Color outline)
+    {
+        if (font == null) return;
+        int x = (int)pos.X, y = (int)pos.Y;
+        for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++)
+                if (dx != 0 || dy != 0)
+                    Scope.DrawString(font, text, new Vector2(x + dx, y + dy), outline);
+        Scope.DrawString(font, text, new Vector2(x, y), color);
     }
 
     private static int FindNecromancer(Simulation sim)
