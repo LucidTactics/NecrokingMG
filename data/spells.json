@@ -1913,6 +1913,32 @@
         "alignment": "Ground",
         "duration": -1
       }
+    },
+    {
+      "name": "Spirit Walk",
+      "id": "spirit_walk",
+      "category": "Toggle",
+      "school": "Alteration",
+      "tileTemplate": "buff",
+      "icon": "assets/UI/Icons/Spells/BodyEthereal2.png",
+      "range": 0,
+      "manaCost": 30,
+      "primaryPath": "spirit",
+      "primaryLevel": 1,
+      "cooldown": 10,
+      "toggleEffect": "spirit_walk",
+      "toggleDuration": 30
+    },
+    {
+      "name": "Spirit Walk Potion",
+      "id": "potion_spirit_walk",
+      "category": "Buff",
+      "school": "Construction",
+      "tileTemplate": "buff",
+      "icon": "assets/Items/Potions/EvolutionPotion.png",
+      "consumesItem": "potion_spirit_walk",
+      "range": 1,
+      "manaCost": 0
     }
   ]
 }

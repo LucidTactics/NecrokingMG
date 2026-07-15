@@ -155,6 +155,10 @@ public partial class Game1
     /// false (logged) when there is no live player to save.</summary>
     internal bool WriteSaveGame(string name)
     {
+        // A save taken mid spirit-walk would persist the SPIRIT as the player
+        // (NecromancerIndex points at it) — snap back to the body first.
+        GameSystems.SpiritWalkSystem.End(this);
+
         int idx = _sim.NecromancerIndex;
         if (idx < 0)
         {

@@ -1561,6 +1561,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // toward a coordinate from the old map).
         _devFreeCamera = false;
         _devWalkTarget = null;
+        // A spirit walk from the previous session must not leak its body/spirit ids
+        // (or the horde anchor) into the new world.
+        SpiritWalkSystem.Reset();
         // Kill mid-flight pickup arcs — they hold textures from the session being
         // disposed below and would deposit the old map's item into the new game.
         _foragables.Clear();
@@ -3731,6 +3734,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _workerSystem.Update(_clock.WorldDt);
             ApplyBlightBombImpacts();
             FinalizeBushWorkIfPending();
+            // Spirit-walk countdown (possession swap + snap-back live in the system).
+            SpiritWalkSystem.Update(this, _clock.WorldDt);
             _dayNightSystem.Update(_clock.WorldDt, _gameData);
             _sim.MagicGlyphs.Update(_clock.WorldDt, _sim.UnitsMut, _sim.Quadtree, _sim, _sim.PoisonClouds, _gameData.Spells);
             _weatherRenderer.Update(_clock.WorldDt, _gameData);
@@ -4222,7 +4227,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// every cast-failure reason ("Too Far", "Horde Full", "Out of Range", "Not
     /// Enough Mana", "Need Death 1", …). Renders red via the DamageNumber alert
     /// path, starting at the unit's HEAD.</summary>
-    private void SpawnCastFailText(int necroIdx, string message)
+    internal void SpawnCastFailText(int necroIdx, string message)
     {
         if (necroIdx < 0 || necroIdx >= _sim.Units.Count) return;
         if (string.IsNullOrEmpty(message)) return;

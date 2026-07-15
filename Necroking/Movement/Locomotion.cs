@@ -268,10 +268,15 @@ public static class Locomotion
             u.EffortMult = em;
 
             // Ghost mode: dev fly speed, ignores physical modifiers (still
-            // honors rope drag like the old player branch did).
+            // honors rope drag like the old player branch did). A positive
+            // GhostSpeedOverride (spirit walk) replaces the fly speed AND the
+            // sprint doubling with a flat cap.
             if (u.GhostMode)
             {
-                u.MaxSpeed = GhostModeSpeed * (isPlayer ? player.DragSlow * (player.WantSprint ? 2 : 1) : 1f);
+                float ghostSpeed = u.GhostSpeedOverride > 0f
+                    ? u.GhostSpeedOverride
+                    : GhostModeSpeed * (isPlayer && player.WantSprint ? 2f : 1f);
+                u.MaxSpeed = ghostSpeed * (isPlayer ? player.DragSlow : 1f);
                 continue;
             }
 

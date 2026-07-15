@@ -152,6 +152,10 @@ public readonly struct EnvAny : IEnvQueryFilter
 /// - Env-object and corpse queries are linear scans behind this facade;
 ///   if profiling ever says otherwise, a spatial index drops in here with
 ///   zero call-site changes.
+/// - GhostMode units (spirit-walk spirits, net ghosts, dev fly) are invisible
+///   to every gameplay unit query here — they can't be aggroed, threat-scanned,
+///   or spell-targeted. The one exception is <see cref="UnitUnderCursor"/>
+///   (hover pick), which still sees them.
 /// - Lives on <see cref="Simulation"/> (per-map lifetime). Reach it as
 ///   _sim.Query.… every call — NEVER cache the instance in a field, same
 ///   rule as _sim itself (the session is recreated on map load).
@@ -185,7 +189,7 @@ public sealed class WorldQuery
         for (int k = 0; k < _idScratch.Count; k++)
         {
             int idx = UnitUtil.ResolveUnitIndex(units, _idScratch[k]); // alive re-check
-            if (idx < 0 || idx == unitIdx) continue;
+            if (idx < 0 || idx == unitIdx || units[idx].GhostMode) continue;
             float d = (units[idx].Position - units[unitIdx].Position).LengthSq();
             if (d < bestD) { bestD = d; best = idx; }
         }
@@ -220,7 +224,8 @@ public sealed class WorldQuery
         for (int k = 0; k < _idScratch.Count; k++)
         {
             int idx = UnitUtil.ResolveUnitIndex(units, _idScratch[k]);
-            if (idx < 0 || idx == excludeIdx || !filter.Match(units[idx], idx)) continue;
+            if (idx < 0 || idx == excludeIdx || units[idx].GhostMode
+                || !filter.Match(units[idx], idx)) continue;
             float d = (units[idx].Position - pos).LengthSq();
             if (d < bestD) { bestD = d; best = idx; }
         }
@@ -283,11 +288,13 @@ public sealed class WorldQuery
         => NearestUnitLinear(pos, range, faction.Bit(), excludeIdx);
 
     /// <summary>Nearest living unit of any faction within the pick radius —
-    /// the hover/click pick. Linear scan — UI-safe, works paused.</summary>
+    /// the hover/click pick. Linear scan — UI-safe, works paused. The only unit
+    /// query that still sees GhostMode units (you can hover them).</summary>
     public int UnitUnderCursor(Vec2 mouseWorld, float pickRadius)
-        => NearestUnitLinear(mouseWorld, pickRadius, FactionMask.All);
+        => NearestUnitLinear(mouseWorld, pickRadius, FactionMask.All, includeGhosts: true);
 
-    private int NearestUnitLinear(Vec2 pos, float range, FactionMask mask, int excludeIdx = -1)
+    private int NearestUnitLinear(Vec2 pos, float range, FactionMask mask, int excludeIdx = -1,
+        bool includeGhosts = false)
     {
         var units = _sim.Units;
         int best = -1;
@@ -295,6 +302,7 @@ public sealed class WorldQuery
         for (int i = 0; i < units.Count; i++)
         {
             if (i == excludeIdx || !units[i].Alive) continue;
+            if (!includeGhosts && units[i].GhostMode) continue;
             if ((units[i].Faction.Bit() & mask) == 0) continue;
             float d = (units[i].Position - pos).LengthSq();
             if (d < bestD) { bestD = d; best = i; }

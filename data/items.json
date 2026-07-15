@@ -120,6 +120,12 @@
       "displayName": "Death Poison",
       "icon": "assets/Items/Potions/PoisonPotion.png",
       "description": "A vicious tincture — stronger DOT, longer duration. Effect mechanics TBD; placeholder reuses Poison effect for now."
+    },
+    {
+      "id": "potion_spirit_walk",
+      "displayName": "Spirit Walk Potion",
+      "icon": "assets/Items/Potions/EvolutionPotion.png",
+      "description": "Drink to leave your body: it drops lifeless while your spirit roams free for 30 seconds - swift, unseen, far-sighted."
     }
   ]
 }

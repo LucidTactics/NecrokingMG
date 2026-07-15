@@ -258,6 +258,16 @@ public partial class Game1 {
       var potionDef = _gameData.Potions.Get(potionId);
       if (potionDef == null) return;
 
+      // Spirit Walk potion is drink-only — wherever the cursor is, just drink it.
+      // (PotionSystem is sim-level and has no Game1 handle, so the walk starts here.)
+      if (potionDef.OnHitEffect == "SpiritWalk") {
+         if (SpiritWalkSystem.Active) return; // already walking; don't waste the bottle
+         _inventory.RemoveItem(itemId, 1);
+         SpiritWalkSystem.Begin(this, necroIdx,
+            potionDef.BuffDuration > 0f ? potionDef.BuffDuration : SpiritWalkSystem.DefaultDuration);
+         return;
+      }
+
       var necroPos = _sim.Units[necroIdx].Position;
       if ((mouseWorld - necroPos).Length() < 1.0f) {
          // Self-target: drink.

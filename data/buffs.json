@@ -692,6 +692,15 @@
       "incapHoldAnim": "Stunned",
       "incapRecoverAnim": "Idle",
       "incapRecoverTime": 0
+    },
+    {
+      "id": "buff_spirit_sleep",
+      "name": "Spirit Walk",
+      "icon": "assets/UI/Icons/Spells/BodyEthereal.png",
+      "duration": 30,
+      "incapacitating": true,
+      "incapHoldAnim": "Knockdown",
+      "incapRecoverAnim": "Standup"
     }
   ]
 }

@@ -883,6 +883,11 @@ public class SpellDef : INamedDef
     [EditorHide]
     [JsonPropertyName("toggleEffect")] public string ToggleEffect { get; set; } = "";
 
+    /// <summary>Seconds a timed toggle effect lasts (spirit_walk). 0 = the
+    /// effect's own default.</summary>
+    [EditorHide]
+    [JsonPropertyName("toggleDuration")] public float ToggleDuration { get; set; }
+
     // ═══════════════════════════════════════
     //  Style builders — single source of truth
     //  Used by SpellEffectSystem (game) and SpellPreview (editor)

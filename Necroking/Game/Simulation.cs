@@ -430,6 +430,11 @@ public class Simulation
     private VillageSystem? _villages;
     public void SetNecromancerIndex(int idx) { _necromancerIdx = idx; }
 
+    /// <summary>When non-zero, the horde circles this unit instead of the
+    /// necromancer — SpiritWalkSystem anchors the horde to the sleeping body while
+    /// the player is off possessing the spirit. 0 = follow the necromancer.</summary>
+    public uint HordeAnchorUnitId;
+
     /// <summary>Reference to the per-game skill-book state. When non-null,
     /// SpawnUnitByID consults SkillBookState.IntrinsicBuffs and applies any
     /// buff whose required tag set matches the spawning unit's UnitDef.Tags.
@@ -719,7 +724,14 @@ public class Simulation
         // (Terrain speed modulation is folded into Locomotion.UpdateSpeeds.)
         PhaseStart(); UpdateMovement(dt); PhaseEnd("movement");
         PhaseStart(); _physics.Update(dt, _units, _grid.Width * GameConstants.TileSize, _grid.Height * GameConstants.TileSize, _quadtree); PhaseEnd("physics");
-        PhaseStart(); _horde.UpdateStates(_units, _quadtree, _necromancerIdx, dt); PhaseEnd("horde_states");
+        // Horde follows the necromancer, unless a spirit walk anchored it to the body.
+        int hordeAnchorIdx = _necromancerIdx;
+        if (HordeAnchorUnitId != 0)
+        {
+            int anchor = UnitUtil.ResolveUnitIndex(_units, HordeAnchorUnitId);
+            if (anchor >= 0) hordeAnchorIdx = anchor;
+        }
+        PhaseStart(); _horde.UpdateStates(_units, _quadtree, hordeAnchorIdx, dt); PhaseEnd("horde_states");
         // Loco vector + movement-animation tier for ALL units, from this frame's
         // final Velocity/PreferredVel — the single gait selector.
         PhaseStart(); Movement.Locomotion.UpdateLocoVectorsAndGait(_units, _gameData); PhaseEnd("loco_gait");
