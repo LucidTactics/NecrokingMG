@@ -366,7 +366,8 @@ public class HordeMinionHandler : IArchetypeHandler
         ctx.Units[ctx.UnitIndex].Target = CombatTarget.None;
         ctx.Units[ctx.UnitIndex].EngagedTarget = CombatTarget.None;
         ctx.Units[ctx.UnitIndex].InCombat = false;
-        ctx.Units[ctx.UnitIndex].PendingAttack = CombatTarget.None;
+        // PendingAttack deliberately NOT cleared — see OnRoutineExit: an in-progress
+        // swing must resolve at its impact frame (the SwingJanitor owns expiry).
 
         if (ctx.Horde != null && ctx.Horde.GetTargetPosition(ctx.MyId, out var slotPos))
         {

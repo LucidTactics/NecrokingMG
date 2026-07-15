@@ -114,6 +114,13 @@ public class DeerHerdHandler : IArchetypeHandler
         // Feeding owns its bush claim — don't leave a stale index behind when spooked away.
         if (oldRoutine == RoutineFeeding)
             ctx.Units[i].BushWorkObjIdx = -1;
+        // Sleeping reduces DetectionRange (×0.6). The standup paths restore it, but
+        // herd flee propagation can yank a sleeper straight into Fleeing, bypassing
+        // standup — without this catch-all restore the reduction compounds each
+        // night (0.6 → 0.36 → …) and the deer goes progressively blind. Restore is
+        // from UnitDef, so calling it when already restored is a no-op.
+        if (oldRoutine == RoutineSleeping)
+            RestoreDetectionRange(ref ctx);
     }
 
     public void OnRoutineEnter(ref AIContext ctx, byte oldRoutine, byte newRoutine)

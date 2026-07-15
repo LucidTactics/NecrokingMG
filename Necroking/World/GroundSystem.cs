@@ -325,6 +325,19 @@ public class GroundSystem
             if (_vertexMap[i] == index) _vertexMap[i] = 0;
             else if (_vertexMap[i] > index) _vertexMap[i]--;
         }
+        // Corruption edits store ORIGINAL type indices as values — remap them the
+        // same way, or ClearAllCorruption / GetVertexMapForSave would restore
+        // shifted (off-by-one) ground types after a type removal.
+        if (_corruptionEdits.Count > 0)
+        {
+            var keys = new List<int>(_corruptionEdits.Keys);
+            foreach (int k in keys)
+            {
+                byte v = _corruptionEdits[k];
+                if (v == index) _corruptionEdits[k] = 0;
+                else if (v > index) _corruptionEdits[k] = (byte)(v - 1);
+            }
+        }
     }
 
     public void ClearTypes()

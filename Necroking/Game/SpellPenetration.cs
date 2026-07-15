@@ -29,7 +29,9 @@ public static class SpellPenetration
             var def = gameData.Units.Get(units[casterIdx].UnitDefID);
             var pri = spell.GetPrimary();
             if (def != null && pri.HasRequirement)
-                pen += def.GetPathLevel(pri.Path);
+                // Effective (buff-inclusive) level, matching spell gating and mana
+                // cost — a grant_path/AllPaths buff must also raise penetration.
+                pen += BuffSystem.EffectivePathLevel(units, casterIdx, def, pri.Path);
         }
         pen += spell.ResistDifficultyMod;
         return pen;

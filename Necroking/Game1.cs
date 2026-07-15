@@ -1549,6 +1549,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _buffVisuals.Clear();
         _tethers.Clear(); _tetherAnchor = null; _tetherDustAccum.Clear();
         _pendingProjectiles.Clear();
+        // Dev camera/walk overrides are per-world: a detached camera or a stale
+        // walk goal from the previous map must not survive a reload (the camera
+        // would stop following the new necromancer / the necro would auto-walk
+        // toward a coordinate from the old map).
+        _devFreeCamera = false;
+        _devWalkTarget = null;
         // Kill mid-flight pickup arcs — they hold textures from the session being
         // disposed below and would deposit the old map's item into the new game.
         _foragables.Clear();

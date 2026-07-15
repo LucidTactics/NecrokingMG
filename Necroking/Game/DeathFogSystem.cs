@@ -125,9 +125,10 @@ public class DeathFogSystem
     /// half, the four inner diagonals a quarter, and the outer ring (minus the 4 far
     /// corners) an eighth — so centerReduction=4 yields the 4 / 2 / 1 / 0.5 pattern.
     /// The 4 far corners are untouched, so 21 of the 25 cells are affected.
-    /// <para>Low-blight scaling: a cell holding &lt; 1 blight only loses
-    /// <c>reduction × (blight × 0.15 + 0.1)</c>, so faint blight is cleared gently
-    /// rather than nuked disproportionately. Never drops below 0.</para></summary>
+    /// <para>Low-blight scaling: a cell holding &lt; 2 blight only loses
+    /// <c>reduction × (blight × 0.4 + 0.2)</c> (continuous at blight = 2), so faint
+    /// blight is cleared gently rather than nuked disproportionately. Never drops
+    /// below 0.</para></summary>
     public void PurifyArea(float worldX, float worldY, float centerReduction)
     {
         if (_read.Length == 0 || centerReduction <= 0f) return;

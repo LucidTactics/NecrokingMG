@@ -563,7 +563,8 @@ public class BuffVisualSystem
         bool drawBehind, SpriteBatch batch, Camera25D cam, Renderer renderer,
         Dictionary<string, Flipbook> flipbooks)
     {
-        if (!flipbooks.TryGetValue(vis.FlipbookID, out var fb) || !fb.IsLoaded || fb.Texture == null) return;
+        if (!flipbooks.TryGetValue(vis.FlipbookID, out var fb) || !fb.IsLoaded || fb.Texture == null
+            || fb.TotalFrames <= 0) return; // TotalFrames guard: a 0-frame def would div-by-zero below
 
         var baseTint = vis.Color.ToColor();
 

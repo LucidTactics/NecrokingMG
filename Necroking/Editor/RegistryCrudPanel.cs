@@ -148,7 +148,9 @@ public sealed class RegistryCrudPanel<TDef> : IRegistryCrudPanel where TDef : cl
 
         if (_ui.DrawButton("+ New", bx, bottomY, btnW, btnH))
         {
-            string newId = _idPrefix + DateTime.Now.ToString("HHmmss");
+            // UniqueId guard: Registry.Add is an UPSERT, so two "+ New" clicks in
+            // the same wall-clock second would silently overwrite the first entry.
+            string newId = UniqueId(_idPrefix + DateTime.Now.ToString("HHmmss"), "");
             var newDef = new TDef { Id = newId, DisplayName = _newDisplayName };
             _registry.Add(newDef);
             SelectedIdx = EditorBase.IndexOf(_registry.GetIDs(), newId);

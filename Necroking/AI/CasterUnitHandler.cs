@@ -115,7 +115,13 @@ public class CasterUnitHandler : IArchetypeHandler
     private static void UpdateCombat(ref AIContext ctx)
     {
         int targetIdx = SubroutineSteps.ResolveTarget(ref ctx);
-        if (targetIdx < 0) return;
+        if (targetIdx < 0)
+        {
+            // Reacquire is handled in EvaluateRoutine; stop so a frenzied unit
+            // held in Combat with no target doesn't coast on stale PreferredVel.
+            SubroutineSteps.SetIdle(ref ctx);
+            return;
+        }
 
         int i = ctx.UnitIndex;
 

@@ -801,7 +801,16 @@ public partial class Game1 {
                if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("assign_worker needs: <unitId> [graveObjIdx]")); break; }
                uint uid = (uint)DevFloat(c.Args[0]);
                int graveIdx;
-               if (c.Args.Length >= 2) graveIdx = (int)DevFloat(c.Args[1]);
+               if (c.Args.Length >= 2) {
+                  // Validate the explicit index like the auto-pick branch does.
+                  graveIdx = (int)DevFloat(c.Args[1]);
+                  if (graveIdx < 0 || graveIdx >= _envSystem.ObjectCount
+                      || _envSystem.GetObject(graveIdx).DefIndex != _envSystem.FindDef("empty_grave")
+                      || !_envSystem.GetObjectRuntime(graveIdx).Alive) {
+                     c.Complete(Necroking.Dev.DevServer.Error($"graveObjIdx {graveIdx} is not a live empty_grave"));
+                     break;
+                  }
+               }
                else {
                   graveIdx = -1;
                   int gdef = _envSystem.FindDef("empty_grave");
