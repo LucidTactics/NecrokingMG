@@ -1402,6 +1402,13 @@ partial class GameRenderer
         Vec2 aim = _g._camera.ScreenToWorld(_g._input.MousePos, _ctx.ScreenW, _ctx.ScreenH);
         float radius = spell.AoeRadius > 0f ? spell.AoeRadius : 1.5f;
 
+        // Same ground-point range gate the cast applies (SpellCasting's Strike
+        // case), so the colour flips exactly where a click would start failing
+        // with "Out of Range".
+        int ni = _g._sim.NecromancerIndex;
+        bool inRange = ni >= 0
+            && (aim - _g._sim.Units[ni].Position).Length() <= spell.Range;
+
         var cen = _g._renderer.WorldToScreen(aim, 0f, _g._camera);
         var ex  = _g._renderer.WorldToScreen(aim + new Vec2(radius, 0f), 0f, _g._camera);
         var ey  = _g._renderer.WorldToScreen(aim + new Vec2(0f, radius), 0f, _g._camera);
@@ -1410,6 +1417,14 @@ partial class GameRenderer
 
         // Straight alpha — the draw surface premultiplies for the open material
         // (same convention as DrawHoverGroundMarkers).
+        if (!inRange)
+        {
+            // Out of range: grey and fainter, and no unit highlights — the
+            // cast can't land here, so promising hits would be a lie.
+            DrawFilledEllipse(cen, rx, ry, new Color(130, 130, 130, 26));
+            DrawEllipseOutline(cen.X, cen.Y, rx, ry, new Color(155, 155, 155, 95), 4f);
+            return;
+        }
         DrawFilledEllipse(cen, rx, ry, new Color(70, 130, 255, 48));
         DrawEllipseOutline(cen.X, cen.Y, rx, ry, new Color(90, 150, 255, 200), 4f);
 
