@@ -523,7 +523,7 @@
         {
           "type": "Set",
           "stat": "AllPaths",
-          "value": 9
+          "value": 99
         },
         {
           "type": "Multiply",

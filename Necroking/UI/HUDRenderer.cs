@@ -111,7 +111,7 @@ public partial class HUDRenderer
     // strong WoW-style blue = out of mana (it regens — wait or produce more),
     // desaturating grey = not available (missing path / no charges — needs
     // fixing), cooldown sweep = just wait. Active = no wash.
-    private static readonly Color LowManaOverlay = new(30, 60, 170, 150);
+    private static readonly Color LowManaOverlay = new(30, 60, 170, 100);
     private static readonly Color NotAvailableOverlay = new(45, 45, 45, 180);
     // (Tooltip box colors moved to TooltipSystem — the one canonical style.)
     private static readonly Color ControlHintColor = new(120, 120, 140, 200);
