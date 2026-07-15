@@ -102,7 +102,7 @@ public partial class HUDRenderer
     private static readonly Color SlotEmptyBg = new(30, 30, 40, 150);
     private static readonly Color SlotBorder = new(100, 100, 130, 200);
     private static readonly Color KeyLabelColor = new(0xff, 0xea, 0xbe); // bright parchment-cream, pops on spell icons
-    private static readonly Color KeyLabelCantUse = new(0x83, 0x54, 0x54); // spell uncastable (mana/path/charges — not cooldown)
+    private static readonly Color KeyLabelCantUse = new(0xb3, 0x74, 0x74); // spell uncastable (mana/path/charges — not cooldown)
     private static readonly Color KeyLabelOutline = new(0x2a, 0x1f, 0x0c); // dark rim so the label reads on any art
     private static readonly Color SpellNameColor = new(200, 200, 220);
     private static readonly Color CooldownOverlay = new(0, 0, 0, 150);
