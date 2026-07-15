@@ -486,7 +486,7 @@ public partial class Game1 {
                      map_editor = Enum.GetNames(typeof(Necroking.Editor.MapEditorTab)),
                      ui_editor = Enum.GetNames(typeof(Necroking.Editor.UIEditorTab)),
                   },
-                  overlays = new[] { "inventory", "character_stats", "skill_book", "grimoire", "character_sheet" },
+                  overlays = new[] { "inventory", "character_stats", "skill_book", "grimoire", "character_sheet", "build_menu", "crafting_menu" },
                   current = _menuState.ToString(),
                });
                c.Complete(Necroking.Dev.DevServer.OkRaw(js));
@@ -2352,6 +2352,25 @@ public partial class Game1 {
             } else _grimoireOverlay.Toggle();
 
             return $"grimoire visible={_grimoireOverlay.IsVisible}";
+
+         case "build_menu":
+         case "buildmenu":
+            if (action == "close") _buildingMenuUI.Close();
+            else if (action == "toggle" || !_buildingMenuUI.IsVisible) {
+               // Mirror the 'B' key path: docked-left panels are exclusive.
+               if (!_buildingMenuUI.IsVisible) CloseSameSidePanels(PanelSide.Left, _buildingMenuUI);
+               _buildingMenuUI.Toggle(sw, sh);
+            }
+            return $"build_menu visible={_buildingMenuUI.IsVisible} placement={_buildingMenuUI.IsPlacementActive}";
+
+         case "crafting_menu":
+         case "craftingmenu":
+            if (action == "close") _craftingMenu.Close();
+            else if (action == "toggle" || !_craftingMenu.IsVisible) {
+               if (!_craftingMenu.IsVisible) CloseSameSidePanels(PanelSide.Left, _craftingMenu);
+               _craftingMenu.Toggle(sw, sh);
+            }
+            return $"crafting_menu visible={_craftingMenu.IsVisible}";
 
          case "character_sheet":
          case "unit_info":

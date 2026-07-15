@@ -16,9 +16,9 @@ namespace Necroking.UI;
 
 /// <summary>
 /// Widget-driven building placement menu. Uses the "BuildingMenu" widget template
-/// containing "BuildingItem" children. Each item shows building name, up to 2
-/// resource costs with icons and quantities. Handles selection, resource checking,
-/// ghost preview, and placement.
+/// containing "BuildingItem" children laid out as a 3-per-row icon grid; each cell
+/// shows the building's sprite, with name + costs in a hover tooltip. Handles
+/// selection, resource checking, ghost preview, and placement.
 /// </summary>
 public class BuildingMenuUI : SideListMenu
 {
@@ -38,6 +38,7 @@ public class BuildingMenuUI : SideListMenu
     private readonly List<int> _buildableDefIndices = new();
     private int _selectedIndex = -1;
     private bool _placementActive; // ghost follows cursor
+    private int _lastScreenW, _lastScreenH;
 
     protected override int ItemCount => _buildableDefIndices.Count;
 
@@ -93,45 +94,9 @@ public class BuildingMenuUI : SideListMenu
         _selectedIndex = -1;
     }
 
-    /// <summary>Bind building <paramref name="i"/>'s name + up to 2 resource costs.</summary>
-    protected override void BindItem(string subId, int i)
-    {
-        int defIdx = _buildableDefIndices[i];
-        var envDef = _envSystem.Defs[defIdx];
-
-        string name = string.IsNullOrEmpty(envDef.Name) ? envDef.Id : envDef.Name;
-        _renderer.SetText(subId, "child_0", name);
-
-        // Cost 1
-        bool hasCost1 = !string.IsNullOrEmpty(envDef.Cost1ItemId) && envDef.Cost1Amount > 0;
-        bool hasCost2 = !string.IsNullOrEmpty(envDef.Cost2ItemId) && envDef.Cost2Amount > 0;
-
-        if (hasCost1)
-        {
-            var item1 = _items.Get(envDef.Cost1ItemId);
-            _renderer.SetText(subId, "Quant1", envDef.Cost1Amount.ToString());
-            if (item1 != null)
-                _renderer.SetImage(subId, "Icon1", item1.Icon);
-        }
-        else
-        {
-            _renderer.SetText(subId, "Quant1", "");
-            _renderer.SetImage(subId, "Icon1", ""); // empty path = nothing rendered
-        }
-
-        if (hasCost2)
-        {
-            var item2 = _items.Get(envDef.Cost2ItemId);
-            _renderer.SetText(subId, "Quant2", envDef.Cost2Amount.ToString());
-            if (item2 != null)
-                _renderer.SetImage(subId, "Icon2", item2.Icon);
-        }
-        else
-        {
-            _renderer.SetText(subId, "Quant2", "");
-            _renderer.SetImage(subId, "Icon2", ""); // hide cost 2 when not needed
-        }
-    }
+    /// <summary>Grid cells are bare frames — the building sprite is drawn by
+    /// <see cref="DrawItemIcons"/> and name/costs live in the hover tooltip.</summary>
+    protected override void BindItem(string subId, int i) { }
 
     protected override bool CanAfford(int i)
         => CanAfford(_envSystem.Defs[_buildableDefIndices[i]]);
@@ -180,6 +145,8 @@ public class BuildingMenuUI : SideListMenu
     public void Update(InputState input, int screenW, int screenH)
     {
         _lastInput = input;
+        _lastScreenW = screenW;
+        _lastScreenH = screenH;
         if (!_visible) return;
 
         SyncItems();
@@ -259,8 +226,98 @@ public class BuildingMenuUI : SideListMenu
         if (!_visible) return;
         _renderer.DrawWidget(MenuWidgetId, _screenX, _screenY, InstanceId);
 
+        // Building sprites, drawn under the overlays so the can't-afford dim
+        // darkens them too.
+        DrawItemIcons();
+
         // Hover / selected / can't-afford overlays (shared side-list mechanics).
-        DrawItemOverlays();
+        // Returns the hovered cell for the tooltip below.
+        int hoveredIdx = DrawItemOverlays();
+
+        if (hoveredIdx >= 0 && _lastInput != null)
+            DrawBuildingTooltip(hoveredIdx, (int)_lastInput.MousePos.X, (int)_lastInput.MousePos.Y);
+    }
+
+    /// <summary>Aspect-fit each building's sprite into its grid cell (frame 0
+    /// for animated sheets — same slicing as EnvGhostRenderer).</summary>
+    private void DrawItemIcons()
+    {
+        var def = _renderer.GetWidgetDef(MenuWidgetId);
+        if (def == null) return;
+
+        var rects = ComputeItemRects(def);
+        for (int i = 0; i < rects.Count; i++)
+        {
+            int defIdx = _buildableDefIndices[i];
+            var envDef = _envSystem.Defs[defIdx];
+            var cell = rects[i];
+            cell.Inflate(-7, -7); // keep clear of the cell frame
+
+            // Glyph traps never instantiate their env sprite — show the trap
+            // spell's grimoire icon (the def texture is usually a placeholder).
+            if (envDef.IsGlyphTrap)
+            {
+                var spell = _spells?.Get(envDef.TrapSpellId);
+                if (spell != null && !string.IsNullOrEmpty(spell.Icon))
+                {
+                    _renderer.DrawIcon(spell.Icon, cell.X, cell.Y, cell.Width, cell.Height);
+                    continue;
+                }
+            }
+
+            var tex = _envSystem.GetDefTexture(defIdx);
+            if (tex == null) continue;
+
+            Rectangle? src = null;
+            if (envDef.IsAnimated && envDef.AnimTotalFrames > 1 && !_envSystem.IsUsingPlaceholder(defIdx))
+                src = envDef.GetAnimFrameRect(tex.Width, tex.Height, 0);
+
+            DrawUtils.DrawAspectFit(Scope, tex, src, cell, Color.White);
+        }
+    }
+
+    /// <summary>Rich hover tooltip: building name + cost rows with have/need
+    /// affordability coloring (same pattern as CraftingMenuUI's potion tooltip).</summary>
+    private void DrawBuildingTooltip(int i, int mx, int my)
+    {
+        var envDef = _envSystem.Defs[_buildableDefIndices[i]];
+        string name = string.IsNullOrEmpty(envDef.Name) ? envDef.Id : envDef.Name;
+
+        const int TipW = 240;
+        var backend = new RichTip.WidgetBackend(_renderer, Scope, _pixel);
+
+        var rows = new List<RichTip.Row>();
+        AddCostRow(rows, envDef.Cost1ItemId, envDef.Cost1Amount);
+        AddCostRow(rows, envDef.Cost2ItemId, envDef.Cost2Amount);
+        if (rows.Count == 0)
+            rows.Add(new("Cost", "Free", RichTip.Green));
+
+        if (envDef.IsGlyphTrap)
+        {
+            var spell = _spells?.Get(envDef.TrapSpellId);
+            if (spell != null)
+                rows.Add(new("Trap spell",
+                    string.IsNullOrEmpty(spell.DisplayName) ? envDef.TrapSpellId : spell.DisplayName,
+                    RichTip.Dim));
+        }
+
+        int sw = _lastScreenW > 0 ? _lastScreenW : (_screenX + _widgetW + TipW + 16);
+        int sh = _lastScreenH > 0 ? _lastScreenH : _widgetH;
+
+        // Deferred to the global tooltip queue: drawn in the topmost Tooltip band.
+        Game1.Tooltips.RequestCustom(_ =>
+            RichTip.Draw(backend, RichTip.Palette.Default, name, null,
+                Array.Empty<string>(), rows, mx, my, sw, sh, TipW));
+    }
+
+    /// <summary>Append a "<c>have/need</c>" cost row (green when affordable) if the
+    /// cost slot is populated.</summary>
+    private void AddCostRow(List<RichTip.Row> rows, string itemId, int amount)
+    {
+        if (string.IsNullOrEmpty(itemId) || amount <= 0) return;
+        int have = _inventory.GetItemCount(itemId);
+        rows.Add(new(_items.NameOf(itemId), $"{have}/{amount}",
+            have >= amount ? RichTip.Green : RichTip.Red));
     }
 
     /// <summary>Draw ghost preview of building at cursor position.</summary>
