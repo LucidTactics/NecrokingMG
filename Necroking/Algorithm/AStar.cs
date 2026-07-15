@@ -101,8 +101,8 @@ public static class AStar
                 // (no corner-cutting through walls)
                 if (dx != 0 && dy != 0)
                 {
-                    if (getCost(cx + dx, cy) >= 255) continue;
-                    if (getCost(cx, cy + dy) >= 255) continue;
+                    if (getCost(cx + dx, cy) == 255) continue;
+                    if (getCost(cx, cy + dy) == 255) continue;
                 }
 
                 float tentativeG = currentG + moveCost * tileCost;

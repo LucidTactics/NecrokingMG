@@ -512,7 +512,7 @@ public class WorkerSystem
         if (total <= 0) return lines;
 
         var counts = new Dictionary<string, int>();
-        var order = new List<string>(); // preserve first-seen order for stable display
+        var order = new List<string>(); // display order = first seen in the newest-first walk below (next-withdrawn types first)
         int typed = 0;
         if (_corpseTypes.TryGetValue(ObjId(objIdx), out var list))
         {

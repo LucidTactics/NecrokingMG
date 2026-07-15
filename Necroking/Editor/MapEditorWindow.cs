@@ -1054,8 +1054,8 @@ public class MapEditorWindow
         UpdateBottomBarClicks(rawLeftClick, mouse, panelX, panelY, screenH);
 
         // Keep the persisted "last tab" in sync in-memory every frame the editor is
-        // open, so ANY settings save path (Exiting, the settings window, dev command,
-        // DualSave) writes the current tab — not the stale default. SaveIfChanged
+        // open, so ANY settings save path (Exiting, the settings window, dev
+        // command) writes the current tab — not the stale default. SaveIfChanged
         // means updating an already-correct value is free.
         if (_gameData != null)
             _gameData.Settings.General.MapEditorLastTab = (int)ActiveTab;

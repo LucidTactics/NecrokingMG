@@ -15,7 +15,7 @@ namespace Necroking.AI;
 ///   Male: fights back when hit. Stands facing attacker between attacks, charges when ready.
 ///
 /// Routines:
-///   0 = IdleRoaming  — walk to a point at 30% speed, idle for a while, repeat within 10u of spawn
+///   0 = IdleRoaming  — walk to a point at half walk speed, idle for a while, repeat within 10u of spawn
 ///   1 = Sleeping     — nighttime: stand still
 ///   2 = Alert        — freeze and watch threat; recheck every second
 ///   3 = Fleeing      — run away from threat
@@ -25,7 +25,8 @@ namespace Necroking.AI;
 ///
 /// Alert behavior (reworked):
 ///   - On detection: freeze, face threat (Alert routine, Watch subroutine)
-///   - Every 1 second: if ANY hostile within 90% of alert radius → flee (or fight if male)
+///   - Every 1 second: if ANY hostile within 90% of alert radius → flee (males only
+///     fight back via the separate flee→FightBack path when actually engaged)
 ///   - If no hostile within 90%: stay frozen, keep watching
 ///   - If alert drops to Unaware: enter Calming then back to Idle
 /// </summary>
@@ -41,7 +42,6 @@ public class DeerHerdHandler : IArchetypeHandler
 
     // Alert subroutines
     private const byte AlertWatch = 0;
-    private const byte AlertRun = 1;
 
     // Fighting subroutines (male only)
     private const byte FightStance = 0;  // stand facing attacker, wait for cooldown
@@ -58,7 +58,7 @@ public class DeerHerdHandler : IArchetypeHandler
     private const byte FeedIdleAfter = 2;
 
     private const float SitDuration = 10f;          // Seconds in sit before sleep
-    private const float SleepDetectionScale = 0.6f;  // 40% reduction in alert radius
+    private const float SleepDetectionScale = 0.6f;  // 40% reduction in detection range
     private const float StandupDuration = 1.0f;      // Standup animation time
 
     private const float RoamRadius = 10f;
@@ -1043,7 +1043,6 @@ public class DeerHerdHandler : IArchetypeHandler
         RoutineAlert => subroutine switch
         {
             AlertWatch => "Watch",
-            AlertRun => "Run",
             _ => $"Unknown({subroutine})"
         },
         RoutineFightBack => subroutine switch

@@ -115,7 +115,7 @@ public class TileGrid
     /// clamp instead. The one wall-footprint probe: Simulation movement collision
     /// and AI walkability checks both delegate here; env objects are a separate
     /// layer (EnvSpatialIndex / WorldQuery.IsSpotBlocked).</summary>
-    public bool OverlapsImpassable(float px, float py, float r)
+    public bool AabbOverlapsImpassable(float px, float py, float r)
     {
         int gx0 = (int)MathF.Floor(px - r);
         int gy0 = (int)MathF.Floor(py - r);
@@ -186,6 +186,8 @@ public class TileGrid
         });
     }
 
+    // NOTE: the stamp methods below use world coords directly as tile coords
+    // (no / TileSize like WorldToGrid) — correct only while TileSize == 1.
     public void StampImpassableCircle(float worldX, float worldY, float radius)
     {
         int minTX = Math.Max(0, (int)MathF.Floor(worldX - radius));
@@ -225,6 +227,9 @@ public class TileGrid
             }
     }
 
+    // Floor, not (int)-truncation: differs for negative coords. Pathfinder uses
+    // (int)(x / TileSize) throughout, so both agree only because world coords
+    // are always >= 0.
     public GridCoord WorldToGrid(Vec2 worldPos) =>
         new((int)MathF.Floor(worldPos.X / GameConstants.TileSize),
             (int)MathF.Floor(worldPos.Y / GameConstants.TileSize));

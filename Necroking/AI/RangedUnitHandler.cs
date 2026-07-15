@@ -6,11 +6,11 @@ using Necroking.Movement;
 namespace Necroking.AI;
 
 /// <summary>
-/// Ranged unit handler for Archers and Casters.
-/// Maintains distance from enemies while attacking. Uses spell/ranged attacks.
+/// Ranged unit handler for Archers (casters have their own CasterUnitHandler).
+/// Maintains distance from enemies while attacking with ranged weapons.
 ///
 /// Routines:
-///   0 = IdleRoaming  — wander near spawn at 30% speed
+///   0 = IdleRoaming  — wander near spawn at half walk speed
 ///   1 = Alert        — noticed threat
 ///   2 = Combat       — attack from range, kite if enemy gets close
 ///   3 = Return       — go back to position
@@ -19,7 +19,7 @@ namespace Necroking.AI;
 /// shoot target — presses inside KiteEnterFrac of max range, they jog away from it
 /// between shots and only stop to draw when the bow is ready, resuming the retreat
 /// after the release. Hysteresis (enter 0.35 / exit 0.5 of max range) stops the
-/// stand↔kite flip-flop at the boundary. Casters stand and cast.
+/// stand↔kite flip-flop at the boundary.
 /// </summary>
 public class RangedUnitHandler : IArchetypeHandler
 {
@@ -158,8 +158,8 @@ public class RangedUnitHandler : IArchetypeHandler
             return;
         }
 
-        // In range, weapon recharging (or caster): hold position. Facing falls to
-        // UpdateFacingAngles priority 3 (stationary with a Target → face it).
+        // In range, weapon recharging: hold position. Facing falls to
+        // Locomotion.UpdateFacing priority 3 (stationary with a Target → face it).
         ctx.Units[i].PreferredVel = Vec2.Zero;
         SubroutineSteps.SetLocomotionAnim(ref ctx);
     }

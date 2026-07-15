@@ -119,7 +119,7 @@ public struct SoulOrb
 /// </summary>
 public class Simulation
 {
-    private const float CombatTickInterval = 2.0f;
+    private const float HarassmentDecayInterval = 2.0f;
     private const float Rad2Deg = 57.29577951f;
 
     private TileGrid _grid = new();
@@ -163,7 +163,7 @@ public class Simulation
     // chase GameData.Settings 600+ times per frame.
     private bool _amortizedAI;
     private int _aiUpdateInterval = 6;
-    private float _harassmentDecayTimer = CombatTickInterval;
+    private float _harassmentDecayTimer = HarassmentDecayInterval;
     private const float FatigueRegenInterval = 3.0f; // 1 fatigue point recovered per this many seconds
     private float _fatigueRegenTimer = FatigueRegenInterval;
     private const float UnconsciousFatigueRegen = 5.0f;   // fatigue recovered per interval while collapsed (manual: ~5/turn)
@@ -409,7 +409,7 @@ public class Simulation
         _nextCorpseID = 0;
         _necromancerIdx = -1;
         _necroState = new NecromancerState();
-        _harassmentDecayTimer = CombatTickInterval;
+        _harassmentDecayTimer = HarassmentDecayInterval;
         _fatigueRegenTimer = FatigueRegenInterval;
 
         if (gameData.Settings.Horde != null)
@@ -548,7 +548,7 @@ public class Simulation
         _harassmentDecayTimer -= dt;
         if (_harassmentDecayTimer <= 0f)
         {
-            _harassmentDecayTimer += CombatTickInterval;
+            _harassmentDecayTimer += HarassmentDecayInterval;
             for (int i = 0; i < _units.Count; i++)
                 if (_units[i].Harassment > 0)
                     _units[i].Harassment = (_units[i].Harassment + 1) / 2;
@@ -1057,7 +1057,7 @@ public class Simulation
     }
 
     /// <summary>Sets the mouse-driven target facing angle for the necromancer.
-    /// The actual rotation is applied by <see cref="UpdateFacingAngles"/> at the
+    /// The actual rotation is applied by Movement.Locomotion.UpdateFacing at the
     /// unit's turn rate. While jogging or running the player branch picks the
     /// velocity direction over this override; once velocity drops back into walk
     /// gait, this becomes the target again and the body swings to face it.</summary>
@@ -1670,6 +1670,9 @@ public class Simulation
             }
 
             var accelDef = UnitUtil.ResolveDef(_units[i], _gameData); // memoized — per moving unit per frame
+            // The single "MaxAcceleration" buff key scales the whole accel model —
+            // accelerating, braking, and turning — so one agility buff (Nimbleness,
+            // god mode) affects all three; there are no per-cap buff keys.
             float maxAccel = BuffSystem.GetModifiedExtra(_units, i, "MaxAcceleration",
                 accelDef?.MaxAcceleration ?? _gameData.Settings.Combat.MaxAcceleration);
             float maxDecel = BuffSystem.GetModifiedExtra(_units, i, "MaxAcceleration",
@@ -2069,7 +2072,7 @@ public class Simulation
     // wall loop doesn't allocate a fresh array each execution.
     private static readonly float[] WallGapProbes = { 0.1f, -0.1f, 0.2f, -0.2f, 0.3f, -0.3f };
 
-    private bool IsBlocked(float px, float py, float r) => _grid.OverlapsImpassable(px, py, r);
+    private bool IsBlocked(float px, float py, float r) => _grid.AabbOverlapsImpassable(px, py, r);
 
     // --- Facing Angles ---
     // The facing priority ladder lives in Movement.Locomotion.UpdateFacing
@@ -2528,9 +2531,10 @@ public class Simulation
             spawnHeight: _units[attackerIdx].EffectSpawnHeight);
     }
 
-    /// NOTE: Actual dominions arrow to hit calc. Size points is 3 for lone human, 10 at most.
-    /// Attacker: DRN + (Size points in the square)/2 +2 if magic weapon
-    /// Defender: DRN + (shield parry value x2) – (Fatigue / 20)
+    /// REFERENCE ONLY — Dominions' original arrow-to-hit formula, NOT what the code
+    /// below implements (no size-points or fatigue terms here; see the summary):
+    ///   Attacker: DRN + (Size points in the square)/2, +2 if magic weapon
+    ///   Defender: DRN + (shield parry value x2) – (Fatigue / 20)
 
     /// <summary>
     /// Dominions-style ranged hit resolution (ported from the C++ resolveRangedAttack):

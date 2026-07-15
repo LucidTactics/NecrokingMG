@@ -360,7 +360,7 @@ public partial class Game1 {
          // a stop (locomotion keeps playing the skid) and turns toward the aim
          // at a boosted rate; TickCastPlant starts the channel once speed drops
          // below the gate. The old raw FacingAngle snap is gone — facing is
-         // owned by UpdateFacingAngles' cast branch for the whole cast.
+         // owned by Locomotion.UpdateFacing's cast branch for the whole cast.
          _pendingCastAnim = new PendingCastAnim {
             SpellID = spellId, Target = mouseWorld, Slot = slot,
             CastingBuffID = spell.CastingBuffID,

@@ -82,8 +82,8 @@ public class EffectManager
             FlipbookKey = flipbookKey,
             BlendMode = blendMode,
             Alignment = alignment,
-            AnchorX = alignment == 1 ? 0.5f : 0.5f,
-            AnchorY = alignment == 1 ? 1f : 0.5f
+            AnchorX = 0.5f,
+            AnchorY = alignment == 1 ? 1f : 0.5f // ground-aligned effects sit on their bottom edge
         });
     }
 

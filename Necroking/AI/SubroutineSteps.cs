@@ -20,10 +20,10 @@ namespace Necroking.AI;
 ///   MoveToPosition   — pathfind toward a world position (stored in MoveTarget)
 ///   MoveAwayFrom     — back away from alert target to a safe distance
 ///   AttackTarget     — stay in melee range, let combat system handle strikes
-///   WaitDuration     — idle for SubroutineTimer seconds
+///   Wait             — idle for SubroutineTimer seconds
 ///   WaitForCooldown  — idle until attack cooldown expires
 ///   Wander           — random movement within radius of spawn point
-///   FleeFromThreat   — pathfind away from alert target
+///   SetFleeFromTarget / SetFleeRandomTarget — pick a flee point away from a threat
 ///   Idle             — stand still, do nothing
 /// </summary>
 public static class SubroutineSteps
@@ -103,7 +103,7 @@ public static class SubroutineSteps
             // Previously this also multiplied by a separate walkSpeedFraction, which
             // double-penalised the effort system (deer "0.6" cap actually moved 0.18).
             MoveToward(ref ctx, target, ctx.MyMaxSpeed);
-            if ((target - ctx.MyPos).LengthSq() < 1.5f)
+            if ((target - ctx.MyPos).LengthSq() < 1.5f) // squared — arrival radius ≈ 1.22 wu
             {
                 ctx.Subroutine = 1;
                 ctx.SubroutineTimer = 3f + (i % 6) + ((ctx.FrameNumber + i * 3) % 5); // 3-13s idle
@@ -190,7 +190,7 @@ public static class SubroutineSteps
     /// destinations match what the movement system will actually accept.
     /// </summary>
     public static bool IsPointWalkable(World.TileGrid grid, Vec2 pos, float radius)
-        => !grid.OverlapsImpassable(pos.X, pos.Y, radius);
+        => !grid.AabbOverlapsImpassable(pos.X, pos.Y, radius);
 
     /// <summary>Random wander within radius of a center point.</summary>
     public static void Wander(ref AIContext ctx, Vec2 center, float radius, float speed)
