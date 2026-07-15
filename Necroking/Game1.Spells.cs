@@ -326,6 +326,11 @@ public partial class Game1 {
          case CastResult.NoValidTarget:
             SpawnCastFailText(necroIdx, "No Target");
             break;
+         // Skill-tree raise gate: the aimed-at corpse's zombie type hasn't been
+         // unlocked (unlock_summon) yet — e.g. a boar before Boar Autopsy.
+         case CastResult.SummonLocked:
+            SpawnCastFailText(necroIdx, "Not Studied");
+            break;
       }
       if (result != CastResult.Success) return result;
 

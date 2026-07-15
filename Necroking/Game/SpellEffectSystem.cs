@@ -333,6 +333,15 @@ public static class SpellEffectSystem
         var sim = game._sim;
         var gameData = game._gameData;
 
+        // Skill-tree raise gate (shared by both branches below): corpse types the
+        // player hasn't unlocked via unlock_summon can't be raised. God mode bypasses.
+        // Cast-time validation (TryStartSpellCast) already filters the single-corpse
+        // path; re-checked here defensively, and the AOE path can only check per
+        // corpse at execute time.
+        var raiseBook = sim.SkillBook;
+        bool raiseGod = raiseBook != null
+            && BuffSystem.HasBuff(sim.Units, necroIdx, "buff_god_mode");
+
         if (spell.SummonTargetReq == "CorpseAOE") {
             // AOE corpse raise: iterate corpses in range, resolve zombie type per corpse
             int raised = 0;
@@ -347,6 +356,8 @@ public static class SpellEffectSystem
                 if (corpse.BaggedByUnitID != GameConstants.InvalidUnit) continue; // mid-bagging
                 float dist = (corpse.Position - pending.TargetPos).Length();
                 if (dist > spell.AoeRadius) continue;
+                if (!TableCraftingSystem.IsRaiseUnlocked(gameData, raiseBook, corpse.UnitDefID, raiseGod))
+                    continue; // locked type — skip this corpse, keep scanning the AOE
 
                 // Resolve zombie type from corpse's UnitDef. Shared with
                 // TableCraftingSystem so the same source corpse always raises
@@ -398,9 +409,14 @@ public static class SpellEffectSystem
                 if (corpseIdx >= 0) {
                     var corpse = sim.Corpses[corpseIdx];
                     // Resolve zombie type from the corpse if summonUnitID is empty (shared
-                    // helper; see the AOE branch above).
-                    if (string.IsNullOrEmpty(summonUnitID))
+                    // helper; see the AOE branch above). Locked types no-op the raise —
+                    // the cast gate already refused these, this covers state changing
+                    // mid-channel.
+                    if (string.IsNullOrEmpty(summonUnitID)) {
+                        if (!TableCraftingSystem.IsRaiseUnlocked(gameData, raiseBook, corpse.UnitDefID, raiseGod))
+                            return;
                         summonUnitID = TableCraftingSystem.ResolveZombieUnitID(gameData, corpse.UnitDefID);
+                    }
 
                     // Corpse-puppet raise: remember the original body so the puppet deposits as that
                     // type at a Corpse Pile (the OnSpawned callback below stamps it onto the unit).

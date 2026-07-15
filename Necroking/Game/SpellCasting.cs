@@ -9,7 +9,7 @@ using Necroking.Movement;
 
 namespace Necroking.GameSystems;
 
-public enum CastResult { Success, NotEnoughMana, OnCooldown, NoValidTarget, OutOfRange, NoNecromancer, HordeCapFull, MissingPath }
+public enum CastResult { Success, NotEnoughMana, OnCooldown, NoValidTarget, OutOfRange, NoNecromancer, HordeCapFull, MissingPath, SummonLocked }
 
 public class PendingSpellCast
 {
@@ -158,6 +158,17 @@ public static class SpellCaster
                     // Find closest corpse to mouse within range of necromancer
                     // If summonUnitID is empty, corpse must have a valid zombieTypeID
                     bool needsZombieType = string.IsNullOrEmpty(spell.SummonUnitID);
+                    // Skill-tree raise gate (player only): a corpse whose zombie type
+                    // the player hasn't unlocked (unlock_summon) isn't a valid target.
+                    // God mode bypasses. AI casters and fixed-summon spells skip this.
+                    SkillBookState? raiseBook = null;
+                    bool raiseGod = false;
+                    if (needsZombieType && caster is NecromancerState)
+                    {
+                        raiseBook = Necroking.Game1.Instance?._skillBookState;
+                        raiseGod = raiseBook != null && BuffSystem.HasBuff(units, casterIdx, "buff_god_mode");
+                    }
+                    bool sawLockedCorpse = false;
                     float bestDist = float.MaxValue;
                     int bestCorpse = -1;
                     for (int i = 0; i < corpses.Count; i++)
@@ -168,6 +179,14 @@ public static class SpellCaster
                         if (needsZombieType && !CorpseHasZombieType(corpses[i], gameData)) continue;
                         float distToCaster = (corpses[i].Position - casterPos).Length();
                         if (distToCaster > spell.Range) continue;
+                        if (raiseBook != null && !TableCraftingSystem.IsRaiseUnlocked(
+                                gameData, raiseBook, corpses[i].UnitDefID, raiseGod))
+                        {
+                            // In-range but locked — remember so the failure reads as
+                            // "not studied" instead of a generic "no target".
+                            sawLockedCorpse = true;
+                            continue;
+                        }
                         float distToCursor = (corpses[i].Position - targetWorld).Length();
                         if (distToCursor < bestDist)
                         {
@@ -175,7 +194,8 @@ public static class SpellCaster
                             bestCorpse = i;
                         }
                     }
-                    if (bestCorpse < 0) return CastResult.NoValidTarget;
+                    if (bestCorpse < 0)
+                        return sawLockedCorpse ? CastResult.SummonLocked : CastResult.NoValidTarget;
                     outPending.TargetCorpseIdx = bestCorpse;
                     outPending.TargetCorpseID = corpses[bestCorpse].CorpseID;
                     outPending.TargetPos = corpses[bestCorpse].Position;

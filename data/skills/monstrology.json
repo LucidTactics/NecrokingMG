@@ -16,7 +16,7 @@
         }
       ],
       "effect": "compound",
-      "effectArg": "cap_buff=monster:1|unlock_summon=ZombieFemaleDeer,ZombieMaleDeer,ZombieWolf|add_spell=reanimate_corpse"
+      "effectArg": "cap_buff=monster:1|unlock_summon=ZombieFemaleDeer,ZombieMaleDeer,WolfCubZombie|add_spell=reanimate_corpse"
     },
     {
       "id": "improved_monstrology",
@@ -130,7 +130,7 @@
         }
       ],
       "effect": "unlock_summon",
-      "effectArg": "ZombieWolf"
+      "effectArg": "ZombieDireWolf"
     },
     {
       "id": "wolf_lunge",

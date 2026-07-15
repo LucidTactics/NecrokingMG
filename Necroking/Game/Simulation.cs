@@ -3779,7 +3779,14 @@ public class Simulation
                             || _units[i].Faction == Faction.Animal;
                         bool isHuman = killedDef != null && killedDef.Tags.Contains("humanoid")
                             || _units[i].Faction == Faction.Human;
-                        if (isMonster) PlayerEvents.Tally(PlayerEventTracker.Keys.MonsterKill);
+                        if (isMonster)
+                        {
+                            PlayerEvents.Tally(PlayerEventTracker.Keys.MonsterKill);
+                            // Placeholder earn path: each player-caused monster kill
+                            // grants 1 monstrology research point (skill costs are 5
+                            // per node). Design intends to replace this later.
+                            _skillBookState.AddSkillPoints("monstrology", 1);
+                        }
                         if (isHuman)   PlayerEvents.Tally(PlayerEventTracker.Keys.HumanKill);
                     }
                 }

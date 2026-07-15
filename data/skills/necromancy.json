@@ -27,8 +27,8 @@
           "amount": 1
         }
       ],
-      "effect": "cap_buff",
-      "effectArg": "human:1"
+      "effect": "compound",
+      "effectArg": "cap_buff=human:1|unlock_summon=group_0"
     }
   ]
 }

@@ -201,10 +201,13 @@ public class SkillBookOverlay : IModalLayer
         {
             var bar = _renderer.GetChildRect(WindowId, "TabBar", _x, _y, Instance);
             string barInst = $"{Instance}.{barIdx}";
+            var barChildren = _renderer.GetWidgetDef("TabBar")?.Children;
             for (int i = 0; i < SkillBookDefs.Tabs.Count && i < SlotCount(); i++)
             {
                 if (!IsTabUnlocked(SkillBookDefs.Tabs[i])) continue; // locked tab isn't clickable
-                var r = _renderer.GetChildRect("TabBar", $"tab{i}", bar.X, bar.Y, barInst);
+                // Slot addressed by its actual child name (see BindTabs) — computed
+                // "tab{i}" broke when the widget data's slot naming had a gap.
+                var r = _renderer.GetChildRect("TabBar", barChildren![i].Name, bar.X, bar.Y, barInst);
                 if (r != Rectangle.Empty && r.Contains(mx, my)) { _activeTab = i; return; }
             }
         }
@@ -361,17 +364,21 @@ public class SkillBookOverlay : IModalLayer
 
         for (int i = 0; i < slots; i++)
         {
+            // Address the slot by its ACTUAL child name, not a computed "tab{i}" —
+            // a gap in the widget data's naming (tab0..tab4,tab6..) once left a
+            // never-addressed slot visible with its default "Tab 0/0" label.
+            string slotName = barDef!.Children![i].Name;
             bool unlocked = i < tabs.Count && IsTabUnlocked(tabs[i]);
             // Hide locked tabs and any unused slots; the horizontal TabBar collapses
             // the gaps so the remaining tabs reflow flush.
-            _renderer.SetHidden(barInst, $"tab{i}", !unlocked);
+            _renderer.SetHidden(barInst, slotName, !unlocked);
             if (!unlocked) continue;
 
             var tab = tabs[i];
             string tabInst = $"{barInst}.{i}";
             // Name is data-driven (DisplayName) so new tab files need no widget edits;
             // width is sized to fill the bar for the current tab count.
-            _renderer.SetChildWidth(barInst, $"tab{i}", tabW);
+            _renderer.SetChildWidth(barInst, slotName, tabW);
             _renderer.SetText(tabInst, "Name", tab.DisplayName);
             var (learned, total) = _state?.GetProgress(tab) ?? (0, tab.Skills.Count);
             _renderer.SetText(tabInst, "Frac", $"{learned}/{total}");
