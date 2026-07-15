@@ -1102,6 +1102,35 @@ public partial class Game1 {
                break;
             }
 
+            // Arm/cancel the circle-targeting aim mode (SpellDef.TargetingMode ==
+            // "Circle") as if the slot's spellbar key was pressed. The circle
+            // follows the cursor (combine with 'mousepos'); 'click' confirms.
+            // aim <slot 0-9> | aim clear
+            case "aim": {
+               if (c.Args.Length < 1) {
+                  c.Complete(Necroking.Dev.DevServer.Error("aim needs: <slot 0-9>  (or 'clear')"));
+                  break;
+               }
+               if (c.Args[0].Equals("clear", StringComparison.OrdinalIgnoreCase)) {
+                  _aimingSlot = -1;
+                  c.Complete(Necroking.Dev.DevServer.Ok("aim cleared"));
+                  break;
+               }
+               if (!int.TryParse(c.Args[0], out int aimSlot) || _spellBarState.Slots == null
+                   || aimSlot < 0 || aimSlot >= _spellBarState.Slots.Length) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"bad slot '{c.Args[0]}'"));
+                  break;
+               }
+               _aimingSlot = aimSlot;
+               var aimedDef = AimedSpell();   // validates; clears the slot if not Circle
+               if (aimedDef == null) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"slot {aimSlot} has no Circle-targeting spell"));
+                  break;
+               }
+               c.Complete(Necroking.Dev.DevServer.Ok($"aiming slot {aimSlot} ({aimedDef.Id})"));
+               break;
+            }
+
             // Add items to the player inventory (e.g. potions for consumable-spell
             // tests). give_item <itemID> [qty]
             case "give_item": {

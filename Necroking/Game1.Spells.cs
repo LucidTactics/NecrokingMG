@@ -277,6 +277,24 @@ public partial class Game1 {
       if (slot >= 0 && slot < _slotFlash.Length) _slotFlash[slot] = HUDRenderer.SlotFlashDuration;
    }
 
+   // --- Circle-targeting aim state (SpellDef.TargetingMode == "Circle") -----
+   // Spell-bar slot armed by a keypress, awaiting a confirming left-click.
+   // -1 = not aiming. While armed the renderer draws the AoE circle + lights up
+   // the units inside it (GameRenderer.Units.DrawSpellAimCircle); the click
+   // confirm/cancel lives in Game1.WorldClicks.cs, ESC cancel in Update.
+   internal int _aimingSlot = -1;
+
+   /// <summary>The spell armed for circle-targeting, or null when not aiming.
+   /// Self-heals: if the armed slot was reassigned/emptied to something that no
+   /// longer circle-targets, the aim is dropped.</summary>
+   internal SpellDef? AimedSpell() {
+      if (_aimingSlot < 0) return null;
+      SpellDef? def = _aimingSlot < _spellBarState.Slots.Length
+         ? _gameData.Spells.Get(_spellBarState.Slots[_aimingSlot].SpellID) : null;
+      if (def == null || def.TargetingMode != "Circle") { _aimingSlot = -1; return null; }
+      return def;
+   }
+
    /// <summary>Single dispatch path for the spell bar (and the dev 'cast'
    /// command). Handles built-in ability intercepts (melee_gather,
    /// poison_berries_*) before falling through to the normal SpellCaster +

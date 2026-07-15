@@ -109,7 +109,11 @@ partial class GameRenderer
         // the resume state.
         _cbShadows ??= (SpriteScope s, int _, int _) =>
             _g._shadowRenderer.Draw(s, _g.GraphicsDevice, _g._spriteBatch, _g._glowTex, _g._camera, _g._renderer, _g._sim, _g._gameData, _g._unitAnims, _g._atlases, _g._envSystem, _g._fogOfWar, _g._groundSystem, _g._deathFog, _g._corpseAnims, _g._reanimFx);
-        _cbHoverMarkers ??= (SpriteScope _, int _, int _) => DrawHoverGroundMarkers();
+        _cbHoverMarkers ??= (SpriteScope _, int _, int _) =>
+        {
+            DrawHoverGroundMarkers();
+            DrawSpellAimCircle();
+        };
         _cbCorpses ??= (SpriteScope s, int _, int _) => DrawCorpses(s);
         _cbProjectilesRope ??= (SpriteScope _, int _, int _) =>
         {
@@ -453,6 +457,12 @@ partial class GameRenderer
         // Ghost mode: subtle blue pulsing outline
         if (_g._sim.Units[i].GhostMode)
             DrawGhostOutline(scope, atlas, fr.Frame.Value, sp, scale, fr.FlipX);
+
+        // Spell-aim AoE: light up units inside an armed circle-targeted spell's
+        // radius (set filled by DrawSpellAimCircle earlier this frame).
+        if (_aimHighlightUnits.Contains(i))
+            DrawSpriteOutline(scope, atlas, fr.Frame.Value, sp, scale, fr.FlipX,
+                _aimHighlightColor1, _aimHighlightColor2, 1.5f, 2.5f, 1.6f, 1);
 
         // Carried body bag rendering (phase-aware: respects effect_ms action moment)
         byte cPhase = _g._sim.Units[i].CorpseInteractPhase;
@@ -1367,6 +1377,71 @@ partial class GameRenderer
             var cp = _g._sim.Corpses[_g._hoveredCorpseIdx];
             float cr = _g._gameData.Units.Get(cp.UnitDefID)?.Radius ?? 0.5f;
             Mark(cp.Position, cr * RadiusMul, HoverVariantFor(false));
+        }
+    }
+
+    // Unit indices inside the armed spell's AoE this frame. Filled by
+    // DrawSpellAimCircle (HoverMarkers layer — runs before the YSort units in
+    // the same frame's layer order), consumed by DrawSingleUnit's highlight.
+    private readonly HashSet<int> _aimHighlightUnits = new();
+    private readonly List<int> _aimUnitsScratch = new();
+
+    /// <summary>Circle-targeting aim overlay (SpellDef.TargetingMode == "Circle"):
+    /// while a spell is armed, a translucent blue AoE disc with a thicker rim
+    /// follows the cursor, and the units the cast would hit are collected into
+    /// _aimHighlightUnits so DrawSingleUnit lights them up. Ground-plane iso
+    /// projection like DrawHoverGroundMarkers, but radius-accurate (projects the
+    /// world-Y offset too instead of the stylised HoverMarkerFlatten squash).
+    /// Uses the live mouse position so the circle keeps tracking while paused.</summary>
+    private void DrawSpellAimCircle()
+    {
+        _aimHighlightUnits.Clear();
+        var spell = _g.AimedSpell();
+        if (spell == null) return;
+
+        Vec2 aim = _g._camera.ScreenToWorld(_g._input.MousePos, _ctx.ScreenW, _ctx.ScreenH);
+        float radius = spell.AoeRadius > 0f ? spell.AoeRadius : 1.5f;
+
+        var cen = _g._renderer.WorldToScreen(aim, 0f, _g._camera);
+        var ex  = _g._renderer.WorldToScreen(aim + new Vec2(radius, 0f), 0f, _g._camera);
+        var ey  = _g._renderer.WorldToScreen(aim + new Vec2(0f, radius), 0f, _g._camera);
+        float rx = MathF.Abs(ex.X - cen.X);
+        float ry = MathF.Abs(ey.Y - cen.Y);
+
+        // Straight alpha — the draw surface premultiplies for the open material
+        // (same convention as DrawHoverGroundMarkers).
+        DrawFilledEllipse(cen, rx, ry, new Color(70, 130, 255, 48));
+        DrawEllipseOutline(cen.X, cen.Y, rx, ry, new Color(90, 150, 255, 200), 4f);
+
+        // Light up what the cast would actually hit: same TargetFilter → faction
+        // mask translation the strike resolution uses (LightningSystem.Update),
+        // so the preview never lies about who gets hit.
+        Enum.TryParse<SpellTargetFilter>(spell.TargetFilter, out var tf);
+        FactionMask mask = tf switch
+        {
+            SpellTargetFilter.AnyEnemy   => FactionMaskExt.AllExcept(Faction.Undead),
+            SpellTargetFilter.LivingOnly => FactionMaskExt.AllExcept(Faction.Undead),
+            SpellTargetFilter.UndeadOnly => Faction.Undead.Bit(),
+            _ => FactionMask.All,
+        };
+        _aimUnitsScratch.Clear();
+        _g._sim.Query.UnitsInRadiusLinear(aim, radius, mask, _aimUnitsScratch);
+        foreach (int idx in _aimUnitsScratch) _aimHighlightUnits.Add(idx);
+    }
+
+    /// <summary>Scanline-filled ellipse (the translucent AoE disc) — 1px-tall
+    /// bars of the shared _pixel texture, like Editor/BuffPreview's fill.</summary>
+    private void DrawFilledEllipse(Vector2 center, float rx, float ry, Color c)
+    {
+        if (rx < 1f || ry < 1f) return;
+        int iRy = (int)ry;
+        for (int dy = -iRy; dy <= iRy; dy++)
+        {
+            float t = dy / ry;
+            float hw = rx * MathF.Sqrt(1f - t * t);
+            int w = (int)(hw * 2f);
+            if (w > 0)
+                _g.Scope.Draw(_g._pixel, new Rectangle((int)(center.X - hw), (int)center.Y + dy, w, 1), c);
         }
     }
 

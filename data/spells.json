@@ -995,6 +995,7 @@
       "primaryLevel": 1,
       "cooldown": 3,
       "castingBuffID": "buff_4_copy_copy",
+      "targetingMode": "Circle",
       "targetFilter": "UndeadOnly",
       "damage": 20,
       "aoeRadius": 4,
