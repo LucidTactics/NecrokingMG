@@ -698,7 +698,7 @@ public static class SpellEffectSystem
         var flags = DamageFlags.None;
         if (spell.ArmorNegating) flags |= DamageFlags.ArmorNegating;
         if (spell.DefenseNegating) flags |= DamageFlags.DefenseNegating;
-        if (spell != null) flags |= DamageFlags.MagicWeapon;
+        flags |= DamageFlags.MagicWeapon; // every spell counts as a magic weapon
         return flags;
     }
 

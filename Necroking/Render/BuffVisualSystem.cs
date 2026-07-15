@@ -442,7 +442,8 @@ public class BuffVisualSystem
                 unitPos.X + ring.AvgSunRadius * MathF.Cos(planetAngle) + ring.AvgMoonRadius * MathF.Cos(moonAngle),
                 unitPos.Y + ring.AvgSunRadius * MathF.Sin(planetAngle) + ring.AvgMoonRadius * MathF.Sin(moonAngle));
 
-            // Depth: behind (phase 0) if sin < 0 in world Y (orb is above unit)
+            // Depth: an orb south of the unit (larger world Y) draws in front;
+            // north of it (smaller Y) draws behind (phase 0).
             bool isFront = orbWorldPos.Y >= unitPos.Y;
             if ((phase == 0 && isFront) || (phase == 1 && !isFront)) continue;
 

@@ -395,7 +395,7 @@ public sealed class WorldQuery
     /// never stale while paused.</summary>
     public bool IsSpotBlocked(Vec2 pos, float unitRadius)
     {
-        if (_sim.Grid.OverlapsImpassable(pos.X, pos.Y, unitRadius * 0.7f)) return true;
+        if (_sim.Grid.AabbOverlapsImpassable(pos.X, pos.Y, unitRadius * 0.7f)) return true;
         _envScratch.Clear();
         _sim.EnvIndex.QueryRadius(pos, unitRadius, _envScratch);
         foreach (var e in _envScratch)
@@ -411,7 +411,7 @@ public sealed class WorldQuery
     /// footprint. No env circles: use <see cref="IsSpotBlocked"/> for "can a
     /// unit stand here".</summary>
     public bool IsWallBlocked(Vec2 pos, float radius)
-        => _sim.Grid.OverlapsImpassable(pos.X, pos.Y, radius);
+        => _sim.Grid.AabbOverlapsImpassable(pos.X, pos.Y, radius);
 
     private static bool IsExcluded(Corpse c, CorpseExclude ex)
     {

@@ -113,7 +113,7 @@ public class Unit
     /// face velocity direction (jog/run); false = face mouse direction (walk).
     /// Enter true when speed crosses JogThreshold + hysteresis upward, exit
     /// back to false when speed drops below JogThreshold − hysteresis. Only
-    /// read for PlayerControlled units in UpdateFacingAngles.</summary>
+    /// read for PlayerControlled units in Locomotion.UpdateFacing.</summary>
     public bool FaceVelocityMode;
     public float Z;             // Height above ground (0 = on ground). Used by 2.5D impulse physics.
     public bool InPhysics;      // True while physics system owns this unit's movement.

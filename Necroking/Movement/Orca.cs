@@ -32,9 +32,8 @@ public struct ORCAParams
     public float MaxSpeed;
     public float Radius;
     public int Priority;
-    // (MaxNeighbors and the unused Default preset were deleted 2026-07-04 —
-    //  neighbor caps live at the gather site in Simulation: TopK dynamic + 6
-    //  static; the solver itself takes whatever list it's given.)
+    // No neighbor cap here — caps live at the gather site in Simulation (TopK
+    // dynamic + 6 static); the solver takes whatever list it's given.
 }
 
 public static class Orca

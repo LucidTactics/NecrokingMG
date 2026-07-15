@@ -132,8 +132,9 @@ public static class StrideCalibration
     /// conversion happens at runtime in <see cref="ResolveAnimVel"/>.</summary>
     public class GaitCalibration
     {
-        /// <summary>Measured stride distance in pixels (90th-percentile of
-        /// per-frame foot-spread across the cycle). Zero if no anim authored.</summary>
+        /// <summary>Measured stride distance in pixels — the envelope of leg
+        /// positions across the cycle (global max rightmost − min leftmost,
+        /// pivot-relative). Zero if no anim authored.</summary>
         public float StridePx;
 
         /// <summary>True if this value was derived from walk × extrapolation
@@ -195,7 +196,7 @@ public static class StrideCalibration
 
         // Walk first — it's the anchor for the sanity check on Jog/Run. Walk
         // scans the same 25% strip as Idle so the subtraction (walk - idle) is
-        // measuring comparable regions. Jog/Run use 50% to catch lifted paws
+        // measuring comparable regions. Jog/Run use 40% to catch lifted paws
         // at peak stride in faster gaits where the trailing foot leaves the
         // ground.
         MeasureGait(cal.Walk, unitName, spriteData, "Walk", WalkStripFraction,
@@ -247,8 +248,8 @@ public static class StrideCalibration
             }
             if (kfs == null) return 0f;
         }
-        // Tighter strip (25%) than the gait scan (50%) — Idle's feet are firmly
-        // on the ground so we don't need the headroom for lifted-foot capture.
+        // Same tight strip (25%) as the walk scan (jog/run widen to 40%) — Idle's
+        // feet are firmly on the ground so we don't need lifted-foot headroom.
         // Max across frames catches the most extended pose if Idle breathes / shifts.
         int maxExtent = 0;
         foreach (var kf in kfs)
@@ -411,17 +412,6 @@ public static class StrideCalibration
     //  Runtime conversion (pixel stride → world velocity)
     // =========================================================================
 
-    /// <summary>Convert a measured stride (in pixels) to a "feet-lock velocity"
-    /// in world units per second. The pixel→world conversion uses the unit's
-    /// effective rendered height = <paramref name="spriteWorldHeight"/> ×
-    /// <paramref name="spriteScale"/>, mirroring how the renderer actually sizes
-    /// the sprite on the map (see <c>ShadowRenderer.cs:232</c>:
-    /// <c>worldH = SpriteWorldHeight × SpriteScale</c>). Omitting SpriteScale
-    /// would silently overstate cycle distance for any unit drawn at less than
-    /// 1.0× scale (e.g. Wretched at 0.9 would overstate by 11%), causing the
-    /// playback rate to underestimate and feet to drag behind body motion.
-    /// Returns 0 if any input is missing — caller treats 0 as "unknown" and
-    /// falls back to the legacy code path.</summary>
     /// <summary>Compute the "suggested CombatSpeed" for a unit — the body
     /// velocity at which the walk anim plays such that one full cycle takes
     /// <paramref name="targetCycleSeconds"/> while feet stay perfectly locked
@@ -443,6 +433,17 @@ public static class StrideCalibration
         return cycleDistanceWorld / t;
     }
 
+    /// <summary>Convert a measured stride (in pixels) to a "feet-lock velocity"
+    /// in world units per second. The pixel→world conversion uses the unit's
+    /// effective rendered height = <paramref name="spriteWorldHeight"/> ×
+    /// <paramref name="spriteScale"/>, mirroring how the renderer actually sizes
+    /// the sprite on the map (see <c>ShadowRenderer.cs:232</c>:
+    /// <c>worldH = SpriteWorldHeight × SpriteScale</c>). Omitting SpriteScale
+    /// would silently overstate cycle distance for any unit drawn at less than
+    /// 1.0× scale (e.g. Wretched at 0.9 would overstate by 11%), causing the
+    /// playback rate to underestimate and feet to drag behind body motion.
+    /// Returns 0 if any input is missing — caller treats 0 as "unknown" and
+    /// falls back to the legacy code path.</summary>
     public static float ResolveAnimVel(GaitCalibration g, float spriteWorldHeight,
         float spriteScale = 1f, float bodySubtractionPx = 0f,
         float dutyCycle = DefaultDutyCycle)

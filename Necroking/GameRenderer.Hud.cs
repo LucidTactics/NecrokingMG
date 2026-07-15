@@ -242,10 +242,10 @@ partial class GameRenderer
         float maxX = MathF.Ceiling(bottomRight.X / cellSize) * cellSize;
         float maxY = MathF.Ceiling(bottomRight.Y / cellSize) * cellSize;
 
-        // Safety cap: limit to ~2500 cells max
-        int maxCells = 50;
-        if ((maxX - minX) / cellSize > maxCells) maxX = minX + maxCells * cellSize;
-        if ((maxY - minY) / cellSize > maxCells) maxY = minY + maxCells * cellSize;
+        // Safety cap: 50 per axis → ~2500 cells max
+        int maxCellsPerAxis = 50;
+        if ((maxX - minX) / cellSize > maxCellsPerAxis) maxX = minX + maxCellsPerAxis * cellSize;
+        if ((maxY - minY) / cellSize > maxCellsPerAxis) maxY = minY + maxCellsPerAxis * cellSize;
 
         float windAngle = 0f;
         for (float wy = minY; wy < maxY; wy += cellSize)
@@ -541,30 +541,6 @@ partial class GameRenderer
             _g.Scope.DrawString(_g._smallFont, "[F7] Debug: Unit Info",
                 new Vector2(10, 26), new Color(80, 200, 255, 200));
     }
-
-    private static string GetRoutineName(byte archetype, byte routine) => archetype switch
-    {
-        AI.ArchetypeRegistry.WolfPack => routine switch { 0 => "IdleRoam", 1 => "Sleep", 2 => "Fight", _ => $"R{routine}" },
-        AI.ArchetypeRegistry.DeerHerd => routine switch { 0 => "IdleRoam", 1 => "Sleep", 2 => "Alert", 3 => "Flee", 4 => "Calm", 5 => "FightBack", _ => $"R{routine}" },
-        AI.ArchetypeRegistry.HordeMinion => routine switch { 0 => "Follow", 1 => "Chase", 2 => "Engage", 3 => "Return", _ => $"R{routine}" },
-        AI.ArchetypeRegistry.PatrolSoldier or AI.ArchetypeRegistry.GuardStationary or AI.ArchetypeRegistry.ArmyUnit =>
-            routine switch { 0 => "Idle", 1 => "Alert", 2 => "Combat", 3 => "Return", _ => $"R{routine}" },
-        AI.ArchetypeRegistry.ArcherUnit or AI.ArchetypeRegistry.CasterUnit =>
-            routine switch { 0 => "Idle", 1 => "Alert", 2 => "Combat", 3 => "Return", _ => $"R{routine}" },
-        _ => $"R{routine}"
-    };
-
-    private static string GetSubroutineName(byte archetype, byte routine, byte sub) => archetype switch
-    {
-        AI.ArchetypeRegistry.WolfPack when routine == 2 => sub switch { 0 => "Approach", 1 => "Strike", 2 => "Disengage", 3 => "Cooldown", _ => $"S{sub}" },
-        AI.ArchetypeRegistry.WolfPack => sub switch { 0 => "Walk", 1 => "Idle", _ => $"S{sub}" },
-        AI.ArchetypeRegistry.DeerHerd when routine == 5 => sub switch { 0 => "Chase", 1 => "Attack", _ => $"S{sub}" },
-        AI.ArchetypeRegistry.DeerHerd => sub switch { 0 => "Walk", 1 => "Idle", _ => $"S{sub}" },
-        AI.ArchetypeRegistry.HordeMinion => $"S{sub}",
-        AI.ArchetypeRegistry.PatrolSoldier when routine == 0 => sub switch { 0 => "Walking", 1 => "Waiting", _ => $"S{sub}" },
-        _ when routine == 2 => sub switch { 0 => "Chase", 1 => "Attack", _ => $"S{sub}" },
-        _ => sub switch { 0 => "Walk", 1 => "Idle", _ => $"S{sub}" },
-    };
 
     /// <summary>Debug readout (Settings → Tooltips → "Show world position info"):
     /// when the cursor is over the world (not UI, no menu open), dump a block of

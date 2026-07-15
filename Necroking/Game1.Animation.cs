@@ -193,7 +193,7 @@ public partial class Game1
         GetChannelStates(pca.CastAnim, out var startS, out var loopS, out var finishS);
 
         // Facing toward the target for the whole channel is owned by
-        // UpdateFacingAngles' cast-plant branch (fast TurnToward, no raw snap) —
+        // Locomotion.UpdateFacing's cast-plant branch (fast TurnToward, no raw snap) —
         // TickCastPlant feeds it the frozen aim angle every frame.
 
         // PlaybackSpeed (the Start/Loop/Finish time-stretch) is applied in the per-unit

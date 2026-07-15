@@ -122,7 +122,8 @@ public static class Locomotion
     /// well under the slowest deliberate locomotion (deer feed at ~0.1 wu/s).</summary>
     public const float MoveIntentEpsilon = 0.05f;
 
-    /// <summary>Dev fly-mode speed cap (ignores all other modifiers).</summary>
+    /// <summary>Dev fly-mode base speed cap (bypasses physical modifiers;
+    /// still honors rope-drag and the sprint ×2 — see UpdateSpeeds).</summary>
     public const float GhostModeSpeed = 20f;
 
     /// <summary>When the effort ramp starts rising from rest, it kickstarts to
@@ -794,43 +795,41 @@ public readonly struct LocomotionProfile
     /// separate effort bias.</summary>
     public AnimState PickTier(AnimState prev, float speed)
     {
-        float biasedSpeed = speed;
-
         bool prevIsLoco = prev == AnimState.Idle || prev == AnimState.Walk
             || prev == AnimState.Jog || prev == AnimState.Run;
 
         if (!prevIsLoco)
         {
-            if (biasedSpeed <= IdleWalkEnter) return AnimState.Idle;
-            if (biasedSpeed < JogThreshold) return AnimState.Walk;
-            if (biasedSpeed < RunThreshold) return AnimState.Jog;
+            if (speed <= IdleWalkEnter) return AnimState.Idle;
+            if (speed < JogThreshold) return AnimState.Walk;
+            if (speed < RunThreshold) return AnimState.Jog;
             return AnimState.Run;
         }
 
         switch (prev)
         {
             case AnimState.Idle:
-                if (biasedSpeed >= RunThreshold + RunHysteresis) return AnimState.Run;
-                if (biasedSpeed >= JogThreshold + JogHysteresis) return AnimState.Jog;
-                if (biasedSpeed > IdleWalkEnter) return AnimState.Walk;
+                if (speed >= RunThreshold + RunHysteresis) return AnimState.Run;
+                if (speed >= JogThreshold + JogHysteresis) return AnimState.Jog;
+                if (speed > IdleWalkEnter) return AnimState.Walk;
                 return AnimState.Idle;
 
             case AnimState.Walk:
-                if (biasedSpeed >= RunThreshold + RunHysteresis) return AnimState.Run;
-                if (biasedSpeed >= JogThreshold + JogHysteresis) return AnimState.Jog;
-                if (biasedSpeed <= IdleWalkExit) return AnimState.Idle;
+                if (speed >= RunThreshold + RunHysteresis) return AnimState.Run;
+                if (speed >= JogThreshold + JogHysteresis) return AnimState.Jog;
+                if (speed <= IdleWalkExit) return AnimState.Idle;
                 return AnimState.Walk;
 
             case AnimState.Jog:
-                if (biasedSpeed >= RunThreshold + RunHysteresis) return AnimState.Run;
-                if (biasedSpeed <= IdleWalkEnter) return AnimState.Idle;
-                if (biasedSpeed <= JogThreshold - JogHysteresis) return AnimState.Walk;
+                if (speed >= RunThreshold + RunHysteresis) return AnimState.Run;
+                if (speed <= IdleWalkEnter) return AnimState.Idle;
+                if (speed <= JogThreshold - JogHysteresis) return AnimState.Walk;
                 return AnimState.Jog;
 
             case AnimState.Run:
-                if (biasedSpeed <= IdleWalkEnter) return AnimState.Idle;
-                if (biasedSpeed <= JogThreshold - JogHysteresis) return AnimState.Walk;
-                if (biasedSpeed <= RunThreshold - RunHysteresis) return AnimState.Jog;
+                if (speed <= IdleWalkEnter) return AnimState.Idle;
+                if (speed <= JogThreshold - JogHysteresis) return AnimState.Walk;
+                if (speed <= RunThreshold - RunHysteresis) return AnimState.Jog;
                 return AnimState.Run;
         }
         return AnimState.Idle;

@@ -11,9 +11,9 @@ namespace Necroking.Render;
 /// texture and frame-selection rule the draw pass uses.</summary>
 public enum WakeParticleKind : byte
 {
-    /// <summary>Soft procedural circle texture. Used for the bow wave,
-    /// which needs a small continuous foam look that the splash-shaped
-    /// MiniSplash frames don't quite fit.</summary>
+    /// <summary>Soft procedural circle texture. Currently unused — no spawn
+    /// site assigns it (the bow wave uses MiniSplash; see SpawnBowWave).
+    /// Kept with its draw path for a future continuous-foam look.</summary>
     SoftCircle = 0,
 
     /// <summary>FX_TX_MiniSplash 2×6 flipbook — small splash that
@@ -601,8 +601,8 @@ public class WadingWakeSystem
     public const float WaterTintInfluence = 1.0f;
 
     /// <summary>Soft-edged round particle texture, generated once on first
-    /// draw. Used for the bow-wave (SoftCircle kind) — the trail and
-    /// splash kinds use the flipbook textures instead.</summary>
+    /// draw. Only the SoftCircle kind draws it — currently unused, since
+    /// every live particle kind uses the flipbook textures.</summary>
     private const int ParticleTexSize = 32;
     private Texture2D? _particleTex;
 
@@ -1640,8 +1640,8 @@ public class WadingWakeSystem
             // at or ahead of the unit (Pos.Y >= unit Y) stays in the front
             // pass — so freshly-shed and just-stepped-out drips read in front
             // until the unit clearly passes them, matching the old look at
-            // the moment of shedding. Trail (MiniSplash) and bow wave
-            // (SoftCircle) keep their authored fixed layer: they track the
+            // the moment of shedding. Trail and bow wave (both MiniSplash)
+            // keep their authored fixed layer: they track the
             // unit continuously, so "spawn location" doesn't apply to them.
             bool particleFront =
                 (p.Kind == WakeParticleKind.BubbleMagic || p.Kind == WakeParticleKind.RainSplash)

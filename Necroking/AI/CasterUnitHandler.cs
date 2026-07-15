@@ -143,7 +143,7 @@ public class CasterUnitHandler : IArchetypeHandler
         }
 
         // In range: stand and cast when mana + cooldown + paths allow. Facing
-        // falls to UpdateFacingAngles priority 3 (stationary with a Target →
+        // falls to Locomotion.UpdateFacing priority 3 (stationary with a Target →
         // face it) between casts.
         ctx.Units[i].PreferredVel = Vec2.Zero;
         SubroutineSteps.SetLocomotionAnim(ref ctx);

@@ -418,8 +418,6 @@ public struct PlacedObjectRuntime
 public class EnvironmentSystem
 {
     private float _worldMaxY = 1f;
-    private readonly List<string> _categories = new();
-    private readonly List<string> _groups = new();
     private readonly List<EnvironmentObjectDef> _defs = new();
     private readonly List<Texture2D?> _textures = new();
     private readonly Render.TextureCache _overrideTextures = new("startup"); // cached single-frame overrides (trap & corrupted sprites)
@@ -882,7 +880,7 @@ public class EnvironmentSystem
             if (inTurnZone && currentFrame != prevFrame)
             {
                 // ~25% chance to reverse per frame in turn zone.
-                // With turn zone of 3 frames, ~58% chance to pass through without reversing.
+                // With turn zone of 3 frames, ~42% chance (0.75³) to pass through without reversing.
                 rt.AnimRng = XorShift(rt.AnimRng);
                 if ((rt.AnimRng % 100) < 25)
                 {
@@ -992,7 +990,6 @@ public class EnvironmentSystem
             {
                 case TrapVisualState.Hidden:
                 {
-                    // Tick cooldown
                     if (rt.TrapCooldownTimer > 0f)
                     {
                         rt.TrapCooldownTimer -= dt;
@@ -1007,14 +1004,12 @@ public class EnvironmentSystem
                     int target = findNearestEnemy(trapPos, trapFaction);
                     if (target < 0) continue;
 
-                    // Fire! Transition to Triggered
                     TrapFireEvents.Add(new TrapFireEvent
                     {
                         ObjectIndex = i, SpellId = def.TrapSpellId,
                         TrapPos = trapPos, TargetUnitIdx = target, TrapOwner = rt.Owner
                     });
 
-                    // Decrement uses
                     if (rt.TrapUsesRemaining > 0)
                     {
                         rt.TrapUsesRemaining--;
@@ -1051,7 +1046,6 @@ public class EnvironmentSystem
                         }
                         else
                         {
-                            // Return to hidden, start cooldown
                             rt.TrapState = TrapVisualState.Hidden;
                             rt.TrapCooldownTimer = 0.5f; // overridden by Game1 with spell cooldown
                         }
@@ -1216,8 +1210,6 @@ public class EnvironmentSystem
 
     public IReadOnlyList<EnvironmentObjectDef> Defs => _defs;
     public IReadOnlyList<PlacedObject> Objects => _objects;
-    public IReadOnlyList<string> Categories => _categories;
-    public IReadOnlyList<string> Groups => _groups;
 
     public void LoadTextures(GraphicsDevice device)
     {

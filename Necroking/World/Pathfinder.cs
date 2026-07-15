@@ -146,7 +146,7 @@ public class Pathfinder
 
     // A* early-out slack: once the open set's best f exceeds the best settled
     // target-portal cost by this much, still-unsettled target portals can't
-    // matter to the flow (their exit would be over a whole sector crossing
+    // matter to the flow (their exit would be over two full sector crossings
     // worse) and the resume stops. Bounds the corridor width off the beeline.
     private const float RouteStopSlack = SectorSize * 2f;
 
@@ -892,8 +892,8 @@ public class Pathfinder
             if (st.Settled) continue;
             // Early-out: pq pops in increasing f, so everything left costs
             // > bestTargetG + slack — any still-unsettled target portal is
-            // irrelevant to the flow (its seed would lose by a full sector
-            // crossing). Its node stays unsettled in the frontier, so a
+            // irrelevant to the flow (its seed would lose by two full sector
+            // crossings). Its node stays unsettled in the frontier, so a
             // later requester can still settle it.
             if (bestTargetG < GameConstants.InfCost && f > bestTargetG + RouteStopSlack)
             {
@@ -1521,7 +1521,7 @@ public class Pathfinder
             return Vec2.Zero;
 
         DiagImagChunkComputes++;
-        long _diagSw0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        long diagSw0 = System.Diagnostics.Stopwatch.GetTimestamp();
         try {
 
         // Center the chunk on the unit, clamped to map bounds
@@ -1659,7 +1659,7 @@ public class Pathfinder
         }
         finally
         {
-            double elapsed = ElapsedMs(_diagSw0);
+            double elapsed = ElapsedMs(diagSw0);
             DiagImagChunkMs += elapsed;
             // Charge the budget: an imag-chunk compute costs about the same as
             // the sector Dijkstra the budget exists to bound. Without this, N
@@ -1675,7 +1675,7 @@ public class Pathfinder
     private Vec2 RecomputeImaginaryChunkFlow(ImaginaryChunk ic, Vec2 unitPos, Vec2 targetPos, int tier)
     {
         DiagImagChunkRecomputes++;
-        long _diagSw0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        long diagSw0 = System.Diagnostics.Stopwatch.GetTimestamp();
         try {
         if (_grid == null) return Vec2.Zero;
 
@@ -1773,7 +1773,7 @@ public class Pathfinder
         }
         finally
         {
-            double elapsed = ElapsedMs(_diagSw0);
+            double elapsed = ElapsedMs(diagSw0);
             DiagImagChunkMs += elapsed;
             ChargeDijkstraMs((float)elapsed); // same reasoning as GetLocalChunkDirection
         }
@@ -1791,7 +1791,7 @@ public class Pathfinder
     // sums them into LastPhaseMs so a profiling scenario can see pathfinder load.
     public static int DiagCallsThisTick;
     public static double DiagTotalMsThisTick;
-    public static int DiagDijkstraInvocations;     // how many full ComputeSectorFlow runs happened
+    public static int DiagDijkstraInvocations;     // total window-Dijkstra runs (sector flows + portal-matrix rows + route seeds)
     public static int DiagFlowCacheHits;           // cache returned without recomputing
     public static int DiagFlowCacheMisses;         // had to call ComputeSectorFlow
     public static int DiagImagChunkComputes;       // GetLocalChunkDirection full sweeps

@@ -51,8 +51,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private GraphicsDeviceManager _graphics;
     internal SpriteBatch _spriteBatch = null!;
 
-    // Sets to true if users is using the window.
-    internal bool userInteractingWithWindow;
+    // Latched true the first time the focused window counts as a real user
+    // interaction (not headless, no scenario); never reset. Forces ground
+    // rendering on in the pipeline.
+    internal bool _userHasInteractedWithWindow;
 
     /// <summary>Draw surface over the shared SpriteBatch — THE way scene/HUD code
     /// draws. Colors are straight alpha; the open material (Materials.Open)
@@ -690,11 +692,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // sprite draw pass (exact sprite bounds) and drawn in the HUD overlay pass.
     // Reset to null each frame at the top of Draw. See ShowHoverHighlight setting.
     internal Rectangle? _hoverBoxObject, _hoverBoxCorpse, _hoverBoxUnit;
-    // --- Hover-highlight style variant cycling (design test harness; cycle with 'H') ----
-    // 13 states: 0-11 = 3 shapes (Circle / Corners / Rectangle) × 4 line styles
-    // (Hover-marker ground geometry constants moved to GameRenderer.)
-    // Dev override for the hover-highlight variant (shape*4 + style). -1 = OFF (use the per-category
-    // Tooltips settings — the normal path); 0..19 forces one variant on everything; 20 = highlight off.
+    // Dev override for the hover-highlight style variant (shape*4 + style), set via the
+    // 'hover_variant' dev command — no hotkey ('H' was freed for depth-fog). -1 = OFF (use
+    // the per-category Tooltips settings — the normal path); 0..19 forces one variant on
+    // everything; 20 = highlight off.
     internal int _hoverHighlightVariant = -1;
     internal float _hoverVariantLabelTimer;     // seconds left to show the "which variant" toast
     internal float _depthFogToastTimer;         // seconds left to show the depth-fog ON/OFF toast ('H' key)
@@ -2841,7 +2842,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // started from the in-game menu leaves LaunchArgs.Scenario null, so it still
         // counts as a real user interaction.
         if (windowFocused && !LaunchArgs.Headless && LaunchArgs.Scenario == null) {
-           userInteractingWithWindow = true;
+           _userHasInteractedWithWindow = true;
         }
 
         // Pump multiplayer next, same placement rationale: the connection must
@@ -4152,9 +4153,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
        _inventory.AddItem("potion_death_evolution", amount);
     }
 
-    /// <summary>Floating "Horde Full" text above the necromancer when a summon
-    /// is refused for hitting the cap. Reuses the DamageNumber PickupText
-    /// channel so the existing renderer + fade-out apply unchanged.</summary>
     /// <summary>Shift+P cheat. Applies / removes buff_god_mode on the
     /// necromancer. On apply, also tops mana up to the new effective cap so
     /// the +999 mana effect is felt immediately rather than slowly filling

@@ -380,10 +380,6 @@ public class WeatherRenderer
     private static float HashFloat(uint h) => (float)(h & 0x00FFFFFFu) / (float)0x01000000u;
 
     /// <summary>
-    /// Returns the effective weather effects for rendering: day/night runtime blend if active,
-    /// otherwise the raw preset effects. Returns null if no valid preset is configured.
-    /// </summary>
-    /// <summary>
     /// Compute the ambient light color from weather brightness and tint.
     /// Applied to lit sprites before bloom so darkness actually reduces emitted light.
     /// Returns Color.White if weather is disabled or no darkening is active.
@@ -412,6 +408,10 @@ public class WeatherRenderer
             (byte)(MathUtil.Clamp(b, 0f, 1f) * 255));
     }
 
+    /// <summary>
+    /// Returns the effective weather effects for rendering: day/night runtime blend if active,
+    /// otherwise the raw preset effects. Returns null if no valid preset is configured.
+    /// </summary>
     private WeatherEffects? GetEffectiveEffects()
     {
         if (!_gameData.Settings.Weather.Enabled) return null;
