@@ -47,6 +47,9 @@ public class BuildingMenuUI : SideListMenu
     protected override int ItemCount => _buildableDefIndices.Count;
 
     public bool IsPlacementActive => _placementActive && _selectedIndex >= 0;
+    /// <summary>Def indices shown by the last Open() — read by the
+    /// map_reload_consistency regression scenario.</summary>
+    internal IReadOnlyList<int> BuildableDefIndices => _buildableDefIndices;
     public int SelectedDefIndex => _selectedIndex >= 0 && _selectedIndex < _buildableDefIndices.Count
         ? _buildableDefIndices[_selectedIndex] : -1;
 
