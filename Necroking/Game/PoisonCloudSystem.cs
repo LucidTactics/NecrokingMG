@@ -187,6 +187,28 @@ public class PoisonCloudSystem
                 ApplyDamageTick(cloud, units, qt, nearbyIDs, outDamage, buffs);
             }
         }
+
+        // Plague exposure needs SUSTAINED time in gas: it accumulates in
+        // ApplyDamageTick while a unit stands in a cloud, and resets here the
+        // moment the unit is outside every cloud. Without the reset a unit that
+        // once grazed a cloud carried near-threshold exposure forever and was
+        // instantly plagued by one tick of any later cloud. (Poison stacks the
+        // unit already took keep ticking their damage independently.)
+        for (int i = 0; i < units.Count; i++)
+        {
+            if (!units[i].Alive || units[i].CloudExposureTime <= 0f) continue;
+            bool inside = false;
+            for (int ci = 0; ci < _clouds.Count; ci++)
+            {
+                var c = _clouds[ci];
+                if ((units[i].Position - c.Position).Length() <= c.CurrentRadius)
+                {
+                    inside = true;
+                    break;
+                }
+            }
+            if (!inside) units[i].CloudExposureTime = 0f;
+        }
     }
 
     private void UpdateRadius(PoisonCloud cloud, float dt)

@@ -169,7 +169,14 @@ public class CombatUnitHandler : IArchetypeHandler
 
     private static void UpdateCombat(ref AIContext ctx)
     {
-        if (!SubroutineSteps.IsTargetAlive(ref ctx)) return; // handled in EvaluateRoutine
+        if (!SubroutineSteps.IsTargetAlive(ref ctx))
+        {
+            // Reacquire is handled in EvaluateRoutine; stop here so a frenzied
+            // unit (kept in Combat with no target) doesn't coast on stale
+            // PreferredVel until something re-enters range.
+            SubroutineSteps.SetIdle(ref ctx);
+            return;
+        }
 
         ctx.SubroutineTimer += ctx.Dt;
 

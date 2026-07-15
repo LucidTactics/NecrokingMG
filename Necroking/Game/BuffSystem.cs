@@ -169,6 +169,18 @@ public static class BuffSystem
         units[unitIdx].Stats = s;
     }
 
+    /// <summary>Inverse guard for <see cref="GrantMaxHpDelta"/>: after any buff
+    /// removal/expiry, clamp HP back to the recomputed effective max so a timed
+    /// +MaxHP buff doesn't leave its granted HP behind permanently.</summary>
+    private static void ClampHpToEffectiveMax(UnitArrays units, int unitIdx)
+    {
+        int effMax = EffectiveMaxHP(units, unitIdx);
+        if (units[unitIdx].Stats.HP <= effMax) return;
+        var s = units[unitIdx].Stats;
+        s.HP = effMax;
+        units[unitIdx].Stats = s;
+    }
+
     public static void TickBuffs(UnitArrays units, float dt, BuffRegistry? buffRegistry = null)
     {
         for (int i = 0; i < units.Count; i++)
@@ -198,6 +210,7 @@ public static class BuffSystem
                     string expiringId = b.BuffDefID;
                     buffs.RemoveAt(j);
                     StripGrantedWeapons(units, i, expiringId);
+                    ClampHpToEffectiveMax(units, i);
                     continue;
                 }
 
@@ -283,6 +296,7 @@ public static class BuffSystem
                 }
                 else
                     buffs[i] = b;
+                ClampHpToEffectiveMax(units, unitIdx);
                 return;
             }
         }
@@ -304,7 +318,11 @@ public static class BuffSystem
                 removed = true;
             }
         }
-        if (removed) StripGrantedWeapons(units, unitIdx, buffDefID);
+        if (removed)
+        {
+            StripGrantedWeapons(units, unitIdx, buffDefID);
+            ClampHpToEffectiveMax(units, unitIdx);
+        }
         return removed;
     }
 

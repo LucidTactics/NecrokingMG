@@ -97,16 +97,25 @@ public class RangedUnitHandler : IArchetypeHandler
     private void UpdateCombat(ref AIContext ctx)
     {
         int targetIdx = SubroutineSteps.ResolveTarget(ref ctx);
-        if (targetIdx < 0) return;
+        if (targetIdx < 0)
+        {
+            // Reacquire is handled in EvaluateRoutine; stop so a frenzied unit
+            // held in Combat with no target doesn't coast on stale PreferredVel.
+            SubroutineSteps.SetIdle(ref ctx);
+            return;
+        }
 
         int i = ctx.UnitIndex;
         ref var stats = ref ctx.Units[i].Stats;
         float maxRange = stats.RangedRange.Count > 0 ? stats.RangedRange[0] : DefaultRange;
         float dist = (ctx.Units[targetIdx].Position - ctx.MyPos).Length();
 
-        // Tick cooldown locally so the AI doesn't depend on the legacy melee combat queue.
-        if (ctx.Units[i].AttackCooldown > 0f)
-            ctx.Units[i].AttackCooldown = MathF.Max(0f, ctx.Units[i].AttackCooldown - ctx.Dt);
+        // Tick the ranged reload locally — it lives in RangedCooldown, NOT the
+        // shared AttackCooldown, which Simulation.UpdateCombat re-derives from
+        // melee weapons every tick (it would wipe the reload of any archer that
+        // also carries a melee sidearm).
+        if (ctx.Units[i].RangedCooldown > 0f)
+            ctx.Units[i].RangedCooldown = MathF.Max(0f, ctx.Units[i].RangedCooldown - ctx.Dt);
 
         // A queued shot plants the unit (movement gate on PendingAttack) until the
         // anim's action moment releases the arrow — keep turning toward the target
@@ -172,7 +181,7 @@ public class RangedUnitHandler : IArchetypeHandler
     private static bool TryQueueShot(ref AIContext ctx, int targetIdx, float dist, float maxRange)
     {
         int i = ctx.UnitIndex;
-        if (ctx.Units[i].AttackCooldown > 0f
+        if (ctx.Units[i].RangedCooldown > 0f
             || !ctx.Units[i].PendingAttack.IsNone
             || ctx.Units[i].PostAttackTimer > 0f)
             return false;
@@ -195,7 +204,7 @@ public class RangedUnitHandler : IArchetypeHandler
         ctx.Units[i].PendingWeaponIdx = chosen;
         ctx.Units[i].PendingWeaponIsRanged = true;
         ctx.Units[i].PendingRangedTarget = ctx.Units[targetIdx].Id;
-        ctx.Units[i].AttackCooldown = cooldown;
+        ctx.Units[i].RangedCooldown = cooldown;
         ctx.Units[i].PostAttackTimer = PostShotFollowThrough;
         ctx.Units[i].PreferredVel = Vec2.Zero;
         SubroutineSteps.FacePosition(ref ctx, ctx.Units[targetIdx].Position);

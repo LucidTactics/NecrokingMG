@@ -59,8 +59,10 @@ public class EnvSpatialIndex
             _entries.Add(new Entry(i, c.CX, c.CY, c.R));
             if (c.R > MaxObjRadius) MaxObjRadius = c.R;
 
-            int bx = (int)(c.CX / CellSize);
-            int by = (int)(c.CY / CellSize);
+            // Floor, not truncation — queries floor, and a collision center pushed
+            // below 0 by a negative CollisionOffset must bucket consistently.
+            int bx = (int)MathF.Floor(c.CX / CellSize);
+            int by = (int)MathF.Floor(c.CY / CellSize);
             if (bx < 0 || bx >= _w || by < 0 || by >= _h) continue;
             _buckets[by * _w + bx].Add(entryIdx);
         }

@@ -177,6 +177,9 @@ partial class GameRenderer
         // unit just off-screen whose head still pokes in isn't clipped early.
         // Without this, off-screen units each ran a full DrawSingleUnit every frame —
         // the dominant Draw cost on a populated map, especially with fog off.
+        // Drop wake state of units that died mid-splash (id-keyed store, once per frame).
+        _g._wakeSystem.PruneDead(_g._sim.Units);
+
         for (int i = 0; i < _g._sim.Units.Count; i++)
         {
             if (!_g._sim.Units[i].Alive) continue;
@@ -410,7 +413,7 @@ partial class GameRenderer
         var sp_upper = _g._renderer.WorldToScreen(renderPos, heightOffset + _g._sim.Units[i].CollisionHeight, _g._camera);
 
         // Hover-highlight: capture this unit's exact on-screen sprite box.
-        if (i == _g._hoveredUnitIdx && _g._gameData.Settings.Tooltips.ShowHoverHighlight)
+        if (i == _g._hoveredUnitIdx && _g.HoverHighlightOn)
             _g._hoverBoxUnit = SpriteFrameAABB(sp, fr.Frame.Value, scale, fr.FlipX);
         // Dev-mark: persistent white box (via the 'mark' dev command).
         if (_g._devMarkedUnitIds.Count > 0 && _g._devMarkedUnitIds.Contains(_g._sim.Units[i].Id))
@@ -428,10 +431,10 @@ partial class GameRenderer
                 if (bd != null && bd.HasWeaponParticle && bd.WeaponParticle != null)
                     _g._wpDefsCache.Add(bd);
             }
-            if (_g._wpDefsCache.Count > 0 || _g._buffVisuals.HasEmitters(i))
+            if (_g._wpDefsCache.Count > 0 || _g._buffVisuals.HasEmitters(_g._sim.Units[i].Id))
                 // WORLD domain (was rawDt*timeScale: unclamped and not even pause-gated,
                 // so emitters kept spawning while paused/in editors).
-                _g._buffVisuals.UpdateWeaponParticles(i, _g._clock.WorldDt, _g._gameTime, _g._wpDefsCache, weaponAttach, _g._gameData.Buffs);
+                _g._buffVisuals.UpdateWeaponParticles(_g._sim.Units[i].Id, _g._clock.WorldDt, _g._gameTime, _g._wpDefsCache, weaponAttach, _g._gameData.Buffs);
         }
 
         // Buff visuals: phase 0 (behind sprite)
@@ -564,7 +567,7 @@ partial class GameRenderer
             // into deep water, the trail and bow wave follow the sunken
             // body instead of floating above it at the sim Y.
             _g._wakeSystem.UpdateAndDrawBack(
-                i, _g._frameDt,
+                _g._sim.Units[i].Id, _g._frameDt,
                 _g._sim.Units[i].RenderPos, _g._sim.Units[i].Velocity,
                 _g._sim.Units[i].FacingAngle, bodyLen,
                 wakeLiftWorldH, true,
@@ -583,7 +586,7 @@ partial class GameRenderer
             // unit" position projects to the same screen Y range as the
             // visible body; drawing front-class particles after the sprite
             // keeps the front foam crescent visible.
-            _g._wakeSystem.DrawFront(i, _g._spriteBatch, _g._renderer, _g._camera);
+            _g._wakeSystem.DrawFront(_g._sim.Units[i].Id, _g._spriteBatch, _g._renderer, _g._camera);
         }
         else
         {
@@ -594,7 +597,7 @@ partial class GameRenderer
                 ? unitDef.BodyLengthWorld
                 : (unitDef.IsQuadruped ? Render.WadingWakeSystem.QuadrupedDefaultBodyLength : 0f);
             _g._wakeSystem.UpdateAndDrawBack(
-                i, _g._frameDt,
+                _g._sim.Units[i].Id, _g._frameDt,
                 _g._sim.Units[i].RenderPos, _g._sim.Units[i].Velocity,
                 _g._sim.Units[i].FacingAngle, bodyLen,
                 0f, false,
@@ -604,7 +607,7 @@ partial class GameRenderer
 
             // Any lingering front-class particles (a bow wave fading out
             // as the unit steps onto land) also need the after-sprite pass.
-            _g._wakeSystem.DrawFront(i, _g._spriteBatch, _g._renderer, _g._camera);
+            _g._wakeSystem.DrawFront(_g._sim.Units[i].Id, _g._spriteBatch, _g._renderer, _g._camera);
         }
 
         // F2 water debug overlay — render after the sprite so it's not occluded.
@@ -783,7 +786,7 @@ partial class GameRenderer
         // Hover-highlight: capture this object's exact on-screen sprite box. Env
         // origin already folds in the flip + raw pivot (Y not inverted, unlike unit
         // spritemeta), so build the box straight from origin.
-        if (i == _g._hoveredObjectIdx && _g._gameData.Settings.Tooltips.ShowHoverHighlight)
+        if (i == _g._hoveredObjectIdx && _g.HoverHighlightOn)
         {
             float bw = frameW * scale, bh = frameH * scale;
             _g._hoverBoxObject = new Rectangle(
@@ -1177,7 +1180,7 @@ partial class GameRenderer
         DrawDepthFogToast();   // 'H' depth-sorted-fog ON/OFF flash
         DrawGpuWarnToast();    // hybrid-GPU warning (integrated GPU while discrete idle)
 
-        if (!_g._gameData.Settings.Tooltips.ShowHoverHighlight) return;
+        if (!_g.HoverHighlightOn) return;
 
         // Stroke a captured sprite box ONLY for the screen-space shapes (Corners / Rectangle).
         // Ground shapes (Circle / Ground Box / Diamond Box) draw behind the sprites in
@@ -1305,7 +1308,7 @@ partial class GameRenderer
     /// don't pulse as the sprite animates and stay locked under the object as the camera moves.</summary>
     private void DrawHoverGroundMarkers()
     {
-        if (!_g._gameData.Settings.Tooltips.ShowHoverHighlight) return;
+        if (!_g.HoverHighlightOn) return;
 
         const float RadiusMul = HoverMarkerRadiusMul;   // shared with the building hit-test
         const float Flatten   = HoverMarkerFlatten;

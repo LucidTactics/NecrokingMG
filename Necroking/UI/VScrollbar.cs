@@ -32,6 +32,7 @@ public static class VScrollbar
     /// clamped so an overscrolled value can't push the thumb past the track.</summary>
     public static Rectangle ThumbRect(int x, int y, int viewH, float contentH, float scroll)
     {
+        if (contentH <= viewH) return TrackRect(x, y, viewH); // no travel — avoid /0 below
         int barH = ThumbH(viewH, contentH);
         float ratio = Math.Clamp(scroll / (contentH - viewH), 0f, 1f);
         int barY = y + (int)(ratio * (viewH - barH));

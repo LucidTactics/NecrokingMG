@@ -551,8 +551,12 @@ public class EnvironmentSystem
         uint animRng = 0;
         if (def.IsAnimated && def.AnimTotalFrames > 1)
         {
-            // Hash position into a seed
-            uint hash = (uint)(x * 73856093f) ^ (uint)(y * 19349663f);
+            // Hash position into a seed. Hash the float BIT PATTERNS (like
+            // ShouldFlipObject) — multiplying the raw floats overflows float
+            // range past x≈58 and the (uint) cast saturates, collapsing the
+            // hash to a constant for most of the map (synchronized anims).
+            uint hash = ((uint)BitConverter.SingleToInt32Bits(x) * 73856093u)
+                      ^ ((uint)BitConverter.SingleToInt32Bits(y) * 19349663u);
             hash ^= hash >> 16; hash *= 0x45d9f3b; hash ^= hash >> 16;
             animRng = hash;
             animStart = (hash % (uint)def.AnimTotalFrames);
@@ -663,6 +667,25 @@ public class EnvironmentSystem
             FireCollisionsDirty(objIdx);
 
         return def.ForagableType;
+    }
+
+    /// <summary>Undo <see cref="CollectForagable"/> — failsafe when the collected
+    /// resource couldn't be banked (inventory filled up mid-flight): the object
+    /// reappears where it stood instead of the item silently vanishing.</summary>
+    public void RestoreForagable(int objIdx)
+    {
+        if (objIdx < 0 || objIdx >= _objects.Count || objIdx >= _objectRuntime.Count) return;
+        var def = _defs[_objects[objIdx].DefIndex];
+        if (!def.IsForagable) return;
+        var rt = _objectRuntime[objIdx];
+        if (!rt.Collected) return;
+
+        rt.Collected = false;
+        rt.RespawnTimer = 0f;
+        _objectRuntime[objIdx] = rt;
+
+        if (def.CollisionRadius > 0)
+            FireCollisionsDirty(objIdx);
     }
 
     /// <summary>

@@ -668,7 +668,14 @@ public class WadingWakeSystem
 
     private static readonly Random _rand = new();
 
-    private readonly List<WakeEmitterState?> _perUnit = new();
+    // Keyed by Unit.Id, NOT sim index: UnitArrays.RemoveUnit swap-and-pops, so an
+    // index-keyed store handed a dead unit's wake state (WasWading, live particles)
+    // to whichever unit got swapped into the slot — phantom exit-splashes on units
+    // that never touched water. Entries self-remove when fully idle; PruneDead
+    // (once per frame from the unit draw pass) drops entries whose unit died
+    // mid-splash.
+    private readonly Dictionary<uint, WakeEmitterState> _perUnit = new();
+    private readonly List<uint> _pruneScratch = new();
 
     /// <summary>Wire up flipbook references after the flipbooks dictionary
     /// has been populated in Game1.LoadGame. Bakes the default (untinted)
@@ -870,7 +877,7 @@ public class WadingWakeSystem
     /// The <paramref name="pixel"/> parameter is unused — the wake uses
     /// its own soft circle texture generated lazily on first draw.</summary>
     public void UpdateAndDrawBack(
-        int unitIdx, float dt,
+        uint unitId, float dt,
         Vec2 unitPos, Vec2 unitVel,
         float facingDeg, float bodyLengthWorld,
         float waterlineWorldHeight,
@@ -878,8 +885,7 @@ public class WadingWakeSystem
         Render.SpriteScope sb, Texture2D pixel,
         Renderer renderer, Camera25D camera)
     {
-        EnsureCapacity(unitIdx);
-        var state = _perUnit[unitIdx];
+        _perUnit.TryGetValue(unitId, out var state);
 
         // Fast exit: unit never had wake state AND isn't wading now →
         // there's nothing to set up, age, or draw.
@@ -889,7 +895,7 @@ public class WadingWakeSystem
         if (state == null)
         {
             state = new WakeEmitterState();
-            _perUnit[unitIdx] = state;
+            _perUnit[unitId] = state;
         }
 
         // Cache the unit's depth Y so the front pass (which doesn't get the
@@ -971,10 +977,34 @@ public class WadingWakeSystem
 
         state.WasWading = wadingActive;
 
-        if (state.Particles.Count == 0) return;
+        if (state.Particles.Count == 0)
+        {
+            // Fully idle (out of water, no live particles, no trickle sessions
+            // pending) → drop the entry so the dictionary only holds units with
+            // active wake state.
+            if (!wadingActive && state.SplashRemainingDuration <= 0f
+                && state.ExitRemainingDuration <= 0f)
+                _perUnit.Remove(unitId);
+            return;
+        }
 
         _particleTex ??= CreateSoftCircleTexture(sb.GraphicsDevice, ParticleTexSize);
         DrawParticles(state, sb, _particleTex, renderer, camera, drawFront: false);
+    }
+
+    /// <summary>Drop wake state whose unit no longer resolves alive — a unit that
+    /// died mid-splash never gets another UpdateAndDrawBack call, so its entry
+    /// (and the swap-pop confusion an index key used to cause) is cleaned here.
+    /// Call once per frame from the unit draw pass; cheap (only wading units
+    /// have entries).</summary>
+    public void PruneDead(Necroking.Movement.UnitArrays units)
+    {
+        if (_perUnit.Count == 0) return;
+        _pruneScratch.Clear();
+        foreach (var kv in _perUnit)
+            if (Necroking.Movement.UnitUtil.ResolveUnitIndex(units, kv.Key) < 0)
+                _pruneScratch.Add(kv.Key);
+        foreach (uint id in _pruneScratch) _perUnit.Remove(id);
     }
 
     /// <summary>Draw the FRONT layer (IsFront=true — bow wave + entry
@@ -983,12 +1013,11 @@ public class WadingWakeSystem
     /// (where "ahead of unit" overlaps the body's screen footprint). No
     /// update step — UpdateAndDrawBack already did that this frame.</summary>
     public void DrawFront(
-        int unitIdx,
+        uint unitId,
         Render.SpriteScope sb, Renderer renderer, Camera25D camera)
     {
-        if (unitIdx < 0 || unitIdx >= _perUnit.Count) return;
-        var state = _perUnit[unitIdx];
-        if (state == null || state.Particles.Count == 0) return;
+        if (!_perUnit.TryGetValue(unitId, out var state)) return;
+        if (state.Particles.Count == 0) return;
         if (_particleTex == null) return; // back pass didn't run; nothing to draw
         DrawParticles(state, sb, _particleTex, renderer, camera, drawFront: true);
     }
@@ -1025,12 +1054,6 @@ public class WadingWakeSystem
         }
         tex.SetData(pixels);
         return tex;
-    }
-
-    private void EnsureCapacity(int unitIdx)
-    {
-        while (_perUnit.Count <= unitIdx)
-            _perUnit.Add(null);
     }
 
     private static void AgeParticles(WakeEmitterState state, float dt)

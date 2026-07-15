@@ -45,7 +45,22 @@ public class CondEntersRegion : ConditionNode
 {
     public string RegionID { get; set; } = "";
     public int MinCount { get; set; } = 1;
-    public override bool Evaluate(TriggerEvalContext ctx, int instanceIdx) => false; // implemented in TriggerSystem
+    /// <summary>True while at least MinCount alive units stand inside the region.
+    /// The "enters" semantic comes from the system's edge-triggered firing: the
+    /// trigger fires when this flips false→true, not every tick it holds.</summary>
+    public override bool Evaluate(TriggerEvalContext ctx, int instanceIdx)
+    {
+        var region = ctx.RegionLookup?.Invoke(RegionID);
+        if (region == null || ctx.Units == null) return false;
+        int count = 0;
+        for (int i = 0; i < ctx.Units.Count; i++)
+        {
+            if (!ctx.Units[i].Alive) continue;
+            if (region.ContainsPoint(ctx.Units[i].Position) && ++count >= MinCount)
+                return true;
+        }
+        return false;
+    }
 }
 
 public class CondUnitsKilled : ConditionNode
@@ -68,7 +83,14 @@ public class CondGameTime : ConditionNode
 public class CondCooldown : ConditionNode
 {
     public float Interval { get; set; } = 10f;
-    public override bool Evaluate(TriggerEvalContext ctx, int instanceIdx) => false;
+    /// <summary>Periodic gate: true whenever the instance's cooldown timer has
+    /// elapsed. TriggerSystem re-arms CooldownTimer to Interval on every fire of
+    /// a trigger whose condition tree contains this node, so a bare CondCooldown
+    /// fires once per Interval; combined via And it rate-limits the other
+    /// conditions.</summary>
+    public override bool Evaluate(TriggerEvalContext ctx, int instanceIdx)
+        => instanceIdx >= 0 && instanceIdx < ctx.RuntimeStates.Length
+           && ctx.RuntimeStates[instanceIdx].CooldownTimer <= 0f;
 }
 
 public class CondAnd : ConditionNode
@@ -173,6 +195,10 @@ public class TriggerEvalContext
 {
     public float GameTime;
     public TriggerRuntimeState[] RuntimeStates = System.Array.Empty<TriggerRuntimeState>();
+    /// <summary>Live unit list for region-membership conditions. Null in unit tests.</summary>
+    public Movement.UnitArrays? Units;
+    /// <summary>Resolves a TriggerRegion by id (null if unknown).</summary>
+    public System.Func<string, TriggerRegion?>? RegionLookup;
 }
 
 public class TriggerExecContext

@@ -26,7 +26,7 @@ public class ForagableSystem
 {
     private struct CollectingForagable
     {
-        public int ObjIdx;             // environment object index at start (just for debug)
+        public int ObjIdx;             // source env object — used to restore it if inventory overflows on landing
         public Vec2 StartPos;          // world position where object was
         public Vec2 TargetPos;         // necromancer position at time of collection
         public float Timer;            // 0..ArcDuration
@@ -95,6 +95,13 @@ public class ForagableSystem
     public void StartCollection(int objIdx)
     {
         if (_sim.NecromancerIndex < 0) return;
+        // Refuse the pickup while the inventory is full — CollectForagable consumes
+        // the world object, so collecting with nowhere to bank the item destroyed it.
+        if (objIdx >= 0 && objIdx < _env.Objects.Count)
+        {
+            var fdef = _env.Defs[_env.Objects[objIdx].DefIndex];
+            if (fdef.IsForagable && !_inventory.HasRoomFor(fdef.ForagableType)) return;
+        }
         string? resourceType = _env.CollectForagable(objIdx);
         if (resourceType == null) return;
 
@@ -138,7 +145,16 @@ public class ForagableSystem
 
             if (cf.Timer >= cf.ArcDuration)
             {
-                _inventory.AddItem(cf.ResourceType);
+                int overflow = _inventory.AddItem(cf.ResourceType);
+                if (overflow > 0)
+                {
+                    // Inventory filled up while the arc was in flight (StartCollection
+                    // pre-checks room, so this is the failsafe): put the object back
+                    // on the ground instead of destroying the resource.
+                    _env.RestoreForagable(cf.ObjIdx);
+                    _inFlight.RemoveAt(i);
+                    continue;
+                }
                 _onLearnTrigger?.Invoke(cf.ResourceType);
                 _effects.SpawnDustPuff(cf.TargetPos);
                 _pickupSound?.Play(0.3f, 0f, 0f);

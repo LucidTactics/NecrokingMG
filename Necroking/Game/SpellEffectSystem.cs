@@ -136,8 +136,18 @@ public static class SpellEffectSystem
 
             case "Buff":
             case "Debuff":
-                BuffSystem.ApplyBuffById(units, casterIdx, gameData.Buffs, spell.BuffID);
+            {
+                // Apply to the unit the cast targeted — TryStartSpellCast already found
+                // the nearest valid ally (Buff) / enemy (Debuff) near the cursor and
+                // stored it in pending. Fall back to the caster when there is no unit
+                // target (AOE buffs) or it died mid-cast. Previously this always applied
+                // to casterIdx, discarding the computed target — a Debuff debuffed its
+                // own caster.
+                int buffIdx = UnitUtil.ResolveUnitIndex(units, pending.TargetUnitID);
+                if (buffIdx < 0) buffIdx = casterIdx;
+                BuffSystem.ApplyBuffById(units, buffIdx, gameData.Buffs, spell.BuffID);
                 break;
+            }
 
             case "Strike":
                 ExecuteStrike(spell, sim, gameData, casterIdx, target, effectOrigin, game._damageNumbers);
@@ -326,6 +336,10 @@ public static class SpellEffectSystem
         if (spell.SummonTargetReq == "CorpseAOE") {
             // AOE corpse raise: iterate corpses in range, resolve zombie type per corpse
             int raised = 0;
+            // Rises are QUEUED (deferred spawn), so HordeCapTracker.Available doesn't
+            // shrink during this loop — track what we queue per category or one cast
+            // could overshoot the cap by the whole AOE.
+            var queuedThisCast = new System.Collections.Generic.Dictionary<UndeadCategory, int>();
             for (int i = 0; i < sim.Corpses.Count && raised < spell.SummonQuantity; i++) {
                 var corpse = sim.Corpses[i];
                 if (corpse.Dissolving || corpse.ConsumedBySummon) continue;
@@ -344,9 +358,12 @@ public static class SpellEffectSystem
                 // whose category is full but keep iterating to consume others
                 // whose category still has room.
                 var aoeCat = HordeCapTracker.CategoryFor(gameData, resolvedID);
-                if (aoeCat != UndeadCategory.None
-                    && HordeCapTracker.Available(sim.Units, gameData, sim.NecroState, aoeCat) <= 0)
-                    continue;
+                if (aoeCat != UndeadCategory.None) {
+                    queuedThisCast.TryGetValue(aoeCat, out int alreadyQueued);
+                    if (HordeCapTracker.Available(sim.Units, gameData, sim.NecroState, aoeCat)
+                        - alreadyQueued <= 0)
+                        continue;
+                }
 
                 // Keep the corpse visible; QueueReanimRise claims it + plays the rise effect (green
                 // outline fading in on the body), then spawns the unit + removes the corpse cleanly
@@ -356,6 +373,10 @@ public static class SpellEffectSystem
                 game.QueueReanimRise(resolvedID, corpse.CorpseID, spell.ReanimationEffectID,
                     riseSpeed: spell.TestRiseSpeed, fogSpeed: spell.TestFogSpeed);
                 raised++;
+                if (aoeCat != UndeadCategory.None) {
+                    queuedThisCast.TryGetValue(aoeCat, out int q);
+                    queuedThisCast[aoeCat] = q + 1;
+                }
             }
         } else {
             // Single corpse consume (Corpse targeting)

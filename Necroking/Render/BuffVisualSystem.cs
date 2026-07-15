@@ -65,17 +65,24 @@ public class BuffVisualSystem
         public float AvgMoonSpeed;
     }
 
-    private readonly List<MergedOrbRing> _mergedRings = new();
+    // All per-unit state is keyed by Unit.Id, NOT sim index: UnitArrays.RemoveUnit
+    // swap-and-pops, so index-keyed stores handed a dead caster's arcs/particles/
+    // orbital phase to whichever unit got swapped into the slot. Entries are
+    // removed when the unit loses the relevant buff, and PruneDead (end of
+    // Update) drops entries whose unit died.
+    private readonly Dictionary<uint, MergedOrbRing> _mergedRings = new();
 
     // Per-unit weapon particle emitters
-    private readonly List<Dictionary<string, WPEmitterState>> _wpEmitters = new();
+    private readonly Dictionary<uint, Dictionary<string, WPEmitterState>> _wpEmitters = new();
 
     // Per-unit lightning arc state
-    private readonly Dictionary<int, List<Vector2[]>> _lightningArcs = new();
-    private readonly Dictionary<int, float> _lightningTimers = new();
+    private readonly Dictionary<uint, List<Vector2[]>> _lightningArcs = new();
+    private readonly Dictionary<uint, float> _lightningTimers = new();
 
-    public bool HasEmitters(int unitIdx) =>
-        unitIdx < _wpEmitters.Count && _wpEmitters[unitIdx].Count > 0;
+    private readonly List<uint> _pruneScratch = new();
+
+    public bool HasEmitters(uint unitId) =>
+        _wpEmitters.TryGetValue(unitId, out var em) && em.Count > 0;
 
     public void Clear()
     {
@@ -91,23 +98,16 @@ public class BuffVisualSystem
     /// </summary>
     public void Update(float dt, UnitArrays units, BuffRegistry buffReg, float globalTime)
     {
-        // Ensure storage
-        while (_mergedRings.Count < units.Count)
-            _mergedRings.Add(new MergedOrbRing { Orbs = new List<MergedOrbRing.Orb>() });
-
         for (int i = 0; i < units.Count; i++)
         {
-            if (!units[i].Alive)
-            {
-                _mergedRings[i] = new MergedOrbRing { Orbs = new List<MergedOrbRing.Orb>() };
-                continue;
-            }
+            if (!units[i].Alive) continue;
 
+            uint uid = units[i].Id;
             var activeBuffs = units[i].ActiveBuffs;
 
             // Build merged orbital ring
-            var ring = _mergedRings[i];
-            if (ring.Orbs == null) ring.Orbs = new List<MergedOrbRing.Orb>();
+            if (!_mergedRings.TryGetValue(uid, out var ring) || ring.Orbs == null)
+                ring = new MergedOrbRing { Orbs = new List<MergedOrbRing.Orb>() };
             ring.Orbs.Clear();
             float totalSunR = 0, totalSunSpd = 0, totalMoonR = 0, totalMoonSpd = 0;
             int numOrbBuffs = 0;
@@ -135,17 +135,19 @@ public class BuffVisualSystem
                 ring.AvgSunSpeed = totalSunSpd / numOrbBuffs;
                 ring.AvgMoonRadius = totalMoonR / numOrbBuffs;
                 ring.AvgMoonSpeed = totalMoonSpd / numOrbBuffs;
+                ring.BaseAngle += ring.AvgSunSpeed * dt;
+                ring.MoonBaseAngle += ring.AvgMoonSpeed * dt;
+                _mergedRings[uid] = ring;
             }
             else
             {
-                ring.AvgSunRadius = ring.AvgSunSpeed = ring.AvgMoonRadius = ring.AvgMoonSpeed = 0;
+                // No orbital buffs → no ring entry (dropping it resets the orbit
+                // phase, which is fine — a re-applied buff starts a fresh ring).
+                _mergedRings.Remove(uid);
             }
 
-            ring.BaseAngle += ring.AvgSunSpeed * dt;
-            ring.MoonBaseAngle += ring.AvgMoonSpeed * dt;
-            _mergedRings[i] = ring;
-
             // Update lightning arcs
+            bool hasLightning = false;
             foreach (var ab in activeBuffs)
             {
                 var def = buffReg.Get(ab.BuffDefID);
@@ -153,28 +155,52 @@ public class BuffVisualSystem
                 var la = def.LightningAura;
                 if (la.JitterHz <= 0) continue;
 
-                if (!_lightningTimers.ContainsKey(i)) _lightningTimers[i] = 0;
-                _lightningTimers[i] += dt;
+                hasLightning = true;
+                if (!_lightningTimers.ContainsKey(uid)) _lightningTimers[uid] = 0;
+                _lightningTimers[uid] += dt;
                 float interval = 1f / la.JitterHz;
-                if (_lightningTimers[i] >= interval)
+                if (_lightningTimers[uid] >= interval)
                 {
-                    _lightningTimers[i] -= interval;
-                    RegenerateLightningArcs(i, la);
+                    _lightningTimers[uid] -= interval;
+                    RegenerateLightningArcs(uid, la);
                 }
             }
+            if (!hasLightning)
+            {
+                _lightningTimers.Remove(uid);
+                _lightningArcs.Remove(uid);
+            }
         }
+
+        // Drop state whose unit died this frame — id-keyed stores only shrink here
+        // (the per-unit loops above never see dead units again).
+        PruneKeys(_mergedRings, units);
+        PruneKeys(_wpEmitters, units);
+        PruneKeys(_lightningArcs, units);
+        PruneKeys(_lightningTimers, units);
+    }
+
+    private void PruneKeys<T>(Dictionary<uint, T> store, UnitArrays units)
+    {
+        if (store.Count == 0) return;
+        _pruneScratch.Clear();
+        foreach (var kv in store)
+            if (UnitUtil.ResolveUnitIndex(units, kv.Key) < 0)
+                _pruneScratch.Add(kv.Key);
+        foreach (uint id in _pruneScratch) store.Remove(id);
     }
 
     /// <summary>
     /// Update weapon particle emitters for a unit. Call during the draw pass (phase 0).
     /// </summary>
-    public void UpdateWeaponParticles(int unitIdx, float dt, float globalTime,
+    public void UpdateWeaponParticles(uint unitId, float dt, float globalTime,
         List<BuffDef> wpDefs, WeaponAttachRuntime weaponAttach, BuffRegistry buffReg)
     {
-        while (_wpEmitters.Count <= unitIdx)
-            _wpEmitters.Add(new Dictionary<string, WPEmitterState>());
-
-        var emitters = _wpEmitters[unitIdx];
+        if (!_wpEmitters.TryGetValue(unitId, out var emitters))
+        {
+            emitters = new Dictionary<string, WPEmitterState>();
+            _wpEmitters[unitId] = emitters;
+        }
         float clampedDt = Math.Clamp(dt, 0f, 0.1f);
 
         // Update existing emitters (age particles, remove dead)
@@ -281,6 +307,7 @@ public class BuffVisualSystem
         if (unitIdx < 0 || unitIdx >= units.Count) return;
         if (!units[unitIdx].Alive) return;
 
+        uint uid = units[unitIdx].Id;
         var activeBuffs = units[unitIdx].ActiveBuffs;
         if (activeBuffs.Count == 0) return;
 
@@ -330,13 +357,13 @@ public class BuffVisualSystem
             }
 
             // Orbitals behind
-            DrawMergedOrbs(unitIdx, unitPos, 0, spriteBatch, camera, renderer,
+            DrawMergedOrbs(uid, unitPos, 0, spriteBatch, camera, renderer,
                 flipbooks, buffReg, globalTime);
 
             // Weapon particles behind
-            if (unitIdx < _wpEmitters.Count)
+            if (_wpEmitters.TryGetValue(uid, out var emittersBehind))
             {
-                foreach (var (buffId, state) in _wpEmitters[unitIdx])
+                foreach (var (buffId, state) in emittersBehind)
                 {
                     if (state.Particles.Count == 0) continue;
                     var def = buffReg.Get(buffId);
@@ -351,7 +378,7 @@ public class BuffVisualSystem
             // --- Phase 1: In front of sprite ---
 
             // Orbitals front
-            DrawMergedOrbs(unitIdx, unitPos, 1, spriteBatch, camera, renderer,
+            DrawMergedOrbs(uid, unitPos, 1, spriteBatch, camera, renderer,
                 flipbooks, buffReg, globalTime);
 
             // Front Effect (exclusive)
@@ -366,14 +393,14 @@ public class BuffVisualSystem
             if (lightningAuraDefs != null)
             {
                 var chosen = lightningAuraDefs[cycle % lightningAuraDefs.Count];
-                DrawLightningAura(chosen.LightningAura!, unitIdx, unitPos, spriteBatch,
+                DrawLightningAura(chosen.LightningAura!, uid, unitPos, spriteBatch,
                     camera, renderer, globalTime);
             }
 
             // Weapon particles front
-            if (unitIdx < _wpEmitters.Count)
+            if (_wpEmitters.TryGetValue(uid, out var emittersFront))
             {
-                foreach (var (buffId, state) in _wpEmitters[unitIdx])
+                foreach (var (buffId, state) in emittersFront)
                 {
                     if (state.Particles.Count == 0) continue;
                     var def = buffReg.Get(buffId);
@@ -418,12 +445,11 @@ public class BuffVisualSystem
     // ==========================================
     // Orbital Orbs (merged ring)
     // ==========================================
-    private void DrawMergedOrbs(int unitIdx, Vec2 unitPos, int phase,
+    private void DrawMergedOrbs(uint unitId, Vec2 unitPos, int phase,
         SpriteBatch batch, Camera25D cam, Renderer renderer,
         Dictionary<string, Flipbook> flipbooks, BuffRegistry buffReg, float globalTime)
     {
-        if (unitIdx >= _mergedRings.Count) return;
-        var ring = _mergedRings[unitIdx];
+        if (!_mergedRings.TryGetValue(unitId, out var ring)) return;
         if (ring.Orbs == null || ring.Orbs.Count == 0) return;
         int totalOrbs = ring.Orbs.Count;
 
@@ -528,10 +554,10 @@ public class BuffVisualSystem
     // ==========================================
     // Lightning Aura
     // ==========================================
-    private void DrawLightningAura(LightningAuraVisual la, int unitIdx, Vec2 unitPos,
+    private void DrawLightningAura(LightningAuraVisual la, uint unitId, Vec2 unitPos,
         SpriteBatch batch, Camera25D cam, Renderer renderer, float globalTime)
     {
-        if (!_lightningArcs.TryGetValue(unitIdx, out var arcs)) return;
+        if (!_lightningArcs.TryGetValue(unitId, out var arcs)) return;
 
         var sp = renderer.WorldToScreen(unitPos, 0f, cam);
         float radiusPixels = la.ArcRadius * cam.Zoom;
@@ -563,7 +589,8 @@ public class BuffVisualSystem
         bool drawBehind, SpriteBatch batch, Camera25D cam, Renderer renderer,
         Dictionary<string, Flipbook> flipbooks)
     {
-        if (!flipbooks.TryGetValue(vis.FlipbookID, out var fb) || !fb.IsLoaded || fb.Texture == null) return;
+        if (!flipbooks.TryGetValue(vis.FlipbookID, out var fb) || !fb.IsLoaded || fb.Texture == null
+            || fb.TotalFrames <= 0) return; // TotalFrames guard: a 0-frame def would div-by-zero below
 
         var baseTint = vis.Color.ToColor();
 
@@ -601,12 +628,12 @@ public class BuffVisualSystem
     // ==========================================
     // Lightning arc generation
     // ==========================================
-    private void RegenerateLightningArcs(int unitIdx, LightningAuraVisual la)
+    private void RegenerateLightningArcs(uint unitId, LightningAuraVisual la)
     {
-        if (!_lightningArcs.TryGetValue(unitIdx, out var arcs))
+        if (!_lightningArcs.TryGetValue(unitId, out var arcs))
         {
             arcs = new List<Vector2[]>();
-            _lightningArcs[unitIdx] = arcs;
+            _lightningArcs[unitId] = arcs;
         }
         arcs.Clear();
 

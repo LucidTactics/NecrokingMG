@@ -108,6 +108,22 @@ public class Inventory
         return remaining;
     }
 
+    /// <summary>True if <see cref="AddItem"/> would fit the full quantity (existing
+    /// stack headroom + empty slots), without mutating anything. Used to refuse a
+    /// pickup before the world object is consumed.</summary>
+    public bool HasRoomFor(string itemId, int quantity = 1)
+    {
+        if (string.IsNullOrEmpty(itemId) || quantity <= 0) return true;
+        int maxStack = _items?.Get(itemId)?.MaxStack ?? 99;
+        int room = 0;
+        for (int i = 0; i < _slots.Length && room < quantity; i++)
+        {
+            if (_slots[i].IsEmpty) room += maxStack;
+            else if (_slots[i].ItemId == itemId) room += maxStack - _slots[i].Quantity;
+        }
+        return room >= quantity;
+    }
+
     /// <summary>Remove items from inventory. Returns true if the full amount was removed.</summary>
     public bool RemoveItem(string itemId, int quantity = 1)
     {
