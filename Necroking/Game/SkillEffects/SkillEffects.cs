@@ -514,7 +514,17 @@ public sealed class CompoundEffect : ISkillEffect
 {
     public bool Apply(SkillEffectContext ctx, string arg)
     {
-        if (string.IsNullOrEmpty(arg)) return true;
+        foreach (var (subEffect, subArg) in Parse(arg))
+            if (!SkillEffectRegistry.Apply(subEffect, ctx, subArg)) return false;
+        return true;
+    }
+
+    /// <summary>The one parser for the compound grammar — also used by save-load
+    /// (SkillBookState.ApplySave replays grant_path sub-effects from learned
+    /// skills), so the two never drift.</summary>
+    public static IEnumerable<(string effect, string arg)> Parse(string arg)
+    {
+        if (string.IsNullOrEmpty(arg)) yield break;
         foreach (var entry in arg.Split('|'))
         {
             var trimmed = entry.Trim();
@@ -522,8 +532,7 @@ public sealed class CompoundEffect : ISkillEffect
             int eq = trimmed.IndexOf('=');
             string subEffect = eq >= 0 ? trimmed.Substring(0, eq).Trim() : trimmed;
             string subArg    = eq >= 0 ? trimmed.Substring(eq + 1) : "";
-            if (!SkillEffectRegistry.Apply(subEffect, ctx, subArg)) return false;
+            yield return (subEffect, subArg);
         }
-        return true;
     }
 }

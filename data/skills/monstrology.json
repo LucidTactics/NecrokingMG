@@ -211,7 +211,7 @@
     {
       "id": "bear_autopsy",
       "name": "Bear Autopsy",
-      "description": "Unlocks Bear Zombies.\nCost 5 Skill Research Points.",
+      "description": "Unlocks Juvenile Bear Zombies.\nCost 5 Skill Research Points.",
       "x": 632,
       "y": 679,
       "parents": [
@@ -225,7 +225,7 @@
         }
       ],
       "effect": "unlock_summon",
-      "effectArg": "ZombieJuvenileBear,ZombieGrizzlyBear"
+      "effectArg": "ZombieJuvenileBear"
     },
     {
       "id": "monsterous_legion",
