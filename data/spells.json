@@ -2177,7 +2177,7 @@
       "manaCost": 30,
       "primaryPath": "spirit",
       "primaryLevel": 1,
-      "cooldown": 10,
+      "cooldown": 2,
       "toggleEffect": "spirit_walk",
       "toggleDuration": 30
     },
