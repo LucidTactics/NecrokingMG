@@ -22,6 +22,10 @@ namespace Necroking.GameSystems;
 /// WorldQuery / SubroutineSteps / VillageThreat). The horde stays anchored to the
 /// sleeping body via Simulation.HordeAnchorUnitId.
 ///
+/// Pressing Q mid-walk ROOTS the spirit where it hovers (<see cref="RootSpirit"/>):
+/// the player wakes up in the body right away, and the spirit stays behind as a
+/// stationary scrying eye — sight halved, expiring after <see cref="EyeDuration"/>.
+///
 /// Same pattern as JumpSystem / TickPendingReanimRises: a plain timer system,
 /// ticked from Game1.Update on WorldDt (a buff can't mutate the world on expiry).
 /// State is per-game — Game1.ResetWorldState calls <see cref="Reset"/>. Stores
@@ -34,6 +38,10 @@ public static class SpiritWalkSystem
     public const float SpiritSpeed = 30f;
     public const float SightMultiplier = 2f;
     public const string SleepBuffId = "buff_spirit_sleep";
+    /// <summary>Seconds a rooted spirit ("eye") keeps scrying before it fades.</summary>
+    public const float EyeDuration = 60f;
+    /// <summary>Rooting halves the spirit's sight (2x normal → normal).</summary>
+    public const float EyeSightMultiplier = 0.5f;
     /// <summary>Seconds before snap-back at which the spirit gets a "Returning..." warning.</summary>
     private const float ReturnWarnTime = 5f;
 
@@ -44,6 +52,10 @@ public static class SpiritWalkSystem
     private static AIBehavior _bodyAI;
     private static byte _bodyArchetype;
 
+    // Rooted eye — outlives the walk itself; one at a time.
+    private static uint _eyeId;
+    private static float _eyeTimer;
+
     public static bool Active => _spiritId != 0;
 
     /// <summary>Per-game reset — called from Game1.ResetWorldState.</summary>
@@ -53,6 +65,8 @@ public static class SpiritWalkSystem
         _spiritId = 0;
         _timer = 0f;
         _warned = false;
+        _eyeId = 0;
+        _eyeTimer = 0f;
     }
 
     /// <summary>Leave the body: spawn the possessed spirit and drop the body prone.
@@ -109,15 +123,64 @@ public static class SpiritWalkSystem
     public static void End(Game1 game)
     {
         if (!Active) return;
+
+        if (game._sim.UnitsMut.TryGetIndex(_spiritId, out int spiritIdx))
+            game._sim.RemoveUnitTracked(spiritIdx);
+
+        WakeBody(game);
+    }
+
+    /// <summary>Q mid-walk: root the spirit where it hovers and wake up at once.
+    /// The rooted spirit becomes a stationary scrying eye — no control, half the
+    /// spirit's sight — and keeps revealing fog for <see cref="EyeDuration"/>.
+    /// Replaces any previous eye (one scrying spot at a time).</summary>
+    public static void RootSpirit(Game1 game)
+    {
+        if (!Active) return;
+        var sim = game._sim;
+        var units = sim.UnitsMut;
+
+        if (!units.TryGetIndex(_spiritId, out int spiritIdx))
+        {
+            End(game); // spirit lost — degrade to a normal snap-back
+            return;
+        }
+
+        // One eye at a time: the new root replaces any previous one.
+        if (_eyeId != 0 && units.TryGetIndex(_eyeId, out int oldEyeIdx))
+        {
+            sim.RemoveUnitTracked(oldEyeIdx);
+            units.TryGetIndex(_spiritId, out spiritIdx); // re-resolve after swap-pop
+        }
+
+        // Convert the spirit into the eye: parked (never PlayerControlled, so
+        // necromancer-index repairs can't pick it), pinned in place the way net
+        // ghosts are, sight halved. GhostMode stays — untargetable + ghost look.
+        var eye = units[spiritIdx];
+        eye.AI = AIBehavior.IdleAtPoint;
+        eye.Archetype = 0;
+        eye.PreferredVel = Vec2.Zero;
+        eye.Velocity = Vec2.Zero;
+        eye.MoveTarget = eye.Position;
+        eye.SpawnPosition = eye.Position;
+        eye.DetectionRange *= EyeSightMultiplier;
+        _eyeId = eye.Id;
+        _eyeTimer = EyeDuration;
+
+        _spiritId = 0; // the walk is over; the eye is no longer "the spirit"
+        WakeBody(game);
+    }
+
+    /// <summary>Shared end-of-walk teardown: restore the body's AI/archetype, drop
+    /// the sleep buff (BuffSystem then plays the standup), hand NecromancerIndex
+    /// back, and clear the walk state. Handles a dead/removed body gracefully.</summary>
+    private static void WakeBody(Game1 game)
+    {
         var sim = game._sim;
         var units = sim.UnitsMut;
 
         sim.HordeAnchorUnitId = 0;
 
-        if (units.TryGetIndex(_spiritId, out int spiritIdx))
-            sim.RemoveUnitTracked(spiritIdx);
-
-        // Re-resolve after the swap-pop removal above.
         if (units.TryGetIndex(_bodyId, out int bodyIdx))
         {
             var body = units[bodyIdx];
@@ -138,10 +201,25 @@ public static class SpiritWalkSystem
         _timer = 0f;
     }
 
-    /// <summary>Tick the walk timer. Called from Game1.Update on WorldDt, so pause
-    /// and editors freeze the countdown.</summary>
+    /// <summary>Tick the walk + eye timers. Called from Game1.Update on WorldDt,
+    /// so pause and editors freeze the countdowns.</summary>
     public static void Update(Game1 game, float dt)
     {
+        // The eye ticks independently — it outlives the walk that planted it.
+        if (_eyeId != 0)
+        {
+            _eyeTimer -= dt;
+            if (!game._sim.Units.TryGetIndex(_eyeId, out int eyeIdx))
+            {
+                _eyeId = 0;
+            }
+            else if (_eyeTimer <= 0f)
+            {
+                game._sim.RemoveUnitTracked(eyeIdx);
+                _eyeId = 0;
+            }
+        }
+
         if (!Active) return;
         var sim = game._sim;
 

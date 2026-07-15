@@ -3558,12 +3558,20 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (aggrShift && _input.WasKeyPressed(Keys.E)) _sim.Horde.AggressionLevel++;
             if (aggrShift && _input.WasKeyPressed(Keys.Q)) _sim.Horde.AggressionLevel--;
 
+            // --- Spirit walk: Q while walking roots the spirit as a scrying eye
+            // and wakes the body. Same guard pattern as Shift+Q — the flag stops
+            // the press from also casting slot 0 below. ---
+            bool spiritRooted = !aggrShift && SpiritWalkSystem.Active
+                && _input.WasKeyPressed(Keys.Q);
+            if (spiritRooted) SpiritWalkSystem.RootSpirit(this);
+
             // --- Spell casting (keyboard-only; see SpellBarBindings for the
             // slot→key table). Mouse buttons never cast — they belong to the
             // world-click dispatch in Game1.WorldClicks.cs. ---
             for (int slot = 0; slot < SpellBarBindings.SlotCount; slot++)
             {
                 if (aggrShift && slot <= 1) continue; // Shift+Q/E = aggression, not a cast
+                if (spiritRooted && slot == 0) continue; // Q consumed by the spirit root
                 if (!SpellBarBindings.WasSlotPressed(_input, slot)) continue;
                 if (slot >= _spellBarState.Slots.Length) continue;
                 // Circle-targeted spells arm an aim mode instead of casting
