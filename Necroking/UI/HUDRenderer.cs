@@ -26,18 +26,22 @@ public partial class HUDRenderer
     private const int HpBarY = 32;
     private const int ManaBarY = 50;
 
-    // One row of grimoire-style frame slots (see SpellBarBindings for the
-    // slot count + key labels), centred on the screen. Each box fits the 96px
-    // spell icon at an exact 2:1 downscale (48px) — pixel-perfect.
+    // Grimoire-style frame slots (see SpellBarBindings for the slot count +
+    // key labels) arranged like the physical keyboard: the number row (1-8)
+    // centred on the screen, Q and E on a row below it — Q under the 1/2 seam,
+    // E under the 3/4 seam (a one-key gap where W sits). Each box fits the
+    // 96px spell icon at an exact 2:1 downscale (48px) — pixel-perfect.
     private const int PrimarySlotW = 60;
     private const int PrimarySlotH = 60;
-    // Sits the row's bottom edge ~2px above the screen bottom (slot height 60
-    // + 1px gap; the frame's own margin makes ~2 visible).
+    // Sits the Q/E row's bottom edge ~2px above the screen bottom (slot height
+    // 60 + 1px gap; the frame's own margin makes ~2 visible).
     private const int PrimaryBarBottomOffset = 61; // screenH - this
     private const int SlotSpacing = 6;
-    // Half the bar's total width (screenW/2 - this = first slot's left edge).
-    private const int SpellBarCenterOffset =
-        (SpellBarBindings.SlotCount * (PrimarySlotW + SlotSpacing) - SlotSpacing) / 2;
+    private const int SlotPitch = PrimarySlotW + SlotSpacing;
+    private const int RowGap = 6; // vertical gap between the two rows
+    private const int NumberSlotCount = SpellBarBindings.SlotCount - 2; // slots 2..9 = keys 1-8
+    // Half the number row's total width (screenW/2 - this = row's left edge).
+    private const int NumberRowCenterOffset = (NumberSlotCount * SlotPitch - SlotSpacing) / 2;
     private const int SlotBorderHeight = 2;
 
     // The slot chrome is the SpellSlot widget (Background = fancy_inner parchment,
@@ -177,8 +181,7 @@ public partial class HUDRenderer
         _hoverSlotSpell = null;
         _hoverSlotMelee = false;
 
-        var layout = GetSpellBarLayout(screenH);
-        DrawSpellBar(screenW, layout.barY, layout.slotW, layout.slotH, layout.centerOffset,
+        DrawSpellBar(screenW, screenH,
             SpellBarBindings.SlotLabels, bar, sim, gameData, inventory, drawSpellCategoryIcon, slotFlash);
 
         // Controls hint intentionally omitted — overlapped the FPS/zoom bottom-
@@ -470,14 +473,13 @@ public partial class HUDRenderer
     //  Spell Bar
     // ═══════════════════════════════════════
 
-    private void DrawSpellBar(int screenW, int barY, int slotW, int slotH, int centerOffset,
+    private void DrawSpellBar(int screenW, int screenH,
         string[] keys, SpellBarState bar, Simulation sim, GameData gameData,
         Inventory inventory, Action<string, int, int> drawCategoryIcon, float[]? flash = null)
     {
         for (int s = 0; s < keys.Length; s++)
         {
-            int slotX = screenW / 2 - centerOffset + s * (slotW + SlotSpacing);
-            var slot = new Rectangle(slotX, barY, slotW, slotH);
+            var slot = GetSlotRect(screenW, screenH, s);
             var inner = SlotInterior(slot);
             bool hasSpell = s < bar.Slots.Length && !string.IsNullOrEmpty(bar.Slots[s].SpellID);
 
@@ -591,30 +593,39 @@ public partial class HUDRenderer
     //  Hit Testing (shared layout with draw)
     // ═══════════════════════════════════════
 
-    /// <summary>
-    /// Get the Y position and layout params for the spell bar.
-    /// Returns (barY, slotW, slotH, centerOffset).
-    /// </summary>
-    public (int barY, int slotW, int slotH, int centerOffset) GetSpellBarLayout(int screenH)
+    /// <summary>Screen rect of a spell-bar slot (0=Q, 1=E, 2-9 = keys 1-8),
+    /// laid out like the physical keyboard: numbers in a row on top, Q/E on a
+    /// row below offset half a key right, with a one-key gap between them
+    /// (W's spot). Drawing, mouse hit-testing and the hit registry all derive
+    /// from this one function.</summary>
+    public Rectangle GetSlotRect(int screenW, int screenH, int slot)
     {
-        int barY = screenH - PrimaryBarBottomOffset;
-        return (barY, PrimarySlotW, PrimarySlotH, SpellBarCenterOffset);
+        int numberLeft = screenW / 2 - NumberRowCenterOffset;
+        int qeY = screenH - PrimaryBarBottomOffset;
+        if (slot < 2)
+        {
+            int x = numberLeft + SlotPitch / 2 + slot * 2 * SlotPitch;
+            return new Rectangle(x, qeY, PrimarySlotW, PrimarySlotH);
+        }
+        int numberY = qeY - PrimarySlotH - RowGap;
+        return new Rectangle(numberLeft + (slot - 2) * SlotPitch, numberY, PrimarySlotW, PrimarySlotH);
     }
+
+    /// <summary>Top edge of the spell-bar cluster (the raised number row) —
+    /// the aggression bar anchors just above this.</summary>
+    public int GetSpellBarTopY(int screenH)
+        => screenH - PrimaryBarBottomOffset - PrimarySlotH - RowGap;
 
     /// <summary>
     /// Hit-test a spell bar slot. Returns the slot index, or -1 if not hit.
-    /// Uses the same layout constants as drawing.
+    /// Uses the same layout as drawing (GetSlotRect).
     /// </summary>
-    public int HitTestBarSlot(int screenW, int barY, int slotW, int slotH, int centerOffset,
-        int mouseX, int mouseY, int slotCount = SpellBarBindings.SlotCount)
+    public int HitTestBarSlot(int screenW, int screenH, int mouseX, int mouseY,
+        int slotCount = SpellBarBindings.SlotCount)
     {
-        if (mouseY < barY || mouseY >= barY + slotH) return -1;
         for (int s = 0; s < slotCount; s++)
-        {
-            int slotX = screenW / 2 - centerOffset + s * (slotW + SlotSpacing);
-            if (mouseX >= slotX && mouseX < slotX + slotW)
+            if (GetSlotRect(screenW, screenH, s).Contains(mouseX, mouseY))
                 return s;
-        }
         return -1;
     }
 
@@ -655,12 +666,8 @@ public partial class HUDRenderer
     public void AppendHitRects(Necroking.UI.UIHitRegistry reg, int screenW, int screenH,
         bool showTimeControls)
     {
-        var (barY, slotW, slotH, centerOffset) = GetSpellBarLayout(screenH);
         for (int s = 0; s < SpellBarBindings.SlotCount; s++)
-        {
-            int slotX = screenW / 2 - centerOffset + s * (slotW + SlotSpacing);
-            reg.Add($"hud.spellbar.{s}", new Rectangle(slotX, barY, slotW, slotH));
-        }
+            reg.Add($"hud.spellbar.{s}", GetSlotRect(screenW, screenH, s));
 
         if (showTimeControls)
         {

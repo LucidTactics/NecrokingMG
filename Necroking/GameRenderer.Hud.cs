@@ -774,9 +774,8 @@ partial class GameRenderer
         var barDef = _g._widgetRenderer.GetWidgetDef("AggressionBar");
         if (barDef == null) return false;
 
-        var barLayout = _g._hudRenderer.GetSpellBarLayout(screenH);
         int x = (screenW - barDef.Width) / 2;
-        int y = barLayout.barY - barDef.Height - 6; // sit just above the spell bar
+        int y = _g._hudRenderer.GetSpellBarTopY(screenH) - barDef.Height - 6; // sit just above the spell-bar cluster
         bar = new Rectangle(x, y, barDef.Width, barDef.Height);
 
         nodes = new System.Collections.Generic.List<Rectangle>();

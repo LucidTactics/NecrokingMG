@@ -97,11 +97,7 @@ public sealed class SpellBarLayer : UILayer
     public override bool Visible => _g.HudVisible && _g._menuState == MenuState.None;
 
     private int HitSlot(int mx, int my, in UICtx ctx)
-    {
-        var bar = _g._hudRenderer.GetSpellBarLayout(ctx.ScreenH);
-        return _g._hudRenderer.HitTestBarSlot(ctx.ScreenW,
-            bar.barY, bar.slotW, bar.slotH, bar.centerOffset, mx, my);
-    }
+        => _g._hudRenderer.HitTestBarSlot(ctx.ScreenW, ctx.ScreenH, mx, my);
 
     public override bool ContainsMouse(int mx, int my, in UICtx ctx)
         => HitSlot(mx, my, in ctx) >= 0;
