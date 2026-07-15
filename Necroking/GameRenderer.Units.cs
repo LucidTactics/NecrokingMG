@@ -413,7 +413,7 @@ partial class GameRenderer
         var sp_upper = _g._renderer.WorldToScreen(renderPos, heightOffset + _g._sim.Units[i].CollisionHeight, _g._camera);
 
         // Hover-highlight: capture this unit's exact on-screen sprite box.
-        if (i == _g._hoveredUnitIdx && _g._gameData.Settings.Tooltips.ShowHoverHighlight)
+        if (i == _g._hoveredUnitIdx && _g.HoverHighlightOn)
             _g._hoverBoxUnit = SpriteFrameAABB(sp, fr.Frame.Value, scale, fr.FlipX);
         // Dev-mark: persistent white box (via the 'mark' dev command).
         if (_g._devMarkedUnitIds.Count > 0 && _g._devMarkedUnitIds.Contains(_g._sim.Units[i].Id))
@@ -786,7 +786,7 @@ partial class GameRenderer
         // Hover-highlight: capture this object's exact on-screen sprite box. Env
         // origin already folds in the flip + raw pivot (Y not inverted, unlike unit
         // spritemeta), so build the box straight from origin.
-        if (i == _g._hoveredObjectIdx && _g._gameData.Settings.Tooltips.ShowHoverHighlight)
+        if (i == _g._hoveredObjectIdx && _g.HoverHighlightOn)
         {
             float bw = frameW * scale, bh = frameH * scale;
             _g._hoverBoxObject = new Rectangle(
@@ -1180,7 +1180,7 @@ partial class GameRenderer
         DrawDepthFogToast();   // 'H' depth-sorted-fog ON/OFF flash
         DrawGpuWarnToast();    // hybrid-GPU warning (integrated GPU while discrete idle)
 
-        if (!_g._gameData.Settings.Tooltips.ShowHoverHighlight) return;
+        if (!_g.HoverHighlightOn) return;
 
         // Stroke a captured sprite box ONLY for the screen-space shapes (Corners / Rectangle).
         // Ground shapes (Circle / Ground Box / Diamond Box) draw behind the sprites in
@@ -1308,7 +1308,7 @@ partial class GameRenderer
     /// don't pulse as the sprite animates and stay locked under the object as the camera moves.</summary>
     private void DrawHoverGroundMarkers()
     {
-        if (!_g._gameData.Settings.Tooltips.ShowHoverHighlight) return;
+        if (!_g.HoverHighlightOn) return;
 
         const float RadiusMul = HoverMarkerRadiusMul;   // shared with the building hit-test
         const float Flatten   = HoverMarkerFlatten;

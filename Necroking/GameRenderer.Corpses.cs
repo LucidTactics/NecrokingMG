@@ -109,7 +109,7 @@ partial class GameRenderer
     private void DrawCorpses(SpriteScope scope)
     {
         // Hover-highlight target (captured below as its sprite is drawn).
-        Corpse? hoveredCorpse = (_g._gameData.Settings.Tooltips.ShowHoverHighlight
+        Corpse? hoveredCorpse = (_g.HoverHighlightOn
             && _g._hoveredCorpseIdx >= 0 && _g._hoveredCorpseIdx < _g._sim.Corpses.Count)
             ? _g._sim.Corpses[_g._hoveredCorpseIdx] : null;
 
@@ -857,7 +857,7 @@ partial class GameRenderer
 
         // Hover-highlight: this draw uses a centroid origin (not the pivot), so
         // build the box from that rather than SpriteFrameAABB.
-        if (_g._gameData.Settings.Tooltips.ShowHoverHighlight
+        if (_g.HoverHighlightOn
             && _g._hoveredCorpseIdx >= 0 && _g._hoveredCorpseIdx < _g._sim.Corpses.Count
             && ReferenceEquals(_g._sim.Corpses[_g._hoveredCorpseIdx], cc))
         {

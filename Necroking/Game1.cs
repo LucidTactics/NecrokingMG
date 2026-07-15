@@ -707,6 +707,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private uint _devForceHoverUnitId = uint.MaxValue;
     // Dev: pin the hovered env object by index (headless variant testing). -1 = off.
     private int _devForceHoverObjectIdx = -1;
+    /// <summary>The hover-highlight draw gate: the user's persistent Tooltips
+    /// setting, OR'd with a live dev force-hover. The 'hover'/'hover_obj' dev
+    /// commands used to write ShowHoverHighlight=true into Settings directly,
+    /// which the Exiting handler then saved — a transient diagnostic permanently
+    /// flipping the player's preference. Derived here instead; nothing persists.</summary>
+    internal bool HoverHighlightOn => _gameData.Settings.Tooltips.ShowHoverHighlight
+        || _devForceHoverUnitId != uint.MaxValue || _devForceHoverObjectIdx >= 0;
     // Dev: detach the camera from the necromancer so dev 'camera' commands stick
     // (lets headless testing pan freely WITHOUT killing the necromancer / triggering game-over).
     private bool _devFreeCamera;

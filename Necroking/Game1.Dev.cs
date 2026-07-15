@@ -1351,7 +1351,6 @@ public partial class Game1 {
                var hvidx = DevResolveUnits(c.Args.Length > 0 ? string.Join(" ", c.Args) : "necro");
                if (hvidx.Count == 0) { c.Complete(Necroking.Dev.DevServer.Error("hover: no unit matched")); break; }
                _devForceHoverUnitId = _sim.Units[hvidx[0]].Id;
-               _gameData.Settings.Tooltips.ShowHoverHighlight = true;
                c.Complete(Necroking.Dev.DevServer.Ok($"hovering unit id={_devForceHoverUnitId} (variant {_hoverHighlightVariant})"));
                break;
             }
@@ -1368,7 +1367,6 @@ public partial class Game1 {
                int oidx = (int)DevFloat(c.Args[0]);
                if (oidx < 0 || oidx >= _envSystem.ObjectCount) { c.Complete(Necroking.Dev.DevServer.Error($"hover_obj: index {oidx} out of range (0..{_envSystem.ObjectCount - 1})")); break; }
                _devForceHoverObjectIdx = oidx;
-               _gameData.Settings.Tooltips.ShowHoverHighlight = true;
                var hod = _envSystem.Defs[_envSystem.GetObject(oidx).DefIndex];
                c.Complete(Necroking.Dev.DevServer.Ok($"hovering object idx={oidx} ({hod.Id}) (variant {_hoverHighlightVariant})"));
                break;
