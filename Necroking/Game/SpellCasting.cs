@@ -541,6 +541,9 @@ public static class SpellCaster
     /// "AllPaths" Set effects (e.g. god mode pinning every path to 9). Higher
     /// native levels win over the buff floor so investing further in a path
     /// isn't wasted while the buff is up.</summary>
-    private static Func<MagicPath, int> ResolveCasterLevel(UnitDef def, UnitArrays units, int casterIdx)
+    /// <summary>The caster's effective level per magic path (native def level +
+    /// buff bonuses). The one level source behind the cast gate, cost scaling,
+    /// and the HUD's castability cues — reuse it, don't re-derive.</summary>
+    public static Func<MagicPath, int> ResolveCasterLevel(UnitDef def, UnitArrays units, int casterIdx)
         => p => BuffSystem.EffectivePathLevel(units, casterIdx, def, p);
 }

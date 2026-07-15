@@ -102,6 +102,7 @@ public partial class HUDRenderer
     private static readonly Color SlotEmptyBg = new(30, 30, 40, 150);
     private static readonly Color SlotBorder = new(100, 100, 130, 200);
     private static readonly Color KeyLabelColor = new(0xff, 0xea, 0xbe); // bright parchment-cream, pops on spell icons
+    private static readonly Color KeyLabelDim = new(0x73, 0x68, 0x54); // spell uncastable (mana/path/charges — not cooldown)
     private static readonly Color KeyLabelOutline = new(0x2a, 0x1f, 0x0c); // dark rim so the label reads on any art
     private static readonly Color SpellNameColor = new(200, 200, 220);
     private static readonly Color CooldownOverlay = new(0, 0, 0, 150);
@@ -183,7 +184,7 @@ public partial class HUDRenderer
         _hoverSlotMelee = false;
 
         DrawSpellBar(screenW, screenH,
-            SpellBarBindings.SlotLabels, bar, sim, gameData, inventory, drawSpellCategoryIcon, slotFlash);
+            SpellBarBindings.SlotLabels, bar, sim, gameData, inventory, drawSpellCategoryIcon, necroIdx, slotFlash);
 
         // Controls hint intentionally omitted — overlapped the FPS/zoom bottom-
         // left readout. Re-enable if we add a menu page for it.
@@ -476,8 +477,16 @@ public partial class HUDRenderer
 
     private void DrawSpellBar(int screenW, int screenH,
         string[] keys, SpellBarState bar, Simulation sim, GameData gameData,
-        Inventory inventory, Action<string, int, int> drawCategoryIcon, float[]? flash = null)
+        Inventory inventory, Action<string, int, int> drawCategoryIcon, int necroIdx, float[]? flash = null)
     {
+        // Same caster-level resolution as the cast gate (TryStartSpellCast), so
+        // the castability cues below can't drift from what a cast would actually
+        // do. One resolve — the same caster serves every slot.
+        Func<MagicPath, int>? casterLevel = null;
+        if (necroIdx >= 0 && necroIdx < sim.Units.Count)
+            casterLevel = SpellCaster.ResolveCasterLevel(
+                gameData.Units.Get(sim.Units[necroIdx].UnitDefID), sim.Units, necroIdx);
+
         for (int s = 0; s < keys.Length; s++)
         {
             var slot = GetSlotRect(screenW, screenH, s);
@@ -523,6 +532,11 @@ public partial class HUDRenderer
                 Scope.Draw(_pixel, new Rectangle(slot.Right - 2, slot.Y, 2, slot.Height), edge);
             }
 
+            // Whether a cast would fail right now for a resource/requirement
+            // reason. Deliberately NOT set by cooldown — that's temporary and
+            // already has its own sweep overlay.
+            bool uncastable = false;
+
             // Cooldown sweep (over the icon interior).
             if (spell != null)
             {
@@ -535,15 +549,27 @@ public partial class HUDRenderer
                     if (_smallFont != null)
                         Text(_smallFont, $"{cd:F1}", new Vector2(inner.Center.X - 10, inner.Center.Y - 6), CooldownText);
                 }
-                if (sim.NecroState.Mana < spell.ManaCost)
+                // Path-discounted cost, matching what the cast gate deducts —
+                // flat ManaCost overstates it for masters of the spell's path.
+                float effCost = casterLevel != null ? spell.EffectiveManaCost(casterLevel) : spell.ManaCost;
+                if (sim.NecroState.Mana < effCost)
+                {
                     Scope.Draw(_pixel, inner, LowManaOverlay);
+                    uncastable = true;
+                }
+                if (casterLevel != null && !spell.MeetsPathRequirements(casterLevel))
+                    uncastable = true;
 
                 // Consumable charges (potion-spells): show the inventory count,
                 // grey out at 0.
                 if (!string.IsNullOrEmpty(spell.ConsumesItem))
                 {
                     int qty = inventory.GetItemCount(spell.ConsumesItem);
-                    if (qty <= 0) Scope.Draw(_pixel, inner, PotionEmptyColor);
+                    if (qty <= 0)
+                    {
+                        Scope.Draw(_pixel, inner, PotionEmptyColor);
+                        uncastable = true;
+                    }
                     if (_smallFont != null)
                     {
                         string q = qty.ToString();
@@ -558,7 +584,8 @@ public partial class HUDRenderer
             if (slotSpellId == "melee_gather")
                 Text(_smallFont, "Melee", new Vector2(inner.X + 1, inner.Center.Y - 6), SpellNameColor);
             // Hotkey label, just inside the frame at the parchment's top-left.
-            TextOutlined(_smallFont, keys[s], new Vector2(inner.X + 3, inner.Y), KeyLabelColor, KeyLabelOutline);
+            TextOutlined(_smallFont, keys[s], new Vector2(inner.X + 3, inner.Y),
+                uncastable ? KeyLabelDim : KeyLabelColor, KeyLabelOutline);
         }
     }
 
