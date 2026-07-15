@@ -133,7 +133,15 @@ per-map textures/RTs) from **app-lifetime** (renderers, editors, `_gameData`, at
 across games, must NOT be recreated).
 Look/edit here when: adding a per-game system/resource and deciding where it lives; a resource leaks
 across map reloads or bleeds state from the previous map; the world renders blank/stale after a
-reload (a system not wired to the fresh session). Current membership + the remaining migration
+reload (a system not wired to the fresh session).
+**Inverse trap — app-lifetime object holds a DEAD session's refs:** any app-lifetime system whose
+one-shot `Init` copies `_envSystem`/`_sim`/`_sim.X` into a private field keeps pointing at the
+disposed session after the next `StartGame` (exit to main menu → re-enter). Known offenders: the
+lazily-init'd `UI/BuildingMenuUI.cs` + `UI/TableCraftMenuUI.cs` via `EnsureInventoryUIsInitialized`
+(one-shot flag `_inventoryUIsInitialized`) — e.g. the build menu goes empty on re-enter because its
+captured env system got `ClearDefs()`d by `GameSession.Dispose`. Rule: read session state live
+through the Game1 forwarding properties (or `Game1.Instance`), never cache it in a field that
+outlives the session. Current membership + the remaining migration
 checklist + the app-vs-game classification live in **`todos/gamesession-migration.md`**.
 `GameSession.Census()` reports a live per-type count of every collection the session owns (units by
 def/faction, env objects by def, corpses/projectiles/wall-defs/… — the accumulation canaries); it's

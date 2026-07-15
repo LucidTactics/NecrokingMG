@@ -11,8 +11,8 @@ namespace Necroking.UI;
 /// side menus (building placement, potion crafting). Owns the <b>mechanics</b>:
 /// open/close/toggle + the x=-12 anchor and stretch-to-screen-height, the widget
 /// child pool (<see cref="EnsureItemChildren"/> / <see cref="SyncItems"/>), the
-/// item hit rects (<see cref="ComputeItemRects"/> — the single copy of the
-/// RuntimeWidgetRenderer vertical-layout math, so draw and hit-test can't
+/// item hit rects (<see cref="ComputeItemRects"/> — driven by the same shared
+/// WidgetLayoutUtils pass the renderer draws with, so draw and hit-test can't
 /// desync), the click hit-test, the hover / selected / can't-afford overlays,
 /// and <see cref="IModalLayer"/> footprint. Subclasses own the <b>content</b>:
 /// which items exist, how each binds, affordability, and what a click does.
@@ -184,31 +184,22 @@ public abstract class SideListMenu : IModalLayer
 
     // === Layout / hit-test ===
 
-    /// <summary>The single copy of the item vertical-layout math (mirrors
-    /// RuntimeWidgetRenderer: LayoutPadLeft/Top fall back to LayoutPadding,
-    /// SpacingY to Spacing). Both the overlay draw and the click hit-test read
-    /// it, so they can never desync.</summary>
+    /// <summary>Item rects from the same shared layout pass the renderer draws
+    /// with (<see cref="WidgetLayoutUtils.ComputeLayoutRects"/> — vertical,
+    /// horizontal and wrapped grid layouts alike). Both the overlay draw and
+    /// the click hit-test read it, so they can never desync.</summary>
     protected List<Rectangle> ComputeItemRects(Editor.UIEditorWidgetDef def)
     {
-        var allRects = new List<Rectangle>();
+        var layoutRects = WidgetLayoutUtils.ComputeLayoutRects(def, _screenX, _screenY);
 
-        int padL = def.LayoutPadLeft > 0 ? def.LayoutPadLeft : def.LayoutPadding;
-        int padT = def.LayoutPadTop > 0 ? def.LayoutPadTop : def.LayoutPadding;
-        int spacY = def.LayoutSpacingY > 0 ? def.LayoutSpacingY : def.LayoutSpacing;
-
-        int curY = padT;
+        var itemRects = new List<Rectangle>();
         for (int i = 0; i < _itemChildIndices.Length && i < ItemCount; i++)
         {
             int childIdx = _itemChildIndices[i];
-            if (childIdx >= def.Children.Count) break;
-            var child = def.Children[childIdx];
-            int cw = child.Width > 0 ? child.Width : 218;
-            int ch = child.Height > 0 ? child.Height : 68;
-
-            allRects.Add(new Rectangle(_screenX + padL, _screenY + curY, cw, ch));
-            curY += ch + spacY;
+            if (childIdx >= layoutRects.Count) break;
+            itemRects.Add(layoutRects[childIdx]);
         }
-        return allRects;
+        return itemRects;
     }
 
     /// <summary>Left-press hit-test over the item rows; an affordable hit fires

@@ -247,6 +247,25 @@ public sealed class WorldQuery
         return found;
     }
 
+    /// <summary>All living units within radius, faction-masked, appended to
+    /// <paramref name="results"/> as indices. Linear scan — safe from UI/paused
+    /// code (e.g. the spell-aim AoE preview), unlike <see cref="UnitsInRadius"/>.</summary>
+    public int UnitsInRadiusLinear(Vec2 pos, float radius, FactionMask mask, List<int> results)
+    {
+        var units = _sim.Units;
+        float r2 = radius * radius;
+        int found = 0;
+        for (int i = 0; i < units.Count; i++)
+        {
+            if (!units[i].Alive) continue;
+            if ((units[i].Faction.Bit() & mask) == 0) continue;
+            if ((units[i].Position - pos).LengthSq() > r2) continue;
+            results.Add(i);
+            found++;
+        }
+        return found;
+    }
+
     /// <summary>Nearest living unit whose faction differs from
     /// <paramref name="friendly"/>. Linear scan — safe from UI/paused code.</summary>
     public int NearestEnemyToPoint(Vec2 pos, float range, Faction friendly)

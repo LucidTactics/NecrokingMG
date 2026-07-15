@@ -486,7 +486,7 @@ public partial class Game1 {
                      map_editor = Enum.GetNames(typeof(Necroking.Editor.MapEditorTab)),
                      ui_editor = Enum.GetNames(typeof(Necroking.Editor.UIEditorTab)),
                   },
-                  overlays = new[] { "inventory", "character_stats", "skill_book", "grimoire", "character_sheet" },
+                  overlays = new[] { "inventory", "character_stats", "skill_book", "grimoire", "character_sheet", "build_menu", "crafting_menu" },
                   current = _menuState.ToString(),
                });
                c.Complete(Necroking.Dev.DevServer.OkRaw(js));
@@ -1122,6 +1122,35 @@ public partial class Game1 {
                }
                _spellBarState.Slots[slot].SpellID = spellId;
                c.Complete(Necroking.Dev.DevServer.Ok($"slot {slot} = '{spellId}'"));
+               break;
+            }
+
+            // Arm/cancel the circle-targeting aim mode (SpellDef.TargetingMode ==
+            // "Circle") as if the slot's spellbar key was pressed. The circle
+            // follows the cursor (combine with 'mousepos'); 'click' confirms.
+            // aim <slot 0-9> | aim clear
+            case "aim": {
+               if (c.Args.Length < 1) {
+                  c.Complete(Necroking.Dev.DevServer.Error("aim needs: <slot 0-9>  (or 'clear')"));
+                  break;
+               }
+               if (c.Args[0].Equals("clear", StringComparison.OrdinalIgnoreCase)) {
+                  _aimingSlot = -1;
+                  c.Complete(Necroking.Dev.DevServer.Ok("aim cleared"));
+                  break;
+               }
+               if (!int.TryParse(c.Args[0], out int aimSlot) || _spellBarState.Slots == null
+                   || aimSlot < 0 || aimSlot >= _spellBarState.Slots.Length) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"bad slot '{c.Args[0]}'"));
+                  break;
+               }
+               _aimingSlot = aimSlot;
+               var aimedDef = AimedSpell();   // validates; clears the slot if not Circle
+               if (aimedDef == null) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"slot {aimSlot} has no Circle-targeting spell"));
+                  break;
+               }
+               c.Complete(Necroking.Dev.DevServer.Ok($"aiming slot {aimSlot} ({aimedDef.Id})"));
                break;
             }
 
@@ -2375,6 +2404,25 @@ public partial class Game1 {
             } else _grimoireOverlay.Toggle();
 
             return $"grimoire visible={_grimoireOverlay.IsVisible}";
+
+         case "build_menu":
+         case "buildmenu":
+            if (action == "close") _buildingMenuUI.Close();
+            else if (action == "toggle" || !_buildingMenuUI.IsVisible) {
+               // Mirror the 'B' key path: docked-left panels are exclusive.
+               if (!_buildingMenuUI.IsVisible) CloseSameSidePanels(PanelSide.Left, _buildingMenuUI);
+               _buildingMenuUI.Toggle(sw, sh);
+            }
+            return $"build_menu visible={_buildingMenuUI.IsVisible} placement={_buildingMenuUI.IsPlacementActive}";
+
+         case "crafting_menu":
+         case "craftingmenu":
+            if (action == "close") _craftingMenu.Close();
+            else if (action == "toggle" || !_craftingMenu.IsVisible) {
+               if (!_craftingMenu.IsVisible) CloseSameSidePanels(PanelSide.Left, _craftingMenu);
+               _craftingMenu.Toggle(sw, sh);
+            }
+            return $"crafting_menu visible={_craftingMenu.IsVisible}";
 
          case "character_sheet":
          case "unit_info":

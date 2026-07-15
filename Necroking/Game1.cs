@@ -401,14 +401,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             else if (TryConsumeInventoryItem(s.ItemId))
                 _inventory.RemoveItem(s.ItemId, 1);
         };
-        _buildingMenuUI.Init(_widgetRenderer, _envSystem, _inventory, _gameData.Items,
-            _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel,
-            _sim.MagicGlyphs, _gameData.Spells, _sim);
+        _buildingMenuUI.Init(_widgetRenderer, _inventory, _gameData.Items,
+            _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel, _gameData.Spells);
         _craftingMenu.Init(_widgetRenderer, _inventory, _gameData.Items, _gameData,
             _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel);
         _craftingMenu.SetSkillBook(_skillBookState);
-        _tableMenuUI.Init(_widgetRenderer, _envSystem, _inventory, _gameData.Items,
-            _sim.PlayerResources, _spriteBatch, _pixel, _font);
+        _tableMenuUI.Init(_widgetRenderer, _inventory, _gameData.Items,
+            _spriteBatch, _pixel, _font);
         _tableMenuUI.SetSkillBook(_skillBookState);
         _tableMenuUI.StartCraftCallback = (envIdx) => StartTableCraft(envIdx);
         _tableMenuUI.DrawUnitIconCallback = (defId, rect) => _gameRenderer.DrawUnitIdleSprite(defId, rect);
@@ -3415,6 +3414,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _uiRouter.DispatchInput(_input,
             new Necroking.UI.UICtx(screenW, screenH, gameTime.TotalGameTime.TotalSeconds, gameTime));
 
+        // ESC while a circle-targeted spell aim is armed cancels the aim (and
+        // eats the key so the pause menu doesn't also open on the same press).
+        if (_aimingSlot >= 0 && !anyTextInputActive
+            && _input.WasKeyPressedUnhandled(Keys.Escape))
+        {
+            _aimingSlot = -1;
+            _input.ConsumeKey(Keys.Escape);
+        }
+
         // ESC fallback: nothing above wanted the key (no popup, panel, editor,
         // or menu consumed it) → open the pause menu.
         if (!anyTextInputActive && _input.WasKeyPressedUnhandled(Keys.Escape)
@@ -3555,6 +3563,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 if (aggrShift && slot <= 1) continue; // Shift+Q/E = aggression, not a cast
                 if (!SpellBarBindings.WasSlotPressed(_input, slot)) continue;
                 if (slot >= _spellBarState.Slots.Length) continue;
+                // Circle-targeted spells arm an aim mode instead of casting
+                // outright — the cast fires on the confirming left-click
+                // (Game1.WorldClicks.cs). Re-pressing the armed slot cancels.
+                var pressedDef = _gameData.Spells.Get(_spellBarState.Slots[slot].SpellID);
+                if (pressedDef != null && pressedDef.TargetingMode == "Circle")
+                {
+                    _aimingSlot = _aimingSlot == slot ? -1 : slot;
+                    continue;
+                }
+                _aimingSlot = -1; // an instant cast breaks any armed aim
                 DispatchSpellCast(_spellBarState.Slots[slot].SpellID, necroIdx, slot, mouseWorld);
             }
 

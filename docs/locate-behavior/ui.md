@@ -293,8 +293,9 @@ reading `MouseOverUI`.
 called in both Update and Draw so hit-test and pixels can never diverge.
 
 **`ContainsMouse` implementers (all `_visible/IsVisible && rect`):** `InventoryUI`,
-`CraftingMenuUI`, `BuildingMenuUI`, `TableCraftMenuUI` (all in `Game/`, widget-def rect
-`_screenX/_screenY/_widgetW/_widgetH`), `GrimoireOverlay`, `SkillBookOverlay`,
+`CraftingMenuUI`, `BuildingMenuUI`, `TableCraftMenuUI` (all in `UI/`, widget-def rect
+`_screenX/_screenY/_widgetW/_widgetH`; building/crafting inherit it from `SideListMenu`),
+`GrimoireOverlay`, `SkillBookOverlay`,
 `UnitInfoPanel`, `JobBoardUI`, `GraveRosterUI` (in `UI/`), `CharacterStatsUI` (in `Render/`,
 two overloads), plus editor layers (`ColorPickerPopup`, `TextureFileBrowser` cached rect,
 full-screen `EnvObjectEditorWindow`/`WallEditorWindow`). `UnitInfoPanel` in transient
@@ -312,10 +313,63 @@ clicks), or hover picks are wrongly suppressed — start from the router walk
 - `UI/PopupManager.cs` — the EDITOR-INTERNAL sub-popup stack (`Game1.Popups`), seated in
   the router via `ModalStackLayer`. Game panels no longer use it.
 - `UI/UIRouter.cs`, `UI/UILayer.cs`, `UI/Layers/` — the unified layer system (top section).
-- `UI/StatTooltips.cs`, `UI/ResourceTooltip.cs`, `UI/NineSlice.cs`, `UI/WidgetLayoutUtils.cs`
-  — shared tooltip/layout helpers.
-- Inventory/crafting/building menus live under `Game/` (`InventoryUI`, `BuildingMenuUI`,
-  `CraftingMenu`, `TableMenuUI`), not `UI/`.
+- `UI/StatTooltips.cs`, `UI/ResourceTooltip.cs`, `UI/RichTip.cs`, `UI/NineSlice.cs`,
+  `UI/WidgetLayoutUtils.cs` — shared tooltip/layout helpers.
+- Inventory/crafting/building menus live in `UI/` too: `UI/InventoryUI.cs`,
+  `UI/BuildingMenuUI.cs`, `UI/CraftingMenuUI.cs`, `UI/TableCraftMenuUI.cs` (the first two
+  side menus share `UI/SideListMenu.cs` — see next section).
+
+## Side-list menus — building placement & potion crafting (`SideListMenu`)
+
+**`Necroking/UI/SideListMenu.cs`** — abstract base for the left-anchored (x=-12,
+stretch-to-screen-height) "pick an item" side menus. Subclasses:
+**`UI/BuildingMenuUI.cs`** (the build menu — env defs with `PlayerBuildable`; click arms
+ghost placement, `TryPlace` from `Game1.WorldClicks.cs`; glyph-trap defs spawn a
+`MagicGlyph` blueprint casting `TrapSpellId` instead of an env object) and
+**`UI/CraftingMenuUI.cs`** (potions). `TableCraftMenuUI` is deliberately NOT a subclass.
+
+- **The base owns the mechanics**: open/close/toggle, the widget child pool
+  (`EnsureItemChildren`/`SyncItems` — clones the item template child N times at Open),
+  `ComputeItemRects` (**the single copy of the item layout math** read by BOTH the click
+  hit-test `HandleItemClick` and the overlay draw `DrawItemOverlays`, so they can't
+  desync), hover/selected/can't-afford overlays, `IModalLayer` footprint. Subclasses own
+  content: `ItemCount`/`BindItem`/`CanAfford`/`OnItemClicked`/`DrawItemExtras`.
+- **`DrawItemOverlays()` returns the hovered item index** — the designed tooltip hook.
+  `CraftingMenuUI.Draw` is the worked precedent: `int hoveredIdx = DrawItemOverlays();`
+  then builds a `RichTip` and defers it via `Game1.Tooltips.RequestCustom` (topmost band).
+  `BuildingMenuUI.DrawMenu` currently discards the return value (no tooltip yet).
+- **Layout comes from the widget def** in `data/ui/widgets.json` (`"BuildingMenu"` panel +
+  `"BuildingItem"` 218x68 row template; `"CraftingMenu"`/`"CraftingItem"`). The real layout
+  engine is `WidgetLayoutUtils.ComputeLayoutRects` (shared by `RuntimeWidgetRenderer`
+  drawing AND the UI editor) — it already supports `layout: "horizontal"` **with row
+  wrapping** (wraps when `curX + cw > W - padR`). **Pitfall:** `SideListMenu.ComputeItemRects`
+  hand-mirrors only the VERTICAL case — switching a menu widget to horizontal/grid layout
+  without rewriting `ComputeItemRects` (best: delegate to `WidgetLayoutUtils.ComputeLayoutRects`
+  and pick out `_itemChildIndices`) leaves clicks/hover on stale vertical positions while
+  the pixels draw as a grid.
+- Item icons bind by path: `_renderer.SetImage(subId, "Icon1", path)` (any image path;
+  `RuntimeWidgetRenderer.DrawIcon(path, x, y, w, h)` is the code-driven equivalent, both
+  via the shared texture cache). `EnvironmentObjectDef` has **no Icon field** — building
+  art = `def.TexturePath` (the world sprite, non-square).
+
+**Look/edit here when:** changing the build/crafting menu layout (list→grid), item row
+binding/cost display, click-to-select/placement arming, or adding hover tooltips to rows.
+
+**Pitfall — stale per-session refs after exit-to-main-menu → re-enter:** these UIs are
+init'd ONCE per process (`Game1.EnsureInventoryUIsInitialized`, guarded by
+`_inventoryUIsInitialized`, never reset) but their `Init` **captures per-session objects
+into private fields**: `BuildingMenuUI.Init(_widgetRenderer, _envSystem, …, _sim.MagicGlyphs,
+_gameData.Spells, _sim)` and `TableCraftMenuUI.Init(…, _envSystem, …, _sim.PlayerResources, …)`.
+`_envSystem`/`_sim` on Game1 are forwarding properties onto `_session` (`GameSession`), and
+`StartGame` does `_session.Dispose(); _session = new GameSession()` — `Dispose` calls
+`Env.ClearDefs()` (DefCount→0, textures disposed). So after returning to the main menu and
+re-entering, the build menu's captured `_envSystem` is the DEAD session's: `Open()` caches an
+empty `_buildableDefIndices` → **empty build menu**; its `_sim`/`_glyphs` would mutate the dead
+world. `_inventory`/`_items`/`_widgetRenderer` are app-lifetime — fine. Fix direction: don't
+capture session-bound objects in one-shot-init'd UIs — read live via `Game1.Instance._envSystem`
+/`_sim` (project convention "Direct over Inject"), or re-point the refs after `_session = new`
+in `StartGame`. Closures over `this` (e.g. `GrimoireOverlay`'s predicate using `_sim.UnitsMut`)
+re-evaluate the property per call and are safe.
 
 ## Cross-links
 - [corpses.md](corpses.md) — corpse data model, pile gather/withdraw (`TryTakeCorpseFromPile`,

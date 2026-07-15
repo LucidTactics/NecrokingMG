@@ -68,10 +68,12 @@ public class TableCraftMenuUI : IModalLayer
     private const float MenuAnchorWorldHeight = 3.0f;
 
     private RuntimeWidgetRenderer _renderer = null!;
-    private EnvironmentSystem _envSystem = null!;
+    // Session-scoped systems are read live: StartGame replaces the GameSession,
+    // so a cached ref would point at the disposed previous session.
+    private EnvironmentSystem _envSystem => Game1.Instance._envSystem;
+    private PlayerResources _resources => Game1.Instance._sim.PlayerResources;
     private Inventory _inventory = null!;
     private ItemRegistry _items = null!;
-    private PlayerResources _resources = null!;
     private SpriteBatch _batch = null!;
     private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
     private Texture2D _pixel = null!;
@@ -124,15 +126,13 @@ public class TableCraftMenuUI : IModalLayer
         return def.ItemSlots < unlocked ? def.ItemSlots : unlocked;
     }
 
-    public void Init(RuntimeWidgetRenderer renderer, EnvironmentSystem envSystem,
-        Inventory inventory, ItemRegistry items, PlayerResources resources,
+    public void Init(RuntimeWidgetRenderer renderer,
+        Inventory inventory, ItemRegistry items,
         SpriteBatch batch, Texture2D pixel, SpriteFont? font)
     {
         _renderer = renderer;
-        _envSystem = envSystem;
         _inventory = inventory;
         _items = items;
-        _resources = resources;
         _batch = batch;
         _pixel = pixel;
         _font = font;

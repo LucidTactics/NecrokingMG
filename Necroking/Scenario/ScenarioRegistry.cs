@@ -145,6 +145,7 @@ public static class ScenarioRegistry
         Register("wall_gate", "World & Environment", () => new Scenarios.WallGateScenario());
         Register("weather_test", "World & Environment", () => new Scenarios.WeatherTestScenario());
         Register("deep_water_blocks", "World & Environment", () => new Scenarios.DeepWaterBlocksScenario());
+        Register("map_reload_consistency", "World & Environment", () => new Scenarios.MapReloadConsistencyScenario());
 
         // --- Game Systems ---
         Register("placed_corpse", "Game Systems", () => new Scenarios.PlacedCorpseScenario());

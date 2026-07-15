@@ -74,6 +74,20 @@ public static class DrawUtils
             batch.Draw(pixel, new Rectangle(box.X + 3, box.Y + 3, box.Width - 6, box.Height - 6), accent);
     }
 
+    /// <summary>Draw a texture (or a source region of it) scaled to fit inside
+    /// <paramref name="dest"/> preserving aspect ratio, centered on both axes.
+    /// The canonical "sprite thumbnail in a UI cell" draw (build menu grid, etc.).</summary>
+    public static void DrawAspectFit(SpriteScope batch, Texture2D tex, Rectangle? src,
+        Rectangle dest, Color color)
+    {
+        int srcW = src?.Width ?? tex.Width, srcH = src?.Height ?? tex.Height;
+        if (srcW <= 0 || srcH <= 0 || dest.Width <= 0 || dest.Height <= 0) return;
+        float scale = MathF.Min((float)dest.Width / srcW, (float)dest.Height / srcH);
+        int w = (int)(srcW * scale), h = (int)(srcH * scale);
+        var fitted = new Rectangle(dest.X + (dest.Width - w) / 2, dest.Y + (dest.Height - h) / 2, w, h);
+        batch.Draw(tex, fitted, src, color);
+    }
+
     /// <summary>Draw a rectangle outline. The single canonical rect-stroke — replaces
     /// ~13 per-file DrawBorder/DrawRectOutline copies. Corners are non-overlapping (drawn
     /// once each) so the stroke is correct under a translucent color as well as solid.</summary>

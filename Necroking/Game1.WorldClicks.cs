@@ -86,6 +86,18 @@ public partial class Game1
     private void HandleWorldLeftClick(int screenW, int screenH, int mouseX, int mouseY,
         Vec2 mouseWorld, int necroIdx)
     {
+        // 0. Circle-targeted spell aim owns the click: cast at the clicked
+        // point. A failed cast (out of range / mana / cooldown — the fail text
+        // already spawns) keeps the aim armed so the player can just re-click.
+        if (AimedSpell() != null)
+        {
+            var result = DispatchSpellCast(_spellBarState.Slots[_aimingSlot].SpellID,
+                necroIdx, _aimingSlot, mouseWorld);
+            if (result == CastResult.Success) _aimingSlot = -1;
+            _input.ConsumeMouse();
+            return;
+        }
+
         // 1. Building placement mode owns the click outright.
         if (_buildingMenuUI.IsPlacementActive)
         {
@@ -121,6 +133,14 @@ public partial class Game1
 
     private void HandleWorldRightClick(Vec2 mouseWorld, int necroIdx)
     {
+        // 0. Right-click cancels a circle-targeted spell aim (mirrors building
+        // placement) — and does nothing else on that click.
+        if (_aimingSlot >= 0)
+        {
+            _aimingSlot = -1;
+            return;
+        }
+
         // 1. Foragable within reach of the necromancer.
         if (necroIdx >= 0)
         {

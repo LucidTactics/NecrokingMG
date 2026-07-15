@@ -212,6 +212,15 @@ public class SpellDef : INamedDef
     [EditorCombo("Spell1", "ImbueGround", "Raise")]
     [JsonPropertyName("castAnim")] public string CastAnim { get; set; } = "Spell1";
 
+    // How the player aims the spell from the spell bar. "Instant" (default —
+    // every pre-existing spell) casts at the cursor the moment the slot key is
+    // pressed. "Circle" arms an aiming mode instead: the AoE circle follows the
+    // cursor (units inside light up), left-click casts, right-click/ESC/
+    // re-pressing the slot cancels. See the aim state in Game1.Spells.cs.
+    [EditorField(Label = "Targeting", Group = "COMMON", Order = 105, Tooltip = "How the player aims the spell. Instant = cast at the cursor\non keypress. Circle = keypress arms an AoE circle on the\ncursor; left-click casts, right-click/ESC cancels.")]
+    [EditorCombo("Instant", "Circle")]
+    [JsonPropertyName("targetingMode")] public string TargetingMode { get; set; } = "Instant";
+
     // Target Filter — only shown for Strike
     [EditorVisible("Category", "Strike")]
     [EditorField(Label = "Target Filter", Group = "COMMON", Order = 105, Tooltip = "Which units the strike is allowed to hit.")]

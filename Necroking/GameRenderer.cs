@@ -49,6 +49,12 @@ internal sealed partial class GameRenderer
     private static readonly HdrColor _ghostColor1 = new(140, 200, 255, 45, 1.0f);
     private static readonly HdrColor _ghostColor2 = new(170, 215, 255, 60, 1.1f);
 
+    // Spell-aim AoE highlight: units inside an armed circle-targeted spell's
+    // radius pulse with this additive blue outline (DrawSpellAimCircle fills
+    // _aimHighlightUnits; DrawSingleUnit draws the outline).
+    private static readonly HdrColor _aimHighlightColor1 = new(110, 175, 255, 190, 1.3f);
+    private static readonly HdrColor _aimHighlightColor2 = new(185, 220, 255, 230, 1.9f);
+
     // Aggression level names + one-line descriptions, indexed 0 (least) .. 4 (most).
     private static readonly string[] AggroNames =
         { "Defensive", "Cautious", "Balanced", "Aggressive", "Bloodthirsty" };
