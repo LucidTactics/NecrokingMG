@@ -208,6 +208,11 @@ public class Unit
     public bool JustLeftCombat;
     public float FacingAngle = 90f;
     public float AttackCooldown;
+    /// <summary>Ranged-weapon reload, owned by RangedUnitHandler. Separate from
+    /// AttackCooldown because Simulation.UpdateCombat overwrites that field from
+    /// the unit's MELEE weapons every tick — an archer carrying a dagger had its
+    /// longbow reload wiped each frame and fired as fast as the anim allowed.</summary>
+    public float RangedCooldown;
     public CombatTarget PendingAttack = CombatTarget.None;
     /// <summary>LungeDist of the weapon that initiated the currently-playing attack
     /// anim. Latched here when the attack is queued (PendingWeaponIdx gets cleared at
@@ -505,7 +510,7 @@ public class Unit
     // Potion effects
     public int PoisonStacks;
     public float PoisonTickTimer;
-    public float CloudExposureTime; // Cumulative time spent in poison clouds
+    public float CloudExposureTime; // Continuous time in poison clouds; PoisonCloudSystem resets it once the unit is outside every cloud (plague needs SUSTAINED exposure)
     public bool ZombieOnDeath;
     // Set by AI (e.g. CorpsePuppetHandler) to vanish the unit with NO corpse — reaped
     // by Simulation.RemoveDeadUnits' pre-pass via RemoveUnitTracked. Distinct from death

@@ -2531,19 +2531,16 @@ public class Simulation
             spawnHeight: _units[attackerIdx].EffectSpawnHeight);
     }
 
-    /// REFERENCE ONLY — Dominions' original arrow-to-hit formula, NOT what the code
-    /// below implements (no size-points or fatigue terms here; see the summary):
-    ///   Attacker: DRN + (Size points in the square)/2, +2 if magic weapon
-    ///   Defender: DRN + (shield parry value x2) – (Fatigue / 20)
-
     /// <summary>
-    /// Dominions-style ranged hit resolution (ported from the C++ resolveRangedAttack):
-    /// an arrow that physically reaches its target can still be dodged/parried — opposed
-    /// Precision + DRN vs max(Defense/2 − harassment, 0) + ShieldParry×2 + DRN — and a
-    /// connecting arrow is mitigated by hit-location armor (head vs body, rolled from the
-    /// projectile's arc in ProjectileManager: plunging lobs strike the head half the time,
-    /// flat shots rarely) + natural protection. Arrows count as piercing (15% armor
-    /// reduction), and damage is weapon-only — no Strength behind a bowshot.
+    /// Ranged hit resolution — deliberately simpler than melee (and than Dominions):
+    /// physics already decided the arrow touched the hitbox, so the only save left is
+    /// the shield. Opposed roll: Precision (+2 magic weapon) + tier-4 DRN vs
+    /// ShieldParry×2 + tier-4 DRN. Defense/harassment/fatigue play no part — those
+    /// matter in melee. A connecting arrow is then mitigated by hit-location armor
+    /// (head vs body, rolled from the projectile's arc in ProjectileManager: plunging
+    /// lobs strike the head half the time, flat shots rarely) + natural protection.
+    /// Arrows count as piercing (15% armor reduction), and damage is weapon-only —
+    /// no Strength behind a bowshot.
     /// </summary>
     private void ResolveArrowHit(ProjectileHit hit, int attackerIdx, DamageFlags flags)
     {
@@ -2561,7 +2558,8 @@ public class Simulation
         int defShield = defStats.ShieldParry * 2;
         int defBase = defShield;
         int defDrnRoll = UnitUtil.RollDRN(4);
-        int attackBase = (flags.HasFlag(DamageFlags.MagicWeapon) ? 2 : 0) + 2;
+        // Precision is guaranteed > 0 here (the RegularHit dispatch gates on it).
+        int attackBase = hit.Precision + (flags.HasFlag(DamageFlags.MagicWeapon) ? 2 : 0);
         int atkRoll = attackBase + atkDrnRoll;
         int defRoll = defBase + defDrnRoll;
 

@@ -120,7 +120,10 @@ public class TriggerSystem
         var evalCtx = new TriggerEvalContext
         {
             GameTime = sim.GameTime,
-            RuntimeStates = _runtimeState.ToArray()
+            RuntimeStates = _runtimeState.ToArray(),
+            Units = sim.Units,
+            RegionLookup = id => _regionIndexByID.TryGetValue(id, out int ri) && ri < _regions.Count
+                ? _regions[ri] : null
         };
 
         for (int i = 0; i < _instances.Count; i++)
@@ -139,29 +142,55 @@ public class TriggerSystem
             if (def.OneShot && rs.FireCount > 0) continue;
             if (def.MaxFireCount > 0 && rs.FireCount >= def.MaxFireCount) continue;
 
-            // Tick cooldown
+            // Tick cooldown. While it runs the condition isn't evaluated, so also
+            // drop the edge state — the first true after the cooldown elapses must
+            // count as a fresh false→true edge (a bare CondCooldown re-fires each
+            // interval this way).
             if (rs.CooldownTimer > 0f)
             {
                 rs.CooldownTimer -= dt;
+                rs.LastConditionResult = false;
                 _runtimeState[i] = rs;
                 continue;
             }
 
-            // Evaluate condition
+            // Edge-triggered: fire only when the condition flips false→true, not on
+            // every tick it stays true (a persistent CondGameTime used to re-run its
+            // effects every sim tick — runaway spawns).
             bool condResult = def.Condition?.Evaluate(evalCtx, i) ?? true;
+            bool fire = condResult && !rs.LastConditionResult;
             rs.LastConditionResult = condResult;
 
-            if (condResult)
+            if (fire)
             {
-                // Fire effects
                 foreach (var effect in def.Effects)
                     ExecuteEffect(effect, i, sim);
 
                 rs.FireCount++;
+                // A CondCooldown anywhere in the tree re-arms on fire.
+                float cd = FindCooldownInterval(def.Condition);
+                if (cd > 0f) rs.CooldownTimer = cd;
             }
 
             _runtimeState[i] = rs;
         }
+    }
+
+    /// <summary>Largest CondCooldown interval in the condition tree (0 = none).</summary>
+    private static float FindCooldownInterval(ConditionNode? node) => node switch
+    {
+        CondCooldown cd => cd.Interval,
+        CondAnd and => MaxCooldown(and.Children),
+        CondOr or => MaxCooldown(or.Children),
+        CondNot not => FindCooldownInterval(not.Child),
+        _ => 0f
+    };
+
+    private static float MaxCooldown(List<ConditionNode> children)
+    {
+        float best = 0f;
+        foreach (var c in children) best = MathF.Max(best, FindCooldownInterval(c));
+        return best;
     }
 
     // --- Event callbacks ---

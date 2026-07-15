@@ -669,6 +669,25 @@ public class EnvironmentSystem
         return def.ForagableType;
     }
 
+    /// <summary>Undo <see cref="CollectForagable"/> — failsafe when the collected
+    /// resource couldn't be banked (inventory filled up mid-flight): the object
+    /// reappears where it stood instead of the item silently vanishing.</summary>
+    public void RestoreForagable(int objIdx)
+    {
+        if (objIdx < 0 || objIdx >= _objects.Count || objIdx >= _objectRuntime.Count) return;
+        var def = _defs[_objects[objIdx].DefIndex];
+        if (!def.IsForagable) return;
+        var rt = _objectRuntime[objIdx];
+        if (!rt.Collected) return;
+
+        rt.Collected = false;
+        rt.RespawnTimer = 0f;
+        _objectRuntime[objIdx] = rt;
+
+        if (def.CollisionRadius > 0)
+            FireCollisionsDirty(objIdx);
+    }
+
     /// <summary>
     /// Update foragable respawn timers. Call each frame with dt.
     /// </summary>
