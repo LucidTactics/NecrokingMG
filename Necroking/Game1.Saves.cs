@@ -114,16 +114,23 @@ public partial class Game1
                 Y = unit.Position.Y,
                 Facing = unit.FacingAngle,
                 FormId = unit.UnitDefID,
-                Buffs = unit.ActiveBuffs.Select(b => new SavedBuff
-                {
-                    Id = b.BuffDefID,
-                    Remaining = b.RemainingDuration,
-                    Permanent = b.Permanent,
-                    Stacks = b.StackCount,
-                }).ToList(),
+                // grant_path buffs (buff_path_*) are code-built, not in the buff
+                // registry — the load-side buff restore can't rebuild them, so
+                // they're excluded here and replayed from the learned skill set
+                // instead (SkillBookState.ApplySave).
+                Buffs = unit.ActiveBuffs
+                    .Where(b => !b.BuffDefID.StartsWith("buff_path_"))
+                    .Select(b => new SavedBuff
+                    {
+                        Id = b.BuffDefID,
+                        Remaining = b.RemainingDuration,
+                        Permanent = b.Permanent,
+                        Stacks = b.StackCount,
+                    }).ToList(),
                 Inventory = SnapshotInventory(),
             },
             SpellBar = _spellBarState.Slots.Select(s => s.SpellID ?? "").ToList(),
+            SkillBook = _skillBookState.ExportSave(),
         };
         return data;
 
@@ -257,6 +264,39 @@ public partial class Game1
             float duration = b.Permanent ? 0f : b.Remaining;
             for (int s = 0; s < Math.Max(1, b.Stacks); s++)
                 BuffSystem.ApplyBuffWithDuration(_sim.UnitsMut, idx, def, duration, _gameData);
+        }
+
+        // Skill book: StartGame reset it, so refill learned/points/tallies/
+        // unlocks verbatim, then ApplySave replays the learned grant_path
+        // effects (their buffs are code-built — excluded from the snapshot
+        // above). Everything else round-trips as data: cap/passive buffs came
+        // back through the buff restore, unlocks gate systems that read the
+        // book directly.
+        _skillBookState.ApplySave(save.SkillBook, new Game.SkillEffects.SkillEffectContext
+        {
+            Inventory = _inventory,
+            GameData = _gameData,
+            Bar = _spellBarState,
+            BookState = _skillBookState,
+            Sim = _sim,
+        });
+
+        // Metamorph accruals (Corpse Eating +MaxHP, Soul Consumption +MaxMana)
+        // mutate stats directly at consume time rather than living on a buff,
+        // so layer them back onto the freshly rebuilt stat block / NecroState.
+        if (_skillBookState.CorpseEatingBonus > 0)
+        {
+            var u = _sim.UnitsMut[idx];
+            var stats = u.Stats;
+            stats.MaxHP += _skillBookState.CorpseEatingBonus;
+            stats.HP += _skillBookState.CorpseEatingBonus;
+            u.Stats = stats;
+        }
+        if (_skillBookState.SoulConsumptionBonus > 0)
+        {
+            _sim.NecroState.MaxMana += _skillBookState.SoulConsumptionBonus;
+            _sim.NecroState.Mana = Math.Min(_sim.NecroState.Mana + _skillBookState.SoulConsumptionBonus,
+                _sim.NecroState.MaxMana);
         }
 
         // Inventory: StartGame recreated + cleared _inventory, so restore the

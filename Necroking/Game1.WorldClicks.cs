@@ -260,6 +260,20 @@ public partial class Game1
                 var cc = _sim.FindCorpseByID(corpseId);
                 bool corpseEligible = cc != null
                     && Game.TableCraftingSystem.IsCorpseEligibleForTable(_gameData, cc.UnitDefID);
+                // Skill-tree raise gate: can't load a corpse type the player hasn't
+                // unlocked (unlock_summon) onto a reanimation table. God mode bypasses.
+                // Handled like a full table (message, corpse stays held) rather than
+                // falling through to PutDown — dropping the body right after the
+                // refusal would read as "did it load?".
+                if (corpseEligible && !Game.TableCraftingSystem.IsRaiseUnlocked(_gameData,
+                        _skillBookState, cc!.UnitDefID,
+                        Necroking.GameSystems.BuffSystem.HasBuff(_sim.Units, necroIdx, "buff_god_mode")))
+                {
+                    SpawnCastFailText(necroIdx, "Not Studied");
+                    DebugLog.Log("table", $"[F-press] BLOCKED: '{cc.UnitDefID}' raise not unlocked");
+                    tableHandled = true;
+                    corpseEligible = false;
+                }
                 var ts = _envSystem.GetTableState(tableIdx);
                 int emptySlot = ts.FindEmptyCorpseSlot();
 

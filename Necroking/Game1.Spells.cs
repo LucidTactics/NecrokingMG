@@ -354,6 +354,11 @@ public partial class Game1 {
          case CastResult.NoValidTarget:
             SpawnCastFailText(necroIdx, "No Target");
             break;
+         // Skill-tree raise gate: the aimed-at corpse's zombie type hasn't been
+         // unlocked (unlock_summon) yet — e.g. a boar before Boar Autopsy.
+         case CastResult.SummonLocked:
+            SpawnCastFailText(necroIdx, "Not Studied");
+            break;
       }
       if (result != CastResult.Success) return result;
 
@@ -608,9 +613,14 @@ public partial class Game1 {
                // Re-sample the spread around the group's base target for THIS shot, so
                // a barrage scatters evenly over its disc instead of retracing one line.
                var shotTarget = GameSystems.SpellEffectSystem.VolleyAimPoint(spell, pg.Target, _rng);
+               // Re-resolve mastery per shot so follow-up volley shots scale the
+               // same as the first (buffs could even shift mid-volley).
+               int shotMastery = GameSystems.SpellEffectSystem.MasteryLevelsFor(
+                  spell, _gameData, _sim.UnitsMut, casterIdx);
                GameSystems.SpellEffectSystem.SpawnProjectile(spell, _sim.Projectiles,
                   _sim.Units[casterIdx].EffectSpawnPos2D, shotTarget, pg.CasterUid,
-                  _sim.Units[casterIdx].EffectSpawnHeight, _sim.Units[casterIdx].Faction);
+                  _sim.Units[casterIdx].EffectSpawnHeight, _sim.Units[casterIdx].Faction,
+                  shotMastery);
             }
 
             if (pg.Remaining <= 0) {

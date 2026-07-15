@@ -1080,6 +1080,29 @@ public partial class Game1 {
                break;
             }
 
+            // Dump the skill-book economy (skill-point pools + milestone-event
+            // tallies) so drive-game checks can verify earn paths (e.g. monster
+            // kills granting monstrology points) without UI scraping.
+            case "skill_points": {
+               var sbj = new System.Text.StringBuilder("{\"points\":{");
+               bool first = true;
+               foreach (var sp in Necroking.Game.SkillBookState.SKILL_POINT_TYPES) {
+                  if (!first) sbj.Append(',');
+                  first = false;
+                  sbj.Append($"{System.Text.Json.JsonSerializer.Serialize(sp)}:{_skillBookState.GetSkillPoints(sp)}");
+               }
+               sbj.Append("},\"events\":{");
+               first = true;
+               foreach (var et in Necroking.Game.SkillBookState.EVENT_TYPES) {
+                  if (!first) sbj.Append(',');
+                  first = false;
+                  sbj.Append($"{System.Text.Json.JsonSerializer.Serialize(et)}:{_skillBookState.Events.Get(et)}");
+               }
+               sbj.Append("}}");
+               c.Complete(Necroking.Dev.DevServer.OkRaw(sbj.ToString()));
+               break;
+            }
+
             // Assign a spell to a primary-bar slot ('-' clears it) so tests can
             // stage the bar without touching user settings/spellbar.json.
             case "set_spell_slot": {

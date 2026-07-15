@@ -18,8 +18,8 @@ public class IntrinsicBuffEntry
 
 /// <summary>
 /// Per-game state for the skill book — which skills are learned, plus the
-/// event-tally tracker. No save/load yet (see SkillEventTracker for the same
-/// caveat). Each instance is one playthrough.
+/// event-tally tracker. Each instance is one playthrough. Persisted in save
+/// games via <see cref="ExportSave"/> / <see cref="ApplySave"/>.
 /// </summary>
 public class SkillBookState
 {
@@ -186,6 +186,76 @@ public class SkillBookState
         foreach (var tab in SkillBookDefs.Tabs)
             foreach (var s in tab.Skills)
                 if (s.StartLearned) _learned.Add(s.Id);
+    }
+
+    /// <summary>Snapshot every mutable collection for a save game. Event tallies
+    /// come from the (usually shared) tracker so the sim's central counts are
+    /// what's recorded.</summary>
+    public SavedSkillBook ExportSave()
+    {
+        var save = new SavedSkillBook
+        {
+            Learned = new List<string>(_learned),
+            SkillPoints = new Dictionary<string, int>(_skillPoints),
+            UnlockedPotions = new List<string>(_unlockedPotions),
+            PassiveFlags = new List<string>(_passiveFlags),
+            UnlockedSummons = new List<string>(_unlockedSummons),
+            UnlockedAI = new Dictionary<string, int>(_unlockedAI),
+            PotionSlots = PotionSlotsUnlocked,
+            CorpseEatingBonus = CorpseEatingBonus,
+            SoulConsumptionBonus = SoulConsumptionBonus,
+        };
+        foreach (var kv in Events.Counts) save.Events[kv.Key] = kv.Value;
+        foreach (var e in _intrinsicBuffs)
+            save.IntrinsicBuffs.Add(new SavedIntrinsicBuff
+            {
+                BuffId = e.BuffID,
+                Tags = new List<string>(e.RequiredTags),
+            });
+        return save;
+    }
+
+    /// <summary>Restore a save-game snapshot: reset to defs, refill every
+    /// collection verbatim, then replay grant_path effects from the learned set.
+    /// The replay exists because grant_path buffs are code-built (not in the
+    /// buff registry), so the save's generic player-buff restore can't recreate
+    /// them; every other skill consequence either lives in these collections or
+    /// round-trips through the saved buff list. Learned ids no longer in the
+    /// defs are dropped (logged), matching how load validates other registries.</summary>
+    public void ApplySave(SavedSkillBook save, SkillEffectContext ctx)
+    {
+        InitFromDefs();
+        foreach (var id in save.Learned)
+        {
+            if (FindSkill(id) == null)
+            {
+                DebugLog.Log("saves", $"Saved skill '{id}' not in skill defs — dropped");
+                continue;
+            }
+            _learned.Add(id);
+        }
+        foreach (var kv in save.SkillPoints) _skillPoints[kv.Key] = kv.Value;
+        Events.Reset();
+        foreach (var kv in save.Events) Events.Tally(kv.Key, kv.Value);
+        foreach (var p in save.UnlockedPotions) _unlockedPotions.Add(p);
+        foreach (var f in save.PassiveFlags) _passiveFlags.Add(f);
+        foreach (var b in save.IntrinsicBuffs) AddIntrinsicBuff(b.BuffId, b.Tags);
+        foreach (var s in save.UnlockedSummons) UnlockSummon(s);
+        foreach (var kv in save.UnlockedAI) UnlockAI(kv.Key, kv.Value);
+        PotionSlotsUnlocked = save.PotionSlots;
+        CorpseEatingBonus = System.Math.Min(save.CorpseEatingBonus, CorpseEatingHPCap);
+        SoulConsumptionBonus = System.Math.Min(save.SoulConsumptionBonus, SoulConsumptionManaCap);
+
+        foreach (var id in _learned)
+        {
+            var def = FindSkill(id);
+            if (def == null) continue;
+            if (def.Effect == "grant_path")
+                SkillEffectRegistry.Apply("grant_path", ctx, def.EffectArg);
+            else if (def.Effect == "compound")
+                foreach (var (fx, arg) in CompoundEffect.Parse(def.EffectArg))
+                    if (fx == "grant_path") SkillEffectRegistry.Apply("grant_path", ctx, arg);
+        }
     }
 
     /// <summary>True if every Parents entry (AND) is learned AND at least one

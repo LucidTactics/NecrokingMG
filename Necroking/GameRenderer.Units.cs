@@ -1404,10 +1404,17 @@ partial class GameRenderer
 
         // Same ground-point range gate the cast applies (SpellCasting's Strike
         // case), so the colour flips exactly where a click would start failing
-        // with "Out of Range".
+        // with "Out of Range" — including mastery range bonuses, which the cast
+        // gate also applies (ScaledRange, not the raw def Range).
         int ni = _g._sim.NecromancerIndex;
-        bool inRange = ni >= 0
-            && (aim - _g._sim.Units[ni].Position).Length() <= spell.Range;
+        bool inRange = false;
+        if (ni >= 0)
+        {
+            int aimMastery = GameSystems.SpellEffectSystem.MasteryLevelsFor(
+                spell, _g._gameData, _g._sim.Units, ni);
+            inRange = (aim - _g._sim.Units[ni].Position).Length()
+                <= spell.ScaledRange(aimMastery);
+        }
 
         var cen = _g._renderer.WorldToScreen(aim, 0f, _g._camera);
         var ex  = _g._renderer.WorldToScreen(aim + new Vec2(radius, 0f), 0f, _g._camera);

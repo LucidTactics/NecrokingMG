@@ -31,12 +31,13 @@ namespace Necroking.UI;
 /// </summary>
 public sealed class TooltipSystem
 {
-    private enum Kind { Lines, Text, Custom }
+    private enum Kind { Lines, ColoredLines, Text, Custom }
 
     private struct Request
     {
         public Kind Kind;
         public string[]? Lines;
+        public (string Text, Color Color)[]? ColoredLines;
         public string? Text;
         public Rectangle Anchor;      // rect anchor (Text) / captured cursor in X,Y (Lines)
         public Action<UICtx>? Custom;
@@ -71,6 +72,22 @@ public sealed class TooltipSystem
         });
     }
 
+    /// <summary>Cursor-anchored multi-line tooltip with a color per line — the
+    /// canonical box, used where lines carry state (e.g. a spell's mastery
+    /// bonuses: reached = green, locked = grey).</summary>
+    public void RequestLines(IReadOnlyList<(string Text, Color Color)> lines)
+    {
+        if (lines == null || lines.Count == 0) return;
+        var copy = new (string, Color)[lines.Count];
+        for (int i = 0; i < lines.Count; i++) copy[i] = lines[i];
+        _queue.Add(new Request
+        {
+            Kind = Kind.ColoredLines,
+            ColoredLines = copy,
+            Anchor = new Rectangle((int)_g._input.MousePos.X, (int)_g._input.MousePos.Y, 0, 0),
+        });
+    }
+
     /// <summary>Rect-anchored one-line tooltip: centered above the anchor,
     /// flips below it when clipped at the top, clamped horizontally.</summary>
     public void RequestText(string text, Rectangle anchorRect)
@@ -100,6 +117,9 @@ public sealed class TooltipSystem
             {
                 case Kind.Lines:
                     DrawLinesBox(r.Lines!, r.Anchor.X, r.Anchor.Y, ctx.ScreenW, ctx.ScreenH);
+                    break;
+                case Kind.ColoredLines:
+                    DrawColoredLinesBox(r.ColoredLines!, r.Anchor.X, r.Anchor.Y, ctx.ScreenW, ctx.ScreenH);
                     break;
                 case Kind.Text:
                     DrawTextBox(r.Text!, r.Anchor, ctx.ScreenW);
@@ -152,6 +172,24 @@ public sealed class TooltipSystem
         DrawBoxChrome(new Rectangle(tx - Pad, ty - Pad, tw + Pad * 2, th + Pad * 2));
         for (int i = 0; i < lines.Length; i++)
             _g.Scope.DrawString(font, lines[i], new Vector2(tx, ty + i * LineH), BoxText);
+    }
+
+    private void DrawColoredLinesBox((string Text, Color Color)[] lines, int mx, int my,
+        int screenW, int screenH)
+    {
+        var font = _g._smallFont;
+        if (font == null) return;
+        float maxW = 0f;
+        foreach (var l in lines)
+        {
+            float w = font.MeasureString(l.Text).X;
+            if (w > maxW) maxW = w;
+        }
+        int tw = (int)maxW, th = lines.Length * LineH;
+        var (tx, ty) = PlaceAtCursor(mx, my, tw, th, screenW, screenH);
+        DrawBoxChrome(new Rectangle(tx - Pad, ty - Pad, tw + Pad * 2, th + Pad * 2));
+        for (int i = 0; i < lines.Length; i++)
+            _g.Scope.DrawString(font, lines[i].Text, new Vector2(tx, ty + i * LineH), lines[i].Color);
     }
 
     private void DrawTextBox(string text, Rectangle anchor, int screenW)

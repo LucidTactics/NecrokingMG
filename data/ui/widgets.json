@@ -4038,6 +4038,15 @@
           ]
         },
         {
+          "name": "tab5",
+          "widget": "SkillBookTab",
+          "x": 0,
+          "y": 0,
+          "width": 170,
+          "height": 35,
+          "anchor": 0
+        },
+        {
           "name": "tab6",
           "widget": "SkillBookTab",
           "x": 0,
@@ -4057,15 +4066,6 @@
         },
         {
           "name": "tab8",
-          "widget": "SkillBookTab",
-          "x": 0,
-          "y": 0,
-          "width": 170,
-          "height": 35,
-          "anchor": 0
-        },
-        {
-          "name": "tab9",
           "widget": "SkillBookTab",
           "x": 0,
           "y": 0,

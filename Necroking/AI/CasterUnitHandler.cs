@@ -96,7 +96,7 @@ public class CasterUnitHandler : IArchetypeHandler
         var spell = GetSpell(ref ctx);
         float range = ctx.Units[ctx.UnitIndex].DetectionRange;
         var cfg = new SentryConfig(
-            selfAcquireRange: spell?.Range ?? 0f,
+            selfAcquireRange: spell != null ? SpellRange(ref ctx, spell) : 0f,
             reacquireRange: range > 0 ? range : 15f);
         SentryTransitions.EvaluateSentryRoutine(ref ctx, cfg);
     }
@@ -137,7 +137,7 @@ public class CasterUnitHandler : IArchetypeHandler
         }
 
         var spell = GetSpell(ref ctx);
-        float maxRange = spell != null && spell.Range > 0f ? spell.Range : DefaultRange;
+        float maxRange = spell != null && spell.Range > 0f ? SpellRange(ref ctx, spell) : DefaultRange;
         float dist = (ctx.Units[targetIdx].Position - ctx.MyPos).Length();
 
         if (dist > maxRange)
@@ -159,6 +159,20 @@ public class CasterUnitHandler : IArchetypeHandler
     }
 
     private static void UpdateReturn(ref AIContext ctx) => SentryTransitions.UpdateReturn(ref ctx);
+
+    /// <summary>The spell's cast range for THIS caster, including mastery range
+    /// bonuses (levels above the primary path requirement) — the same scaled
+    /// range TryStartSpellCast gates on, so approach/acquire distances match
+    /// what a cast can actually reach.</summary>
+    private static float SpellRange(ref AIContext ctx, SpellDef spell)
+    {
+        int i = ctx.UnitIndex;
+        var casterDef = ctx.GameData?.Units.Get(ctx.Units[i].UnitDefID);
+        if (casterDef == null) return spell.Range;
+        var units = ctx.Units;
+        return spell.ScaledRange(spell.MasteryLevels(
+            p => BuffSystem.EffectivePathLevel(units, i, casterDef, p)));
+    }
 
     /// <summary>This unit's spell def (Unit.SpellID), or null when it has none /
     /// no mana pool — a caster without a castable spell just behaves like a
@@ -185,8 +199,9 @@ public class CasterUnitHandler : IArchetypeHandler
         if (GetCooldown(ctx.Units[i], spell.Id) > 0f) return;
 
         // Path-aware gating: the caster must meet primary+secondary path
-        // requirements; cost is scaled down by primary mastery. Effective
-        // levels so path buffs (and god mode's AllPaths floor) count.
+        // requirements; cost reductions come from the spell's own mastery
+        // bonuses (fatigue -N% / free). Effective levels so path buffs (and
+        // god mode's AllPaths floor) count.
         var units = ctx.Units;
         var casterDef = ctx.GameData.Units.Get(units[i].UnitDefID);
         Func<MagicPath, int> casterLevel = p => BuffSystem.EffectivePathLevel(units, i, casterDef, p);

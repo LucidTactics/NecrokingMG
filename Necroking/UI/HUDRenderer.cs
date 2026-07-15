@@ -211,7 +211,7 @@ public partial class HUDRenderer
         Inventory inventory, int hoveredObjectIdx, EnvironmentSystem envSystem,
         uint hoveredBellyUnitId, int hoveredCorpseIdx, int hoveredUnitIdx, bool editorInspect)
     {
-        DrawSpellSlotTooltip(gameData, inventory, screenW, screenH);
+        DrawSpellSlotTooltip(sim, gameData, inventory);
         DrawObjectTooltip(hoveredObjectIdx, envSystem, sim, gameData, screenW, screenH);
         DrawBellyTooltip(hoveredBellyUnitId, sim, gameData, screenW, screenH);
         DrawCorpseTooltip(hoveredCorpseIdx, sim, gameData, screenW, screenH);
@@ -882,45 +882,26 @@ public partial class HUDRenderer
         }, screenW, screenH);
     }
 
-    /// <summary>Floating cursor tooltip for the hovered spell-bar slot: ability name
-    /// plus school and any mana/cooldown/charge info. Populated by DrawSpellBar via
-    /// _hoverSlotSpell / _hoverSlotMelee; a no-op when nothing is hovered.</summary>
-    private void DrawSpellSlotTooltip(GameData gameData, Inventory inventory, int screenW, int screenH)
+    /// <summary>Floating cursor tooltip for the hovered spell-bar slot. Spell
+    /// content comes from the shared <see cref="SpellTooltip"/> builder (also
+    /// used by the grimoire) — effective fatigue cost, requirements, and the
+    /// mastery-bonus section. Populated by DrawSpellBar via _hoverSlotSpell /
+    /// _hoverSlotMelee; a no-op when nothing is hovered.</summary>
+    private void DrawSpellSlotTooltip(Simulation sim, GameData gameData, Inventory inventory)
     {
         if (_smallFont == null) return;
 
-        var lines = new List<string>();
         if (_hoverSlotMelee)
         {
-            lines.Add("Melee / Gather");
-            lines.Add("Strike the nearest enemy, or gather at the cursor.");
+            Game1.Tooltips.RequestLines(
+                "Melee / Gather",
+                "Strike the nearest enemy, or gather at the cursor.");
+            return;
         }
-        else if (_hoverSlotSpell != null)
-        {
-            var sp = _hoverSlotSpell;
-            lines.Add(gameData.Spells.NameOf(sp.Id));
+        if (_hoverSlotSpell == null) return;
 
-            string kind = !string.IsNullOrEmpty(sp.School) ? sp.School
-                        : !string.IsNullOrEmpty(sp.Category) ? sp.Category : "";
-            if (kind.Length > 0) lines.Add(kind);
-
-            // Cost / cooldown — only the parts that apply (orders like Command have neither).
-            var stats = new List<string>();
-            if (sp.ManaCost > 0f) stats.Add($"{sp.ManaCost:0.#} mana");
-            if (sp.Cooldown > 0f) stats.Add($"{sp.Cooldown:0.#}s cooldown");
-            if (stats.Count > 0) lines.Add(string.Join("   ", stats));
-
-            // Consumable charges (potion-spells): show how many the player holds.
-            if (!string.IsNullOrEmpty(sp.ConsumesItem))
-            {
-                var item = gameData.Items.Get(sp.ConsumesItem);
-                string itemName = item != null && item.DisplayName.Length > 0 ? item.DisplayName : sp.ConsumesItem;
-                lines.Add($"Held: {inventory.GetItemCount(sp.ConsumesItem)} {itemName}");
-            }
-        }
-        else return;
-
-        DrawCursorTooltip(lines.ToArray(), screenW, screenH);
+        Game1.Tooltips.RequestLines(SpellTooltip.BuildLines(
+            _hoverSlotSpell, gameData, sim, FindNecromancer(sim), inventory));
     }
 
     /// <summary>Cursor-anchored text tooltip — box style, placement, and the

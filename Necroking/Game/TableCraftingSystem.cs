@@ -184,6 +184,29 @@ public static class TableCraftingSystem
         return gameData.UnitGroups.PickRandom(zombieTypeID) ?? "";
     }
 
+    /// <summary>Skill-tree gate shared by every player raise path (reanimate spells,
+    /// table loading): has the player unlocked raising this corpse type? The source's
+    /// zombieTypeID is checked against SkillBookState.UnlockedSummons — a group id
+    /// counts as unlocked when the group id itself OR any member id is in the set, so
+    /// unlock_summon args can name either. God mode bypasses (pass godMode from
+    /// BuffSystem.HasBuff(units, necroIdx, "buff_god_mode")). A null book (headless
+    /// scenario without a skill book attached) fails open so ungated tests keep their
+    /// raw behaviour, matching the intrinsic-buff spawn hook.</summary>
+    public static bool IsRaiseUnlocked(GameData gameData, SkillBookState? book,
+        string sourceUnitDefID, bool godMode)
+    {
+        if (book == null || godMode) return true;
+        var sourceDef = gameData.Units.Get(sourceUnitDefID);
+        string? ztid = sourceDef?.ZombieTypeID;
+        if (string.IsNullOrEmpty(ztid)) return false;
+        if (book.IsSummonUnlocked(ztid)) return true;
+        var group = gameData.UnitGroups.Get(ztid);
+        if (group != null)
+            foreach (var e in group.Entries)
+                if (book.IsSummonUnlocked(e.UnitDefID)) return true;
+        return false;
+    }
+
     /// <summary>True if the corpse can be loaded onto a table (non-undead source with a zombieTypeID).</summary>
     public static bool IsCorpseEligibleForTable(GameData gameData, string sourceUnitDefID)
     {

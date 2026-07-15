@@ -10,8 +10,9 @@ namespace Necroking.Game;
 /// quests) read cumulative totals with <see cref="Get"/>.
 ///
 /// Counts are cumulative and never consumed — once a milestone is hit it stays
-/// hit, so every skill that requires it stays satisfied. Per-game only; no
-/// persistence yet (cleared on <see cref="Reset"/> / new game).
+/// hit, so every skill that requires it stays satisfied. Per-game (cleared on
+/// <see cref="Reset"/> / new game); persisted in save games as part of the
+/// skill-book snapshot (SavedSkillBook.Events).
 ///
 /// The canonical live instance hangs off <c>Simulation.PlayerEvents</c>. That is
 /// where future "record an event about the player" hooks belong — call
@@ -34,6 +35,9 @@ public class PlayerEventTracker
     }
 
     public void Reset() => _counts.Clear();
+
+    /// <summary>All non-zero tallies — for save-game snapshots and debug dumps.</summary>
+    public IReadOnlyDictionary<string, int> Counts => _counts;
 
     public void Tally(string eventKey, int n = 1)
     {
