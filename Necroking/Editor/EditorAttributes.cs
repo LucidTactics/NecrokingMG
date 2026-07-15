@@ -117,6 +117,21 @@ public class EditorCheckboxGridAttribute : Attribute
 }
 
 /// <summary>
+/// Renders a List&lt;string&gt; property as editable text rows with add/remove
+/// buttons — for free-form line lists (e.g. a spell's mastery-bonus mini-language).
+/// Must be combined with [EditorField].
+/// </summary>
+[AttributeUsage(AttributeTargets.Property)]
+public class EditorStringListAttribute : Attribute
+{
+    public string Header { get; set; } = "";
+    public string AddLabel { get; set; } = "+ Add";
+    public int HeaderColorR { get; set; } = 200;
+    public int HeaderColorG { get; set; } = 180;
+    public int HeaderColorB { get; set; } = 255;
+}
+
+/// <summary>
 /// Draws an inline sub-section header before this field.
 /// Different from Group headers — these are lightweight labels within a group.
 /// </summary>

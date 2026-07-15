@@ -585,9 +585,14 @@ public partial class Game1 {
                // Re-sample the spread around the group's base target for THIS shot, so
                // a barrage scatters evenly over its disc instead of retracing one line.
                var shotTarget = GameSystems.SpellEffectSystem.VolleyAimPoint(spell, pg.Target, _rng);
+               // Re-resolve mastery per shot so follow-up volley shots scale the
+               // same as the first (buffs could even shift mid-volley).
+               int shotMastery = GameSystems.SpellEffectSystem.MasteryLevelsFor(
+                  spell, _gameData, _sim.UnitsMut, casterIdx);
                GameSystems.SpellEffectSystem.SpawnProjectile(spell, _sim.Projectiles,
                   _sim.Units[casterIdx].EffectSpawnPos2D, shotTarget, pg.CasterUid,
-                  _sim.Units[casterIdx].EffectSpawnHeight, _sim.Units[casterIdx].Faction);
+                  _sim.Units[casterIdx].EffectSpawnHeight, _sim.Units[casterIdx].Faction,
+                  shotMastery);
             }
 
             if (pg.Remaining <= 0) {

@@ -76,13 +76,13 @@ public class SpellDef : INamedDef
     [EditorField(Label = "Range", Group = "COMMON", Order = 100, Step = 0.1f, Decimals = 1, GroupColorR = 200, GroupColorG = 200, GroupColorB = 220, Tooltip = "Max cast distance from the caster (world units).")]
     [JsonPropertyName("range")] public float Range { get; set; } = 20.0f;
 
-    [EditorField(Label = "Mana Cost", Group = "COMMON", Order = 101, Step = 0.1f, Decimals = 1, Tooltip = "Mana spent per cast. Mastery beyond the primary\npath requirement reduces it.")]
+    [EditorField(Label = "Mana Cost", Group = "COMMON", Order = 101, Step = 0.1f, Decimals = 1, Tooltip = "Fatigue (mana) spent per cast. Only reduced by this\nspell's own mastery bonuses (fatigue -N% / free).")]
     [JsonPropertyName("manaCost")] public float ManaCost { get; set; } = 2.0f;
 
     // Path requirements. A spell may have a primary and an optional secondary.
-    // Both must be met by the caster to cast; only the primary's level is used
-    // when computing the cost reduction (mastery beyond the primary requirement).
-    [EditorField(Label = "Primary Path",  Group = "PATHS", Order = 120, GroupColorR = 200, GroupColorG = 180, GroupColorB = 240, Tooltip = "Magic path required to cast. Levels beyond the\nrequirement reduce the mana cost.")]
+    // Both must be met by the caster to cast; only the primary's level feeds the
+    // mastery bonuses (x = caster level above the primary requirement).
+    [EditorField(Label = "Primary Path",  Group = "PATHS", Order = 120, GroupColorR = 200, GroupColorG = 180, GroupColorB = 240, Tooltip = "Magic path required to cast. Levels beyond the\nrequirement feed the spell's mastery bonuses.")]
     [EditorCombo("", "metal", "shock", "fire", "water", "heavens", "earth", "chaos", "order", "spirit", "body", "nature", "death")]
     [JsonPropertyName("primaryPath")]    public string PrimaryPath    { get; set; } = "";
 
@@ -95,6 +95,53 @@ public class SpellDef : INamedDef
 
     [EditorField(Label = "Secondary Level", Group = "PATHS", Order = 123, Tooltip = "Level needed in the secondary path.")]
     [JsonPropertyName("secondaryLevel")] public int    SecondaryLevel { get; set; }
+
+    // Mastery mini-language: bonuses for casting with primary-path levels above
+    // the requirement (x = caster level - required level). Grammar + semantics
+    // live on SpellMastery; the tooltip and the cast pipeline both read the
+    // parsed form via GetMasteryBonuses().
+    [EditorField(Label = "", Group = "PATHS", Order = 124, Tooltip = "Bonuses per level above the primary requirement.\n\"+N: effect\" unlocks at N above; \"x: effect\" scales\nper level. Effects: fatigue -30%, free, damage +5,\nrange +2, aoe +1.5, duration +50%, buff <id> [self].")]
+    [EditorStringList(Header = "MASTERY BONUSES", AddLabel = "+ Add bonus")]
+    [JsonPropertyName("masteryBonuses")] public List<string>? MasteryBonuses { get; set; }
+
+    // Parse cache for MasteryBonuses — invalidated when the list instance or any
+    // line changes (the in-game editor mutates the def live).
+    private List<MasteryBonus>? _masteryCache;
+    private string[]? _masteryCacheSource;
+
+    /// <summary>The parsed mastery bonuses (cached; re-parses when the editor
+    /// changes the lines). Empty list when the spell has none.</summary>
+    public List<MasteryBonus> GetMasteryBonuses()
+    {
+        var src = MasteryBonuses;
+        if (src == null || src.Count == 0)
+        {
+            _masteryCache = null; _masteryCacheSource = null;
+            return _emptyMastery;
+        }
+        bool fresh = _masteryCache != null && _masteryCacheSource != null
+            && _masteryCacheSource.Length == src.Count;
+        if (fresh)
+            for (int i = 0; i < src.Count; i++)
+                if (!ReferenceEquals(_masteryCacheSource![i], src[i])) { fresh = false; break; }
+        if (!fresh)
+        {
+            _masteryCache = SpellMastery.ParseAll(src, Id);
+            _masteryCacheSource = src.ToArray();
+        }
+        return _masteryCache!;
+    }
+    private static readonly List<MasteryBonus> _emptyMastery = new();
+
+    /// <summary>x — how many levels the caster is above the primary-path
+    /// requirement (0 when merely meeting it, or when there's no requirement).
+    /// The one input to every mastery bonus.</summary>
+    public int MasteryLevels(Func<MagicPath, int> casterLevel)
+    {
+        var pri = GetPrimary();
+        if (!pri.HasRequirement) return 0;
+        return Math.Max(0, casterLevel(pri.Path) - pri.Level);
+    }
 
     /// <summary>Strongly-typed primary path requirement, resolved from the
     /// string id. Path == None means "no primary requirement".</summary>
@@ -122,20 +169,30 @@ public class SpellDef : INamedDef
         return true;
     }
 
-    /// <summary>Effective mana cost after primary-path mastery scaling.
-    /// Formula: cost × 1 / (casterLevel − reqLevel + 1). Same-level casters get
-    /// full cost (N=1); each additional level of mastery in the primary path
-    /// shaves another fraction off. Secondary path requirement does not affect
-    /// cost — it's a gate only. Returns ManaCost unchanged if there's no
-    /// primary requirement.</summary>
+    /// <summary>Effective mana/fatigue cost after mastery bonuses. There is NO
+    /// blanket discount for out-leveling a spell anymore — only the spell's own
+    /// masteryBonuses lines (fatigue -N% / free) reduce the cost. Secondary path
+    /// requirement never affects cost — it's a gate only.</summary>
     public float EffectiveManaCost(Func<MagicPath, int> casterLevel)
-    {
-        var pri = GetPrimary();
-        if (!pri.HasRequirement) return ManaCost;
-        int n = casterLevel(pri.Path) - pri.Level + 1;
-        if (n <= 0) return ManaCost; // caster lacks primary; cost is moot but return base for safety
-        return ManaCost / n;
-    }
+        => EffectiveManaCostAt(MasteryLevels(casterLevel));
+
+    /// <summary>Cost at a known x (levels above the primary requirement) — the
+    /// tooltip path, which resolves x once for the whole tooltip.</summary>
+    public float EffectiveManaCostAt(int masteryLevels)
+        => ManaCost * SpellMastery.FatigueCostMultiplier(GetMasteryBonuses(), masteryLevels);
+
+    /// <summary>Cast range after mastery bonuses at x levels above the requirement.</summary>
+    public float ScaledRange(int masteryLevels)
+        => SpellMastery.ApplyStat(GetMasteryBonuses(), MasteryEffect.Range, Range, masteryLevels);
+
+    /// <summary>Damage after mastery bonuses (rounded — the damage pipeline is int).</summary>
+    public int ScaledDamage(int masteryLevels)
+        => (int)MathF.Round(SpellMastery.ApplyStat(GetMasteryBonuses(), MasteryEffect.Damage,
+            Damage, masteryLevels));
+
+    /// <summary>AoE radius after mastery bonuses at x levels above the requirement.</summary>
+    public float ScaledAoeRadius(int masteryLevels)
+        => SpellMastery.ApplyStat(GetMasteryBonuses(), MasteryEffect.Aoe, AoeRadius, masteryLevels);
 
     [EditorField(Label = "Cooldown", Group = "COMMON", Order = 102, Step = 0.1f, Decimals = 1, Tooltip = "Seconds before the spell can be cast again.")]
     [JsonPropertyName("cooldown")] public float Cooldown { get; set; }

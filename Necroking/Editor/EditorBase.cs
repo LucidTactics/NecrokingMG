@@ -1218,9 +1218,9 @@ public class EditorBase
         return (text, isActive, committed);
     }
 
-    public string DrawTextField(string fieldId, string label, string value, int x, int y, int w)
+    public string DrawTextField(string fieldId, string label, string value, int x, int y, int w,
+        int labelW = 120)
     {
-        int labelW = 120;
         DrawText(label, new Vector2(x, y + 2), TextDim);
 
         int inputX = x + labelW;

@@ -9,6 +9,12 @@
       "range": 40,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "castingBuffID": "buff_4",
       "aoeType": "AOE",
       "damage": 18,
@@ -56,6 +62,12 @@
       "range": 40,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "castingBuffID": "buff_4",
       "knockbackForce": 30,
       "knockbackUpward": 15,
@@ -107,6 +119,12 @@
       "manaCost": 4,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 1,
       "damage": 3,
       "hitEffectFlipbook": {
@@ -141,6 +159,12 @@
       "manaCost": 4,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 1,
       "damage": 3,
       "hitEffectFlipbook": {
@@ -176,6 +200,12 @@
       "manaCost": 4,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 1,
       "damage": 3,
       "hitEffectFlipbook": {
@@ -227,6 +257,12 @@
       "manaCost": 4,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 1,
       "damage": 3,
       "hitEffectFlipbook": {
@@ -277,6 +313,12 @@
       "icon": "assets/UI/Icons/Spells/summon_skeleton.png",
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 0.5,
       "summonTargetReq": "Corpse",
       "summonUnitID": "skeleton",
@@ -308,6 +350,12 @@
       "manaCost": 1,
       "primaryPath": "nature",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 0.5,
       "summonUnitID": "FemaleDeer",
       "spawnLocation": "NearestTargetToMouse",
@@ -338,6 +386,12 @@
       "manaCost": 1,
       "primaryPath": "nature",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 0.5,
       "summonUnitID": "Wolf",
       "spawnLocation": "NearestTargetToMouse",
@@ -368,6 +422,12 @@
       "manaCost": 1,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 0.5,
       "summonUnitID": "ZombieWolf",
       "spawnLocation": "NearestTargetToMouse",
@@ -398,6 +458,12 @@
       "manaCost": 5,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 1,
       "acceptableTargets": [
         "skeleton"
@@ -434,6 +500,12 @@
       "manaCost": 10,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 2,
       "summonUnitID": "abomination",
       "summonFlipbook": {
@@ -463,6 +535,12 @@
       "range": 35,
       "primaryPath": "shock",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 1.5,
       "castingBuffID": "buff_4_copy_copy",
       "armorNegating": true,
@@ -500,14 +578,14 @@
         "g": 247,
         "b": 194,
         "a": 255,
-        "intensity": 10.022728
+        "intensity": 6.6181817
       },
       "strikeGlowColor": {
         "r": 175,
         "g": 224,
         "b": 255,
-        "a": 200,
-        "intensity": 8.386364
+        "a": 255,
+        "intensity": 4.072727
       }
     },
     {
@@ -521,6 +599,12 @@
       "manaCost": 1,
       "primaryPath": "shock",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 0.5,
       "castingBuffID": "buff_4_copy_copy",
       "armorNegating": true,
@@ -577,6 +661,12 @@
       "range": 30,
       "primaryPath": "shock",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 3,
       "castingBuffID": "buff_4_copy_copy",
       "armorNegating": true,
@@ -585,7 +675,7 @@
       "beamTickRate": 0.5,
       "beamDisplacement": 0.15,
       "beamCoreWidth": 1,
-      "beamGlowWidth": 3,
+      "beamGlowWidth": 2,
       "beamFlickerMin": 0.9,
       "beamFlickerMax": 1.2,
       "beamFlickerHz": 0.5,
@@ -595,14 +685,14 @@
         "g": 253,
         "b": 196,
         "a": 255,
-        "intensity": 14.386363
+        "intensity": 6.4727273
       },
       "beamGlowColor": {
         "r": 149,
         "g": 231,
         "b": 255,
-        "a": 150,
-        "intensity": 8.727272
+        "a": 255,
+        "intensity": 3.1272728
       },
       "beamChainBranches": 2,
       "beamChainDepth": 2,
@@ -619,6 +709,12 @@
       "manaCost": 5,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 1,
       "acceptableTargets": [
         "skeleton_copy"
@@ -654,6 +750,12 @@
       "manaCost": 1,
       "primaryPath": "earth",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "buffID": "iron_skin",
       "castFlipbook": {
         "flipbookID": "cloud03",
@@ -682,6 +784,12 @@
       "manaCost": 1,
       "primaryPath": "shock",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "buffID": "iron_skin_copy",
       "castFlipbook": {
         "flipbookID": "cloud03",
@@ -709,6 +817,12 @@
       "icon": "assets/UI/Icons/Spells/spell_11.png",
       "primaryPath": "heavens",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "buffID": "buff_3",
       "castFlipbook": {
         "flipbookID": "",
@@ -737,6 +851,12 @@
       "range": 30,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 1,
       "castingBuffID": "buff_4_copy",
       "armorNegating": true,
@@ -768,11 +888,11 @@
       "drainCloudSize": 15,
       "drainCloudSpeed": 0.7,
       "drainCloudColor": {
-        "r": 215,
+        "r": 212,
         "g": 255,
-        "b": 185,
+        "b": 123,
         "a": 255,
-        "intensity": 4.363636
+        "intensity": 6.981818
       },
       "drainSourceCoreColor": {
         "r": 220,
@@ -822,6 +942,12 @@
       "manaCost": 0,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 3,
       "castingBuffID": "buff_4_copy",
       "sacrificeHealFlat": 30
@@ -837,6 +963,12 @@
       "manaCost": 0,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "summonUnitID": "militia",
       "summonQuantity": 10,
       "spawnLocation": "AtTargetLocation",
@@ -868,6 +1000,12 @@
       "manaCost": 0,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "summonUnitID": "militia_copy_copy",
       "spawnLocation": "AtTargetLocation",
       "summonFlipbook": {
@@ -898,6 +1036,12 @@
       "manaCost": 0,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "summonUnitID": "skeleton",
       "summonQuantity": 20,
       "spawnLocation": "AtTargetLocation",
@@ -928,6 +1072,12 @@
       "manaCost": 3,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 0.5,
       "castingBuffID": "buff_4_copy",
       "summonTargetReq": "Corpse",
@@ -959,6 +1109,12 @@
       "manaCost": 8,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 3,
       "castingBuffID": "buff_4_copy",
       "aoeRadius": 6,
@@ -993,6 +1149,12 @@
       "manaCost": 8,
       "primaryPath": "heavens",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 3,
       "castingBuffID": "buff_4_copy_copy",
       "targetFilter": "UndeadOnly",
@@ -1070,6 +1232,12 @@
       "manaCost": 0,
       "primaryPath": "spirit",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 0.5,
       "toggleEffect": "ghost_mode"
     },
@@ -1083,6 +1251,12 @@
       "range": 30,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 2,
       "castingBuffID": "buff_4_copy",
       "aoeType": "AOE",
@@ -1106,6 +1280,12 @@
       "manaCost": 1,
       "primaryPath": "nature",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 1,
       "armorNegating": true,
       "aoeType": "AOE",
@@ -1152,6 +1332,12 @@
       "manaCost": 1,
       "primaryPath": "earth",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 1,
       "armorNegating": true,
       "aoeType": "AOE",
@@ -1246,6 +1432,12 @@
       "range": 2.5,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 0.5,
       "castTime": 1.5,
       "castAnim": "ImbueGround",
@@ -1264,6 +1456,12 @@
       "manaCost": 3,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 0.5,
       "castTime": 2,
       "castAnim": "Raise",
@@ -1369,6 +1567,12 @@
       "manaCost": 15,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 2,
       "aoeRadius": 4,
       "hitEffectFlipbook": {
@@ -1418,6 +1622,12 @@
       "manaCost": 25,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 4,
       "aoeRadius": 2,
       "friendlyOnly": false,
@@ -1508,6 +1718,12 @@
       "manaCost": 5,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 2,
       "castTime": 2,
       "castAnim": "ImbueTable",
@@ -1540,6 +1756,12 @@
       "manaCost": 5,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 2,
       "castTime": 2,
       "castAnim": "ImbueTable",
@@ -1574,6 +1796,12 @@
       "manaCost": 5,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 0.5,
       "castTime": 0.5,
       "castAnim": "ImbueTable",
@@ -1610,6 +1838,12 @@
       "manaCost": 3,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 0.5,
       "castingBuffID": "buff_4_copy",
       "summonTargetReq": "Corpse",
@@ -1643,6 +1877,12 @@
       "manaCost": 3,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 0.5,
       "castingBuffID": "buff_4_copy",
       "summonTargetReq": "Corpse",
@@ -1675,6 +1915,12 @@
       "manaCost": 4,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 8,
       "aoeType": "AOE",
       "wolfHuntDuration": 18,
@@ -1698,6 +1944,12 @@
       "manaCost": 1,
       "primaryPath": "shock",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "buffID": "quickness_accel",
       "castFlipbook": {
         "flipbookID": "cloud03",
@@ -1775,6 +2027,12 @@
       "manaCost": 4,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 1,
       "damage": 9,
       "aoeRadius": 1,
@@ -1829,6 +2087,12 @@
       "manaCost": 4,
       "primaryPath": "death",
       "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
       "cooldown": 1,
       "damage": 9,
       "aoeRadius": 1,

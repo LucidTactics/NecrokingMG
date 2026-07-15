@@ -75,11 +75,10 @@ public static class SpellCaster
         if (spell == null) return CastResult.NoValidTarget;
 
         if (caster.GetCooldown(spellID) > 0f) return CastResult.OnCooldown;
-        // Path-aware cost: caster's UnitDef carries Paths, the spell's primary
-        // path scales the mana cost downward when caster level exceeds the
-        // requirement. Secondary path is a hard gate only — meeting it doesn't
-        // reduce cost. Without a UnitDef we fall back to flat ManaCost so
-        // existing test paths keep working. Buff "AllPaths" Set effects floor
+        // Path-aware cost: caster's UnitDef carries Paths; levels above the
+        // spell's primary requirement only reduce the cost through the spell's
+        // own masteryBonuses lines (fatigue -N% / free) — no blanket discount.
+        // Secondary path is a hard gate only. Buff "AllPaths" Set effects floor
         // every path level (e.g. god mode = 9 everywhere) without overwriting
         // higher native levels.
         var casterDef = gameData.Units.Get(units[casterIdx].UnitDefID);
@@ -89,6 +88,13 @@ public static class SpellCaster
         if (!spell.MeetsPathRequirements(casterLevel)) return CastResult.MissingPath;
         float effectiveCost = spell.EffectiveManaCost(casterLevel);
         if (caster.Mana < effectiveCost) return CastResult.NotEnoughMana;
+
+        // Mastery (levels above the primary requirement) can stretch the spell's
+        // targeting range/area via its masteryBonuses lines. All the per-category
+        // range gates below use these scaled values, never range directly.
+        int mastery = spell.MasteryLevels(casterLevel);
+        float range = spell.ScaledRange(mastery);
+        float aoeRadius = spell.ScaledAoeRadius(mastery);
 
         var casterPos = units[casterIdx].Position;
         var casterFaction = units[casterIdx].Faction;
@@ -112,7 +118,7 @@ public static class SpellCaster
             case "Projectile":
             {
                 float dist = (targetWorld - casterPos).Length();
-                if (dist > spell.Range) return CastResult.OutOfRange;
+                if (dist > range) return CastResult.OutOfRange;
                 outPending.TargetPos = targetWorld;
                 outPending.RemainingProjectiles = spell.Quantity;
                 outPending.ProjectileTimer = 0f;
@@ -132,7 +138,7 @@ public static class SpellCaster
                     {
                         if (!units[i].Alive) continue;
                         float distToCaster = (units[i].Position - casterPos).Length();
-                        if (distToCaster > spell.Range) continue;
+                        if (distToCaster > range) continue;
                         if (spell.Category == "Buff" && units[i].Faction != casterFaction) continue;
                         if (spell.Category == "Debuff" && units[i].Faction == casterFaction) continue;
 
@@ -178,7 +184,7 @@ public static class SpellCaster
                         if (corpses[i].BaggedByUnitID != GameConstants.InvalidUnit) continue;
                         if (needsZombieType && !CorpseHasZombieType(corpses[i], gameData)) continue;
                         float distToCaster = (corpses[i].Position - casterPos).Length();
-                        if (distToCaster > spell.Range) continue;
+                        if (distToCaster > range) continue;
                         if (raiseBook != null && !TableCraftingSystem.IsRaiseUnlocked(
                                 gameData, raiseBook, corpses[i].UnitDefID, raiseGod))
                         {
@@ -211,7 +217,7 @@ public static class SpellCaster
                         if (!units[i].Alive) continue;
                         if (units[i].Faction != casterFaction) continue;
                         float distToCaster = (units[i].Position - casterPos).Length();
-                        if (distToCaster > spell.Range) continue;
+                        if (distToCaster > range) continue;
 
                         // Check if unit type matches acceptable targets using unitDefID
                         bool acceptable = spell.AcceptableTargets == null || spell.AcceptableTargets.Count == 0;
@@ -242,7 +248,7 @@ public static class SpellCaster
                 {
                     // AOE corpse targeting: validate at least one valid corpse with zombieTypeID in AOE
                     float dist = (targetWorld - casterPos).Length();
-                    if (dist > spell.Range) return CastResult.OutOfRange;
+                    if (dist > range) return CastResult.OutOfRange;
 
                     bool foundValid = false;
                     for (int i = 0; i < corpses.Count; i++)
@@ -251,7 +257,7 @@ public static class SpellCaster
                         if (corpses[i].DraggedByUnitID != GameConstants.InvalidUnit) continue;
                         if (corpses[i].BaggedByUnitID != GameConstants.InvalidUnit) continue;
                         float distToTarget = (corpses[i].Position - targetWorld).Length();
-                        if (distToTarget > spell.AoeRadius) continue;
+                        if (distToTarget > aoeRadius) continue;
                         if (!CorpseHasZombieType(corpses[i], gameData)) continue;
                         foundValid = true;
                         break;
@@ -267,7 +273,7 @@ public static class SpellCaster
                         spell.SpawnLocation == "NearestTargetToMouse")
                     {
                         float dist = (targetWorld - casterPos).Length();
-                        if (spell.Range > 0 && dist > spell.Range) return CastResult.OutOfRange;
+                        if (range > 0 && dist > range) return CastResult.OutOfRange;
                         outPending.TargetPos = targetWorld;
                     }
                     else
@@ -319,7 +325,7 @@ public static class SpellCaster
                         if (!units[i].Alive) continue;
                         if (units[i].Faction == casterFaction) continue;
                         float distToCaster = (units[i].Position - casterPos).Length();
-                        if (distToCaster > spell.Range) continue;
+                        if (distToCaster > range) continue;
                         float distToCursor = (units[i].Position - targetWorld).Length();
                         if (distToCursor < bestDist)
                         {
@@ -335,7 +341,7 @@ public static class SpellCaster
                 else
                 {
                     float dist = (targetWorld - casterPos).Length();
-                    if (dist > spell.Range) return CastResult.OutOfRange;
+                    if (dist > range) return CastResult.OutOfRange;
                     outPending.TargetPos = targetWorld;
                 }
                 break;
@@ -350,7 +356,7 @@ public static class SpellCaster
                     if (!units[i].Alive) continue;
                     if (units[i].Faction == casterFaction) continue;
                     float distToCaster = (units[i].Position - casterPos).Length();
-                    if (distToCaster > spell.Range) continue;
+                    if (distToCaster > range) continue;
                     float distToCursor = (units[i].Position - targetWorld).Length();
                     if (distToCursor < bestDist)
                     {
@@ -383,7 +389,7 @@ public static class SpellCaster
                         if (units[i].Faction == casterFaction) continue;
                     }
                     float distToCaster = (units[i].Position - casterPos).Length();
-                    if (distToCaster > spell.Range) continue;
+                    if (distToCaster > range) continue;
                     float distToCursor = (units[i].Position - targetWorld).Length();
                     if (distToCursor < bestDist)
                     {
@@ -408,7 +414,7 @@ public static class SpellCaster
                     {
                         if (corpses[i].Dissolving || corpses[i].ConsumedBySummon) continue;
                         float distToCaster = (corpses[i].Position - casterPos).Length();
-                        if (distToCaster > spell.Range) continue;
+                        if (distToCaster > range) continue;
                         float distToCursor = (corpses[i].Position - targetWorld).Length();
                         if (distToCursor < bestCorpseDist)
                         {
@@ -444,7 +450,7 @@ public static class SpellCaster
                     if (units[i].Faction != casterFaction) continue;
                     if (restrict && !spell.AcceptableTargets!.Contains(units[i].UnitDefID)) continue;
                     float distToCaster = (units[i].Position - casterPos).Length();
-                    if (distToCaster > spell.Range) continue;
+                    if (distToCaster > range) continue;
                     float distToCursor = (units[i].Position - targetWorld).Length();
                     if (distToCursor < bestDist)
                     {
@@ -462,7 +468,7 @@ public static class SpellCaster
             case "Cloud":
             {
                 float dist = (targetWorld - casterPos).Length();
-                if (dist > spell.Range) return CastResult.OutOfRange;
+                if (dist > range) return CastResult.OutOfRange;
                 outPending.TargetPos = targetWorld;
                 break;
             }
@@ -476,7 +482,7 @@ public static class SpellCaster
             default:
             {
                 float dist = (targetWorld - casterPos).Length();
-                if (dist > spell.Range) return CastResult.OutOfRange;
+                if (dist > range) return CastResult.OutOfRange;
                 outPending.TargetPos = targetWorld;
                 break;
             }

@@ -113,12 +113,17 @@ public static class SpellEffectSystem
         var effectOrigin = caster.EffectSpawnPos2D;
         var effectOriginH = caster.EffectSpawnHeight + caster.Z;
 
+        // Mastery = levels above the spell's primary path requirement, resolved at
+        // effect time from the live caster (same pattern as SpellPenetration) so a
+        // channeled cast reflects buffs present when the effect actually fires.
+        int mastery = MasteryLevelsFor(spell, gameData, units, casterIdx);
+
         switch (spell.Category)
         {
             case "Projectile":
                 SpawnProjectile(spell, sim.Projectiles, effectOrigin,
                     VolleyAimPoint(spell, target, game._rng), casterUid,
-                    effectOriginH, casterFaction);
+                    effectOriginH, casterFaction, mastery);
                 if (spell.Quantity > 1)
                 {
                     game._pendingProjectiles.Add(new PendingProjectileGroup
@@ -145,12 +150,23 @@ public static class SpellEffectSystem
                 // own caster.
                 int buffIdx = UnitUtil.ResolveUnitIndex(units, pending.TargetUnitID);
                 if (buffIdx < 0) buffIdx = casterIdx;
-                BuffSystem.ApplyBuffById(units, buffIdx, gameData.Buffs, spell.BuffID);
+                // Mastery "duration" bonuses stretch the applied buff. Only for
+                // timed buffs — a 0-duration def means permanent, leave it alone.
+                var buffDef = gameData.Buffs.Get(spell.BuffID);
+                if (buffDef != null)
+                {
+                    float dur = buffDef.Duration > 0f
+                        ? SpellMastery.ApplyStat(spell.GetMasteryBonuses(),
+                            MasteryEffect.Duration, buffDef.Duration, mastery)
+                        : buffDef.Duration;
+                    BuffSystem.ApplyBuffWithDuration(units, buffIdx, buffDef, dur);
+                }
                 break;
             }
 
             case "Strike":
-                ExecuteStrike(spell, sim, gameData, casterIdx, target, effectOrigin, game._damageNumbers);
+                ExecuteStrike(spell, sim, gameData, casterIdx, target, effectOrigin,
+                    game._damageNumbers, mastery);
                 break;
 
             case "Summon":
@@ -169,8 +185,8 @@ public static class SpellEffectSystem
                 if (beamTarget >= 0)
                 {
                     sim.Lightning.SpawnBeam(casterUid, units[beamTarget].Id,
-                        spell.Id, spell.Damage, spell.BeamTickRate, spell.BeamRetargetRadius,
-                        spell.BuildBeamStyle());
+                        spell.Id, spell.ScaledDamage(mastery), spell.BeamTickRate,
+                        spell.BeamRetargetRadius, spell.BuildBeamStyle());
                     StartChannel(game, units, casterIdx, slot, spell, units[beamTarget].Position);
                 }
                 break;
@@ -194,7 +210,8 @@ public static class SpellEffectSystem
                         && !sim.Corpses[corpseIdx].ConsumedBySummon)
                     {
                         sim.Lightning.SpawnDrain(casterUid, GameConstants.InvalidUnit,
-                            spell.Id, spell.Damage, spell.DrainTickRate, spell.DrainHealPercent,
+                            spell.Id, spell.ScaledDamage(mastery), spell.DrainTickRate,
+                            spell.DrainHealPercent,
                             spell.DrainCorpseHP, spell.DrainReversed, spell.DrainMaxDuration,
                             spell.BuildDrainVisuals(),
                             targetCorpseIdx: corpseIdx, targetCorpseID: pending.TargetCorpseID,
@@ -210,7 +227,8 @@ public static class SpellEffectSystem
                 if (drainTarget >= 0)
                 {
                     sim.Lightning.SpawnDrain(casterUid, units[drainTarget].Id,
-                        spell.Id, spell.Damage, spell.DrainTickRate, spell.DrainHealPercent,
+                        spell.Id, spell.ScaledDamage(mastery), spell.DrainTickRate,
+                        spell.DrainHealPercent,
                         spell.DrainCorpseHP, spell.DrainReversed, spell.DrainMaxDuration,
                         spell.BuildDrainVisuals());
                     StartChannel(game, units, casterIdx, slot, spell, units[drainTarget].Position);
@@ -226,7 +244,7 @@ public static class SpellEffectSystem
                 break;
 
             case "Cloud":
-                ExecuteCloud(spell, sim, target, casterFaction, casterIdx);
+                ExecuteCloud(spell, sim, target, casterFaction, casterIdx, mastery);
                 break;
 
             case "WolfHunt":
@@ -257,12 +275,13 @@ public static class SpellEffectSystem
 
                 if (spell.StrikeVisualType == "GodRay")
                 {
-                    ExecuteStrike(spell, sim, gameData, casterIdx, target, effectOrigin, game._damageNumbers);
+                    ExecuteStrike(spell, sim, gameData, casterIdx, target, effectOrigin,
+                        game._damageNumbers, mastery);
                 }
                 else if (hasBomb)
                 {
                     SpawnProjectile(spell, sim.Projectiles, effectOrigin, target, casterUid,
-                        effectOriginH, casterFaction);
+                        effectOriginH, casterFaction, mastery);
                     if (spell.Quantity > 1)
                     {
                         game._pendingProjectiles.Add(new PendingProjectileGroup
@@ -285,6 +304,33 @@ public static class SpellEffectSystem
                    caster.GhostMode = !caster.GhostMode;
                 break;
         }
+
+        // Mastery "buff <id> [self]" perks: extra buffs layered on after the
+        // spell's own effect, once the caster's x reaches the perk's threshold.
+        if (mastery > 0)
+        {
+            var bonuses = spell.GetMasteryBonuses();
+            for (int i = 0; i < bonuses.Count; i++)
+            {
+                var b = bonuses[i];
+                if (b.Effect != MasteryEffect.Buff || b.PerLevel || mastery < b.Level) continue;
+                int perkIdx = b.SelfTarget ? casterIdx
+                    : UnitUtil.ResolveUnitIndex(units, pending.TargetUnitID);
+                if (perkIdx < 0) perkIdx = casterIdx;
+                BuffSystem.ApplyBuffById(units, perkIdx, gameData.Buffs, b.BuffId);
+            }
+        }
+    }
+
+    /// <summary>x (levels above the primary path requirement) for a caster unit —
+    /// the effect-time twin of the cast gate's computation in TryStartSpellCast.
+    /// casterIdx &lt; 0 (casterless sources like traps) => 0, no mastery bonuses.</summary>
+    public static int MasteryLevelsFor(SpellDef spell, GameData gameData,
+        UnitArrays units, int casterIdx)
+    {
+        if (casterIdx < 0 || casterIdx >= units.Count) return 0;
+        var def = gameData.Units.Get(units[casterIdx].UnitDefID);
+        return spell.MasteryLevels(SpellCaster.ResolveCasterLevel(def, units, casterIdx));
     }
 
     /// <summary>Arm the channel-hold for a just-started Beam/Drain. Player casts
@@ -559,8 +605,11 @@ public static class SpellEffectSystem
     /// projectile/hit-effect flipbook refs. Public — Game1.TickPendingProjectiles also
     /// calls it for the staggered Quantity&gt;1 shots.</summary>
     public static void SpawnProjectile(SpellDef spell, ProjectileManager projectiles,
-        Vec2 origin, Vec2 target, uint ownerUid, float spawnHeight, Faction casterFaction)
+        Vec2 origin, Vec2 target, uint ownerUid, float spawnHeight, Faction casterFaction,
+        int masteryLevels = 0)
     {
+        int damage = spell.ScaledDamage(masteryLevels);
+        float aoeRadius = spell.ScaledAoeRadius(masteryLevels);
         // AOE spells fly as Explosive and burst on impact; a single-target (zero-AOE)
         // spell flies as RegularHit instead, so it actually strikes its target rather
         // than relying on a zero-radius explosion happening to reach it. The +10
@@ -572,9 +621,9 @@ public static class SpellEffectSystem
         bool lob = traj == Trajectory.Lob || traj == Trajectory.HighLob;
         float speed = spell.ProjectileSpeed > 0 ? spell.ProjectileSpeed : ProjectileManager.MagicSpeed;
         var proj = projectiles.Spawn(origin, target, casterFaction, ownerUid,
-            spell.AoeRadius > 0f ? ProjectileType.Explosive : ProjectileType.RegularHit,
-            spell.Damage, speed, lob,
-            aoeRadius: spell.AoeRadius, precision: spell.PrecisionBonus + 10,
+            aoeRadius > 0f ? ProjectileType.Explosive : ProjectileType.RegularHit,
+            damage, speed, lob,
+            aoeRadius: aoeRadius, precision: spell.PrecisionBonus + 10,
             weaponName: spell.DisplayName, spawnHeight: spawnHeight,
             gravityScale: spell.GravityScale, preferHighArc: traj == Trajectory.HighLob);
 
@@ -645,12 +694,13 @@ public static class SpellEffectSystem
     }
 
     private static void ExecuteStrike(SpellDef spell, Simulation sim, GameData gameData,
-        int casterIdx, Vec2 target, Vec2 effectOrigin, List<DamageNumber> damageNumbers)
+        int casterIdx, Vec2 target, Vec2 effectOrigin, List<DamageNumber> damageNumbers,
+        int masteryLevels = 0)
     {
         var units = sim.UnitsMut;
         ExecuteStrikeFrom(spell, sim, gameData, casterIdx, units[casterIdx].Id,
             effectOrigin, units[casterIdx].EffectSpawnHeight, target,
-            units[casterIdx].Faction, damageNumbers);
+            units[casterIdx].Faction, damageNumbers, masteryLevels);
     }
 
     /// <summary>
@@ -665,17 +715,19 @@ public static class SpellEffectSystem
     /// </summary>
     public static void ExecuteStrikeFrom(SpellDef spell, Simulation sim, GameData gameData,
         int casterIdx, uint ownerUid, Vec2 origin, float originHeight,
-        Vec2 target, Faction sourceFaction, List<DamageNumber> damageNumbers)
+        Vec2 target, Faction sourceFaction, List<DamageNumber> damageNumbers,
+        int masteryLevels = 0)
     {
         var units = sim.UnitsMut;
         var style = spell.BuildStrikeStyle();
         var sVis = spell.StrikeVisualType == "GodRay" ? StrikeVisual.GodRay : StrikeVisual.Lightning;
         var sGrp = spell.BuildGodRayParams();
         Enum.TryParse<SpellTargetFilter>(spell.TargetFilter, out var sTF);
+        int damage = spell.ScaledDamage(masteryLevels);
 
         if (spell.StrikeTargetUnit)
         {
-            int enemy = FindClosestEnemy(sim, target, spell.Range, sourceFaction);
+            int enemy = FindClosestEnemy(sim, target, spell.ScaledRange(masteryLevels), sourceFaction);
             if (enemy >= 0)
             {
                 var targetPos = units[enemy].Position;
@@ -689,13 +741,13 @@ public static class SpellEffectSystem
                 // Standard spell pipeline: MR gate + opposed DRN damage roll. The
                 // damage event it emits already surfaces the floating number (the
                 // old flat path double-printed via an extra FloatingText here).
-                sim.ApplySpellDamage(enemy, spell.Damage, spell, casterIdx);
+                sim.ApplySpellDamage(enemy, damage, spell, casterIdx);
             }
         }
         else
         {
             sim.Lightning.SpawnStrike(target, spell.TelegraphDuration,
-                spell.StrikeDuration, spell.AoeRadius, spell.Damage,
+                spell.StrikeDuration, spell.ScaledAoeRadius(masteryLevels), damage,
                 style, spell.Id, sVis, sGrp, sTF, spell.TelegraphVisible,
                 ownerUid);
         }
@@ -705,14 +757,18 @@ public static class SpellEffectSystem
     /// AoE burst through the standard spell pipeline (per-unit MR gate + rolls).
     /// casterIdx -1 = casterless source (trap-fired clouds).</summary>
     public static void ExecuteCloud(SpellDef spell, Simulation sim, Vec2 target,
-        Faction casterFaction, int casterIdx = -1)
+        Faction casterFaction, int casterIdx = -1, int masteryLevels = 0)
     {
         var units = sim.UnitsMut;
         uint casterUid = casterIdx >= 0 && casterIdx < units.Count
             ? units[casterIdx].Id : GameConstants.InvalidUnit;
         sim.PoisonClouds.SpawnCloud(target, spell, casterFaction, casterUid);
 
-        float radius = spell.AoeRadius > 0 ? spell.AoeRadius : spell.CloudRadius;
+        // Mastery "aoe" bonuses widen the initial burst (the lingering cloud
+        // itself still uses the def's radii — its growth is corpse-driven).
+        float baseRadius = spell.AoeRadius > 0 ? spell.AoeRadius : spell.CloudRadius;
+        float radius = SpellMastery.ApplyStat(spell.GetMasteryBonuses(),
+            MasteryEffect.Aoe, baseRadius, masteryLevels);
 
         if (spell.CloudAppliesParalysis)
         {
@@ -722,8 +778,9 @@ public static class SpellEffectSystem
             return;
         }
 
-        if (spell.Damage > 0)
-            sim.ApplySpellDamageAoE(target, radius, spell.Damage, spell, casterIdx,
+        int damage = spell.ScaledDamage(masteryLevels);
+        if (damage > 0)
+            sim.ApplySpellDamageAoE(target, radius, damage, spell, casterIdx,
                 casterFaction, DamageType.Poison);
     }
 

@@ -253,6 +253,12 @@ public class ReflectionPropertyRenderer
             return DrawCheckboxGridField(entry, obj, x, ref curY, w);
         }
 
+        // Free-form string-line list (add/remove text rows)
+        if (entry.StringList != null)
+        {
+            return DrawStringListField(fieldId, entry, obj, x, ref curY, w);
+        }
+
         var propType = prop.PropertyType;
 
         if (propType == typeof(string))
@@ -445,6 +451,62 @@ public class ReflectionPropertyRenderer
     }
 
     // ===========================
+    //  String-line list (add/remove text rows)
+    // ===========================
+
+    private bool DrawStringListField(string fieldId, FieldEntry entry, object obj,
+        int x, ref int curY, int w)
+    {
+        var info = entry.StringList!;
+        var prop = entry.Property;
+        var list = (List<string>?)prop.GetValue(obj);
+
+        bool anyChanged = false;
+
+        // Header
+        curY += 4;
+        _ui.DrawRect(new Rectangle(x, curY, w, 1), new Color(60, 60, 80));
+        curY += 4;
+        _ui.DrawText(string.IsNullOrEmpty(info.Header) ? entry.Label : info.Header,
+            new Vector2(x, curY), info.HeaderColor);
+        curY += 18;
+
+        // One editable text row per line, with a remove button at the right.
+        const int RemoveW = 22;
+        int removeIdx = -1;
+        for (int i = 0; i < (list?.Count ?? 0); i++)
+        {
+            string line = list![i] ?? "";
+            string newLine = _ui.DrawTextField($"{fieldId}[{i}]", "", line,
+                x, curY, w - RemoveW - 4, labelW: 0);
+            if (_ui.DrawButton("x", x + w - RemoveW, curY, RemoveW, RowH - 4))
+                removeIdx = i;
+            curY += RowH;
+            if (newLine != line) { list[i] = newLine; anyChanged = true; }
+        }
+        if (removeIdx >= 0)
+        {
+            list!.RemoveAt(removeIdx);
+            anyChanged = true;
+        }
+
+        // Add button
+        if (_ui.DrawButton(info.AddLabel, x, curY, 140, RowH - 2))
+        {
+            if (list == null)
+            {
+                list = new List<string>();
+                prop.SetValue(obj, list);
+            }
+            list.Add("");
+            anyChanged = true;
+        }
+        curY += RowH + 2;
+
+        return anyChanged;
+    }
+
+    // ===========================
     //  Compact HdrColor swatch
     // ===========================
 
@@ -524,6 +586,7 @@ public class ReflectionPropertyRenderer
             var comboAttr = prop.GetCustomAttribute<EditorComboAttribute>();
             var registryAttr = prop.GetCustomAttribute<EditorRegistryDropdownAttribute>();
             var checkboxGridAttr = prop.GetCustomAttribute<EditorCheckboxGridAttribute>();
+            var stringListAttr = prop.GetCustomAttribute<EditorStringListAttribute>();
             var headerAttr = prop.GetCustomAttribute<EditorHeaderAttribute>();
             var visAttrs = prop.GetCustomAttributes<EditorVisibleAttribute>().ToList();
 
@@ -556,6 +619,17 @@ public class ReflectionPropertyRenderer
                 };
             }
 
+            StringListInfo? stringListInfo = null;
+            if (stringListAttr != null)
+            {
+                stringListInfo = new StringListInfo
+                {
+                    Header = stringListAttr.Header,
+                    AddLabel = stringListAttr.AddLabel,
+                    HeaderColor = new Color(stringListAttr.HeaderColorR, stringListAttr.HeaderColorG, stringListAttr.HeaderColorB),
+                };
+            }
+
             entries.Add(new FieldEntry
             {
                 Property = prop,
@@ -570,6 +644,7 @@ public class ReflectionPropertyRenderer
                 ComboOptions = comboAttr?.Options,
                 RegistryName = registryAttr?.RegistryName,
                 CheckboxGrid = gridInfo,
+                StringList = stringListInfo,
                 HeaderText = headerAttr?.Text,
                 HeaderColor = headerAttr != null ? new Color(headerAttr.ColorR, headerAttr.ColorG, headerAttr.ColorB) : Color.White,
                 VisibilityRules = visRules,
@@ -609,6 +684,7 @@ public class ReflectionPropertyRenderer
         public string[]? ComboOptions;
         public string? RegistryName;
         public CheckboxGridInfo? CheckboxGrid;
+        public StringListInfo? StringList;
         public string? HeaderText;
         public Color HeaderColor = Color.White;
         public Dictionary<string, HashSet<string>>? VisibilityRules;
@@ -620,6 +696,13 @@ public class ReflectionPropertyRenderer
         public string RegistryName = "";
         public int Columns = 2;
         public string Header = "";
+        public Color HeaderColor = new(200, 180, 255);
+    }
+
+    private class StringListInfo
+    {
+        public string Header = "";
+        public string AddLabel = "+ Add";
         public Color HeaderColor = new(200, 180, 255);
     }
 }

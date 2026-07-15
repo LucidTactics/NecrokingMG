@@ -297,6 +297,26 @@ public class GrimoireOverlay : IModalLayer
         if (!IsVisible) return;
         Layout(screenH);
         _renderer.DrawWidget(GrimoirePanel.WidgetId, _x, _y, InstanceId);
+        RequestTileTooltip();
+    }
+
+    /// <summary>Hover tooltip over a spell tile — the same shared builder as the
+    /// spell-bar tooltip (effective fatigue cost, requirements, mastery bonuses),
+    /// so the grimoire and the bar can never disagree. Draw-time request; the
+    /// TooltipSystem renders it topmost and clears per frame.</summary>
+    private void RequestTileTooltip()
+    {
+        var g = Game1.Instance;
+        if (g == null) return;
+        int mx = (int)g._input.MousePos.X, my = (int)g._input.MousePos.Y;
+        if (!ContainsMouse(mx, my)) return;
+        for (int i = 0; i < _shown.Count; i++)
+        {
+            if (!HitChild($"tile{i}", mx, my)) continue;
+            Game1.Tooltips.RequestLines(SpellTooltip.BuildLines(
+                _shown[i], _gameData, g._sim, g.FindNecromancer(), g._inventory));
+            return;
+        }
     }
 
     private void Layout(int screenH)
