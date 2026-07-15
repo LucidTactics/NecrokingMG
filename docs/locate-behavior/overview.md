@@ -31,6 +31,7 @@ open the listed `<area>.md`. Areas marked **(not yet documented)** have no doc y
 | Save / load games — `saves/{name}.json` session snapshot | [save-load.md](save-load.md) ✅ | The play-session save feature (distinct from map save): `Data/SaveGameData.cs` DTOs (`SaveGameData`/`SavedPlayer`/`SavedBuff`/`SaveGameInfo`), `Game1.Saves.cs` write/load/apply pipeline (`WriteSaveGame`/`LoadSaveGame`/`ApplySaveToWorld`), `UI/SaveGameWindow.cs`, preview cards; **where a new persisted field goes** + the player `_inventory` (runtime store + why it's not saved yet) |
 | Logging & diagnostics | [logging-diagnostics.md](logging-diagnostics.md) ✅ | `Core/DebugLog.cs` (`log/<tag>.log` files, tag census, no in-memory store), `Game/CombatLog.cs` (`Simulation.CombatLog` 200-entry message list + HUD fading lines `HUDRenderer.DrawCombatLog`), frame timings (`Simulation.LastTickMs`/`LastPhaseMs`, `Game1._drawMsAvg` readout, perf-spike logger), startup timings (`Game1.LogTiming` → `log/startup.log`), live world counts (`GameSession.Census()`) |
 | User settings — per-machine `user settings/settings.json` | [user-settings.md](user-settings.md) ✅ | The gitignored per-machine settings/config: `GameSettingsData` schema (section POCOs, `[JsonPropertyName]`, `Load`/`SaveIfChanged`) in `Data/Registries/GameSettings.cs`, first-run seeding via `GamePaths.SeededUserFile`, `Game1.Exiting` persistence, the `Display` "remember how the user left X" pattern, plus how weather.json/spellbar.json use the same mechanism. **Where to add a new persisted user setting.** |
+| Scenarios — coded headless tests & batch sim harnesses | [scenarios.md](scenarios.md) ✅ | `Necroking/Scenario/` harness (`ScenarioBase` contract + Game1 `StartScenario` run path, flat-grass `GridSize` world, no map load), `ScenarioRegistry` registration, the `balance_matrix` unit-balance tournament (arena duels, swing self-resolution at batched tick speed, win/casualty stats → `log/balance_results.json`, `tools/balance_report/make_report.py` HTML matrix) |
 
 ## Subsystems (under `Necroking/`) — most not yet documented
 
@@ -53,7 +54,7 @@ authoritative in [docs/code-map.md](../code-map.md); this table is the routing v
 | `Algorithm/` | Standalone algorithms | (not yet documented) |
 | `Editor/` | In-game immediate-mode editors (unit / spell / map / UI / item) | [editor.md](editor.md) ◐ (UI/widget editor only) |
 | `Dev/` | Dev control server — `DevServer`, `DevCommand` (HTTP → `ExecuteDevCommand`) | (not yet documented) |
-| `Scenario/` | Coded headless test scenarios (~125 files, `--scenario <name>`) | (not yet documented) |
+| `Scenario/` | Coded headless test scenarios (~125 files, `--scenario <name>`) | [scenarios.md](scenarios.md) ✅ |
 
 ## Behavior → area quick index
 
@@ -113,7 +114,8 @@ Use this to pick a starting area. When the routed area isn't documented yet, doc
 - **Combat log messages, error/debug log files (`log/*.log`), capturing errors for an in-game panel, frame/startup timings, unit/object counts for a stats readout** → [logging-diagnostics.md](logging-diagnostics.md) (`Game/CombatLog.cs` `Simulation.CombatLog.Entries`; `Core/DebugLog.cs` = the one file-log chokepoint; `GameSession.Census()`; `Game1.LogTiming`).
 - **Top-right HUD button rows (core-menu / editor-launcher), adding a button that toggles a panel** → [ui.md](ui.md) UIRouter section + [logging-diagnostics.md](logging-diagnostics.md) callers: `UI/HUDRenderer.cs` `MenuButtonLabels`+`LayoutButtonRow`+`DrawMenuButtons`/`HitTestMenuButtons`, click side `GameRenderer.Hud.cs` `ToggleCoreMenu`/`BuildMenuOpenMask`, seat `UI/Layers/HudLayers.cs` `CoreMenuButtonsLayer` (HudTop band).
 - **Dev/test commands driving the running game** → game1-partials.md (`Game1.Dev.cs` → `ExecuteDevCommand`) + `Dev/`.
-- **Headless regression tests** → `Scenario/` (and `docs/testing-scenarios.md`).
+- **Headless regression tests / writing or extending a `--scenario`** → [scenarios.md](scenarios.md) (`Scenario/ScenarioBase.cs` contract, `ScenarioRegistry.cs` registration, `Game1.cs` `StartScenario` run path; and `docs/testing-scenarios.md`).
+- **Balance testing / unit matchup tournaments / win-rate & casualty statistics / batch simulated fights** → [scenarios.md](scenarios.md) (`Scenario/Scenarios/BalanceMatrixScenario.cs` = the arena-duel harness: spawn-side setup, swing self-resolution at batched speed, faction-count winner detection, `log/balance_results.json`; report = `tools/balance_report/make_report.py`).
 
 ## When you extend the map
 
