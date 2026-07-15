@@ -14,9 +14,13 @@
   `ZoomBy`). Three projections:
   - `WorldToScreen(worldPos, worldHeight, w, h)` — lift = `worldHeight * Zoom * YRatio`.
     For anything physical (jumps, projectile altitude, corpse Z).
-  - `WorldToScreenPx(worldPos, pixelHeight, w, h)` — lift in literal pixels,
-    zoom-independent. For screen-space effects anchored to world points.
+  - `WorldToScreenPx(worldPos, pixelHeight, w, h)` — lift in literal pixels (the
+    projection applies no zoom). Anchors pixel-authored effects to world points.
   - `ScreenToWorld(screenPos, w, h)` — the inverse (mouse picking).
+  - **`SoftZoomScale(refZoom)`** = `sqrt(Zoom / refZoom)` — THE canonical softened zoom
+    coupling for pixel-authored effects (rain, damage numbers): legible at MinZoom,
+    not bloated at MaxZoom. World-tracking effects use plain linear `Zoom / refZoom`
+    instead (lightning widths, health bars — both authored at refZoom 32).
 - **`Necroking/Render/Renderer.cs`** — thin wrappers `WorldToScreen`/`WorldToScreenPx`/
   `ScreenToWorld(…, cam)` that supply the screen size; `DrawSprite`/`DrawFlipbookFrame`
   use `pixelScale = scale * cam.Zoom / 32f` (zoom 32 = 1:1 texels).
@@ -40,9 +44,9 @@
   `_devFreeCamera`).
 - **Set on load** — `Game1.cs` `StartGame`: `Zoom = 48` for `empty_test`, else `24`;
   scenarios override via `ScenarioBase.CameraZoom`.
-- **DEAD duplicates (no callers)**: `Camera25D.HandleInput` and
-  `Renderer.HandleCameraInput` both contain a WASD-pan + scroll-zoom block that nothing
-  invokes — don't fix zoom behavior there; the live handlers are the layers above.
+- (Two dead duplicate pan+zoom handlers, `Camera25D.HandleInput` and
+  `Renderer.HandleCameraInput`, were deleted 2026-07-15 — the layers above are the
+  only input paths.)
 - **Pixel snap**: `GameRenderer.Draw.cs` snaps `camera.Position` to the pixel grid
   (`1/Zoom`, `1/(Zoom*YRatio)`) for the Scene phase and restores the smooth position for
   the Hud phase — camera reads during scene drawing see the snapped position.
@@ -90,27 +94,34 @@
 - Debug overlays: `Render/DebugDraw.cs` (tiles ×Zoom, labels only when `Zoom >= 8`),
   `GameRenderer.Hud.cs` wind-debug grid (cell size `40/Zoom` so cell count is bounded).
 
-**Deliberately screen-space (pixel-constant by design — don't "fix" without intent)**:
+**Pixel-authored but zoom-coupled (reworked 2026-07-15 — the zoom-correctness pass)**:
 - **Rain** — `Render/WeatherRenderer.cs` `DrawRainParticles`: streak dims are pixels
-  (`RAIN_PX_PER_UNIT = 16`), fall speed screen-space; BUT it already has the two zoom
-  adaptations: drop size `zoomDropScale = 1 + zoomT` (1× at MinZoom → 2× at MaxZoom) and
-  **zoom-based density culling** `priorityThreshold = RainDensity * (0.02 + 0.98*zoomNorm²)`
-  against `RAIN_REF_ZOOM = 48` (fewer drops when zoomed out). Snow/wind visuals: ABSENT.
-- **Lightning/zaps/beams/drains** — `Render/LightningRenderer.cs` + `Render/HdrStripBatch.cs`:
-  endpoints projected per frame, AOE telegraph radius ×Zoom, but bolt `CoreWidth`/
-  `GlowWidth`, midpoint displacement and drain arc/wave amplitudes (hardcoded 20/5 px;
-  `DrainVisualParams.ArcHeight` unconsumed) are **screen pixels** — the Camera25D comment
-  blesses "lightning arc shapes" as zoom-independent, so at far zoom bolts look fatter
-  relative to the world.
-- **Unit health bars** — `GameRenderer.Units.cs` `DrawHealthBar`: fixed `30×3` px bar;
-  only the vertical offset (`spriteWorldH * SpriteScale * Zoom * 0.9 + 5`) scales.
+  (`RAIN_PX_PER_UNIT = 16`) but the whole fall column (streak length, thickness ≥1px,
+  on-screen fall speed) is scaled by `SoftZoomScale(RAIN_REF_ZOOM=48)` folded into
+  `heightScale`. Ground positions/splashes are world-anchored (splash radius ×`Zoom/32`,
+  linear). **Zoom-based density culling** `priorityThreshold = RainDensity *
+  (0.02 + 0.98*zoomNorm²)` (fewer drops when zoomed out) + `MAX_RAIN` cap.
+  Snow/wind visuals: ABSENT (weather.json fields unconsumed).
+- **Lightning/zaps/beams/drains** — `Render/LightningRenderer.cs`: endpoints projected
+  per frame; bolt widths, drain arc/wave amplitudes, cloud/flare/impact sizes are
+  pixel values authored at zoom 32, all scaled by `FxScale()` = `clamp(Zoom/32, 0.3, 4)`
+  (threaded as the optional `fxScale`/`widthScale` params on the static rasterizers;
+  `Editor/SpellPreview.cs` passes defaults = authoring view). Sky-strike bolt origin
+  stays screen-space by design.
+- **Unit health bars** — `GameRenderer.Units.cs` `DrawHealthBar`: `30×3` px authored at
+  zoom 32, scaled linearly (`Zoom/32`, height floored at 1px) so the bar reads as part
+  of the unit sprite; offset gap `5px` scales too.
 - **Damage numbers / floating text** — `GameRenderer.World.cs` `DrawDamageNumbers`: text
-  scale from settings (`DamageNumberSize/16`), not zoom; position/lift via `WorldToScreen`
-  (drift `Height` is world units, so drift SPEED on screen scales with zoom).
+  scale AND float-up rise both ×`SoftZoomScale(32)`; rise converted to pixels
+  (`Height * 32 * YRatio * soft`) and anchored via `WorldToScreenPx` so size and motion
+  live in one space.
+
+**Deliberately screen-space (pixel-constant by design — don't "fix" without intent)**:
 - **Status ?/! glyphs** — `GameRenderer.Units.cs` `DrawSingleUnit` `sp_upper`: font size
   fixed, anchor offset partially zoom-scaled (`0.25 * Zoom * YRatio`).
 - **Hover-marker / aim-circle line thickness** — constant px (documented choice).
-- Cursor tooltips, HUD chrome, combat log — pure screen-space, zoom-irrelevant.
+- Floating weapon-name labels, cursor tooltips, HUD chrome, combat log — pure
+  screen-space, zoom-irrelevant.
 
 ## Look/edit here when…
 - "Zoom feels wrong / clamp / speed" → `Render/Camera25D.cs` (`ZoomBy`, Min/Max/ZoomSpeed);

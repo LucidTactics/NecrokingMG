@@ -1744,10 +1744,14 @@ partial class GameRenderer
         float spriteWorldH = (unitDef != null && unitDef.SpriteWorldHeight > 0)
             ? unitDef.SpriteWorldHeight : 1.8f;
         float spriteScale = _g._sim.Units[unitIdx].SpriteScale;
-        float barOffset = spriteWorldH * spriteScale * _g._camera.Zoom * 0.9f + 5f;
+        // Bar dims scale linearly with zoom (authored at the default 32) so the bar
+        // reads as part of the unit sprite instead of a fixed screen overlay; height
+        // floored so it never vanishes at MinZoom.
+        float zoomScale = _g._camera.Zoom / 32f;
+        float barOffset = spriteWorldH * spriteScale * _g._camera.Zoom * 0.9f + 5f * zoomScale;
 
-        float barW = 30f;
-        float barH = 3f;
+        float barW = 30f * zoomScale;
+        float barH = MathF.Max(1f, 3f * zoomScale);
         float barX = screenPos.X - barW / 2f;
         float barY = screenPos.Y - barOffset;
 

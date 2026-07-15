@@ -224,21 +224,20 @@ public class WeatherRenderer
 
         float zoom = _camera.Zoom;
         float yRatio = _camera.YRatio;
-        // Rain is a screen-space effect: "height units" are pixels, not world units, so streak
-        // dimensions stay consistent regardless of zoom. RAIN_PX_PER_UNIT is the conversion for
-        // any "height unit" values rain uses internally (e.g. RAIN_FALL_HEIGHT, RainLength).
+        // Rain is pixel-authored ("height units" are pixels via RAIN_PX_PER_UNIT), softly
+        // coupled to zoom: streak length/thickness and on-screen fall speed all scale by
+        // SoftZoomScale, so rain reads bigger/faster zoomed in without full linear coupling
+        // (which would leave sub-pixel drizzle at MinZoom and fat bars at MaxZoom). Folding
+        // the factor into heightScale scales the whole fall column (speed included) since
+        // fall *time* stays zoom-independent.
         const float RAIN_PX_PER_UNIT = 16.0f;
-        float heightScale = RAIN_PX_PER_UNIT;
+        float softScale = _camera.SoftZoomScale(RAIN_REF_ZOOM);
+        float heightScale = RAIN_PX_PER_UNIT * softScale;
         float minZoom = _camera.MinZoom;
-        float maxZoom = _camera.MaxZoom;
         float baseFallRate = fx.RainSpeed / 60.0f;
         float windAngleRad = fx.RainWindAngle * MathF.PI / 180.0f;
         float windSin = MathF.Sin(windAngleRad);
         float globalTime = _gameTime;
-
-        // Zoom-based drop size: 2x at max zoom in, 1x at max zoom out
-        float zoomT = MathUtil.Clamp((zoom - minZoom) / (maxZoom - minZoom), 0f, 1f);
-        float zoomDropScale = 1.0f + zoomT; // 1.0 at min zoom, 2.0 at max zoom
 
         float halfScreenW = screenW * 0.5f;
         float halfScreenH = screenH * 0.5f;
@@ -303,8 +302,9 @@ public class WeatherRenderer
                 float fallProgress = cyclePhase / fallFraction;
                 float currentHeight = RAIN_FALL_HEIGHT * (1.0f - fallProgress);
 
-                // Streak length in height units, scaled by zoom (2x at max zoom, 1x at min)
-                float baseStreakH = fx.RainLength * zoomDropScale / heightScale;
+                // Streak length in height units; heightScale carries the soft zoom
+                // coupling, so on-screen length = RainLength * softScale px.
+                float baseStreakH = fx.RainLength / RAIN_PX_PER_UNIT;
                 float streakH = baseStreakH * (1.0f + (fx.RainNearScale - 1.0f) * depth);
                 float topHeight = currentHeight + streakH;
                 float botHeight = currentHeight;
@@ -331,7 +331,8 @@ public class WeatherRenderer
                 byte colR = (byte)(170 + (int)(30 * depth));
                 byte colG = (byte)(185 + (int)(25 * depth));
                 byte colB = (byte)(215 + (int)(15 * depth));
-                float thickness = (1.0f + 0.5f * depth) * zoomDropScale;
+                // Floor at 1px so far-zoom streaks stay visible under point sampling.
+                float thickness = MathF.Max(1.0f, (1.0f + 0.5f * depth) * softScale);
 
                 float alphaVal = fx.RainAlpha * (fx.RainFarOpacity + (1f - fx.RainFarOpacity) * depth)
                     * distFade * (0.7f + HashFloat(h0) * 0.3f);

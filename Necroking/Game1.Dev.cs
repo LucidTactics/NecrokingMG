@@ -196,6 +196,29 @@ public partial class Game1 {
                break;
             }
 
+            // Tweak a field on the ACTIVE weather preset in memory (never saved):
+            // devctl: cmd weather rainAlpha 0.9 · cmd weather brightness 1 · argless lists fields.
+            // For visual verification (rain under zoom, etc.) without editing weather.json.
+            case "weather": {
+               string presetId = _gameData.Settings.Weather.ActivePreset;
+               var preset = _gameData.Weather.Get(presetId);
+               if (preset == null) { c.Complete(Necroking.Dev.DevServer.Error($"no active weather preset ('{presetId}')")); break; }
+               var props = typeof(Data.Registries.WeatherEffects).GetProperties();
+               if (c.Args.Length < 2)
+               {
+                   var names = string.Join(", ", props.Select(p => p.Name));
+                   c.Complete(Necroking.Dev.DevServer.Ok($"active={presetId}; fields: {names}"));
+                   break;
+               }
+               var prop = props.FirstOrDefault(p => string.Equals(p.Name, c.Args[0], StringComparison.OrdinalIgnoreCase));
+               if (prop == null) { c.Complete(Necroking.Dev.DevServer.Error($"unknown weather field: {c.Args[0]}")); break; }
+               if (prop.PropertyType == typeof(float)) prop.SetValue(preset.Effects, DevFloat(c.Args[1]));
+               else if (prop.PropertyType == typeof(bool)) prop.SetValue(preset.Effects, bool.Parse(c.Args[1]));
+               else { c.Complete(Necroking.Dev.DevServer.Error($"unsupported field type {prop.PropertyType.Name}")); break; }
+               c.Complete(Necroking.Dev.DevServer.Ok($"{presetId}.{prop.Name} = {c.Args[1]} (in-memory)"));
+               break;
+            }
+
             // Report the necromancer's spell cooldowns + the effective cooldown rate
             // (base × buff modifiers, e.g. ×10 under god mode). window.dev('cooldowns')
             case "cooldowns": {
