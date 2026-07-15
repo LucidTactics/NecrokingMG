@@ -103,11 +103,13 @@
   (0.02 + 0.98*zoomNorm²)` (fewer drops when zoomed out) + `MAX_RAIN` cap.
   Snow/wind visuals: ABSENT (weather.json fields unconsumed).
 - **Lightning/zaps/beams/drains** — `Render/LightningRenderer.cs`: endpoints projected
-  per frame; bolt widths, drain arc/wave amplitudes, cloud/flare/impact sizes are
-  pixel values authored at zoom 32, all scaled by `FxScale()` = `clamp(Zoom/32, 0.3, 4)`
-  (threaded as the optional `fxScale`/`widthScale` params on the static rasterizers;
-  `Editor/SpellPreview.cs` passes defaults = authoring view). Sky-strike bolt origin
-  stays screen-space by design.
+  per frame; bolt widths and drain arc/wave/fan amplitudes are pixel values authored
+  at zoom 32, scaled by `FxScale()` = `clamp(Zoom/32, 0.3, 4)` (threaded as the optional
+  `fxScale`/`widthScale` params on the static rasterizers; `Editor/SpellPreview.cs`
+  passes defaults = authoring view). The VOLUMETRIC sprites (drain clouds, impact
+  cluster, flares) use `VolumetricScale` = `sqrt(fxScale)` — full linear merges the
+  soft additive puffs into one blob that swallows both units at high zoom. Sky-strike
+  bolt origin stays screen-space by design.
 - **Unit health bars** — `GameRenderer.Units.cs` `DrawHealthBar`: `30×3` px authored at
   zoom 32, scaled linearly (`Zoom/32`, height floored at 1px) so the bar reads as part
   of the unit sprite; offset gap `5px` scales too.
