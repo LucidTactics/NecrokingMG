@@ -107,13 +107,17 @@ public partial class HUDRenderer
     private static readonly Color SpellNameColor = new(200, 200, 220);
     private static readonly Color CooldownOverlay = new(0, 0, 0, 150);
     private static readonly Color CooldownText = new(255, 200, 100);
-    private static readonly Color LowManaOverlay = new(80, 0, 0, 80);
+    // Icon state washes — distinct looks so a glance tells WHY a spell is off:
+    // strong WoW-style blue = out of mana (it regens — wait or produce more),
+    // desaturating grey = not available (missing path / no charges — needs
+    // fixing), cooldown sweep = just wait. Active = no wash.
+    private static readonly Color LowManaOverlay = new(30, 60, 170, 150);
+    private static readonly Color NotAvailableOverlay = new(45, 45, 45, 180);
     // (Tooltip box colors moved to TooltipSystem — the one canonical style.)
     private static readonly Color ControlHintColor = new(120, 120, 140, 200);
     private static readonly Color InventoryHintColor = new(200, 220, 180);
     private static readonly Color MaterialColor = new(200, 160, 255);
     private static readonly Color PotionQtyColor = new(255, 255, 200);
-    private static readonly Color PotionEmptyColor = new(100, 100, 100, 120);
     // Spell-slot activation flash (warm gold) — interior wash + bright frame edges,
     // scaled by the remaining flash fraction so it fades out smoothly. Public so the
     // cast dispatch sets the timer with the SAME duration the draw normalizes by —
@@ -549,37 +553,30 @@ public partial class HUDRenderer
                     if (_smallFont != null)
                         Text(_smallFont, $"{cd:F1}", new Vector2(inner.Center.X - 10, inner.Center.Y - 6), CooldownText);
                 }
-                // Path-discounted cost, matching what the cast gate deducts —
+                // Icon state wash. Not-available (missing path / no charges)
+                // wins over low-mana — grey means "go fix something", blue
+                // means "just wait for mana"; stacking them would read as mud.
+                // Mana compares the path-discounted cost the cast gate deducts —
                 // flat ManaCost overstates it for masters of the spell's path.
+                bool missingPath = casterLevel != null && !spell.MeetsPathRequirements(casterLevel);
+                int charges = string.IsNullOrEmpty(spell.ConsumesItem) ? -1
+                    : inventory.GetItemCount(spell.ConsumesItem);
                 float effCost = casterLevel != null ? spell.EffectiveManaCost(casterLevel) : spell.ManaCost;
-                if (sim.NecroState.Mana < effCost)
-                {
-                    Scope.Draw(_pixel, inner, LowManaOverlay);
-                    uncastable = true;
-                }
-                if (casterLevel != null && !spell.MeetsPathRequirements(casterLevel))
-                    uncastable = true;
+                bool notAvailable = missingPath || charges == 0;
+                bool lowMana = sim.NecroState.Mana < effCost;
+                uncastable = notAvailable || lowMana;
+                if (notAvailable) Scope.Draw(_pixel, inner, NotAvailableOverlay);
+                else if (lowMana) Scope.Draw(_pixel, inner, LowManaOverlay);
 
-                // Consumable charges (potion-spells): show the inventory count,
-                // grey out at 0.
-                if (!string.IsNullOrEmpty(spell.ConsumesItem))
+                // Consumable charges (potion-spells): WoW-style count at the
+                // bottom-right, outlined so it reads on the icon art.
+                if (charges >= 0 && _smallFont != null)
                 {
-                    int qty = inventory.GetItemCount(spell.ConsumesItem);
-                    if (qty <= 0)
-                    {
-                        Scope.Draw(_pixel, inner, PotionEmptyColor);
-                        uncastable = true;
-                    }
-                    if (_smallFont != null)
-                    {
-                        // WoW-style charge count at the bottom-right, outlined
-                        // so it reads on the icon art.
-                        string q = qty.ToString();
-                        var qs = _smallFont.MeasureString(q);
-                        TextOutlined(_smallFont, q,
-                            new Vector2(inner.Right - qs.X - 1, inner.Bottom - qs.Y + 2),
-                            PotionQtyColor, KeyLabelOutline);
-                    }
+                    string q = charges.ToString();
+                    var qs = _smallFont.MeasureString(q);
+                    TextOutlined(_smallFont, q,
+                        new Vector2(inner.Right - qs.X - 1, inner.Bottom - qs.Y + 2),
+                        PotionQtyColor, KeyLabelOutline);
                 }
             }
 
