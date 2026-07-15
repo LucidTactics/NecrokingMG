@@ -355,6 +355,22 @@ ghost placement, `TryPlace` from `Game1.WorldClicks.cs`; glyph-trap defs spawn a
 **Look/edit here when:** changing the build/crafting menu layout (list→grid), item row
 binding/cost display, click-to-select/placement arming, or adding hover tooltips to rows.
 
+**Pitfall — stale per-session refs after exit-to-main-menu → re-enter:** these UIs are
+init'd ONCE per process (`Game1.EnsureInventoryUIsInitialized`, guarded by
+`_inventoryUIsInitialized`, never reset) but their `Init` **captures per-session objects
+into private fields**: `BuildingMenuUI.Init(_widgetRenderer, _envSystem, …, _sim.MagicGlyphs,
+_gameData.Spells, _sim)` and `TableCraftMenuUI.Init(…, _envSystem, …, _sim.PlayerResources, …)`.
+`_envSystem`/`_sim` on Game1 are forwarding properties onto `_session` (`GameSession`), and
+`StartGame` does `_session.Dispose(); _session = new GameSession()` — `Dispose` calls
+`Env.ClearDefs()` (DefCount→0, textures disposed). So after returning to the main menu and
+re-entering, the build menu's captured `_envSystem` is the DEAD session's: `Open()` caches an
+empty `_buildableDefIndices` → **empty build menu**; its `_sim`/`_glyphs` would mutate the dead
+world. `_inventory`/`_items`/`_widgetRenderer` are app-lifetime — fine. Fix direction: don't
+capture session-bound objects in one-shot-init'd UIs — read live via `Game1.Instance._envSystem`
+/`_sim` (project convention "Direct over Inject"), or re-point the refs after `_session = new`
+in `StartGame`. Closures over `this` (e.g. `GrimoireOverlay`'s predicate using `_sim.UnitsMut`)
+re-evaluate the property per call and are safe.
+
 ## Cross-links
 - [corpses.md](corpses.md) — corpse data model, pile gather/withdraw (`TryTakeCorpseFromPile`,
   `FindCorpsePileUnderCursor` in `Game1.cs`).
