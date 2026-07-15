@@ -1232,8 +1232,11 @@ public class Simulation
 
                 case AIBehavior.IdleAtPoint:
                 {
-                    // Idle near move target, fight nearby enemies, return
-                    int enemy = FindClosestEnemy(i);
+                    // Idle near move target, fight nearby enemies, return.
+                    // GhostMode units never fight — spirit-walk eyes and net
+                    // ghosts park on this AI and must hold position, not chase
+                    // a passing animal they can't even hurt.
+                    int enemy = _units[i].GhostMode ? -1 : FindClosestEnemy(i);
                     if (enemy >= 0)
                     {
                         float eDist = (_units[enemy].Position - _units[i].Position).Length();

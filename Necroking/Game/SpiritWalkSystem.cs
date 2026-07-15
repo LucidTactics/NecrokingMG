@@ -1,4 +1,5 @@
 using System;
+using Necroking.Core;
 using Necroking.Data;
 using Necroking.Lib;
 using Necroking.Movement;
@@ -163,6 +164,9 @@ public static class SpiritWalkSystem
         eye.Velocity = Vec2.Zero;
         eye.MoveTarget = eye.Position;
         eye.SpawnPosition = eye.Position;
+        eye.Target = CombatTarget.None;
+        eye.EngagedTarget = CombatTarget.None;
+        eye.PendingAttack = CombatTarget.None;
         eye.DetectionRange *= EyeSightMultiplier;
         _eyeId = eye.Id;
         _eyeTimer = EyeDuration;
