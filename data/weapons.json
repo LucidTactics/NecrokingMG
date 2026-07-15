@@ -112,7 +112,7 @@
     {
       "id": "weapon_kick",
       "name": "Kick",
-      "damage": -3,
+      "damage": -2,
       "attackBonus": -2,
       "length": 0,
       "anim": "AttackBite",
@@ -148,7 +148,7 @@
     {
       "id": "wolf_pounce_tackle",
       "name": "Pounce",
-      "damage": -10,
+      "damage": 2,
       "attackBonus": 4,
       "bonuses": [
         "Knockdown"
@@ -175,17 +175,16 @@
       "attackBonus": -2,
       "length": 2,
       "archetype": "Sweep",
-      "cooldownRounds": 4,
+      "cooldownRounds": 3,
       "priority": 1,
       "damageType": "Slashing",
-      "twoHanded": false,
-      "sweepRadius": 2
+      "twoHanded": false
     },
     {
       "id": "weapon_boar_tusk",
       "name": "Tusks",
-      "damage": 2,
-      "attackBonus": 1,
+      "damage": 5,
+      "attackBonus": 2,
       "defenseBonus": -1,
       "damageType": "Piercing",
       "twoHanded": false
