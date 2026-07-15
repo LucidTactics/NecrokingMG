@@ -10,16 +10,22 @@ All serialization is **System.Text.Json**; there is no third-party JSON library.
   `RegistryBase<TDef>` (TDef: `IHasId`, parameterless ctor) holds `_defs`
   (id→def) + `_orderedIDs` (file order preserved). Key members:
   - `CreateJsonOptions()` (virtual, **no registry overrides it**) — CamelCase naming,
-    `WriteIndented = true`, **`DefaultIgnoreCondition = JsonIgnoreCondition.Never`** (every
-    property is materialized on save, deliberately), `JsonStringEnumConverter(CamelCase)`.
+    `WriteIndented = true`, LF newlines, `DefaultIgnoreCondition = JsonIgnoreCondition.Never`
+    (pruning happens later in `Save`, not via the serializer), relaxed escaping,
+    `JsonStringEnumConverter(CamelCase)`.
   - `Load(path)` — parses the file, reads the `RootKey` array (e.g. `"units"`), calls
     `DeserializeItem` per element → `JsonSerializer.Deserialize<TDef>`. **Missing JSON
     properties fall back to the C# property-initializer defaults** on the def class —
     omitting a field whose value equals the initializer is round-trip-safe.
-  - `Save(path)` — `SerializeItem(def, options)` (virtual; default returns the def itself)
-    per ordered id into `{ RootKey: [ … ] }`, then `Core.JsonFile.WriteStringIfChanged`
-    (atomic tmp+rename via `Core.AtomicFile`, skips write when text unchanged — editor
-    auto-save loops depend on this).
+  - `Save(path)` — serializes each def to a `JsonObject` and runs **`PruneDefaults`**
+    against a `new TDef()` baseline (also serialized): any top-level property
+    `DeepEquals`-equal to the freshly-constructed default is OMITTED (except `id`;
+    nested objects are kept/dropped as whole subtrees). So **a new def field with an
+    initializer default only appears in JSON for entries where it's authored** — adding
+    a field does not fatten every entry on the next roundtrip. Then per ordered id into
+    `{ RootKey: [ … ] }` → `Core.JsonFile.WriteStringIfChanged` (atomic tmp+rename via
+    `Core.AtomicFile`, skips write when text unchanged — editor auto-save loops depend
+    on this).
   - `CloneDef` / `AddFromJson` — JSON round-trips through the SAME
     `SerializeItem`/`DeserializeItem`, so copy/paste fidelity == save/load fidelity, and the
     dev `add_data` command matches what `Load` produces.
@@ -84,11 +90,12 @@ All serialization is **System.Text.Json**; there is no third-party JSON library.
 
 ## Serialization gotchas (for anyone changing save output)
 
-- `DefaultIgnoreCondition = WhenWritingDefault` is NOT a valid "omit defaults" shortcut:
-  many UnitDef defaults are non-CLR-default initializers (`Size=2`, `Radius=0.495`,
-  `UnitType="Dynamic"`, `AggroRangeScale=1`, `WadingWaterlineFraction=0.35`, stats `=10`,
-  `UnitAnimTimingOverride.EffectTimeMs=-1`). Omitting must compare against a `new TDef()`
-  baseline, not against CLR zero.
+- Default-omission is implemented as `RegistryBase.PruneDefaults` (compare each serialized
+  property against a serialized `new TDef()` baseline, drop when `DeepEquals`). It was NOT
+  done with `DefaultIgnoreCondition = WhenWritingDefault` because many defaults are
+  non-CLR-default initializers (`Size=2`, `Radius=0.495`, `UnitType="Dynamic"`,
+  `AggroRangeScale=1`, `WadingWaterlineFraction=0.35`, stats `=10`,
+  `UnitAnimTimingOverride.EffectTimeMs=-1`) — CLR-zero comparison would be wrong.
 - `DirectionalFractions` intercardinals track "explicitly authored" via setters; an
   authored 0 that gets omitted would be re-lerped from cardinals on the next load
   (rendering change). Treat nullable nested objects as all-or-nothing subtrees.
