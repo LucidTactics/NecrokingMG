@@ -401,14 +401,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             else if (TryConsumeInventoryItem(s.ItemId))
                 _inventory.RemoveItem(s.ItemId, 1);
         };
-        _buildingMenuUI.Init(_widgetRenderer, _envSystem, _inventory, _gameData.Items,
-            _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel,
-            _sim.MagicGlyphs, _gameData.Spells, _sim);
+        _buildingMenuUI.Init(_widgetRenderer, _inventory, _gameData.Items,
+            _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel, _gameData.Spells);
         _craftingMenu.Init(_widgetRenderer, _inventory, _gameData.Items, _gameData,
             _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel);
         _craftingMenu.SetSkillBook(_skillBookState);
-        _tableMenuUI.Init(_widgetRenderer, _envSystem, _inventory, _gameData.Items,
-            _sim.PlayerResources, _spriteBatch, _pixel, _font);
+        _tableMenuUI.Init(_widgetRenderer, _inventory, _gameData.Items,
+            _spriteBatch, _pixel, _font);
         _tableMenuUI.SetSkillBook(_skillBookState);
         _tableMenuUI.StartCraftCallback = (envIdx) => StartTableCraft(envIdx);
         _tableMenuUI.DrawUnitIconCallback = (defId, rect) => _gameRenderer.DrawUnitIdleSprite(defId, rect);

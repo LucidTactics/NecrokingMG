@@ -27,12 +27,16 @@ public class BuildingMenuUI : SideListMenu
     protected override string InstanceId => "buildmenu";
     protected override string ItemChildPrefix => "building_";
 
-    private EnvironmentSystem _envSystem = null!;
+    // Session-scoped systems are read live: StartGame disposes the old GameSession
+    // and creates a new one, so a cached ref would point at the dead session
+    // (cleared defs → empty menu after exiting to main menu and re-entering).
+    private EnvironmentSystem _envSystem => Game1.Instance._envSystem;
+    private Simulation _sim => Game1.Instance._sim;
+    private MagicGlyphSystem _glyphs => _sim.MagicGlyphs;
+
     private Inventory _inventory = null!;
     private ItemRegistry _items = null!;
-    private MagicGlyphSystem? _glyphs;
     private SpellRegistry? _spells;
-    private Simulation? _sim;
 
     // Buildable defs (cached when menu opens)
     private readonly List<int> _buildableDefIndices = new();
@@ -46,21 +50,16 @@ public class BuildingMenuUI : SideListMenu
     public int SelectedDefIndex => _selectedIndex >= 0 && _selectedIndex < _buildableDefIndices.Count
         ? _buildableDefIndices[_selectedIndex] : -1;
 
-    public void Init(RuntimeWidgetRenderer renderer, EnvironmentSystem envSystem,
+    public void Init(RuntimeWidgetRenderer renderer,
         Inventory inventory, ItemRegistry items, int screenH,
-        SpriteBatch batch, Texture2D pixel,
-        MagicGlyphSystem? glyphs = null, SpellRegistry? spells = null,
-        Simulation? sim = null)
+        SpriteBatch batch, Texture2D pixel, SpellRegistry? spells = null)
     {
         _renderer = renderer;
-        _envSystem = envSystem;
         _inventory = inventory;
         _items = items;
         _batch = batch;
         _pixel = pixel;
-        _glyphs = glyphs;
         _spells = spells;
-        _sim = sim;
 
         var def = renderer.GetWidgetDef(MenuWidgetId);
         if (def == null) return;
@@ -174,7 +173,7 @@ public class BuildingMenuUI : SideListMenu
         // Glyph traps spawn a MagicGlyph blueprint instead of an env object. The glyph
         // has its own placement overlap check (radius-based) and its own build progress.
         // Auto-assigns the necromancer to build it (walk over, work, activate).
-        if (envDef.IsGlyphTrap && _glyphs != null)
+        if (envDef.IsGlyphTrap)
         {
             var pos = new Vec2(worldX, worldY);
             if (!_glyphs.CanPlace(pos, envDef.GlyphRadius)) return false;
@@ -192,7 +191,7 @@ public class BuildingMenuUI : SideListMenu
             // Assign the player's necromancer to walk over and build the glyph.
             // StartRoutine fires the OLD routine's exit cleanup (and restarts the build
             // routine when retargeting a new blueprint); fields are set after.
-            if (_sim != null && _sim.NecromancerIndex >= 0)
+            if (_sim.NecromancerIndex >= 0)
             {
                 int necroIdx = _sim.NecromancerIndex;
                 AI.AIControl.StartRoutine(_sim.UnitsMut, necroIdx,
