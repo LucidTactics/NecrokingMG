@@ -10,6 +10,10 @@ using Necroking.Movement;
 
 namespace Necroking.Render;
 
+/// <summary>Three-state fog classification of a world tile — what the fog
+/// overlay shows there. Produced by <see cref="FogOfWarSystem.GetTileState"/>.</summary>
+public enum FogTileState : byte { Unexplored, Explored, Visible }
+
 /// <summary>
 /// GPU-based fog of war using three render targets:
 ///   - Visibility RT: current-frame vision, cleared each Update, circles drawn opaque
@@ -317,6 +321,25 @@ public class FogOfWarSystem
     /// Used to cull enemy unit sprites, their shadows, buffs, projectiles, and
     /// damage numbers when the necromancer can't see them.
     /// </summary>
+    /// <summary>The mode the last Update/SyncMode ran with.</summary>
+    public FogOfWarMode Mode => _lastMode;
+
+    /// <summary>Three-state fog at a world tile (minimap shading). Mode-aware
+    /// like <see cref="IsVisible"/>: Off → everything Visible; Explored
+    /// (permanent reveal, no fogged band) → explored tiles Visible, rest
+    /// Unexplored; FogOfWar/Hybrid → classic Visible / Explored / Unexplored.
+    /// Out of bounds → Unexplored.</summary>
+    public FogTileState GetTileState(int tx, int ty)
+    {
+        if (_lastMode == FogOfWarMode.Off) return FogTileState.Visible;
+        if (tx < 0 || tx >= _worldW || ty < 0 || ty >= _worldH) return FogTileState.Unexplored;
+        int idx = ty * _worldW + tx;
+        if (_lastMode == FogOfWarMode.Explored)
+            return _exploredTiles[idx] ? FogTileState.Visible : FogTileState.Unexplored;
+        if (_visibleTiles[idx]) return FogTileState.Visible;
+        return _exploredTiles[idx] ? FogTileState.Explored : FogTileState.Unexplored;
+    }
+
     public bool IsVisible(Vec2 pos)
     {
         if (_lastMode == FogOfWarMode.Off || _lastMode == FogOfWarMode.Explored) return true;

@@ -2,6 +2,8 @@ using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Necroking.Data;
+using Necroking.Data.Registries;
+using Necroking.Render;
 using Necroking.World;
 
 namespace Necroking.UI;
@@ -44,6 +46,10 @@ public class MinimapHUD
     private static readonly Color BorderColor = new(20, 20, 30, 220);
     private static readonly Color MarkerOutline = new(10, 10, 12);
     private static readonly Color ViewportColor = Color.White * 0.5f; // premultiplied 50% white
+    // Fog overlay (premultiplied). Unexplored is opaque — nothing shows through —
+    // but deliberately dark gray, not pure black (too stark next to the terrain).
+    private static readonly Color FogUnexplored = new(26, 26, 32, 255);
+    private static readonly Color FogExplored = new Color(0, 0, 0, 90); // ~35% dim: terrain readable, clearly fogged
     private static readonly Color PlayerColor = Color.White;
     private static readonly Color AnimalColor = new(90, 240, 70);
     private static readonly Color HumanColor = new(255, 215, 60);
@@ -53,8 +59,16 @@ public class MinimapHUD
     private SpriteBatch _batch = null!;
     private Texture2D _pixel = null!;
 
+    // Fog overlay refreshes much faster than the terrain bake (the bright circle
+    // follows moving units) but not every frame — the CPU fog grid itself only
+    // updates every 2nd frame (FogOfWarSystem.UpdateInterval).
+    private const int FogRefreshFrames = 3;
+
     private Texture2D? _terrainTex;
+    private Texture2D? _fogTex;
     private Color[] _bakeBuffer = Array.Empty<Color>();
+    private Color[] _fogBuffer = Array.Empty<Color>();
+    private int _framesSinceFog = 999;
     private bool[] _obstacleMask = Array.Empty<bool>();
     private Color[] _typeColors = Array.Empty<Color>();
     private GroundSystem? _bakedGround; // session identity — rebake + recolor when it changes
@@ -91,11 +105,49 @@ public class MinimapHUD
         FillRect(new Rectangle(rect.X - 2, rect.Y - 2, rect.Width + 4, rect.Height + 4), BorderColor);
         _batch.Draw(_terrainTex, rect, Color.White);
 
+        // Fog over terrain, markers over fog: buildings stay full-bright inside
+        // the dimmed explored band, and gating (below) keeps markers out of the
+        // opaque unexplored area.
+        var fog = g._fogOfWar;
+        bool fogOn = fog.Mode != FogOfWarMode.Off;
+        if (fogOn)
+        {
+            if (++_framesSinceFog >= FogRefreshFrames) RefreshFogTexture(fog);
+            if (_fogTex != null) _batch.Draw(_fogTex, rect, Color.White);
+        }
+
         float sx = rect.Width / _winW;
         float sy = rect.Height / _winH;
-        DrawBuildingMarkers(g, rect, sx, sy);
-        DrawUnitMarkers(g, rect, sx, sy);
+        DrawBuildingMarkers(g, rect, sx, sy, fogOn ? fog : null);
+        DrawUnitMarkers(g, rect, sx, sy, fogOn ? fog : null);
         DrawCameraViewport(g, rect, sx, sy, screenW, screenH);
+    }
+
+    /// <summary>Rebuild the fog overlay for the current window: opaque dark on
+    /// unexplored, translucent dim on explored-but-not-visible, clear where seen.</summary>
+    private void RefreshFogTexture(FogOfWarSystem fog)
+    {
+        _framesSinceFog = 0;
+        int n = MapSize * MapSize;
+        if (_fogBuffer.Length != n) _fogBuffer = new Color[n];
+        for (int py = 0; py < MapSize; py++)
+        {
+            int ty = (int)(_winY + (py + 0.5f) * _winH / MapSize);
+            int row = py * MapSize;
+            for (int px = 0; px < MapSize; px++)
+            {
+                int tx = (int)(_winX + (px + 0.5f) * _winW / MapSize);
+                _fogBuffer[row + px] = fog.GetTileState(tx, ty) switch
+                {
+                    FogTileState.Unexplored => FogUnexplored,
+                    FogTileState.Explored => FogExplored,
+                    _ => Color.Transparent,
+                };
+            }
+        }
+        if (_fogTex == null || _fogTex.IsDisposed)
+            _fogTex = new Texture2D(_device, MapSize, MapSize);
+        _fogTex.SetData(_fogBuffer);
     }
 
     /// <summary>Outline of the world area the camera currently renders.</summary>
@@ -149,6 +201,7 @@ public class MinimapHUD
             _bakedGround = ground;
         }
         _winX = winX; _winY = winY; _winW = winW; _winH = winH;
+        _framesSinceFog = 999; // window moved — fog overlay must follow this frame
 
         int n = MapSize * MapSize;
         if (_bakeBuffer.Length != n)
@@ -241,7 +294,7 @@ public class MinimapHUD
     //  Live markers
     // ═══════════════════════════════════════
 
-    private void DrawBuildingMarkers(Game1 g, Rectangle rect, float sx, float sy)
+    private void DrawBuildingMarkers(Game1 g, Rectangle rect, float sx, float sy, FogOfWarSystem? fog)
     {
         var env = g._envSystem;
         var objects = env.Objects;
@@ -251,17 +304,23 @@ public class MinimapHUD
             var def = defs[objects[i].DefIndex];
             if (!def.IsBuilding) continue;
             if (!env.IsObjectVisible(i)) continue;
+            // Owner convention (see EnvironmentSystem trap dispatch): 0 = Undead, 1 = Human.
+            bool undeadOwned = env.GetObjectRuntime(i).Owner == 0;
+            // Own buildings always show; others need the tile explored at least
+            // once (buildings, unlike units, stay marked in the fogged band).
+            if (!undeadOwned && fog != null
+                && fog.GetTileState((int)objects[i].X, (int)objects[i].Y) == FogTileState.Unexplored)
+                continue;
             int cx = rect.X + (int)((objects[i].X - _winX) * sx);
             int cy = rect.Y + (int)((objects[i].Y - _winY) * sy);
-            // Owner convention (see EnvironmentSystem trap dispatch): 0 = Undead, 1 = Human.
-            if (env.GetObjectRuntime(i).Owner == 0)
+            if (undeadOwned)
                 OutlinedSquare(cx, cy, 3, UndeadColor, rect);
             else
                 OutlinedDisc(cx, cy, 3, HumanColor, rect);
         }
     }
 
-    private void DrawUnitMarkers(Game1 g, Rectangle rect, float sx, float sy)
+    private void DrawUnitMarkers(Game1 g, Rectangle rect, float sx, float sy, FogOfWarSystem? fog)
     {
         var units = g._sim.Units;
         int necroIdx = g.FindNecromancer();
@@ -269,6 +328,14 @@ public class MinimapHUD
         {
             var u = units[i];
             if (!u.Alive || i == necroIdx) continue;
+            // Same culling as the world renderer (GameRenderer.Units): own undead
+            // always show, everyone else only inside current vision. The extra
+            // Unexplored check only bites in Explored mode, where IsVisible is
+            // unconditionally true but the dark shroud still hides unseen tiles.
+            if (u.Faction != Faction.Undead && fog != null
+                && (!fog.IsVisible(u.Position)
+                    || fog.GetTileState((int)u.Position.X, (int)u.Position.Y) == FogTileState.Unexplored))
+                continue;
             Color col = u.Faction switch
             {
                 Faction.Animal => AnimalColor,
