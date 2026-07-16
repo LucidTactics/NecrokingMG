@@ -57,9 +57,11 @@ public class LightningRenderer
 
     // Bolt widths, drain arc heights, and cloud/flare sizes are pixel values authored
     // at the default zoom (32). Scale them linearly with zoom so the effects track
-    // world size like the units they connect, clamped so bolts never collapse below
-    // a visible width at MinZoom nor bloat absurdly at MaxZoom.
-    private float FxScale() => Math.Clamp(_camera.Zoom / 32f, 0.3f, 4f);
+    // world size like the units they connect. No inflation floor — zoomed out the
+    // effect must shrink with the world (a floor here made drains read huge at far
+    // zoom); visibility at MinZoom is handled by per-width pixel floors in the
+    // rasterizers instead.
+    private float FxScale() => Math.Clamp(_camera.Zoom / 32f, 0f, 4f);
 
     public void Draw()
     {
@@ -302,9 +304,11 @@ public class LightningRenderer
         // Style.WidthFade controls how much the bolt's width follows the fade:
         // 1 = full coupling (width*ef, the classic collapse-to-a-thread; also the
         // pre-knob behavior), 0 = constant width with only brightness fading.
+        // Width floors keep far-zoom bolts a visible hairline (widthScale shrinks
+        // proportionally with zoom, unfloored) while wf still fades to nothing.
         float wf = MathHelper.Lerp(1f, ef, Math.Clamp(style.WidthFade, 0f, 1f));
-        float coreW = style.CoreWidth * widthScale * wf;
-        float glowW = style.GlowWidth * widthScale * wf;
+        float coreW = MathF.Max(style.CoreWidth * widthScale, 0.6f) * wf;
+        float glowW = MathF.Max(style.GlowWidth * widthScale, 1.2f) * wf;
 
         foreach (var branch in branches)
         {
@@ -511,8 +515,9 @@ public class LightningRenderer
         float scrollOff = elapsed * v.ScrollSpeed * fxScale * (v.FlowReversed ? -1f : 1f);
         var scrollVerts = scroll ? strips.GetTexturedBucket(coreI) : null;
 
-        float glowW = v.GlowWidth * fxScale;
-        float coreW = v.CoreWidth * fxScale;
+        // Same hairline floors as the bolt path — far zoom thins, never vanishes.
+        float glowW = MathF.Max(v.GlowWidth * fxScale, 1.2f);
+        float coreW = MathF.Max(v.CoreWidth * fxScale, 0.6f);
         for (int t = 0; t < v.TendrilCount; t++)
         {
             float offset = (t - v.TendrilCount / 2f) * v.SwayAmplitude * fxScale;
@@ -554,13 +559,14 @@ public class LightningRenderer
     /// meets the flow source (the victim) and a smaller one at the destination
     /// hand. Must be called while the additive HDR sprite batch is open (colors
     /// via ToHdrVertex). Shared by the in-game renderer and SpellPreview.</summary>
-    // Volumetric sprites (clouds/impact/flare) couple to zoom SOFTLY (sqrt of the
-    // structural fxScale): at fxScale 1 the authored effect already fills the
-    // caster→target gap, so scaling the soft additive puffs fully linear merges
-    // them into one featureless saturated blob that swallows both units at high
-    // zoom. sqrt keeps them puff-sized relative to the beam while the tendril
-    // structure (widths/arc/wave) tracks the world exactly.
-    private static float VolumetricScale(float fxScale) => MathF.Sqrt(fxScale);
+    // Volumetric sprites (clouds/impact/flare): proportional below the authoring
+    // zoom, soft (sqrt) above it. Zoomed OUT the puffs must shrink with the world —
+    // sqrt there over-sizes them ~2x and the drain reads as a fat caterpillar
+    // dominating the screen. Zoomed IN, full linear merges the soft additive puffs
+    // into one featureless blob that swallows both units, so growth is damped while
+    // the tendril structure (widths/arc/wave) keeps tracking the world exactly.
+    private static float VolumetricScale(float fxScale)
+        => fxScale >= 1f ? MathF.Sqrt(fxScale) : fxScale;
 
     public static void AddDrainFlareSprites(SpriteBatch sb, Texture2D glowTex,
         Vector2 start, Vector2 end, DrainVisualParams v, float elapsed, float fxScale = 1f)
