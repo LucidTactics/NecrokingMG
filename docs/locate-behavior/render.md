@@ -657,6 +657,70 @@ point[0] is the CASTER end (drains: caster hand → target). Anything drawn alon
 path can reuse `BuildTendrilPoints`' point list parametrically (regenerate per frame, no
 stored state — same convention as the ribbons themselves).
 
+## ScatterGlow — world-space light-scatter halos ("lit air" around effects)
+
+**`Necroking/Render/ScatterGlowSystem.cs`** (`Game1._scatterGlow`, shader
+`resources/ScatterGlow.fx`) — immediate-mode: effects register emitters during draw
+collection each frame, the system draws soft additive halos into the HDR scene RT
+pre-bloom, modulated by a world-anchored mist field. DepthRead vs the FogDepthOccluders
+unit stamps (`NeedsDepthStamps` ORs into the stamp-pass gate). Emitter API:
+`AddPoint(worldPos, radius, rgb, strength, height)` (one call per EFFECT, not per
+particle), `AddSpellPoint(spell, pos, strengthScale, height)` = the single
+SpellDef→emitter conversion (reads `spell.ScatterRadius/ScatterColor/ScatterStrength`,
+no-op at radius 0), `AddPolyline(worldPts, …)` (beam paths in world space),
+`AddRibbonScreen(screenPts, worldRadius, rgb, strength, worldYStart, worldYEnd)` (bolt
+paths that only exist in screen px; depth lerps between the endpoint world Ys). Gate:
+`Active` = shader loaded && `Settings.Performance.ScatterGlow` (bool) — global density
+also scales by `Performance.ScatterGlowStrength` (float); both fields exist in
+`Data/Registries/GameSettings.cs` `PerformanceSettings` and are live-tunable via the
+`scatterglow` dev command (`Game1.Dev.cs`), but have **NO SettingsWindow UI row yet**.
+Current emitter call sites: `GameRenderer.World.cs` (`Effect.ScatterRadius/Rgb/Strength`
+on EffectManager effects + projectile impact bursts), `Render/LightningRenderer.cs` beam
+loop (`beam.Style.ScatterRadius…` → `AddRibbonScreen`, main path + branches), and the
+TestShape review spells inside ScatterGlowSystem itself.
+
+**Scatter style mapping gap (strike/zap vs beam):** `LightningStyle` carries
+`ScatterRadius/ScatterRgb/ScatterStrength` (`Game/LightningSystem.cs`), but only
+`SpellDef.BuildBeamStyle()` (`Data/Registries/SpellRegistry.cs`) maps the spell's SCATTER
+fields into them — **`BuildStrikeStyle()` does NOT**, so zaps/strikes get zero scatter
+today. Strike spells build their style in `SpellEffectSystem.ExecuteStrikeFrom`
+(`spell.BuildStrikeStyle()` → `Lightning.SpawnZap(origin, targetPos, …, style,
+originHeight, targetH)` when `StrikeTargetUnit`, else `SpawnStrike`). `ActiveZap` stores
+**world-space** `StartPos`/`EndPos` (Vec2) + `StartHeight`/`EndHeight` — the zap draw loop
+in `LightningRenderer.Draw` has everything needed for a beam-style `AddRibbonScreen` with
+per-end depth. Drains: endpoints resolve in `TryGetDrainEndpoints` (screen space; world
+positions are re-derivable from `drain.CasterID`/target/`CorpsePos`); drain colors =
+`DrainVisualParams.CoreColor/GlowColor` (HdrColor), built by `SpellDef.BuildDrainVisuals()`
+from `drainCoreColor`/`drainGlowColor` in spells.json.
+
+## Buff visuals & the casting glow (`Render/BuffVisualSystem.cs`)
+
+`Game1._buffVisuals` renders every per-buff visual on units. All visuals are **data on
+`BuffDef`** (`Data/Registries/BuffRegistry.cs`): paired `HasX` flag + config object —
+`Orbital` (flipbook orbs, `OrbColor` HdrColor, orbit radii/speeds), `GroundAura`
+(flipbook, `Color` HdrColor, scale, pulse), `BehindEffect`/`FrontEffect`
+(`UprightEffectVisual` — flipbook at the unit or pinned to `EffectSpawnPos` via
+`PinToEffectSpawn`), `LightningAura` (arcs, core/glow HdrColors + widths),
+`ImageBehind`, `PulsingOutline` (drawn NOT here but by `GameRenderer.Units.cs`
+`DrawUnitPulsingOutline`), `WeaponParticle` (flipbook particles emitted along the
+hilt→tip weapon segment, `Color` HdrColor, spawn rate/lifetime/drift), `UnitTint`.
+- **Tick**: `BuffVisualSystem.Update(dt, units, buffReg, globalTime)` from
+  `Game1.Animation.cs` (orbit angles, lightning-arc reseed; state keyed by `Unit.Id`).
+- **Draw**: `GameRenderer.Units.cs` `DrawSingleUnit` calls `UpdateWeaponParticles`
+  (with `ComputeWeaponAttach(i, …)` → `WeaponAttachRuntime` — **world-space**
+  `HiltWorld`/`TipWorld` + heights) then `_buffVisuals.DrawUnit(i, renderPos, phase, …)`
+  twice: phase 0 behind the sprite, phase 1 in front. Same-type buffs alternate on a
+  2-second cycle (exclusive per visual type).
+- **The casting glow is just a buff**: `SpellDef.CastingBuffID` (e.g. `buff_4`, a
+  WeaponParticle/glow buff) applied in `Game1.Spells.cs` `DispatchSpellCast` (player;
+  removed by `RemoveCastingBuffAll` at cast end / `CancelPlayerChannel`) and in the AI
+  cast path (expires by duration); the craft-table channel glow is
+  `Game1.Animation.cs` `UpdateTableChannelBuff` (`TableChannelBuffId`). The glow's hand
+  anchor = the weapon-attach TIP, projected with the sprite height convention
+  (height × Zoom, no YRatio) — same anchor comment in `LightningRenderer.Draw`'s beam loop.
+- BuffVisualSystem is a **native-encoding island** (raw Scene batch, `EncodeColor`
+  CPU-clamps to LDR — see "Where each spell/buff glow layer is drawn" above).
+
 ### `Necroking/Render/Flipbook.cs` — flipbook (sprite-sheet frame sequence)
 What lives here: `class Flipbook` — loads a sprite-sheet texture (cols×rows, FPS) and
 maps a frame index to a source `Rectangle`. `LoadFromDef(device, FlipbookDef)` builds one
