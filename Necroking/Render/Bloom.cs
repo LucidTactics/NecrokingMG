@@ -30,10 +30,32 @@ public class BloomRenderer
     private XnaEffect? _downsampleEffect;
     private XnaEffect? _bicubicUpsampleEffect;
 
-    // Cached scatter blend state — BlendState is a native graphics object, so
-    // it's rebuilt only when the quantized scatter value changes, not per frame.
-    private BlendState? _scatterBlend;
-    private byte _scatterBlendByte;
+    // Cached scatter blend states — BlendState is a native graphics object, so
+    // they're rebuilt only when the quantized scatter value changes, not per
+    // frame. Two slots: the regular per-level scatter, and the deepest level's
+    // (which carries the fractional zoom-spread weight, so it differs).
+    private readonly BlendState?[] _scatterBlends = new BlendState?[2];
+    private readonly byte[] _scatterBlendBytes = new byte[2];
+
+    private BlendState GetScatterBlend(float scatter, bool deepestSlot)
+    {
+        int slot = deepestSlot ? 1 : 0;
+        byte sb = (byte)(Math.Clamp(scatter, 0f, 1f) * 255f);
+        if (_scatterBlends[slot] == null || _scatterBlendBytes[slot] != sb)
+        {
+            _scatterBlends[slot]?.Dispose();
+            _scatterBlends[slot] = new BlendState
+            {
+                ColorSourceBlend = Blend.BlendFactor,
+                ColorDestinationBlend = Blend.One,
+                AlphaSourceBlend = Blend.BlendFactor,
+                AlphaDestinationBlend = Blend.One,
+                BlendFactor = new Color(sb, sb, sb, sb)
+            };
+            _scatterBlendBytes[slot] = sb;
+        }
+        return _scatterBlends[slot]!;
+    }
 
     public bool IsInitialized => _initialized;
     public RenderTarget2D? SceneRT => _sceneRT;
@@ -144,8 +166,16 @@ public class BloomRenderer
         device.Clear(Color.Black);
     }
 
+    /// <param name="zoomSpreadBias">Zoom-relative bloom spread in mip levels:
+    /// log2(cameraZoom / authoringZoom). Bloom radius is set by how deep the mip
+    /// chain goes (each level doubles it), which is fixed SCREEN pixels — so a
+    /// thin bright beam zoomed out wears the same halo as zoomed in and reads
+    /// many times fatter than the world it belongs to. Biasing the effective
+    /// iteration count by log2(zoom) makes halo width track world scale; the
+    /// deepest level blends in fractionally so wheel-zoom doesn't pop between
+    /// integer depths. 0 (the default, and the editor preview) = tuned look.</param>
     public void EndScene(GraphicsDevice device, SpriteBatch batch, BloomSettings settings,
-        RenderTarget2D? outputTarget = null)
+        RenderTarget2D? outputTarget = null, float zoomSpreadBias = 0f)
     {
         if (!_initialized || _sceneRT == null || _mipCount < 1 ||
             _extractEffect == null || _downsampleEffect == null || _combineEffect == null)
@@ -170,7 +200,11 @@ public class BloomRenderer
             return;
         }
 
-        int iters = Math.Clamp(settings.Iterations, 1, _mipCount);
+        // Effective chain depth in float mips; the fractional part becomes the
+        // deepest level's blend weight (smooth radius growth while zooming).
+        float fSpread = Math.Clamp(settings.Iterations + zoomSpreadBias, 1f, _mipCount);
+        int iters = (int)MathF.Ceiling(fSpread);
+        float deepestFrac = 1f - (iters - fSpread); // 1 when fSpread is integral
 
         // --- Step 1: Prefilter — 13-tap Karis downsample + threshold → mips[0] ---
         _extractEffect.Parameters["BloomThreshold"]?.SetValue(settings.Threshold);
@@ -214,24 +248,13 @@ public class BloomRenderer
         // Weighted additive: mip[i] = mip[i] + upsample(mip[i+1]) * scatter
         // BlendFactor controls how much of the wider blur gets added at each level.
         // Destination stays at full strength (One) so sharp detail is preserved.
-        byte sb = (byte)(scatter * 255f);
-        if (_scatterBlend == null || _scatterBlendByte != sb)
-        {
-            _scatterBlend?.Dispose();
-            _scatterBlend = new BlendState
-            {
-                ColorSourceBlend = Blend.BlendFactor,
-                ColorDestinationBlend = Blend.One,
-                AlphaSourceBlend = Blend.BlendFactor,
-                AlphaDestinationBlend = Blend.One,
-                BlendFactor = new Color(sb, sb, sb, sb)
-            };
-            _scatterBlendByte = sb;
-        }
-        var scatterBlend = _scatterBlend;
-
+        // The DEEPEST level additionally carries deepestFrac (the fractional part
+        // of the zoom-biased chain depth) so spread grows smoothly while zooming
+        // instead of popping at integer mip counts.
         for (int i = iters - 2; i >= 0; i--)
         {
+            bool deepest = i == iters - 2;
+            var scatterBlend = GetScatterBlend(deepest ? scatter * deepestFrac : scatter, deepest);
             device.SetRenderTarget(_mips[i]);
             if (useBicubic)
             {
