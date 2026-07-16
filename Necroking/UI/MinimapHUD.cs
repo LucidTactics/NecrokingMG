@@ -152,6 +152,15 @@ public class MinimapHUD
                          _winY + (my - rect.Y) * _winH / rect.Height);
         return true;
     }
+    public bool TryScreenToWorldNoBoundsCheck(int mx, int my, int screenW, out Vec2 world)
+    {
+        world = Vec2.Zero;
+        if (_terrainTex == null || _winW <= 0 || _winH <= 0) return false;
+        var rect = Bounds(screenW);
+        world = new Vec2(_winX + (mx - rect.X) * _winW / rect.Width,
+            _winY + (my - rect.Y) * _winH / rect.Height);
+        return true;
+    }
 
     /// <summary>Rebuild the fog overlay for the current window: opaque dark on
     /// unexplored, translucent dim on explored-but-not-visible, clear where seen.</summary>
@@ -197,6 +206,10 @@ public class MinimapHUD
         ClippedRect(x1, y0 + 1, 1, y1 - y0 - 1, ViewportColor, rect);
     }
 
+    public Vec2 map_center;
+
+    public Vec2 baked_map_center => new Vec2(_winX + _winW * 0.5f, _winY + _winH * 0.5f);
+
     /// <summary>The window of the world the minimap should show: ViewRange
     /// world units centered on the player (map center if none), clamped to the
     /// map — whole map when it's smaller than ViewRange. In the map editor it
@@ -209,7 +222,8 @@ public class MinimapHUD
         float cx = ground.WorldW * 0.5f, cy = ground.WorldH * 0.5f;
         if (g._menuState == MenuState.MapEditor)
         {
-            cx = g._camera.Position.X; cy = g._camera.Position.Y;
+            cx = map_center.X;
+            cy = map_center.Y;
         }
         else
         {
@@ -220,6 +234,8 @@ public class MinimapHUD
                 cx = p.X; cy = p.Y;
             }
         }
+
+        map_center = new(cx, cy);
         float x = Math.Clamp(cx - w * 0.5f, 0, ground.WorldW - w);
         float y = Math.Clamp(cy - h * 0.5f, 0, ground.WorldH - h);
         return (x, y, w, h);

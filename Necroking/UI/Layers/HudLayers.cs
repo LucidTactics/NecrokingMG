@@ -1,4 +1,5 @@
 using Necroking.Core;
+using Necroking.Lib;
 
 namespace Necroking.UI;
 
@@ -359,6 +360,9 @@ public sealed class MinimapLayer : UILayer
     private readonly Game1 _g;
     public MinimapLayer(Game1 g) { _g = g; Band = UIBand.HudTop; }
 
+    public bool dragging_camera;
+    public bool dragging_map;
+    public Vec2 drag_map_center;
     public override string Id => "hud.minimap";
     public override bool Visible => _g.HudVisible && _g._menuState == MenuState.MapEditor;
     public override bool VisibleForDraw => _g._gameWorldLoaded && _g.ShowUIForDraw;
@@ -371,13 +375,72 @@ public sealed class MinimapLayer : UILayer
 
     protected override void OnPointer(InputState input, in UICtx ctx)
     {
-        if (!input.LeftPressed) return;
-        if (_g._minimap.TryScreenToWorld((int)input.MousePos.X, (int)input.MousePos.Y,
-                ctx.ScreenW, out var world))
-            _g._camera.Position = world;
+        if (_g._menuState == MenuState.MapEditor)
+        {
+            // Right click moves camera and center of map.
+            // Left click moves camera, but not map, and also engages dragging so holding mose lets you move around
+            // the map.
+            if (dragging_map || dragging_camera)
+            {
+                return;
+
+            }
+            if (input.RightPressed)
+            {
+                if (_g._minimap.TryScreenToWorld((int)input.MousePos.X, (int)input.MousePos.Y,
+                        ctx.ScreenW, out var world))
+                {
+                    dragging_map = true;
+                    drag_map_center = _g._minimap.baked_map_center;
+                    _g._camera.Position = world;
+                    _g._minimap.map_center = world;
+                }
+            }
+            else if (input.LeftPressed)
+            {
+                if (_g._minimap.TryScreenToWorld((int)input.MousePos.X, (int)input.MousePos.Y,
+                        ctx.ScreenW, out var world))
+                {
+                    dragging_camera = true;
+                    _g._camera.Position = world;
+                }
+            }
+        }
     }
 
     public override void Draw(in UICtx ctx) => _g._minimap.Draw(ctx.ScreenW, ctx.ScreenH);
+
+    protected override void OnFrame(InputState input, in UICtx ctx)
+    {
+        if (!input.LeftDown)
+        {
+            dragging_camera = false;
+        }
+        if (!input.RightDown)
+        {
+            dragging_map = false;
+        }
+
+        if (_g._menuState == MenuState.MapEditor)
+        {
+            if (dragging_map)
+            {
+                if (_g._minimap.TryScreenToWorldNoBoundsCheck((int)input.MousePos.X, (int)input.MousePos.Y,
+                        ctx.ScreenW, out var world))
+                {
+                    var dragDiff = drag_map_center - _g._minimap.baked_map_center;
+                    _g._camera.Position = world + dragDiff;
+                    _g._minimap.map_center = world + dragDiff;
+                }
+            }
+            if (dragging_camera)
+            {
+                if (_g._minimap.TryScreenToWorldNoBoundsCheck((int)input.MousePos.X, (int)input.MousePos.Y,
+                        ctx.ScreenW, out var world))
+                    _g._camera.Position = world;
+            }
+        }
+    }
 }
 
 /// <summary>Bottom-right skill-learn toasts — clickable to jump to the relevant
