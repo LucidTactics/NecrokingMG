@@ -305,6 +305,7 @@ public class BloomRenderer
         // (it's rebuilt next frame, so blending in place is safe) for smooth
         // wheel-zoom. srcMip stays within the levels the chain actually filled.
         int srcMip = 0;
+        float intensityComp = 1f;
         if (zoomSpreadBias > 0f)
         {
             float b = MathF.Min(zoomSpreadBias, iters - 1);
@@ -318,6 +319,17 @@ public class BloomRenderer
                 batch.Draw(_mips[srcMip + 1],
                     new Rectangle(0, 0, _mips[srcMip]!.Width, _mips[srcMip]!.Height), Color.White);
                 batch.End();
+
+                // The mip lerp is trilinear-style: for THIN bright features (beams)
+                // the wider mip's peak is only ~Rho of the finer one's, so mid-octave
+                // the composite peak dips ~25% and the visible halo contour shrinks,
+                // popping back at every octave boundary while zooming (the reported
+                // "bloom shrinks, then grows again" threshold). Compensate with the
+                // inverse of the expected peak loss — monotone contour growth; broad
+                // sources overbrighten mid-octave by at most 1/Rho-1, far milder
+                // than the dip this cures.
+                const float Rho = 0.6f;
+                intensityComp = 1f / ((1f - frac) + frac * Rho);
             }
         }
 
@@ -326,7 +338,7 @@ public class BloomRenderer
         // downsample chain provides the softness, and scatter/iterations tune it.)
         device.SetRenderTarget(outputTarget);
 
-        _combineEffect.Parameters["BloomIntensity"]?.SetValue(settings.Intensity);
+        _combineEffect.Parameters["BloomIntensity"]?.SetValue(settings.Intensity * intensityComp);
         _combineEffect.Parameters["TonemapEnabled"]?.SetValue(settings.Tonemap ? 1f : 0f);
         _combineEffect.Parameters["TonemapShoulder"]?.SetValue(settings.TonemapShoulder);
         _combineEffect.Parameters["TonemapWhitePoint"]?.SetValue(settings.TonemapWhitePoint);
