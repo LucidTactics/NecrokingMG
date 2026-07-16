@@ -294,7 +294,7 @@ public class MapEditorWindow
     private float _statusTimer;
 
     // Panel dimensions
-    private const int PanelWidth = 320;
+    public const int PanelWidth = 320;
     private const int TabRowHeight = 26;
     private const int HeaderHeight = 28;
     private const int LineHeight = 20;
@@ -676,9 +676,13 @@ public class MapEditorWindow
     /// side panel plus the Zones tab's left village panel. This is the map-editor
     /// layer's ContainsMouse in the UI router (its footprint: the editor is NOT a
     /// blocking blanket; the world area stays paintable underneath).</summary>
+    /// <summary>Screen X of the right-docked panel's left edge — the single
+    /// source for the panel rect (MinimapHUD docks left of this in editor mode).</summary>
+    public static int PanelLeftX(int screenW) => screenW - PanelWidth - 10;
+
     public bool IsPanelAt(int mx, int my, int screenW, int screenH)
     {
-        int panelX = screenW - PanelWidth - 10;
+        int panelX = PanelLeftX(screenW);
         int panelY = 10;
         int panelH = screenH - 20;
         if (mx >= panelX && mx < panelX + PanelWidth &&
@@ -805,7 +809,7 @@ public class MapEditorWindow
         bool rightDown = !popupBlocking && mouse.RightButton == ButtonState.Pressed;
         bool rightUp = mouse.RightButton == ButtonState.Released && _prevMouse.RightButton == ButtonState.Pressed;
 
-        int panelX = screenW - PanelWidth - 10;
+        int panelX = PanelLeftX(screenW);
         int panelY = 10;
         bool overPanel = IsMouseOverPanel(screenW, screenH);
 
@@ -1205,7 +1209,7 @@ public class MapEditorWindow
 
     public void Draw(int screenW, int screenH)
     {
-        int panelX = screenW - PanelWidth - 10;
+        int panelX = PanelLeftX(screenW);
         int panelY = 10;
         int panelH = screenH - 20;
 

@@ -73,10 +73,13 @@ public sealed class MapEditorLayer : UILayer
         // block): only while no sub-popup sits above the editor — a texture
         // browser / color picker / env editor owns the wheel then — and the
         // cursor is off the side panel (the panel's own per-tab scroll reads
-        // raw mouse in the immediate-mode pass).
+        // raw mouse in the immediate-mode pass) and off the minimap (a UI
+        // surface over the world, but in a LOWER band, so it can't consume
+        // the wheel before this runs).
         if (input.ScrollDelta != 0 && !input.IsScrollConsumed
             && _popups.IsEmpty
-            && !ContainsMouse((int)input.MousePos.X, (int)input.MousePos.Y, in ctx))
+            && !ContainsMouse((int)input.MousePos.X, (int)input.MousePos.Y, in ctx)
+            && !MinimapHUD.Bounds(ctx.ScreenW).Contains((int)input.MousePos.X, (int)input.MousePos.Y))
         {
             _g._camera.ZoomBy(input.ScrollDelta / 120f);
             input.ConsumeScroll();

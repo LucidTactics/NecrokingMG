@@ -12,7 +12,9 @@ namespace Necroking.UI;
 // UIHitRegistry — Game1.RebuildUIHitRects still catalogues the HUD through
 // HUDRenderer.AppendHitRects (+ toast/aggro extras) under the fine-grained
 // per-button ids ("hud.menu_row.2") the ui_rects dev command and the map
-// editor's OverGameplayHud prefix checks rely on.
+// editor's OverGameplayHud prefix checks rely on. Exception: MinimapLayer —
+// HUDRenderer doesn't know the minimap, so it appends its own rect (map
+// editor only, where it takes input).
 
 /// <summary>The world floor — the layer everything else sits above. Owns world
 /// clicks (Game1.WorldClicks.cs dispatch) and camera scroll-zoom. Overrides the
@@ -346,19 +348,34 @@ public sealed class EditorLauncherLayer : UILayer
     }
 }
 
-/// <summary>Top-right minimap under the button rows — draw-only (no input yet).
-/// Unlike the button rows it hides outside normal play so it can't cover the
-/// map editor's right-side panels.</summary>
+/// <summary>Top-right minimap under the button rows. Draw-only during normal
+/// play (no input — the follow-cam would lerp a click-jump straight back). In
+/// the map editor it docks left of the editor panel (MinimapHUD.Bounds) and
+/// takes input: a click jumps the camera to that world spot, and its
+/// "hud."-prefixed hit rect flips OverGameplayHud so the click can't paint
+/// tiles underneath.</summary>
 public sealed class MinimapLayer : UILayer
 {
     private readonly Game1 _g;
     public MinimapLayer(Game1 g) { _g = g; Band = UIBand.HudTop; }
 
     public override string Id => "hud.minimap";
-    public override bool Visible => false; // draw-only
+    public override bool Visible => _g.HudVisible && _g._menuState == MenuState.MapEditor;
     public override bool VisibleForDraw => _g._gameWorldLoaded && _g.ShowUIForDraw;
-    public override bool ContainsMouse(int mx, int my, in UICtx ctx) => false;
-    public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { }
+
+    public override bool ContainsMouse(int mx, int my, in UICtx ctx)
+        => MinimapHUD.Bounds(ctx.ScreenW).Contains(mx, my);
+
+    public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx)
+        => reg.Add(Id, MinimapHUD.Bounds(ctx.ScreenW));
+
+    protected override void OnPointer(InputState input, in UICtx ctx)
+    {
+        if (!input.LeftPressed) return;
+        if (_g._minimap.TryScreenToWorld((int)input.MousePos.X, (int)input.MousePos.Y,
+                ctx.ScreenW, out var world))
+            _g._camera.Position = world;
+    }
 
     public override void Draw(in UICtx ctx) => _g._minimap.Draw(ctx.ScreenW, ctx.ScreenH);
 }

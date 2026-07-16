@@ -3,13 +3,16 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Necroking.Data;
 using Necroking.Data.Registries;
+using Necroking.Lib;
 using Necroking.Render;
 using Necroking.World;
 
 namespace Necroking.UI;
 
 /// <summary>
-/// Top-right minimap, sitting under the core-menu/editor button rows. Shows a
+/// Top-right minimap, sitting under the core-menu/editor button rows (in the
+/// map editor it docks left of the editor panel instead and follows the free
+/// camera; clicking it there jumps the camera — see MinimapLayer). Shows a
 /// player-centered window of the world (not the whole map — on the 4096-tile
 /// default map a whole-map view collapses every lake and forest into a pixel).
 /// Terrain (ground colors + darkened natural obstacles) is baked into a small
@@ -30,6 +33,9 @@ public class MinimapHUD
     /// <summary>Bottom edge — HUD elements that used to sit under the button
     /// rows (horde caps) now sit under this.</summary>
     public const int Bottom = Top + MapSize;
+    // Gap between the minimap and the map editor's right-side panel when the
+    // editor is open (the minimap docks left of the panel so it doesn't cover it).
+    private const int EditorPanelGap = 8;
 
     // World units the window spans (2 units/px at MapSize 192): one tree ≈ one
     // darkened pixel. Shrinks to the map size on maps smaller than this.
@@ -84,8 +90,17 @@ public class MinimapHUD
         _pixel = pixel;
     }
 
+    /// <summary>Screen rect of the minimap. Top-right normally; in the map
+    /// editor it moves left of the editor's right-side panel so it doesn't
+    /// cover it. The single placement source — draw, hit rect, and click
+    /// mapping all derive from it.</summary>
     public static Rectangle Bounds(int screenW)
-        => new(screenW - RightMargin - MapSize, Top, MapSize, MapSize);
+    {
+        int x = Game1.Instance._menuState == MenuState.MapEditor
+            ? Editor.MapEditorWindow.PanelLeftX(screenW) - EditorPanelGap - MapSize
+            : screenW - RightMargin - MapSize;
+        return new(x, Top, MapSize, MapSize);
+    }
 
     public void Draw(int screenW, int screenH)
     {
@@ -107,9 +122,10 @@ public class MinimapHUD
 
         // Fog over terrain, markers over fog: buildings stay full-bright inside
         // the dimmed explored band, and gating (below) keeps markers out of the
-        // opaque unexplored area.
+        // opaque unexplored area. Fog-free in the map editor, mirroring the
+        // world's FogOfWarOverlay pass — the editor sees everything.
         var fog = g._fogOfWar;
-        bool fogOn = fog.Mode != FogOfWarMode.Off;
+        bool fogOn = fog.Mode != FogOfWarMode.Off && g._menuState != MenuState.MapEditor;
         if (fogOn)
         {
             if (++_framesSinceFog >= FogRefreshFrames) RefreshFogTexture(fog);
@@ -121,6 +137,20 @@ public class MinimapHUD
         DrawBuildingMarkers(g, rect, sx, sy, fogOn ? fog : null);
         DrawUnitMarkers(g, rect, sx, sy, fogOn ? fog : null);
         DrawCameraViewport(g, rect, sx, sy, screenW, screenH);
+    }
+
+    /// <summary>Map a screen pixel inside the minimap to the world point it
+    /// shows (inverse of the marker mapping, against the baked window). False
+    /// when the pixel is outside the minimap or nothing has been baked yet.</summary>
+    public bool TryScreenToWorld(int mx, int my, int screenW, out Vec2 world)
+    {
+        world = Vec2.Zero;
+        if (_terrainTex == null || _winW <= 0 || _winH <= 0) return false;
+        var rect = Bounds(screenW);
+        if (!rect.Contains(mx, my)) return false;
+        world = new Vec2(_winX + (mx - rect.X) * _winW / rect.Width,
+                         _winY + (my - rect.Y) * _winH / rect.Height);
+        return true;
     }
 
     /// <summary>Rebuild the fog overlay for the current window: opaque dark on
@@ -169,17 +199,26 @@ public class MinimapHUD
 
     /// <summary>The window of the world the minimap should show: ViewRange
     /// world units centered on the player (map center if none), clamped to the
-    /// map — whole map when it's smaller than ViewRange.</summary>
+    /// map — whole map when it's smaller than ViewRange. In the map editor it
+    /// centers on the free camera instead, so the minimap follows where you're
+    /// working rather than staying pinned to the necromancer.</summary>
     private (float x, float y, float w, float h) DesiredWindow(Game1 g, GroundSystem ground)
     {
         float w = Math.Min(ViewRange, ground.WorldW);
         float h = Math.Min(ViewRange, ground.WorldH);
         float cx = ground.WorldW * 0.5f, cy = ground.WorldH * 0.5f;
-        int necroIdx = g.FindNecromancer();
-        if (necroIdx >= 0)
+        if (g._menuState == MenuState.MapEditor)
         {
-            var p = g._sim.Units[necroIdx].Position;
-            cx = p.X; cy = p.Y;
+            cx = g._camera.Position.X; cy = g._camera.Position.Y;
+        }
+        else
+        {
+            int necroIdx = g.FindNecromancer();
+            if (necroIdx >= 0)
+            {
+                var p = g._sim.Units[necroIdx].Position;
+                cx = p.X; cy = p.Y;
+            }
         }
         float x = Math.Clamp(cx - w * 0.5f, 0, ground.WorldW - w);
         float y = Math.Clamp(cy - h * 0.5f, 0, ground.WorldH - h);
