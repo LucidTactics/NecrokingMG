@@ -161,7 +161,13 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
   (wheel handled generically in `Update`; `DrawUnitsTab` clamps the max itself since the
   generic handler only clamps at 0). **`_selectedUnitDefIdx` indexes the FILTERED list** —
   reset it to -1 whenever the filter changes (the faction-combo handler already does).
-  `DrawPlacedUnitMarkers` draws world diamonds/crosses (no sprites).
+  `DrawPlacedUnitMarkers` = the always-on world markers + unit-name labels over every
+  placed unit (faction-colored diamond / corpse cross + `Units.NameOf` text at
+  `WorldToScreen(pu) + (8,-6)`, no sprites). Called near the top of `MapEditorWindow.Draw`
+  deliberately BEFORE the panel background so the panel occludes markers behind it — but
+  the minimap draws EARLIER still (`MinimapLayer`, HudTop band 450, vs the editor layer's
+  Editor band 700), so these labels paint over the minimap unless rect-suppressed against
+  `MinimapHUD.Bounds(screenW)` (see [ui.md](ui.md) "Draw-order trap").
 - **Drawing a unit sprite thumbnail in editor UI** (the unit-editor preview pattern,
   `UnitEditorWindow.DrawPreviewSprite`): `def.Sprite` (`SpriteRef {AtlasName, SpriteName}`)
   → `AtlasDefs.ResolveAtlasName` → `Game1._atlases[idx]` (internal, reachable via the

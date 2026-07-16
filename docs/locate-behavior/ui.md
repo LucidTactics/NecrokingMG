@@ -486,21 +486,19 @@ it is already tight — adding a button means shrinking heights/gaps or raising 
 play, or on `map_center` (public `Vec2`, follows the free camera / minimap drags) in the
 map editor; clamped to the map. The baked window is `_winX/_winY/_winW/_winH` (private;
 `baked_map_center` exposes its center).
-- **Size**: `const MapSize = 192` is the ONE size constant and it is **doubly loaded** —
-  it is both the on-screen rect size (`Bounds` width/height, `Bottom = Top + MapSize`)
-  AND the texture resolution (`_terrainTex`/`_fogTex` are `MapSize×MapSize`; the `Bake`
-  and `RefreshFogTexture` pixel loops iterate it; the obstacle-darkening world→texel map
-  divides by it). The draw call `_batch.Draw(_terrainTex, rect, …)` already stretches
-  texture→rect, and markers/`TryScreenToWorld` scale off `rect.Width / _winW`, so those
-  generalize to any rect automatically — only the bake/fog texel loops + texture
-  allocation hard-code `MapSize`. Texture (re)allocation only checks `null || IsDisposed`,
-  NOT size — a dynamic size must also compare `tex.Width`.
+- **Size — per-mode**: static `CurrentSize` (=`EditorSize` 288 in the map editor, else
+  `BaseSize` 192) is the ONE size accessor and it is **doubly loaded** — it is both the
+  on-screen rect size (`Bounds` width/height) AND the texture resolution (`_terrainTex`/
+  `_fogTex`; the `Bake`/`RefreshFogTexture` pixel loops iterate the baked `_texSize`).
+  `Draw` rebakes when `_terrainTex.Width != CurrentSize`, so mode switches re-alloc
+  correctly. `Bottom = Top + BaseSize` is deliberately base-size (its only consumer,
+  horde caps, never shows in the editor).
 - **Position**: static `Bounds(screenW)` — the ONE placement source draw, hit rect, and
   click mapping all derive from. Already **per-mode**: normal play = top-right
-  `(screenW - RightMargin(8) - MapSize, Top(66))`; map editor = docked left of the editor
-  panel, `x = MapEditorWindow.PanelLeftX(screenW) - EditorPanelGap(8) - MapSize`. Consts
-  `Top`/`Bottom` are also read by `HUDRenderer.DrawHordeCaps` (horde caps anchor below it
-  in normal play).
+  `(screenW - RightMargin(8) - CurrentSize, Top(66))`; map editor = docked left of the
+  editor panel, `x = MapEditorWindow.PanelLeftX(screenW) - EditorPanelGap(8) - CurrentSize`.
+  Consts `Top`/`Bottom` are also read by `HUDRenderer.DrawHordeCaps` (horde caps anchor
+  below it in normal play).
 - **Draw**: `Bake` (terrain texture from `GroundSystem` vertex map + darkened natural
   obstacles; rebaked on drift/`RebakeFrames`/session change), `RefreshFogTexture` (fog
   overlay), `DrawBuildingMarkers`/`DrawUnitMarkers` (live, fog-gated for non-undead),
@@ -525,10 +523,21 @@ map editor; clamped to the map. The baked window is `_winX/_winY/_winW/_winH` (p
   is written directly — no smoothing. Safe in map-editor mode; in normal play the
   follow-cam (`Game1.cs` Update, `necroIdx >= 0 && !_devFreeCamera` branch) lerps back to
   the necromancer every frame, so a minimap jump there gets undone.
+- **Draw-order trap — world labels over the minimap**: `MinimapLayer` draws at HudTop
+  (450), but the map editor host layer draws at Editor (700), i.e. LATER in the router's
+  bottom-up draw walk — so anything `MapEditorWindow.Draw` paints (notably
+  `DrawPlacedUnitMarkers` unit-name labels) lands ON TOP of the minimap. Suppress by
+  rect-testing against `MinimapHUD.Bounds(screenW)` (the exclusion precedent is
+  `MapEditorHostLayer.OnFrame` in `UI/Layers/HostLayers.cs`, which excludes `Bounds` from
+  camera scroll-zoom). The Alt-key name labels (`GameRenderer.Draw.cs`
+  `DrawAltNameLabels`, "AltLabels" CustomPass) run in the post phase BEFORE the Hud
+  phase, so in normal play the opaque minimap already covers them — no suppress needed
+  there.
 
 **Look/edit here when:** moving/resizing the minimap (incl. per-mode size/placement —
-`MapSize`/`Bounds` and the bake/fog loops in `MinimapHUD.cs`), minimap markers/colors,
-minimap fog behavior, or changing the editor click/drag controls (`MinimapLayer`).
+`CurrentSize`/`Bounds` and the bake/fog loops in `MinimapHUD.cs`), minimap markers/colors,
+minimap fog behavior, changing the editor click/drag controls (`MinimapLayer`), or
+something (editor world labels) draws on top of the minimap.
 
 ## Cross-links
 - [corpses.md](corpses.md) — corpse data model, pile gather/withdraw (`TryTakeCorpseFromPile`,
