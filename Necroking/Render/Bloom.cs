@@ -19,6 +19,12 @@ public class BloomRenderer
 {
     private const int MaxMips = 8;
 
+    // Zoom-out halo dimming exponent: below the authoring zoom the blur floor
+    // can't shrink further, so intensity scales by 2^(DimPow * bias) instead
+    // (energy of a lit region smaller than representable). Tuned on the hdrbar
+    // fixture; 2.0 would be strict area-proportional, lower reads warmer.
+    private const float DimPow = 1.5f;
+
     private RenderTarget2D? _sceneRT;
     private readonly RenderTarget2D?[] _mips = new RenderTarget2D?[MaxMips];
     // Half-res scratch for the zoom-magnified halo (see EndScene): the fractional
@@ -197,15 +203,19 @@ public class BloomRenderer
 
     /// <param name="zoomSpreadBias">Zoom-relative bloom spread in mip levels:
     /// log2(cameraZoom / authoringZoom). Realism model: a light source lights a
-    /// fixed WORLD distance of nearby air, so the halo should occupy zoom-scaled
-    /// screen pixels at the SAME intensity — never a fixed pixel size (reads huge
-    /// zoomed out) and never energy-dispersed (reads absent zoomed in).
-    /// Below the authoring zoom (bias &lt; 0): the effective iteration count
-    /// shrinks, trimming the halo's outer levels (the finest mip is the floor —
-    /// can't blur less than half-res). Above it (bias &gt; 0): the bloom composites
-    /// from a DEEPER mip stretched up — the identical tuned profile magnified 2x
-    /// per level at full intensity — with a fractional lerp between adjacent mips
-    /// so wheel-zoom is smooth. 0 (the default, and the editor preview) = tuned look.</param>
+    /// fixed WORLD distance of nearby air — the halo footprint must scale with
+    /// zoom at the same intensity. Implemented by running the UNCHANGED tuned
+    /// pyramid at a world-anchored VIRTUAL RESOLUTION: for bias &gt; 0 every pass
+    /// renders into a subregion scaled by 2^-bias (= 32/zoom), so when the result
+    /// stretches to the screen the whole tuned profile magnifies CONTINUOUSLY
+    /// with zoom — no mip blending, no octave seams possible by construction.
+    /// (Weight-based mip mixing was tried and field-failed repeatedly: with HDR
+    /// intensities ~10x over the knee, blend weights barely move the VISIBLE glow
+    /// edge — only footprint changes do.) Below the authoring zoom the virtual
+    /// resolution caps at native (can't blur less than the pyramid's floor), so
+    /// the halo DIMS by the energy ratio instead — a lit region smaller than
+    /// representable contributes proportionally less light.
+    /// 0 (the default, and the editor preview) = the tuned look, bit-identical.</param>
     public void EndScene(GraphicsDevice device, SpriteBatch batch, BloomSettings settings,
         RenderTarget2D? outputTarget = null, float zoomSpreadBias = 0f)
     {
@@ -232,13 +242,26 @@ public class BloomRenderer
             return;
         }
 
-        // Zoomed OUT (negative bias): shrink the chain depth; the fractional part
-        // becomes the deepest level's blend weight (smooth radius change).
-        float fSpread = Math.Clamp(settings.Iterations + MathF.Min(0f, zoomSpreadBias), 1f, _mipCount);
-        int iters = (int)MathF.Ceiling(fSpread);
-        float deepestFrac = 1f - (iters - fSpread); // 1 when fSpread is integral
-        DebugBias = zoomSpreadBias; DebugFSpread = fSpread; DebugIters = iters;
-        DebugSrcMip = 0; DebugFrac = 0f; DebugComp = 1f;
+        // World-anchored virtual resolution: the whole pyramid renders into
+        // subregions scaled by s = 2^-max(0,bias), then stretches back to the
+        // screen — the tuned halo footprint magnified continuously with zoom.
+        // Below the authoring zoom s caps at 1 and the halo dims instead
+        // (energy of a lit region smaller than the blur floor).
+        float s = MathF.Pow(2f, -MathF.Max(0f, zoomSpreadBias));
+        s = MathF.Max(s, 0.15f); // RT-budget floor (~zoom 210+)
+        float dim = zoomSpreadBias < 0f
+            ? MathF.Pow(2f, DimPow * MathF.Max(zoomSpreadBias, -3f))
+            : 1f;
+        int iters = Math.Clamp(settings.Iterations, 1, _mipCount);
+        Span<int> w = stackalloc int[MaxMips];
+        Span<int> h = stackalloc int[MaxMips];
+        for (int i = 0; i < iters; i++)
+        {
+            w[i] = Math.Max(2, (int)(_mips[i]!.Width * s));
+            h[i] = Math.Max(2, (int)(_mips[i]!.Height * s));
+        }
+        DebugBias = zoomSpreadBias; DebugFSpread = s; DebugIters = iters;
+        DebugSrcMip = 0; DebugFrac = 0f; DebugComp = dim;
 
         // --- Step 1: Prefilter — 13-tap Karis downsample + threshold → mips[0] ---
         _extractEffect.Parameters["BloomThreshold"]?.SetValue(settings.Threshold);
@@ -248,7 +271,7 @@ public class BloomRenderer
         device.SetRenderTarget(_mips[0]);
         device.Clear(Color.Black);
         batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp, null, null, _extractEffect);
-        batch.Draw(_sceneRT, new Rectangle(0, 0, _mips[0]!.Width, _mips[0]!.Height), Color.White);
+        batch.Draw(_sceneRT, new Rectangle(0, 0, w[0], h[0]), Color.White);
         batch.End();
 
         if (DebugShowExtract)
@@ -257,7 +280,8 @@ public class BloomRenderer
             // only), skipping the downsample/upsample/blur chain entirely.
             device.SetRenderTarget(outputTarget);
             batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp);
-            batch.Draw(_mips[0], new Rectangle(0, 0, _screenW, _screenH), Color.White);
+            batch.Draw(_mips[0], new Rectangle(0, 0, _screenW, _screenH),
+                new Rectangle(0, 0, w[0], h[0]), Color.White);
             batch.End();
             return;
         }
@@ -270,7 +294,8 @@ public class BloomRenderer
             device.SetRenderTarget(_mips[i]);
             device.Clear(Color.Black);
             batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp, null, null, _downsampleEffect);
-            batch.Draw(_mips[i - 1], new Rectangle(0, 0, _mips[i]!.Width, _mips[i]!.Height), Color.White);
+            batch.Draw(_mips[i - 1], new Rectangle(0, 0, w[i], h[i]),
+                new Rectangle(0, 0, w[i - 1], h[i - 1]), Color.White);
             batch.End();
         }
 
@@ -282,13 +307,9 @@ public class BloomRenderer
         // Weighted additive: mip[i] = mip[i] + upsample(mip[i+1]) * scatter
         // BlendFactor controls how much of the wider blur gets added at each level.
         // Destination stays at full strength (One) so sharp detail is preserved.
-        // The DEEPEST level additionally carries deepestFrac (the fractional part
-        // of the zoom-biased chain depth) so spread grows smoothly while zooming
-        // instead of popping at integer mip counts.
         for (int i = iters - 2; i >= 0; i--)
         {
-            bool deepest = i == iters - 2;
-            var scatterBlend = GetWeightBlend(deepest ? scatter * deepestFrac : scatter, deepest ? 1 : 0);
+            var scatterBlend = GetWeightBlend(scatter, 0);
             device.SetRenderTarget(_mips[i]);
             if (useBicubic)
             {
@@ -301,58 +322,23 @@ public class BloomRenderer
             {
                 batch.Begin(SpriteSortMode.Immediate, scatterBlend, SamplerState.LinearClamp);
             }
-            batch.Draw(_mips[i + 1], new Rectangle(0, 0, _mips[i]!.Width, _mips[i]!.Height), Color.White);
+            batch.Draw(_mips[i + 1], new Rectangle(0, 0, w[i], h[i]),
+                new Rectangle(0, 0, w[i + 1], h[i + 1]), Color.White);
             batch.End();
         }
 
-        // Zoomed IN (positive bias): composite from a deeper mip — bilinear
-        // stretch magnifies the whole tuned halo profile 2x per level at full
-        // intensity (the realism model: same world illumination radius, more
-        // pixels). Fractional bias lerps the next-deeper mip into the source mip
-        // (it's rebuilt next frame, so blending in place is safe) for smooth
-        // wheel-zoom. srcMip stays within the levels the chain actually filled.
-        // Zoomed IN (positive bias): grow the halo by ADDING a deeper (2x-wider
-        // per level) mip on top of the untouched mip0 — never attenuate or drop
-        // the tuned bloom. The sharp half-res core is what makes a thin beam's
-        // bloom read hot; any scheme that fades mip0 out produced hard thin/thick
-        // thresholds at the octave zooms (64/128), field-verified with the debug
-        // widget. Construction uses ONLY the proven weighted-additive blend
-        // (src*factor + dst, same as the scatter chain — the in-place
-        // InverseBlendFactor lerp corrupted its destination at small factors):
-        //   scratch = (1-frac)*stretch(mip[deep]) + frac*stretch(mip[deep+1])
-        //   mip0   += lambda * stretch(scratch),  lambda ramping to a cap over
-        // the first octave. Halo radius grows smoothly; the core never dims, so
-        // no intensity compensation is needed.
-        int srcMip = 0;
-        float intensityComp = 1f;
-        if (zoomSpreadBias > 0f && _haloScratch != null)
+        // Stretch the virtual-resolution result to a full-size texture for the
+        // combine (its shader samples the bloom at screen UVs 1:1 and has no UV
+        // scale uniform). Skipped at s == 1 — mips[0] already matches.
+        RenderTarget2D bloomTex = _mips[0]!;
+        if (s < 0.999f && _haloScratch != null)
         {
-            float b = MathF.Min(zoomSpreadBias, iters - 1);
-            int deep = Math.Max(1, (int)b);
-            float frac = b - (int)b;
-            if (deep + 1 > iters - 1) frac = 0f; // no deeper mip in the chain to mix
-
             device.SetRenderTarget(_haloScratch);
-            device.Clear(Color.Black);
-            var scratchRect = new Rectangle(0, 0, _haloScratch.Width, _haloScratch.Height);
-            batch.Begin(SpriteSortMode.Immediate, GetWeightBlend(1f - frac, 2), SamplerState.LinearClamp);
-            batch.Draw(_mips[deep], scratchRect, Color.White);
+            batch.Begin(SpriteSortMode.Immediate, BlendState.Opaque, SamplerState.LinearClamp);
+            batch.Draw(_mips[0], new Rectangle(0, 0, _haloScratch.Width, _haloScratch.Height),
+                new Rectangle(0, 0, w[0], h[0]), Color.White);
             batch.End();
-            if (frac > 0.001f)
-            {
-                batch.Begin(SpriteSortMode.Immediate, GetWeightBlend(frac, 3), SamplerState.LinearClamp);
-                batch.Draw(_mips[deep + 1], scratchRect, Color.White);
-                batch.End();
-            }
-
-            const float HaloShare = 0.6f; // added halo weight cap
-            float lambda = HaloShare * MathF.Min(1f, zoomSpreadBias);
-            device.SetRenderTarget(_mips[0]);
-            batch.Begin(SpriteSortMode.Immediate, GetWeightBlend(lambda, 4), SamplerState.LinearClamp);
-            batch.Draw(_haloScratch, new Rectangle(0, 0, _mips[0]!.Width, _mips[0]!.Height), Color.White);
-            batch.End();
-
-            DebugSrcMip = deep; DebugFrac = lambda; DebugComp = intensityComp;
+            bloomTex = _haloScratch;
         }
 
         // --- Step 4: Composite — scene + bloom * intensity → output target ---
@@ -360,24 +346,22 @@ public class BloomRenderer
         // downsample chain provides the softness, and scatter/iterations tune it.)
         device.SetRenderTarget(outputTarget);
 
-        _combineEffect.Parameters["BloomIntensity"]?.SetValue(settings.Intensity * intensityComp);
+        _combineEffect.Parameters["BloomIntensity"]?.SetValue(settings.Intensity * dim);
         _combineEffect.Parameters["TonemapEnabled"]?.SetValue(settings.Tonemap ? 1f : 0f);
         _combineEffect.Parameters["TonemapShoulder"]?.SetValue(settings.TonemapShoulder);
         _combineEffect.Parameters["TonemapWhitePoint"]?.SetValue(settings.TonemapWhitePoint);
         _combineEffect.Parameters["TonemapDesaturate"]?.SetValue(settings.TonemapDesaturate);
 
         // Bind the bloom texture to sampler slot 1 via the effect parameter.
-        // srcMip > 0 stretches automatically: the combine shader samples
-        // normalized UVs, so a smaller RT magnifies under LinearClamp.
         var bloomParam = _combineEffect.Parameters["BloomSampler"];
         if (bloomParam != null)
         {
-            bloomParam.SetValue(_mips[srcMip]);
+            bloomParam.SetValue(bloomTex);
         }
         else
         {
             Console.Error.WriteLine("[Bloom] WARNING: BloomSampler parameter not found, using fallback Textures[1]");
-            device.Textures[1] = _mips[srcMip];
+            device.Textures[1] = bloomTex;
             device.SamplerStates[1] = SamplerState.LinearClamp;
         }
 

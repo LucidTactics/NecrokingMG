@@ -163,7 +163,27 @@ public class LightningRenderer
             AddDrainCloudSprites(_spriteBatch, _glowTex, drainCloudFb, startSp, endSp,
                 drain.Visuals, drain.Elapsed, fxScale);
         }
+
+        // Dev HDR test bar (`hdrbar` command): a plain world-anchored rectangle
+        // through the same strips+bloom path as beams — the controlled fixture
+        // for zoom/bloom testing. No flicker/jitter/style; hard edges; constant
+        // world size, so its pixel width scales exactly with zoom.
+        if (_game._devHdrBar)
+        {
+            var barPos = _game._devHdrBarPos;
+            float halfLen = _game._devHdrBarLen * 0.5f;
+            var pA = _renderer.WorldToScreen(new Vec2(barPos.X - halfLen, barPos.Y), 0f, _camera);
+            var pB = _renderer.WorldToScreen(new Vec2(barPos.X + halfLen, barPos.Y), 0f, _camera);
+            float wPx = _game._devHdrBarWidth * _camera.Zoom;
+            _barPts.Clear(); _barPts.Add(pA); _barPts.Add(pB);
+            var barVerts = _strips.GetBucket(
+                MathF.Min(_game._devHdrBarIntensity, HdrColor.MaxHdrIntensity));
+            PolylineStrip.Build(barVerts, _barPts, Color.White, 1f, 1f, wPx, wPx, 0f);
+        }
     }
+
+    // Scratch for the dev HDR bar polyline (render thread only).
+    private static readonly List<Vector2> _barPts = new();
 
     /// <summary>Screen-space endpoints for a drain: caster hand anchor (sprite
     /// height convention, no YRatio foreshortening — same as the beam) and the

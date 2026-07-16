@@ -10,6 +10,15 @@ using Necroking.Scenario;
 namespace Necroking;
 
 public partial class Game1 {
+   // `hdrbar` dev command: a plain world-anchored HDR rectangle drawn through the
+   // same strip+bloom pipeline as beams (LightningRenderer.Draw) — the controlled
+   // fixture for zoom/bloom testing: no flicker/jitter/style, constant world size.
+   internal bool _devHdrBar;
+   internal Vec2 _devHdrBarPos;
+   internal float _devHdrBarLen = 8f;        // world units
+   internal float _devHdrBarWidth = 0.15f;   // world units (thin: ~5px at zoom 32)
+   internal float _devHdrBarIntensity = 10f;
+
    // Ring buffers behind the `perf` dev command — fed once per frame at the end of
    // GameRenderer.Draw. Frame = real wall-clock Draw-to-Draw interval (valid in both
    // fixed and variable timestep, unlike _rawDt under fixed-timestep catch-up).
@@ -193,6 +202,25 @@ public partial class Game1 {
                bool want = DevToggle(c.Args, has);
                if (want != has) ToggleGodMode(ni);
                c.Complete(Necroking.Dev.DevServer.Ok($"godmode {(want ? "on" : "off")}"));
+               break;
+            }
+
+            // Toggle the HDR test bar — a plain world-anchored rectangle through the
+            // beam strip+bloom pipeline, anchored at the current camera position.
+            // devctl: cmd hdrbar on [len] [width] [intensity] · cmd hdrbar off
+            case "hdrbar": {
+               bool want = DevToggle(c.Args, _devHdrBar);
+               _devHdrBar = want;
+               if (want)
+               {
+                  _devHdrBarPos = _camera.Position;
+                  if (c.Args.Length > 1) _devHdrBarLen = DevFloat(c.Args[1]);
+                  if (c.Args.Length > 2) _devHdrBarWidth = DevFloat(c.Args[2]);
+                  if (c.Args.Length > 3) _devHdrBarIntensity = DevFloat(c.Args[3]);
+               }
+               c.Complete(Necroking.Dev.DevServer.Ok(want
+                  ? $"hdrbar on at ({_devHdrBarPos.X:F1},{_devHdrBarPos.Y:F1}) len={_devHdrBarLen} width={_devHdrBarWidth} intensity={_devHdrBarIntensity}"
+                  : "hdrbar off"));
                break;
             }
 

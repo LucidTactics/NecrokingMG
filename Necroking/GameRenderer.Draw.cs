@@ -319,8 +319,7 @@ partial class GameRenderer
         {
             var bl = _g._bloom;
             string zdbg = $"ZOOM {_g._camera.Zoom:F1} | bias {bl.DebugBias:+0.00;-0.00} | "
-                + $"spread {bl.DebugFSpread:F2} iters {bl.DebugIters} | "
-                + $"mip {bl.DebugSrcMip}+{bl.DebugFrac:F2} | comp x{bl.DebugComp:F2}";
+                + $"vres x{bl.DebugFSpread:F2} iters {bl.DebugIters} | dim x{bl.DebugComp:F2}";
             var zsize = _g._smallFont.MeasureString(zdbg);
             DrawText(_g._smallFont, zdbg,
                 new Vector2((int)(screenW - zsize.X - 10), 86), new Color(255, 230, 90));
