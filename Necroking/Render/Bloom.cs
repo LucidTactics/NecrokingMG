@@ -85,6 +85,12 @@ public class BloomRenderer
     public RenderTarget2D? SceneRT => _sceneRT;
     public bool IsHDR => _hdrScene;
 
+    // Last-frame zoom-bloom internals for the on-screen debug widget (temporary
+    // while tuning the zoom-threshold artifacts): which code path produced the
+    // frame the user is looking at.
+    public float DebugBias, DebugFSpread, DebugFrac, DebugComp;
+    public int DebugIters, DebugSrcMip;
+
     /// <summary>Set to true to show only the bloom extract result (diagnostic).</summary>
     public bool DebugShowExtract;
 
@@ -232,6 +238,8 @@ public class BloomRenderer
         float fSpread = Math.Clamp(settings.Iterations + MathF.Min(0f, zoomSpreadBias), 1f, _mipCount);
         int iters = (int)MathF.Ceiling(fSpread);
         float deepestFrac = 1f - (iters - fSpread); // 1 when fSpread is integral
+        DebugBias = zoomSpreadBias; DebugFSpread = fSpread; DebugIters = iters;
+        DebugSrcMip = 0; DebugFrac = 0f; DebugComp = 1f;
 
         // --- Step 1: Prefilter — 13-tap Karis downsample + threshold → mips[0] ---
         _extractEffect.Parameters["BloomThreshold"]?.SetValue(settings.Threshold);
@@ -331,6 +339,7 @@ public class BloomRenderer
                 const float Rho = 0.6f;
                 intensityComp = 1f / ((1f - frac) + frac * Rho);
             }
+            DebugSrcMip = srcMip; DebugFrac = frac; DebugComp = intensityComp;
         }
 
         // --- Step 4: Composite — scene + bloom * intensity → output target ---
