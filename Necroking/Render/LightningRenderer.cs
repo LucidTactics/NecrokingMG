@@ -167,15 +167,17 @@ public class LightningRenderer
                     out var scatterPts, out var scatterBranches, beam.Seed, fxScale);
                 float casterY = _sim.Units[casterIdx].Position.Y;
                 float targetY = _sim.Units[targetIdx].Position.Y;
-                _game._scatterGlow.AddPolylineScreen(scatterPts, beam.Style.ScatterRadius,
+                _game._scatterGlow.AddRibbonScreen(scatterPts, beam.Style.ScatterRadius,
                     beam.Style.ScatterRgb, beam.Style.ScatterStrength * scatterFlicker,
                     casterY, targetY);
                 // Side branches get the same lit-air treatment, thinner and dimmer —
-                // mirroring the ribbon pass's BranchDecay width / reduced alpha. Depth:
+                // mirroring the ribbon pass's BranchDecay width / reduced alpha. The
+                // main+branch overlap at the fork is deliberate: real channels glow
+                // brighter below a junction (the branch current joins). Depth:
                 // branches are short, a flat mid-beam Y is indistinguishable.
                 float branchY = (casterY + targetY) * 0.5f;
                 foreach (var branch in scatterBranches)
-                    _game._scatterGlow.AddPolylineScreen(branch,
+                    _game._scatterGlow.AddRibbonScreen(branch,
                         beam.Style.ScatterRadius * beam.Style.BranchDecay,
                         beam.Style.ScatterRgb,
                         beam.Style.ScatterStrength * scatterFlicker * 0.5f,

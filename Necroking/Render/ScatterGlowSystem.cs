@@ -182,30 +182,49 @@ public sealed class ScatterGlowSystem
         AddPoint(worldPts[^1], radius, rgb, splatStrength, height);
     }
 
-    /// <summary>Register a polyline emitter from a SCREEN-space path (lightning
-    /// bolts — their jittered shape only exists in screen px). Radius stays a
-    /// WORLD unit; splat depth lerps between the endpoints' world Ys so the
-    /// sheath depth-sorts correctly along its length.</summary>
-    public void AddPolylineScreen(IReadOnlyList<Vector2> screenPts, float worldRadius,
+    /// <summary>Register a sheath emitter along a SCREEN-space path (lightning
+    /// bolts — their jittered shape only exists in screen px). The path is first
+    /// SIMPLIFIED to the sheath's own resolution (points closer than ~0.75 radius
+    /// merge — scattering physically can't resolve kinks smaller than itself),
+    /// then round splats go down at even arc spacing. The simplification is what
+    /// kills the periodic bright beads: they were splat-crowding at every path
+    /// kink, re-amplified by bloom. Round splats also give organic edges and free
+    /// end caps (a continuous miter ribbon showed straight polygon creases and
+    /// fold-over holes at sharp joins). Radius stays a WORLD unit; splat depth
+    /// lerps between the endpoints' world Ys.</summary>
+    public void AddRibbonScreen(IReadOnlyList<Vector2> screenPts, float worldRadius,
         Color rgb, float strength, float worldYStart, float worldYEnd)
     {
         if (!Active || worldRadius <= 0f || strength <= 0f || screenPts.Count < 2) return;
         var cam = _g._camera;
         float radiusPx = worldRadius * cam.Zoom;
-        float spacingPx = radiusPx * 0.55f;
-        float splatStrength = strength * 0.42f;   // same overlap dimming as AddPolyline
+
+        // Simplify to sheath resolution (keep first + last always).
+        float minDist = radiusPx * 0.75f;
+        float minDistSq = minDist * minDist;
+        _pathScratch.Clear();
+        _pathScratch.Add(screenPts[0]);
+        for (int i = 1; i < screenPts.Count - 1; i++)
+            if (Vector2.DistanceSquared(screenPts[i], _pathScratch[^1]) >= minDistSq)
+                _pathScratch.Add(screenPts[i]);
+        _pathScratch.Add(screenPts[^1]);
+        if (_pathScratch.Count < 2) return;
+
+        float spacingPx = radiusPx * 0.5f;
+        // 0.38: even-arc splats at 0.5r overlap to a ~1.6x ridge — lands the
+        // sheath at the approved overall brightness, below the bloom knee.
+        float splatStrength = strength * 0.38f;
         float camY = cam.Position.Y;
 
-        // Total arc length first, so each splat can lerp its depth by arc fraction.
         float totalLen = 0f;
-        for (int i = 1; i < screenPts.Count; i++)
-            totalLen += (screenPts[i] - screenPts[i - 1]).Length();
+        for (int i = 1; i < _pathScratch.Count; i++)
+            totalLen += (_pathScratch[i] - _pathScratch[i - 1]).Length();
         if (totalLen <= 1e-3f) return;
 
         float arc = 0f, carry = 0f;
-        for (int i = 1; i < screenPts.Count; i++)
+        for (int i = 1; i < _pathScratch.Count; i++)
         {
-            Vector2 a = screenPts[i - 1], b = screenPts[i];
+            Vector2 a = _pathScratch[i - 1], b = _pathScratch[i];
             float segLen = (b - a).Length();
             if (segLen <= 1e-3f) continue;
             float t = carry;
@@ -221,6 +240,7 @@ public sealed class ScatterGlowSystem
             arc += segLen;
         }
     }
+    private readonly List<Vector2> _pathScratch = new(64);
 
     // ─────────────────────────── Test shapes ───────────────────────────
 
