@@ -319,6 +319,48 @@ clicks), or hover picks are wrongly suppressed — start from the router walk
   `UI/BuildingMenuUI.cs`, `UI/CraftingMenuUI.cs`, `UI/TableCraftMenuUI.cs` (the first two
   side menus share `UI/SideListMenu.cs` — see next section).
 
+## The inventory window (`InventoryUI`) + the slot Inventory model
+
+**`Necroking/UI/InventoryUI.cs`** — the center-docked, draggable inventory window ('I').
+Widget-based (`"EquipmentWindow"` widget, instance `"inventory"`); binds the slot model to
+widget children.
+- **Slot rects / hit-test**: `TryGetSlotIndexAt(mx, my, out slotIdx)` — the ONE public
+  slot hit-test (also used by `TableCraftMenuUI`); both it and the hover highlight in
+  `Draw` derive rects from `WidgetLayoutUtils.ComputeLayoutRects(def, _screenX, _screenY)`
+  + `_slotChildIndices` (mapping slot i → widget child index, built in `Init`/
+  `EnsureSlotChildren`). No cached rects — recomputed per call, so layout and clicks
+  can't desync.
+- **Slot input**: `Update(input)` — window drag first (title-bar rect = top 90px →
+  `_dragging`/`IsDragging`), then `input.LeftPressed` over a filled slot fires
+  `OnSlotClicked(slotIdx)`. The callback is wired in `Game1.EnsureInventoryUIsInitialized`
+  (deposit into open craft table, else `TryConsumeInventoryItem`). There is a
+  `// Dragging (future)` marker — item drag between slots does NOT exist yet, only
+  window drag.
+- **Router seat**: `PanelLayer` registered in the `Game1` ctor (~ln 999), Panels band,
+  with drag provider `() => _inventoryUI.IsDragging` — while that returns true and
+  LeftDown, `UIRouter.SetCapture` keeps ALL mouse input on this layer (`PanelLayer.cs`
+  ~ln 85). **This is the existing drag→mouse-capture precedent** any in-panel item drag
+  should reuse (make the provider also return true during an item drag).
+- **Slot visuals**: `SyncSlots()` swaps each child between `"Item Slot"` /
+  `"Item Slot_Empty"` widgets and sets quantity text + icon
+  (`_renderer.SetImage(subId, "child_1", itemDef.Icon)`). A cursor "drag ghost" icon =
+  `RuntimeWidgetRenderer.DrawIcon(iconPath, x, y, w, h)` drawn at the end of
+  `InventoryUI.Draw` (Panels band draws above the Hud-band spellbar).
+- Hover tooltip = `RichTip` deferred via `Game1.Tooltips.RequestCustom`.
+
+**`Necroking/Game/Inventory.cs`** (`Necroking.GameSystems.Inventory`) — the slot data
+model (`InventorySlot { ItemId, Quantity }`, fixed `SlotCount`, default 20; the player
+instance is `Game1._inventory`). Mutation API: `AddItem` (stack-then-empty packing),
+`RemoveItem`, `SetSlot` (verbatim write, save restore), **`MoveSlot(from, to)` — already
+implements drag-reorder semantics: merges stacks of the same item (respecting MaxStack)
+else swaps the two slots.** Also `HasRoomFor`, `FindSlot`, `GetItemCount`, `_everSeen`
+(grow-only "has the player ever held this" set gating potion spells in the grimoire).
+
+**Look/edit here when:** inventory slot click/drag behavior, slot rendering, reordering
+items, dropping an inventory item onto another panel/the spellbar (start the drag in
+`InventoryUI.Update`, resolve the drop on release using the target's hit-test, e.g.
+`HUDRenderer.HitTestBarSlot`).
+
 ## Side-list menus — building placement & potion crafting (`SideListMenu`)
 
 **`Necroking/UI/SideListMenu.cs`** — abstract base for the left-anchored (x=-12,
