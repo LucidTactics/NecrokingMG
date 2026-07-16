@@ -319,6 +319,48 @@ clicks), or hover picks are wrongly suppressed — start from the router walk
   `UI/BuildingMenuUI.cs`, `UI/CraftingMenuUI.cs`, `UI/TableCraftMenuUI.cs` (the first two
   side menus share `UI/SideListMenu.cs` — see next section).
 
+## The inventory window (`InventoryUI`) + the slot Inventory model
+
+**`Necroking/UI/InventoryUI.cs`** — the center-docked, draggable inventory window ('I').
+Widget-based (`"EquipmentWindow"` widget, instance `"inventory"`); binds the slot model to
+widget children.
+- **Slot rects / hit-test**: `TryGetSlotIndexAt(mx, my, out slotIdx)` — the ONE public
+  slot hit-test (also used by `TableCraftMenuUI`); both it and the hover highlight in
+  `Draw` derive rects from `WidgetLayoutUtils.ComputeLayoutRects(def, _screenX, _screenY)`
+  + `_slotChildIndices` (mapping slot i → widget child index, built in `Init`/
+  `EnsureSlotChildren`). No cached rects — recomputed per call, so layout and clicks
+  can't desync.
+- **Slot input**: `Update(input)` — window drag first (title-bar rect = top 90px →
+  `_dragging`/`IsDragging`), then `input.LeftPressed` over a filled slot fires
+  `OnSlotClicked(slotIdx)`. The callback is wired in `Game1.EnsureInventoryUIsInitialized`
+  (deposit into open craft table, else `TryConsumeInventoryItem`). There is a
+  `// Dragging (future)` marker — item drag between slots does NOT exist yet, only
+  window drag.
+- **Router seat**: `PanelLayer` registered in the `Game1` ctor (~ln 999), Panels band,
+  with drag provider `() => _inventoryUI.IsDragging` — while that returns true and
+  LeftDown, `UIRouter.SetCapture` keeps ALL mouse input on this layer (`PanelLayer.cs`
+  ~ln 85). **This is the existing drag→mouse-capture precedent** any in-panel item drag
+  should reuse (make the provider also return true during an item drag).
+- **Slot visuals**: `SyncSlots()` swaps each child between `"Item Slot"` /
+  `"Item Slot_Empty"` widgets and sets quantity text + icon
+  (`_renderer.SetImage(subId, "child_1", itemDef.Icon)`). A cursor "drag ghost" icon =
+  `RuntimeWidgetRenderer.DrawIcon(iconPath, x, y, w, h)` drawn at the end of
+  `InventoryUI.Draw` (Panels band draws above the Hud-band spellbar).
+- Hover tooltip = `RichTip` deferred via `Game1.Tooltips.RequestCustom`.
+
+**`Necroking/Game/Inventory.cs`** (`Necroking.GameSystems.Inventory`) — the slot data
+model (`InventorySlot { ItemId, Quantity }`, fixed `SlotCount`, default 20; the player
+instance is `Game1._inventory`). Mutation API: `AddItem` (stack-then-empty packing),
+`RemoveItem`, `SetSlot` (verbatim write, save restore), **`MoveSlot(from, to)` — already
+implements drag-reorder semantics: merges stacks of the same item (respecting MaxStack)
+else swaps the two slots.** Also `HasRoomFor`, `FindSlot`, `GetItemCount`, `_everSeen`
+(grow-only "has the player ever held this" set gating potion spells in the grimoire).
+
+**Look/edit here when:** inventory slot click/drag behavior, slot rendering, reordering
+items, dropping an inventory item onto another panel/the spellbar (start the drag in
+`InventoryUI.Update`, resolve the drop on release using the target's hit-test, e.g.
+`HUDRenderer.HitTestBarSlot`).
+
 ## Side-list menus — building placement & potion crafting (`SideListMenu`)
 
 **`Necroking/UI/SideListMenu.cs`** — abstract base for the left-anchored (x=-12,
@@ -370,6 +412,50 @@ capture session-bound objects in one-shot-init'd UIs — read live via `Game1.In
 /`_sim` (project convention "Direct over Inject"), or re-point the refs after `_session = new`
 in `StartGame`. Closures over `this` (e.g. `GrimoireOverlay`'s predicate using `_sim.UnitsMut`)
 re-evaluate the property per call and are safe.
+
+## Menu screens (main/pause) & the Settings/Multiplayer/Save submenus
+
+One class per full-screen menu in `UI/`: `MainMenuScreen.cs` (title screen), `PauseMenuScreen.cs`
+(ESC menu), `ScenarioListScreen.cs`, `LoadMenuScreen.cs`. Each has a private `BuildLayout` that is
+the single source of truth its `Draw` and `Update`/`HandleClick` both consume. Shared button
+identities/style live in `UI/MenuCommon.cs`: `MenuButtonId` enum (ids are SHARED across screens —
+e.g. `LoadGame`/`Quit`/`Settings` exist once), `MenuButton` struct, static `MenuDraw`
+(`Button`/`Panel`/`Backdrop`/`Scrollbar`/`Text`).
+
+**Two dispatch families — main menu vs pause menu differ:**
+- **Main/scenario/load menus**: `Game1.Update` early-returns per state (`_mainMenu.Update()` etc.),
+  and `GameRenderer.Draw` early-outs with its own SpriteBatch (`Materials.Hud.Begin`) —
+  they bypass the UIRouter entirely.
+- **Pause menu + its submenus** (`MenuState.PauseMenu`/`Settings`/`Multiplayer`/`SaveMenu`):
+  drawn by `MenuHostLayer` in `UI/Layers/HostLayers.cs` (Menu band, `Blocking`, `Closable`;
+  `OnCancel` = ESC walk-back). Clicks: pause buttons via `_g._pauseMenu.HandleClick()` from
+  Game1.Update's PauseMenu block; the submenus are `WantsClose`-style windows updated from
+  Game1.Update state gates (`_settingsWindow.Update`, plus `_editorUi.UpdateInput` — the
+  Settings window is EditorBase-widget based).
+
+**Settings window open/close flow** (`Editor/SettingsWindow.cs`):
+- Open = just `_g._menuState = MenuState.Settings` (PauseMenuScreen `MenuButtonId.Settings` case;
+  dev verb `settings` in `Game1.Dev.cs` does the same). The window itself is app-lifetime —
+  created/wired once in `Game1.LoadContent` (`SetGameData` with user-settings paths,
+  `SetDayNightSystem`); it holds NO per-session refs (edits `_gameData.Settings` live,
+  auto-saves debounced; `_dayNightSystem` is an app-level Game1 field).
+- Close = TWO paths, both currently **hardcode return to PauseMenu**: the `WantsClose` block in
+  `Game1.cs` Update ("Settings window close handling": resets flag, `_editorUi.ResetAllState()`,
+  `_menuState = MenuState.PauseMenu`) and `MenuHostLayer.OnCancel` (ESC). To open Settings from
+  another root menu, route the close through `Game1._backMenuState` — the field the load menu
+  already uses (stamped `MainMenu`/`PauseMenu` every frame while on those screens;
+  `LoadMenuScreen.Open`/`Update` is the precedent).
+- Draw-frame housekeeping: `GameRenderer.Draw.cs` `DrawHudBlock` calls `_editorUi.EndDrawFrame()`
+  when `_menuState == Settings` (skipping it causes the ghost-click replay bug — see
+  [editor.md](editor.md)).
+- With `_menuState == Settings` the FULL world pipeline runs (no early-out): fine over a paused
+  world; from the main menu the backdrop is the empty `GameSession` world (exists from app start),
+  not the menu backdrop — cosmetic, consider `MenuDraw.Backdrop` in `MenuHostLayer.Draw` when
+  `!_gameWorldLoaded`.
+
+**Layout pitfall (main menu):** `MainMenuScreen.BuildLayout` stacks 55px buttons + 12px gaps +
+25px group gaps starting at `screenH/2 - 75`; the comment warns the stack must fit at 720p and
+it is already tight — adding a button means shrinking heights/gaps or raising the start Y.
 
 ## Cross-links
 - [corpses.md](corpses.md) — corpse data model, pile gather/withdraw (`TryTakeCorpseFromPile`,

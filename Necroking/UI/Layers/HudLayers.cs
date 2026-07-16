@@ -68,7 +68,9 @@ public sealed class HudChromeLayer : UILayer
 
     public override string Id => "hud.chrome";
     public override bool Visible => false;                    // draw-only
-    public override bool VisibleForDraw => _g.ShowUIForDraw;  // same gate the old inline DrawHUD call had
+    // Old inline DrawHUD gate + a loaded world: the chrome reads sim/spell-bar
+    // data that doesn't exist in no-world states (Settings from the main menu).
+    public override bool VisibleForDraw => _g._gameWorldLoaded && _g.ShowUIForDraw;
     public override bool ContainsMouse(int mx, int my, in UICtx ctx) => false;
     public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { }
 

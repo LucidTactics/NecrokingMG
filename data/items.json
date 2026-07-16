@@ -45,7 +45,7 @@
     {
       "id": "Log",
       "displayName": "Log",
-      "icon": "assets/Environment/Misc/Log2.png",
+      "icon": "assets/Environment/Logs/Log2.png",
       "category": "material",
       "description": "A small wooden log. Useful for building and fuel."
     },

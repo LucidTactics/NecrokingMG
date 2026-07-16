@@ -210,7 +210,8 @@ public sealed class MenuHostLayer : UILayer
     public override bool Visible => _g._menuState == MenuState.PauseMenu
         || _g._menuState == MenuState.Settings
         || _g._menuState == MenuState.Multiplayer
-        || _g._menuState == MenuState.SaveMenu;
+        || _g._menuState == MenuState.SaveMenu
+        || _g._menuState == MenuState.LoadMenu;
     public override bool Blocking => true;
     public override bool Closable => true;
     public override bool ContainsMouse(int mx, int my, in UICtx ctx) => true;
@@ -220,6 +221,11 @@ public sealed class MenuHostLayer : UILayer
         switch (_g._menuState)
         {
             case MenuState.Settings:
+            case MenuState.LoadMenu:
+                // Reachable from both root menus — return to whichever opened it.
+                _g._editorUi?.ResetAllState();
+                _g._menuState = _g._backMenuState;
+                break;
             case MenuState.Multiplayer:
             case MenuState.SaveMenu:
                 _g._editorUi?.ResetAllState();
@@ -250,7 +256,14 @@ public sealed class MenuHostLayer : UILayer
                 _g._pauseMenu.Draw(ctx.ScreenW, ctx.ScreenH);
                 break;
             case MenuState.Settings:
+                // Opened from the main menu there's no world behind the window —
+                // draw the menu backdrop instead of the empty dark world.
+                if (!_g._gameWorldLoaded) MenuDraw.Backdrop(ctx.ScreenW, ctx.ScreenH);
                 _g._settingsWindow.Draw(ctx.ScreenW, ctx.ScreenH);
+                break;
+            case MenuState.LoadMenu:
+                if (!_g._gameWorldLoaded) MenuDraw.Backdrop(ctx.ScreenW, ctx.ScreenH);
+                _g._loadGameWindow.Draw(ctx.ScreenW, ctx.ScreenH);
                 break;
             case MenuState.Multiplayer:
                 _g._multiplayerWindow.Draw(ctx.ScreenW, ctx.ScreenH);

@@ -135,8 +135,16 @@ partial class GameRenderer
     {
         var p = new RenderPipeline();
 
+        // The world phases (Prep/Scene/Post) index ground/env/sim data that only
+        // exists once a map is loaded, but the pipeline can run without one —
+        // e.g. Settings opened from the main menu. Gate them; Hud stays
+        // unconditional (it hosts MenuHostLayer's windows and the ghost-click
+        // SnapshotDrawFrame, which must run every frame). Draw() clears the
+        // backbuffer itself when these are skipped.
+        Func<bool> worldLoaded = () => _g._gameWorldLoaded;
+
         // ---- Phase: Prep — RT-touching jobs that must run before the scene RT binds ----
-        var prep = p.AddPhase(new RenderPhase("Prep"));
+        var prep = p.AddPhase(new RenderPhase("Prep") { When = worldLoaded });
 
         prep.Add(new CustomPass("WeatherContext", ctx =>
         {
@@ -160,7 +168,7 @@ partial class GameRenderer
         }));
 
         // ---- Phase: Scene — the world, captured into the HDR scene RT when bloom is on ----
-        var scene = p.AddPhase(new RenderPhase("Scene"));
+        var scene = p.AddPhase(new RenderPhase("Scene") { When = worldLoaded });
 
         scene.OnBegin = ctx =>
         {
@@ -274,7 +282,7 @@ partial class GameRenderer
         };
 
         // ---- Phase: Post — backbuffer composites and debug overlays ----
-        var post = p.AddPhase(new RenderPhase("Post"));
+        var post = p.AddPhase(new RenderPhase("Post") { When = worldLoaded });
 
         post.Add(new CustomPass("FogOfWarOverlay", ctx =>
         {
@@ -371,9 +379,13 @@ partial class GameRenderer
 
         // Weather effects (fog/haze/brightness — rain draws in scene pass).
         // Runs inside the HUD batch; the scope resumes Materials.Hud after the
-        // fog shader's fullscreen quad.
+        // fog shader's fullscreen quad. World visual — its context is set by the
+        // (world-gated) Prep phase, so it must not run without a world either.
         hud.Add(new CustomPass("WeatherFog", ctx =>
-            _g._weatherRenderer.DrawFog(new SpriteScope(ctx.Batch, Materials.Hud), ctx.ScreenW, ctx.ScreenH)));
+        {
+            if (_g._gameWorldLoaded)
+                _g._weatherRenderer.DrawFog(new SpriteScope(ctx.Batch, Materials.Hud), ctx.ScreenW, ctx.ScreenH);
+        }));
 
         hud.Add(new CustomPass("Hud", ctx => DrawHudBlock(ctx.ScreenW, ctx.ScreenH, ctx.GameTime)));
 

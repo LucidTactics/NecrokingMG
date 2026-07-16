@@ -58,6 +58,10 @@ public sealed class RenderPhase
     public readonly List<RenderPass> Passes = new();
     public Action<RenderContext>? OnBegin;
     public Action<RenderContext>? OnEnd;
+    /// <summary>Phase-level gate: when set and false, the whole phase (including
+    /// OnBegin/OnEnd) is skipped this frame. Used by the world phases, whose
+    /// passes index ground/env/sim data that only exists once a map is loaded.</summary>
+    public Func<bool>? When;
 
     public RenderPhase(string name) => Name = name;
     public RenderPass Add(RenderPass pass) { Passes.Add(pass); return pass; }
@@ -79,6 +83,7 @@ public sealed class RenderPipeline
     {
         foreach (var phase in Phases)
         {
+            if (phase.When != null && !phase.When()) continue;
             phase.OnBegin?.Invoke(ctx);
             foreach (var pass in phase.Passes)
             {
