@@ -478,47 +478,57 @@ e.g. `LoadGame`/`Quit`/`Settings` exist once), `MenuButton` struct, static `Menu
 25px group gaps starting at `screenH/2 - 75`; the comment warns the stack must fit at 720p and
 it is already tight — adding a button means shrinking heights/gaps or raising the start Y.
 
-## The minimap (top-right, fog-of-war aware)
+## The minimap (top-right, fog-of-war aware, editor-interactive)
 
 **`Necroking/UI/MinimapHUD.cs`** — class `MinimapHUD` (`Game1._minimap`, init'd in
-`LoadContent`). Top-right 192px map of a **player-centered window** of the world (NOT the
-whole map): `DesiredWindow` = `ViewRange` (384) world units centered on the necromancer,
-clamped to the map; the baked window is `_winX/_winY/_winW/_winH` (private).
-- **Position**: static `Bounds(screenW)` = `(screenW - RightMargin(8) - MapSize(192),
-  Top(66), 192, 192)` — the ONE placement source every draw derives from. Consts
-  `Top`/`Bottom` are also read by `HUDRenderer.DrawHordeCaps` (horde caps anchor below it).
+`LoadContent`). 192px map of a **centered window** of the world (NOT the whole map):
+`DesiredWindow` = `ViewRange` (384) world units centered on the necromancer in normal
+play, or on `map_center` (public `Vec2`, follows the free camera / minimap drags) in the
+map editor; clamped to the map. The baked window is `_winX/_winY/_winW/_winH` (private;
+`baked_map_center` exposes its center).
+- **Size**: `const MapSize = 192` is the ONE size constant and it is **doubly loaded** —
+  it is both the on-screen rect size (`Bounds` width/height, `Bottom = Top + MapSize`)
+  AND the texture resolution (`_terrainTex`/`_fogTex` are `MapSize×MapSize`; the `Bake`
+  and `RefreshFogTexture` pixel loops iterate it; the obstacle-darkening world→texel map
+  divides by it). The draw call `_batch.Draw(_terrainTex, rect, …)` already stretches
+  texture→rect, and markers/`TryScreenToWorld` scale off `rect.Width / _winW`, so those
+  generalize to any rect automatically — only the bake/fog texel loops + texture
+  allocation hard-code `MapSize`. Texture (re)allocation only checks `null || IsDisposed`,
+  NOT size — a dynamic size must also compare `tex.Width`.
+- **Position**: static `Bounds(screenW)` — the ONE placement source draw, hit rect, and
+  click mapping all derive from. Already **per-mode**: normal play = top-right
+  `(screenW - RightMargin(8) - MapSize, Top(66))`; map editor = docked left of the editor
+  panel, `x = MapEditorWindow.PanelLeftX(screenW) - EditorPanelGap(8) - MapSize`. Consts
+  `Top`/`Bottom` are also read by `HUDRenderer.DrawHordeCaps` (horde caps anchor below it
+  in normal play).
 - **Draw**: `Bake` (terrain texture from `GroundSystem` vertex map + darkened natural
-  obstacles; rebaked on drift/`RebakeFrames`), `RefreshFogTexture` (fog overlay, gated
-  `fog.Mode != FogOfWarMode.Off`), `DrawBuildingMarkers`/`DrawUnitMarkers` (live, fog-gated
-  for non-undead), `DrawCameraViewport` (outline of the camera's world rect). Marker
-  screen↔world scale: `sx = rect.Width / _winW` — the inverse (minimap px → world) is
-  `world = _win* + (px - rect.X) * _winW / rect.Width`, but no public method exposes it yet.
-- **Router seat**: `MinimapLayer` in `UI/Layers/HudLayers.cs` — HudTop band, **draw-only**:
-  `Visible => false`, empty `AppendHitRects`, `ContainsMouse => false`;
-  `VisibleForDraw => _gameWorldLoaded && ShowUIForDraw`. Consequences: (1) it DOES draw
-  during the map editor — the class comment claiming it hides there is stale — but the
-  Editor band (700 > HudTop 450) panel draws over it; (2) it has NO hit rect anywhere
-  (HUDRenderer.AppendHitRects doesn't cover it either), so clicks over the minimap fall
-  through to the world.
-- **Adding minimap input** (click-to-jump etc.): `UIRouter.AppendHitRects` **skips layers
-  with `Visible == false`** — the layer must become Visible for its hit rects to register.
-  Its id `"hud.minimap"` matters: `Game1.RebuildUIHitRects` sets the map editor's
-  `OverGameplayHud` from `_uiHits.Hit(mx,my,"hud.")`, which is the ONLY thing that stops
-  the editor's immediate-mode painting under a HUD element (router click consumption does
-  not — painting reads raw mouse inside `MapEditorWindow`).
-- **Fog gotcha**: `GameRenderer.Pipeline.cs` skips the world `FogOfWarOverlay` pass when
-  `_menuState == MenuState.MapEditor`, but `SyncMode` keeps `fog.Mode` live — the minimap's
-  own `fog.Mode != Off` check doesn't know about editors, so it fogs in the map editor
-  while the world doesn't unless you mirror the editor exception.
+  obstacles; rebaked on drift/`RebakeFrames`/session change), `RefreshFogTexture` (fog
+  overlay), `DrawBuildingMarkers`/`DrawUnitMarkers` (live, fog-gated for non-undead),
+  `DrawCameraViewport` (outline of the camera's world rect). Fog is editor-aware:
+  `fogOn = fog.Mode != Off && _menuState != MenuState.MapEditor` (mirrors the world
+  pass skip — the old "fogs in the editor" gotcha is fixed).
+- **Screen→world**: public `TryScreenToWorld(mx,my,screenW,out world)` (bounds-checked)
+  and `TryScreenToWorldNoBoundsCheck` — the inverse marker mapping against the baked
+  window; both used by `MinimapLayer` drags.
+- **Router seat + input**: `MinimapLayer` in `UI/Layers/HudLayers.cs` — HudTop band.
+  `Visible => HudVisible && _menuState == MenuState.MapEditor` (so it takes input ONLY in
+  the map editor; in normal play it stays draw-only because the follow-cam would lerp a
+  click-jump straight back); `VisibleForDraw => _gameWorldLoaded && ShowUIForDraw` (draws
+  in both modes). `ContainsMouse`/`AppendHitRects` use `MinimapHUD.Bounds`. Editor click
+  controls (`OnPointer`/`OnFrame`): left press+drag = move camera (`_g._camera.Position =
+  world`); right press+drag = move camera AND recenter the minimap window (`map_center`),
+  panning the view. Its id `"hud.minimap"` matters: `Game1.RebuildUIHitRects` sets the map
+  editor's `OverGameplayHud` from `_uiHits.Hit(mx,my,"hud.")`, which is what stops the
+  editor's immediate-mode painting under it; `MapEditorHostLayer.OnFrame`
+  (`UI/Layers/HostLayers.cs`) also excludes `MinimapHUD.Bounds` from camera scroll-zoom.
 - **Camera jump**: `Camera25D.Position` (public `Vec2`, the world point at screen center)
-  is written directly — no smoothing. Safe in map-editor mode (WASD pan just adds
-  velocity); in normal play the follow-cam (`Game1.cs` Update, `necroIdx >= 0 &&
-  !_devFreeCamera` branch) lerps back to the necromancer every frame, so a minimap jump
-  there gets undone.
+  is written directly — no smoothing. Safe in map-editor mode; in normal play the
+  follow-cam (`Game1.cs` Update, `necroIdx >= 0 && !_devFreeCamera` branch) lerps back to
+  the necromancer every frame, so a minimap jump there gets undone.
 
-**Look/edit here when:** moving/resizing the minimap (incl. per-mode placement like
-"left of the map editor panel"), minimap markers/colors, minimap fog behavior, or adding
-minimap mouse input.
+**Look/edit here when:** moving/resizing the minimap (incl. per-mode size/placement —
+`MapSize`/`Bounds` and the bake/fog loops in `MinimapHUD.cs`), minimap markers/colors,
+minimap fog behavior, or changing the editor click/drag controls (`MinimapLayer`).
 
 ## Cross-links
 - [corpses.md](corpses.md) — corpse data model, pile gather/withdraw (`TryTakeCorpseFromPile`,
