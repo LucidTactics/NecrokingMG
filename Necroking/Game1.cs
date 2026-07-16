@@ -3736,7 +3736,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (_input.WasKeyPressed(Keys.B))
             {
                 EnsureInventoryUIsInitialized();
-                if (!_buildingMenuUI.IsVisible) CloseSameSidePanels(PanelSide.Left, _buildingMenuUI);
+                if (!_buildingMenuUI.IsVisible)
+                {
+                    CloseSameSidePanels(PanelSide.Left, _buildingMenuUI);
+                    // Building menu want to build to the map, so close center panels like inventory as well.
+                    _inventoryUI.Close();
+                }
                 _buildingMenuUI.Toggle(screenW, screenH);
             }
 
