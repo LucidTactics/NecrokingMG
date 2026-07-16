@@ -1,9 +1,10 @@
+using System;
 using Microsoft.Xna.Framework;
 
 namespace Necroking.UI;
 
 /// <summary>The title screen (MenuState.MainMenu): Continue / Play / Load Game /
-/// Scenarios / Quit. Layout, drawing and click handling live together —
+/// Scenarios / Settings / Quit. Layout, drawing and click handling live together —
 /// BuildLayout is the single source of truth Draw and Update both consume.
 /// Drawn from GameRenderer.Draw's MainMenu early-out (full-screen, bypasses the
 /// UIRouter); Update is called from the matching block in Game1.Update.</summary>
@@ -13,7 +14,8 @@ public sealed class MainMenuScreen
     internal MainMenuScreen(Game1 g) { _g = g; }
 
     // The ONE definition of the main-menu layout — Draw and Update both consume it.
-    // Buttons (55+18 tall each) must fit below screenH/2 at 720p.
+    // The stack starts just above screenH/2 but shifts up (never into the title
+    // block) when it would clip the bottom edge — keeps all buttons on-screen at 720p.
     private MenuButton[] BuildLayout(int screenW, int screenH)
     {
         bool hasSaves = _g._loadMenuSaves.Count > 0;
@@ -23,13 +25,17 @@ public sealed class MainMenuScreen
             (MenuButtonId.PlayTestMap, "Play Test Map", false, true),
             (MenuButtonId.LoadGame, "Load Game", true, true),
             (MenuButtonId.Scenarios, "Scenarios", false, true),
+            (MenuButtonId.Settings, "Settings", false, true),
             (MenuButtonId.Quit, "Quit", true, true),
         };
 
-        int btnW = 320, btnH = 55, btnGap = 12;
-        int gapSpace = 25;
+        int btnW = 320, btnH = 55, btnGap = 10;
+        int gapSpace = 18;
+        int totalH = -btnGap;
+        foreach (var it in items) totalH += (it.gapBefore ? gapSpace : 0) + btnH + btnGap;
         int x = screenW / 2 - btnW / 2;
-        int y = screenH / 2 - 20 - btnH;
+        int y = Math.Min(screenH / 2 - 20 - btnH, screenH - 20 - totalH);
+        y = Math.Max(y, screenH / 5 + 60);
         var buttons = new MenuButton[items.Length];
         for (int i = 0; i < items.Length; i++)
         {
@@ -69,6 +75,9 @@ public sealed class MainMenuScreen
                     return;
                 case MenuButtonId.LoadGame:
                     _g._loadMenu.Open();
+                    return;
+                case MenuButtonId.Settings:
+                    _g._menuState = MenuState.Settings;
                     return;
                 case MenuButtonId.Quit:
                     _g.Exit();

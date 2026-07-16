@@ -382,7 +382,7 @@ public partial class Game1 {
             // through `start_game <map>` instead.
             case "menu": {
                if (c.Args.Length < 1) {
-                  c.Complete(Necroking.Dev.DevServer.Error("menu needs: <new_game|scenarios|main_menu|quit>"));
+                  c.Complete(Necroking.Dev.DevServer.Error("menu needs: <new_game|scenarios|settings|main_menu|quit>"));
                   break;
                }
 
@@ -397,6 +397,10 @@ public partial class Game1 {
                      _menuState = MenuState.ScenarioList;
                      _scenarioScrollPx = 0f;
                      c.Complete(Necroking.Dev.DevServer.Ok("opened scenario list"));
+                     break;
+                  case "settings":
+                     _menuState = MenuState.Settings;
+                     c.Complete(Necroking.Dev.DevServer.Ok("opened settings"));
                      break;
                   case "main_menu":
                   case "back":

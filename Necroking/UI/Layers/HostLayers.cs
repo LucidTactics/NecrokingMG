@@ -220,6 +220,10 @@ public sealed class MenuHostLayer : UILayer
         switch (_g._menuState)
         {
             case MenuState.Settings:
+                // Reachable from both root menus — return to whichever opened it.
+                _g._editorUi?.ResetAllState();
+                _g._menuState = _g._backMenuState;
+                break;
             case MenuState.Multiplayer:
             case MenuState.SaveMenu:
                 _g._editorUi?.ResetAllState();
@@ -250,6 +254,9 @@ public sealed class MenuHostLayer : UILayer
                 _g._pauseMenu.Draw(ctx.ScreenW, ctx.ScreenH);
                 break;
             case MenuState.Settings:
+                // Opened from the main menu there's no world behind the window —
+                // draw the menu backdrop instead of the empty dark world.
+                if (!_g._gameWorldLoaded) MenuDraw.Backdrop(ctx.ScreenW, ctx.ScreenH);
                 _g._settingsWindow.Draw(ctx.ScreenW, ctx.ScreenH);
                 break;
             case MenuState.Multiplayer:

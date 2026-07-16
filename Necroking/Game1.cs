@@ -622,7 +622,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// collision data.</summary>
     private MenuState _prevMenuState = MenuState.MainMenu;
     internal bool _gameWorldLoaded;
-    internal MenuState _backMenuState = MenuState.MainMenu; // where the load menu's Back/ESC returns
+    internal MenuState _backMenuState = MenuState.MainMenu; // where the load menu's and settings window's Back/ESC returns (MainMenu or PauseMenu)
     /// <summary>True while anything holds the game paused (forwarder for
     /// <see cref="Core.GameClock.Paused"/>). Write via <c>_clock.Pause / Resume /
     /// TogglePause / ClearAllPauses</c> with a <see cref="Core.GameClock.PauseSource"/>.</summary>
@@ -3285,7 +3285,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         {
             _settingsWindow.WantsClose = false;
             _editorUi.ResetAllState();
-            _menuState = MenuState.PauseMenu;
+            // Settings is reachable from both the main menu and the pause menu —
+            // _backMenuState holds whichever was active when it opened.
+            _menuState = _backMenuState;
         }
 
         // --- Multiplayer window close handling (session keeps running) ---
@@ -3411,9 +3413,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Editors pause the game. Clock phase 2: all pause/menu input for the frame
         // has run by here, so gate the world domain — WorldRunning/WorldDt reflect
         // THIS frame's pause + editor state (same-frame freeze, as the old inline
-        // `!_paused && !editorActive` check did).
+        // `!_paused && !editorActive` check did). No loaded world also suspends it:
+        // states like Settings-from-main-menu reach here with an empty session, and
+        // ticking the never-initialized sim would NRE (matches the dev-script dt
+        // prediction at the top of Update).
         bool editorActive = EditorActive;
-        _clock.GateWorld(worldSuspended: editorActive);
+        _clock.GateWorld(worldSuspended: editorActive || !_gameWorldLoaded);
 
         // Map-editor hover-inspect: run ONLY the read-only debug-tooltip picks while
         // editing the map so you can hover things to see what they are. None of the

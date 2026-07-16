@@ -82,6 +82,11 @@ partial class GameRenderer
             MathF.Round(_realCameraPos.Y / pixelSizeY) * pixelSizeY);
 
         // --- Execute the frame (phases/passes built in GameRenderer.Pipeline.cs) ---
+        // With no world loaded the world phases skip themselves (RenderPhase.When),
+        // taking the Scene phase's clear with them — clear here so the Hud phase
+        // (settings over the main menu) draws onto a clean backbuffer.
+        if (!_g._gameWorldLoaded)
+            _g.GraphicsDevice.Clear(new Color(20, 15, 30));
         _pipeline ??= BuildPipeline();
         _ctx.Device = _g.GraphicsDevice;
         _ctx.Batch = _g._spriteBatch;
