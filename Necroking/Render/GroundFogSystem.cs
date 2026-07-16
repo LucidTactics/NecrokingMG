@@ -254,7 +254,11 @@ public class GroundFogSystem
             // Slight rise off the ground so wisps read as a layer, not a decal.
             float height = 0.25f + 0.35f * MathF.Sin((w.FramePhase + t) * MathF.PI);
             var sp = _renderer.WorldToScreen(w.Pos, height, _camera);
-            if (sp.X < -80 || sp.X > screenW + 80 || sp.Y < -80 || sp.Y > screenH + 80) continue;
+            // Cull margin must cover the wisp's half-extent in px — a fixed 80px
+            // margin popped big wisps at screen edges when zoomed in (round-2 sweep).
+            float cullMargin = w.WorldSize * zoom * 0.5f + 16f;
+            if (sp.X < -cullMargin || sp.X > screenW + cullMargin
+                || sp.Y < -cullMargin || sp.Y > screenH + cullMargin) continue;
 
             int frame = _cloud.GetFrameAtNormalizedTime((t * 2f + w.FramePhase) % 1f);
             var src = _cloud.GetFrameRect(frame);

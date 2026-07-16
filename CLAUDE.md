@@ -108,6 +108,12 @@ three-layer split (`SpellRegistry` / `SpellCasting` / `SpellEffectSystem` + the
 and how to test a cast on the empty test map. Most spells are pure data (a `SpellDef` in
 `data/spells.json`) and need no code.
 
+## VFX & Zoom
+Any new or changed visual effect must pass the zoom check before committing: every
+constant classified (world vs px-at-32 vs screen — offsets/anchors/speeds too), ONE
+scaling policy per effect, screenshot-verified paused at zoom 8/32/128. Full protocol +
+staging recipes: [docs/vfx-zoom-audit.md](docs/vfx-zoom-audit.md).
+
 ## UI Text Rendering
 - SpriteBatch uses `SamplerState.PointClamp` — text drawn at sub-pixel positions gets aliasing artifacts
 - **Always round text positions to integer pixels**: `new Vector2((int)x, (int)y)`

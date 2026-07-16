@@ -617,10 +617,14 @@ public partial class Game1 {
                // same as the first (buffs could even shift mid-volley).
                int shotMastery = GameSystems.SpellEffectSystem.MasteryLevelsFor(
                   spell, _gameData, _sim.UnitsMut, casterIdx);
+               // Same sprite-rig → physical conversion (+Z) as the first shot in
+               // SpellEffectSystem.Execute — follow-ups used to launch lower and
+               // to ignore an airborne caster's Z.
                GameSystems.SpellEffectSystem.SpawnProjectile(spell, _sim.Projectiles,
                   _sim.Units[casterIdx].EffectSpawnPos2D, shotTarget, pg.CasterUid,
-                  _sim.Units[casterIdx].EffectSpawnHeight, _sim.Units[casterIdx].Faction,
-                  shotMastery);
+                  _sim.Units[casterIdx].EffectSpawnHeight / _camera.YRatio
+                     + _sim.Units[casterIdx].Z,
+                  _sim.Units[casterIdx].Faction, shotMastery);
             }
 
             if (pg.Remaining <= 0) {

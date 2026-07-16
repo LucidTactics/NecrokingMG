@@ -149,6 +149,9 @@ pipeline). Settings stay tuned at 32;
 mid-pause and compare screenshots.
 
 ## Look/edit here when…
+- **Adding/altering ANY visual effect** → zoom checklist in
+  [../vfx-zoom-audit.md](../vfx-zoom-audit.md) (audit constants not systems — the misses
+  were offsets/anchors, not sizes).
 - "Zoom feels wrong / clamp / speed" → `Render/Camera25D.cs` (`ZoomBy`, Min/Max/ZoomSpeed);
   input sites in `UI/Layers/HudLayers.cs` + `UI/Layers/HostLayers.cs`.
 - "Effect X doesn't scale with zoom" → find its renderer above; the fix is usually

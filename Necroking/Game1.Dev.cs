@@ -21,6 +21,10 @@ public partial class Game1 {
    internal int _devHdrBarCount = 1;         // parallel bars (between-beam fill tests)
    internal float _devHdrBarGap = 0.5f;      // world units between bar centers
 
+   // `zoomhud` dev command: on-screen zoom + bloom code-path readout (top-right)
+   // so sweep/artifact screenshots carry the exact numbers.
+   internal bool _devZoomHud;
+
    // Ring buffers behind the `perf` dev command — fed once per frame at the end of
    // GameRenderer.Draw. Frame = real wall-clock Draw-to-Draw interval (valid in both
    // fixed and variable timestep, unlike _rawDt under fixed-timestep catch-up).
@@ -226,6 +230,14 @@ public partial class Game1 {
                c.Complete(Necroking.Dev.DevServer.Ok(want
                   ? $"hdrbar on at ({_devHdrBarPos.X:F1},{_devHdrBarPos.Y:F1}) len={_devHdrBarLen} width={_devHdrBarWidth} intensity={_devHdrBarIntensity} count={_devHdrBarCount} gap={_devHdrBarGap}"
                   : "hdrbar off"));
+               break;
+            }
+
+            // Toggle the on-screen zoom/bloom debug readout (zoom sweeps).
+            // devctl: cmd zoomhud [on|off]
+            case "zoomhud": {
+               _devZoomHud = DevToggle(c.Args, _devZoomHud);
+               c.Complete(Necroking.Dev.DevServer.Ok($"zoomhud {(_devZoomHud ? "on" : "off")}"));
                break;
             }
 

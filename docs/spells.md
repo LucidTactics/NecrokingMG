@@ -130,3 +130,7 @@ Use the dev server (`CLAUDE.md` → Dev Control Server). `cast <spellID> <x> <y>
 the full player pipeline (`set_mana necro 9999` first to dodge mana/cooldown), or
 `panel spell_editor` + `select <name>` to inspect a def. Screenshot the impact to
 confirm the payoff lands.
+
+**Any visual effect: also run the zoom check** — pause mid-effect, screenshot at zoom
+8/32/128; px-authored values scale by `Zoom/32`, offsets/anchors included. Checklist +
+staging recipes: [vfx-zoom-audit.md](vfx-zoom-audit.md).

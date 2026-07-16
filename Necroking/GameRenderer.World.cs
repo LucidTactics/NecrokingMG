@@ -31,15 +31,16 @@ partial class GameRenderer
         {
             var orb = orbs[i];
             var sp = _g._renderer.WorldToScreen(orb.Position, 0.5f, _g._camera);
+            float orbZoom = _g._camera.Zoom / 32f; // radii authored at zoom 32
 
             // Outer purple glow
-            float outerR = 6f;
+            float outerR = 6f * orbZoom;
             _g.Scope.Draw(_g._pixel, new Vector2(sp.X - outerR, sp.Y - outerR), null,
                 new Color(120, 40, 180, 80), 0f, Vector2.Zero,
                 new Vector2(outerR * 2, outerR * 2), SpriteEffects.None, 0f);
 
             // Inner white bright
-            float innerR = 2f;
+            float innerR = 2f * orbZoom;
             _g.Scope.Draw(_g._pixel, new Vector2(sp.X - innerR, sp.Y - innerR), null,
                 new Color(255, 255, 255, 200), 0f, Vector2.Zero,
                 new Vector2(innerR * 2, innerR * 2), SpriteEffects.None, 0f);
@@ -315,7 +316,7 @@ partial class GameRenderer
                     wallColor.A);
                 _g.Scope.Draw(_g._pixel, new Vector2(sp.X, sp.Y - wallH + tileH), null,
                     darkColor, 0f, Vector2.Zero,
-                    new Vector2(tileW + 0.5f, 2f), SpriteEffects.None, 0f);
+                    new Vector2(tileW + 0.5f, 2f * _g._camera.Zoom / 32f), SpriteEffects.None, 0f);
             }
         }
     }
@@ -367,12 +368,14 @@ partial class GameRenderer
                 Vec2 arrowVel = proj.VisualVelocity;
                 float angle = MathF.Atan2(
                     (arrowVel.Y - proj.VisualVelocityZ) * _g._camera.YRatio, arrowVel.X);
-                float len = 12f * _g._camera.Zoom / 32f;
+                float projZoom = _g._camera.Zoom / 32f;
+                float len = 12f * projZoom;
                 _g.Scope.Draw(_g._pixel, sp, null, new Color(200, 180, 120),
-                    angle, new Vector2(0, 0.5f), new Vector2(len, 1.5f), SpriteEffects.None, 0f);
-                // Arrowhead
+                    angle, new Vector2(0, 0.5f), new Vector2(len, 1.5f * projZoom), SpriteEffects.None, 0f);
+                // Arrowhead (origin offset is in source texels — scaling the draw
+                // scale carries it, so only the scale term needs the zoom factor)
                 _g.Scope.Draw(_g._pixel, sp, null, new Color(160, 140, 100),
-                    angle, new Vector2(-2f, 1.5f), new Vector2(4f, 3f), SpriteEffects.None, 0f);
+                    angle, new Vector2(-2f, 1.5f), new Vector2(4f, 3f) * projZoom, SpriteEffects.None, 0f);
             }
             else if (proj.Type == ProjectileType.Potion)
             {
@@ -459,7 +462,8 @@ partial class GameRenderer
                 float u = 1f - tt;
                 var p = u * u * a + 2f * u * tt * mid + tt * tt * b;
                 DrawUtils.DrawLine(_g._spriteBatch, _g._pixel, prev, p,
-                    (s % 2 == 0) ? ropeBright : ropeDim, 2f);
+                    (s % 2 == 0) ? ropeBright : ropeDim,
+                    MathF.Max(1f, 2f * _g._camera.Zoom / 32f));
                 prev = p;
             }
         }
@@ -550,7 +554,10 @@ partial class GameRenderer
             if (!eff.Alive || eff.BlendMode != blendMode) continue;
             float t = eff.Age / eff.Lifetime;
             float alpha = eff.AlphaCurve.Evaluate(t);
-            float scale = eff.ScaleCurve.Evaluate(t) * _g._camera.Zoom / 32f;
+            // ScaleCurve is WORLD units — the world→px multiply happens once below.
+            // (A stray extra *Zoom/32 here made every impact flipbook scale ∝ Zoom²:
+            // right at 32, 2x too big at 64, 4x too small at 8. Round-2 sweep find.)
+            float scale = eff.ScaleCurve.Evaluate(t);
 
             var sp = _g._renderer.WorldToScreen(eff.Position, 0f, _g._camera);
 
@@ -612,6 +619,8 @@ partial class GameRenderer
         // a bit bigger/farther zoomed in, never unreadable at MinZoom. The rise is
         // converted to pixels here (dn.Height is authored in world units at zoom 32)
         // so text size and motion stay in one space instead of mixing conventions.
+        // POLICY FLAG (user-approved deviation, 2026-07): this sqrt curve is a sanctioned
+        // exception to the strict-realism linear rule — see vfx-zoom-audit.md policy flags.
         float softScale = _g._camera.SoftZoomScale(32f);
         float dnScale = dnSettings.DamageNumberSize / 16f * softScale; // normalize against default 16
 

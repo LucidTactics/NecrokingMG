@@ -116,7 +116,9 @@ public class LightningRenderer
                         0f, new Vector2(32f, 32f), new Vector2(radius / 32f, radius * _camera.YRatio * 0.5f / 32f),
                         SpriteEffects.None, 0f);
 
-                    // Procedural lightning bolt from sky (start above top of screen)
+                    // Procedural lightning bolt from sky. Origin is SCREEN-anchored
+                    // by design — the sky is at infinity (sanctioned screen anchor,
+                    // see camera.md / vfx-zoom-audit.md).
                     float skyY = -50f; // well above screen edge
                     float skyX = sp.X - 50f + (sp.Y - skyY) * 0.05f; // slight angle
                     AddBoltStrips(new Vector2(skyX, skyY), sp, strike.Style, fade, fxScale, strike.Seed);
@@ -271,7 +273,7 @@ public class LightningRenderer
     /// </summary>
     private static float ComputeBoltShape(Vector2 start, Vector2 end, LightningStyle style,
         float gameTime, out List<Vector2> mainPoints, out List<List<Vector2>> branches,
-        uint seedSalt = 0)
+        uint seedSalt = 0, float fxScale = 1f)
     {
         // JitterHz: how often the bolt reshapes. 0 = never — the shape stays
         // frozen (matches the buff-aura convention where Hz 0 disables the
@@ -298,7 +300,7 @@ public class LightningRenderer
             : (uint)(start.X * 1000 + end.Y * 7 + jitterTime * 60);
         mainPoints = GenerateBoltPoints(start, end, style.Subdivisions, style.Displacement, ref seed);
         branches = mainPoints.Count >= 2
-            ? GenerateBranches(mainPoints, style, ref seed)
+            ? GenerateBranches(mainPoints, style, ref seed, fxScale)
             : new List<List<Vector2>>();
         return flicker;
     }
@@ -320,7 +322,7 @@ public class LightningRenderer
         LightningStyle style, float fade, float gameTime, float widthScale = 1f,
         uint seedSalt = 0)
     {
-        float flicker = ComputeBoltShape(start, end, style, gameTime, out var mainPoints, out var branches, seedSalt);
+        float flicker = ComputeBoltShape(start, end, style, gameTime, out var mainPoints, out var branches, seedSalt, widthScale);
         if (mainPoints.Count < 2) return;
         float ef = fade * flicker;
         if (ef <= 0.001f) return;
@@ -402,7 +404,7 @@ public class LightningRenderer
     /// 50% of the bolt (25%-75%), each forking at a natural angle off the main path.
     /// </summary>
     public static List<List<Vector2>> GenerateBranches(List<Vector2> mainPoints,
-        LightningStyle style, ref uint seed)
+        LightningStyle style, ref uint seed, float fxScale = 1f)
     {
         var branches = new List<List<Vector2>>();
         if (style.MaxBranches <= 0 || style.BranchChance <= 0f) return branches;
@@ -435,10 +437,12 @@ public class LightningRenderer
             float bdLen = branchDir.Length();
             if (bdLen > 0.01f) branchDir /= bdLen;
 
-            // Branch length: fraction of remaining main bolt distance
+            // Branch length: fraction of remaining main bolt distance.
+            // Cull threshold is px authored at zoom 32 — unscaled it changed the
+            // bolt's STRUCTURE with zoom (more branches zoomed in, fewer out).
             float remainDist = (mainPoints[^1] - mainPoints[i]).Length();
             float branchLen = remainDist * style.BranchLength;
-            if (branchLen < 5f) continue;
+            if (branchLen < 5f * fxScale) continue;
 
             Vector2 branchEnd = mainPoints[i] + branchDir * branchLen;
 

@@ -113,6 +113,13 @@ public class WeatherRenderer
                 _fogEffect.Parameters["FogWorldScale"]?.SetValue(fogWorldScale);
                 _fogEffect.Parameters["HazeStrength"]?.SetValue(fx.HazeStrength);
                 _fogEffect.Parameters["HazeColor"]?.SetValue(new Vector3(fx.HazeR, fx.HazeG, fx.HazeB));
+                // World-anchored haze: the ramp spans a fixed WORLD depth northward
+                // (authored 45u = the zoom-32/720p view height, reproducing the old
+                // screen ramp exactly at the tuning zoom). Anchor = bottom of the
+                // ramp, half the authored depth below the camera center.
+                const float HazeWorldDepth = 45f;
+                _fogEffect.Parameters["HazeAnchorY"]?.SetValue(_camera.Position.Y + HazeWorldDepth * 0.5f);
+                _fogEffect.Parameters["HazeInvWorldDepth"]?.SetValue(1f / HazeWorldDepth);
                 // Brightness and tint are now applied pre-bloom as ambient light on sprites,
                 // so pass neutral values here to avoid double-darkening
                 _fogEffect.Parameters["Brightness"]?.SetValue(1.0f);
@@ -230,6 +237,8 @@ public class WeatherRenderer
         // (which would leave sub-pixel drizzle at MinZoom and fat bars at MaxZoom). Folding
         // the factor into heightScale scales the whole fall column (speed included) since
         // fall *time* stays zoom-independent.
+        // POLICY FLAG (user-approved deviation, 2026-07): this sqrt curve is a sanctioned
+        // exception to the strict-realism linear rule — see vfx-zoom-audit.md policy flags.
         const float RAIN_PX_PER_UNIT = 16.0f;
         float softScale = _camera.SoftZoomScale(RAIN_REF_ZOOM);
         float heightScale = RAIN_PX_PER_UNIT * softScale;

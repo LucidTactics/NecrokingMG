@@ -389,10 +389,12 @@ partial class GameRenderer
 
     private void DrawBaggingProgressBar(Vector2 screenPos, float progress)
     {
-        float barW = 26f;
-        float barH = 3f;
+        // px-at-32, scaled like the unit health bar (camera.md policy).
+        float zs = _g._camera.Zoom / 32f;
+        float barW = 26f * zs;
+        float barH = MathF.Max(1f, 3f * zs);
         float barX = screenPos.X - barW / 2f;
-        float barY = screenPos.Y - 18f;
+        float barY = screenPos.Y - 18f * zs;
 
         _g.Scope.Draw(_g._pixel, new Rectangle((int)barX - 1, (int)barY - 1, (int)barW + 2, (int)barH + 2), new Color(0, 0, 0, 180));
         _g.Scope.Draw(_g._pixel, new Rectangle((int)barX, (int)barY, (int)(barW * progress), (int)barH), new Color(220, 180, 40));
@@ -400,20 +402,22 @@ partial class GameRenderer
 
     private void DrawBuildProgressBar(Vector2 screenPos, float progress, float worldRadius = 0f)
     {
+        // px-at-32 dims scaled like the unit health bar (camera.md policy).
+        float zs = _g._camera.Zoom / 32f;
         float barW, barY;
         if (worldRadius > 0f)
         {
             float screenRadiusX = worldRadius * _g._camera.Zoom;
             float screenRadiusY = screenRadiusX * _g._camera.YRatio;
             barW = screenRadiusX * 2f;
-            barY = screenPos.Y - screenRadiusY - 6f; // above the top of the circle
+            barY = screenPos.Y - screenRadiusY - 6f * zs; // above the top of the circle
         }
         else
         {
-            barW = 30f;
-            barY = screenPos.Y - 22f;
+            barW = 30f * zs;
+            barY = screenPos.Y - 22f * zs;
         }
-        float barH = 3f;
+        float barH = MathF.Max(1f, 3f * zs);
         float barX = screenPos.X - barW / 2f;
 
         _g.Scope.Draw(_g._pixel, new Rectangle((int)barX - 1, (int)barY - 1, (int)barW + 2, (int)barH + 2), new Color(0, 0, 0, 180));
@@ -433,9 +437,13 @@ partial class GameRenderer
         float refH = GetBodyBagRefHeight();
         float bagScale = (CarryBagScale * _g._camera.Zoom) / refH;
 
-        // Flip-aware offset: X offset flips with the sprite
+        // Flip-aware offset: X offset flips with the sprite. Carry offsets are px
+        // authored at zoom 32 — scale so the bag stays glued to the hands at every
+        // zoom (round-2 sweep: constant px made the bag drift off the hilt).
         bool flipX = fr.FlipX;
-        float ofsX = flipX ? -CarryOffsetX : CarryOffsetX;
+        float carryZoom = _g._camera.Zoom / 32f;
+        float ofsX = (flipX ? -CarryOffsetX : CarryOffsetX) * carryZoom;
+        float ofsY = CarryOffsetY * carryZoom;
 
         // Position at weapon hilt point if available
         var unitDef = _g._gameData.Units.Get(_g._sim.Units[unitIdx].UnitDefID);
@@ -459,7 +467,7 @@ partial class GameRenderer
                 // pre-`421fdd3` behavior of `HiltHeight * Zoom / HeightScale`.
                 var hiltScreen = _g._renderer.WorldToScreenPx(attach.HiltWorld, attach.HiltHeight * _g._camera.Zoom, _g._camera);
                 hiltScreen.X += ofsX;
-                hiltScreen.Y += CarryOffsetY; // small fine-tune; can be negative to nudge bag up
+                hiltScreen.Y += ofsY; // small fine-tune; can be negative to nudge bag up
                 DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, hiltScreen, bagScale, fr.FlipX, _g._ambientColor);
                 return;
             }
@@ -476,7 +484,7 @@ partial class GameRenderer
 
         float spriteWorldH = (unitDef != null && unitDef.SpriteWorldHeight > 0) ? unitDef.SpriteWorldHeight : 1.8f;
         float spritePixelH = spriteWorldH * _g._sim.Units[unitIdx].SpriteScale * _g._camera.Zoom;
-        float bagY = unitScreenPos.Y - spritePixelH * 0.30f + CarryOffsetY;
+        float bagY = unitScreenPos.Y - spritePixelH * 0.30f + ofsY;
 
         DrawSpriteFrame(corpsesAtlas, fr.Frame.Value, new Vector2(bagX, bagY), bagScale, fr.FlipX, _g._ambientColor);
     }
@@ -803,7 +811,7 @@ partial class GameRenderer
             if (attach.Valid)
                 pos = _g._renderer.WorldToScreenPx(attach.HiltWorld, attach.HiltHeight * _g._camera.Zoom, _g._camera);
         }
-        pos.Y += CarriedCorpseHandOffsetY;
+        pos.Y += CarriedCorpseHandOffsetY * _g._camera.Zoom / 32f; // px-at-32 nudge
 
         DrawCorpseCarriedFrame(cc, pos);
     }
