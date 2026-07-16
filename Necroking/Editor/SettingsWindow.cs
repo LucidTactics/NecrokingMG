@@ -439,7 +439,7 @@ public class SettingsWindow
     // ----------------------------------------------------------------
     // Index order must match the FogOfWarMode enum
     // (Off = 0, Explored = 1, FogOfWar = 2, Hybrid = 3).
-    private static readonly string[] FogModeNames = { "Off", "Explored", "Fog of War", "Hybrid" };
+    public static readonly string[] FogModeNames = { "Off", "Explored", "Fog of War", "Hybrid" };
 
     // Hover tooltips for the mode options, index-aligned with FogModeNames.
     private static readonly string[] FogModeTips =

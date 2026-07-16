@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Necroking.Core;
+using Necroking.Data.Registries;
 using Necroking.Editor;
 using Necroking.Lib;
 using Necroking.Render;
@@ -93,6 +94,11 @@ public class DebugSettingsPanel
 
         return new List<DebugModeToggle>
         {
+            new() { Label = "Fog", Options = SettingsWindow.FogModeNames,
+                Get = () => _g._gameData.Settings.FogOfWar.Mode,
+                Set = v => _g._gameData.Settings.FogOfWar.Mode = v,
+                Tooltips = new[] { null,
+                    "Outlines every registered UI hit-region with a\n1px yellow border." } },
             new() { Label = "F2 Water",     Options = onOff, Get = () => _g._waterDebug ? 1 : 0,
                     Set = v => _g._waterDebug = v == 1,
                     Tooltips = new[] { null,
