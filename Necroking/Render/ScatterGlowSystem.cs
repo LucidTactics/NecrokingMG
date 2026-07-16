@@ -46,13 +46,16 @@ public sealed class ScatterGlowSystem
     private XnaEffect? _effect;
 
     // ─── Emitters (cleared every frame) ───
+    // Stored in SCREEN space: registration happens during draw collection (the
+    // camera is final for the frame), and beam paths only exist as screen-space
+    // polylines. Radius converts world→px at Add time; depth is FogDepthForY.
     private struct Halo
     {
-        public Vec2 Pos;         // world
-        public float Height;     // physical lift (WorldToScreen worldHeight units)
-        public float Radius;     // world units
+        public Vector2 ScreenPos;
+        public float RadiusPx;
         public Color Rgb;        // straight color, A ignored
         public float Strength;   // 0..1, folded into vertex alpha
+        public float Depth;      // FogDepthForY value for the DepthRead test
     }
     private readonly List<Halo> _halos = new(64);
 
@@ -122,11 +125,19 @@ public sealed class ScatterGlowSystem
     public void AddPoint(Vec2 worldPos, float radius, Color rgb, float strength = 1f, float height = 0f)
     {
         if (!Active || radius <= 0f || strength <= 0f) return;
+        var cam = _g._camera;
+        AddScreenHalo(_g._renderer.WorldToScreen(worldPos, height, cam),
+            radius * cam.Zoom, rgb, strength,
+            GameRenderer.FogDepthForY(worldPos.Y, cam.Position.Y));
+    }
+
+    private void AddScreenHalo(Vector2 screenPos, float radiusPx, Color rgb, float strength, float depth)
+    {
         if (_halos.Count >= MaxHalosPerFrame) { _droppedThisFrame++; return; }
         _halos.Add(new Halo
         {
-            Pos = worldPos, Height = height, Radius = radius, Rgb = rgb,
-            Strength = MathHelper.Clamp(strength, 0f, 1f),
+            ScreenPos = screenPos, RadiusPx = radiusPx, Rgb = rgb,
+            Strength = MathHelper.Clamp(strength, 0f, 1f), Depth = depth,
         });
     }
 
@@ -163,6 +174,46 @@ public sealed class ScatterGlowSystem
             carry = t - segLen;
         }
         AddPoint(worldPts[^1], radius, rgb, splatStrength, height);
+    }
+
+    /// <summary>Register a polyline emitter from a SCREEN-space path (lightning
+    /// bolts — their jittered shape only exists in screen px). Radius stays a
+    /// WORLD unit; splat depth lerps between the endpoints' world Ys so the
+    /// sheath depth-sorts correctly along its length.</summary>
+    public void AddPolylineScreen(IReadOnlyList<Vector2> screenPts, float worldRadius,
+        Color rgb, float strength, float worldYStart, float worldYEnd)
+    {
+        if (!Active || worldRadius <= 0f || strength <= 0f || screenPts.Count < 2) return;
+        var cam = _g._camera;
+        float radiusPx = worldRadius * cam.Zoom;
+        float spacingPx = radiusPx * 0.55f;
+        float splatStrength = strength * 0.42f;   // same overlap dimming as AddPolyline
+        float camY = cam.Position.Y;
+
+        // Total arc length first, so each splat can lerp its depth by arc fraction.
+        float totalLen = 0f;
+        for (int i = 1; i < screenPts.Count; i++)
+            totalLen += (screenPts[i] - screenPts[i - 1]).Length();
+        if (totalLen <= 1e-3f) return;
+
+        float arc = 0f, carry = 0f;
+        for (int i = 1; i < screenPts.Count; i++)
+        {
+            Vector2 a = screenPts[i - 1], b = screenPts[i];
+            float segLen = (b - a).Length();
+            if (segLen <= 1e-3f) continue;
+            float t = carry;
+            while (t < segLen)
+            {
+                float frac = (arc + t) / totalLen;
+                float depth = GameRenderer.FogDepthForY(
+                    MathHelper.Lerp(worldYStart, worldYEnd, frac), camY);
+                AddScreenHalo(a + (b - a) * (t / segLen), radiusPx, rgb, splatStrength, depth);
+                t += spacingPx;
+            }
+            carry = t - segLen;
+            arc += segLen;
+        }
     }
 
     // ─────────────────────────── Test shapes ───────────────────────────
@@ -235,14 +286,13 @@ public sealed class ScatterGlowSystem
         for (int i = 0; i < _halos.Count; i++)
         {
             var h = _halos[i];
-            var sp = _g._renderer.WorldToScreen(h.Pos, h.Height, cam);
-            float rPx = h.Radius * cam.Zoom;
+            float rPx = h.RadiusPx;
+            var sp = h.ScreenPos;
             if (sp.X < -rPx || sp.X > ctx.ScreenW + rPx || sp.Y < -rPx || sp.Y > ctx.ScreenH + rPx)
                 continue;
-            float z = GameRenderer.FogDepthForY(h.Pos.Y, camY);
             var col = new Color(h.Rgb.R, h.Rgb.G, h.Rgb.B,
                 (byte)Math.Clamp((int)(h.Strength * 255f + 0.5f), 0, 255));
-            AddQuad(_haloVerts, sp, rPx, rPx, 0f, z, col, uvExtent: 1f);
+            AddQuad(_haloVerts, sp, rPx, rPx, 0f, h.Depth, col, uvExtent: 1f);
         }
         _halos.Clear();
 

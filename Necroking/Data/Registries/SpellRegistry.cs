@@ -993,6 +993,9 @@ public class SpellDef : INamedDef
         FlickerMax = BeamFlickerMax,
         FlickerHz = BeamFlickerHz,
         JitterHz = BeamJitterHz,
+        ScatterRadius = ScatterRadius,
+        ScatterRgb = new Microsoft.Xna.Framework.Color(ScatterColor.R, ScatterColor.G, ScatterColor.B),
+        ScatterStrength = ScatterStrength,
     };
 
     /// <summary>Build drain visual params from this spell's drain fields.</summary>

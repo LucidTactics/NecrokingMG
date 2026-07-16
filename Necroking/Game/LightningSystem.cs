@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Microsoft.Xna.Framework;
 using Necroking.Core;
 using Necroking.Data;
 using Necroking.Lib;
@@ -29,6 +30,13 @@ public class LightningStyle
     public float BranchLength = 0.4f;   // branch extends this fraction of remaining main bolt
     public float BranchDecay = 0.6f;    // width multiplier per branch level
     public int MaxBranches = 3;         // max branches per bolt
+
+    // ScatterGlow sheath (0 radius = none): LightningRenderer registers a
+    // polyline emitter along the bolt path, flicker-synced, so the air near the
+    // bolt visibly lights up (world units; see Render/ScatterGlowSystem.cs).
+    public float ScatterRadius;
+    public Color ScatterRgb;
+    public float ScatterStrength = 1f;
 }
 
 public class GodRayParams

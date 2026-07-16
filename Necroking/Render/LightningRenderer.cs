@@ -156,6 +156,19 @@ public class LightningRenderer
                 _sim.Units[casterIdx].EffectSpawnHeight * _camera.Zoom, _camera);
             var endSp = _renderer.WorldToScreen(_sim.Units[targetIdx].Position, 1f, _camera);
             AddBoltStrips(startSp, endSp, beam.Style, 1f, fxScale, beam.Seed);
+
+            // ScatterGlow: lit-air sheath along the bolt. ComputeBoltShape is
+            // deterministic (same seed/jitter clock), so this re-derivation is the
+            // exact path AddBoltStrips just rasterized; strength tracks the same
+            // flicker so the air breathes with the bolt's surges.
+            if (beam.Style.ScatterRadius > 0f && _game._scatterGlow.Active)
+            {
+                float scatterFlicker = ComputeBoltShape(startSp, endSp, beam.Style, _gameTime,
+                    out var scatterPts, out _, beam.Seed, fxScale);
+                _game._scatterGlow.AddPolylineScreen(scatterPts, beam.Style.ScatterRadius,
+                    beam.Style.ScatterRgb, beam.Style.ScatterStrength * scatterFlicker,
+                    _sim.Units[casterIdx].Position.Y, _sim.Units[targetIdx].Position.Y);
+            }
         }
 
         // Draw active drains (tendrils, additive endpoint flares, and the
