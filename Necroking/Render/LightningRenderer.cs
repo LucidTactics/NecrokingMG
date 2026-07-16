@@ -559,15 +559,6 @@ public class LightningRenderer
     /// meets the flow source (the victim) and a smaller one at the destination
     /// hand. Must be called while the additive HDR sprite batch is open (colors
     /// via ToHdrVertex). Shared by the in-game renderer and SpellPreview.</summary>
-    // Volumetric sprites (clouds/impact/flare): proportional below the authoring
-    // zoom, soft (sqrt) above it. Zoomed OUT the puffs must shrink with the world —
-    // sqrt there over-sizes them ~2x and the drain reads as a fat caterpillar
-    // dominating the screen. Zoomed IN, full linear merges the soft additive puffs
-    // into one featureless blob that swallows both units, so growth is damped while
-    // the tendril structure (widths/arc/wave) keeps tracking the world exactly.
-    private static float VolumetricScale(float fxScale)
-        => fxScale >= 1f ? MathF.Sqrt(fxScale) : fxScale;
-
     public static void AddDrainFlareSprites(SpriteBatch sb, Texture2D glowTex,
         Vector2 start, Vector2 end, DrainVisualParams v, float elapsed, float fxScale = 1f)
     {
@@ -579,8 +570,7 @@ public class LightningRenderer
         float pulse = 1f + 0.18f * MathF.Sin(elapsed * MathF.Max(v.PulseHz, 0.5f) * 2f * MathF.PI);
 
         float srcR = MathF.Max(v.ImpactSize * 1.6f,
-            v.GlowWidth * MathF.Max(1f, v.SourceWidthScale)) * v.ImpactFlareScale * pulse
-            * VolumetricScale(fxScale);
+            v.GlowWidth * MathF.Max(1f, v.SourceWidthScale)) * v.ImpactFlareScale * pulse * fxScale;
         var srcC = v.SourceCoreColor;
         float srcI = MathF.Min(srcC.Intensity, HdrColor.MaxHdrIntensity);
         // Hot center + wider soft halo.
@@ -604,7 +594,7 @@ public class LightningRenderer
         Vector2 start, Vector2 end, DrainVisualParams v, float elapsed, float fxScale = 1f)
     {
         if (v.ImpactPuffCount <= 0 || v.ImpactSize <= 0f) return;
-        float impactSize = v.ImpactSize * VolumetricScale(fxScale);
+        float impactSize = v.ImpactSize * fxScale;
         var srcPos = v.FlowReversed ? start : end;
         var toDst = (v.FlowReversed ? end : start) - srcPos;
         float len = toDst.Length();
@@ -667,7 +657,7 @@ public class LightningRenderer
         Vector2 start, Vector2 end, DrainVisualParams v, float elapsed, float fxScale = 1f)
     {
         if (v.CloudCount <= 0 || v.CloudSize <= 0f) return;
-        float cloudSize = v.CloudSize * VolumetricScale(fxScale);
+        float cloudSize = v.CloudSize * fxScale;
         var dir = end - start;
         float length = dir.Length();
         if (length < 1f) return;
