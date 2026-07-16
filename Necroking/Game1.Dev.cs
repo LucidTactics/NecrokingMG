@@ -2323,6 +2323,7 @@ public partial class Game1 {
                   "reanim_at <x> <y> [defId] [riseSpeed] [fogSpeed]",
                   "reanim_into <zombieDefId> [x] [y]", "learn_skill <skillId>",
                   "set_spell_slot <slot 0-9> <spellID|->", "give_item <itemID> [qty]",
+                  "save_game <name>", "load_game <name>",
                   // headless input (clicks / mouse / hover)
                   "click <x> <y> [right]", "mousepos <x> <y>|clear", "pile_click <x> <y>",
                   "hover <selector>|clear", "hover_obj <index>|clear",
