@@ -250,6 +250,12 @@ public sealed class MenuHostLayer : UILayer
             _g._gameRenderer.DrawGameOver(ctx.ScreenW, ctx.ScreenH);
             return;
         }
+        // One shared dim for the whole modal-menu family — drawn here rather
+        // than per window so stacked menus don't double-darken. Skipped when
+        // there's no world behind (main-menu Settings/LoadMenu draw the opaque
+        // Backdrop below instead).
+        if (_g._gameWorldLoaded)
+            MenuDraw.ModalDim(ctx.ScreenW, ctx.ScreenH);
         switch (_g._menuState)
         {
             case MenuState.PauseMenu:

@@ -31,9 +31,6 @@ public static class SettingsGeneralTab
         s.ShowObjectRadius = ui.DrawCheckbox("Show Object Radius", s.ShowObjectRadius, x, curY);
         curY += RowH;
 
-        s.PauseDimBackground = ui.DrawCheckbox("Dim Background on Pause", s.PauseDimBackground, x, curY);
-        curY += RowH;
-
         s.RunWhenUnfocused = ui.DrawCheckbox("Keep Running When Unfocused", s.RunWhenUnfocused, x, curY);
         curY += RowH;
 

@@ -269,8 +269,9 @@ public class SkillBookOverlay : IModalLayer
         if (!IsVisible) return;
         Layout(sw, sh);
 
-        // Dim the world behind the modal.
-        Scope.Draw(_pixel, new Rectangle(0, 0, sw, sh), new Color(0, 0, 0, 180));
+        // Dim the world behind the modal (Overlay band — not covered by
+        // MenuHostLayer's shared dim, so it draws its own).
+        Scope.Draw(_pixel, new Rectangle(0, 0, sw, sh), MenuDraw.ModalDimColor);
 
         // Never sit on a locked tab (e.g. it re-locked, or one was force-set).
         EnsureActiveTabUnlocked();

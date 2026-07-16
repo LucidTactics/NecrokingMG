@@ -77,8 +77,6 @@ public class SaveGameWindow
 
     public void Draw(int screenW, int screenH)
     {
-        _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 180));
-
         var PanelH = screenH - 50;
         int panelX = (screenW - PanelW) / 2;
         int panelY = (screenH - PanelH) / 2;

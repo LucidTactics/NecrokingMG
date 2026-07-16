@@ -46,8 +46,6 @@ public class MultiplayerWindow
     {
         _lanIps ??= NetSession.GetLocalIPv4s();
 
-        _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 180));
-
         int panelX = (screenW - PanelW) / 2;
         int panelY = (screenH - PanelH) / 2;
         _ui.DrawRect(new Rectangle(panelX, panelY, PanelW, PanelH), EditorBase.PanelBg);

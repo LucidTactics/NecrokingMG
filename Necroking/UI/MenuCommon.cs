@@ -110,6 +110,17 @@ internal static class MenuDraw
         G.Scope.Draw(G._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 120));
     }
 
+    /// <summary>Shared translucent black behind every modal window — one value
+    /// so the whole family darkens uniformly.</summary>
+    public static readonly Color ModalDimColor = new(0, 0, 0, 180);
+
+    /// <summary>Fullscreen dim behind a modal menu/window, signalling the world
+    /// behind it isn't interactable. The menu family gets this once per frame
+    /// from MenuHostLayer.Draw — individual windows shouldn't draw their own on
+    /// top, or stacked menus double-darken.</summary>
+    public static void ModalDim(int screenW, int screenH)
+        => G.Scope.Draw(G._pixel, new Rectangle(0, 0, screenW, screenH), ModalDimColor);
+
     // Draws a menu-family scrollbar using the shared VScrollbar geometry. The
     // thumb goes "hot" while hovered or being dragged (drag state lives on the
     // owning screen).

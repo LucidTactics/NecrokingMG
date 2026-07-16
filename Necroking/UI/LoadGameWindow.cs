@@ -46,8 +46,6 @@ public sealed class LoadGameWindow
 
     public void Draw(int screenW, int screenH)
     {
-        _ui.DrawRect(new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 180));
-
         int panelW = SaveGameWindow.PanelW;
         int panelH = screenH - 50;
         int panelX = (screenW - panelW) / 2;

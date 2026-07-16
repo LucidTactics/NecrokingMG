@@ -101,7 +101,6 @@ public class GeneralSettings
     [JsonPropertyName("damageNumberFadeTime")] public float DamageNumberFadeTime { get; set; } = 0.75f;
     [JsonPropertyName("damageNumberSpeed")] public float DamageNumberSpeed { get; set; } = 1.5f;
     [JsonPropertyName("autoPickupForagables")] public bool AutoPickupForagables { get; set; }
-    [JsonPropertyName("pauseDimBackground")] public bool PauseDimBackground { get; set; }
     /// <summary>Keep simulating while the window is unfocused (alt-tabbed). When off
     /// (default) the game freezes until refocused. Input is always ignored while
     /// unfocused regardless — this only controls whether the simulation advances.</summary>

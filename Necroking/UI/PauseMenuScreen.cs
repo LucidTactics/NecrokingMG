@@ -136,9 +136,6 @@ public sealed class PauseMenuScreen
 
     public void Draw(int screenW, int screenH)
     {
-        if (_g._gameData.Settings.General.PauseDimBackground)
-            _g.Scope.Draw(_g._pixel, new Rectangle(0, 0, screenW, screenH), new Color(0, 0, 0, 150));
-
         var view = BuildLayout(screenW, screenH);
         MenuDraw.Panel(view.Box, new Color(30, 30, 50, 235), new Color(100, 100, 180), 3);
 
