@@ -122,6 +122,11 @@ public class LightningRenderer
                     float skyY = -50f; // well above screen edge
                     float skyX = sp.X - 50f + (sp.Y - skyY) * 0.05f; // slight angle
                     AddBoltStrips(new Vector2(skyX, skyY), sp, strike.Style, fade, fxScale, strike.Seed);
+                    // Sky-bolt sheath: the sky end is a screen anchor at infinity, so
+                    // both depth ends use the target's world Y (occlusion only matters
+                    // near the ground where units stand).
+                    AddBoltScatter(new Vector2(skyX, skyY), sp, strike.Style, fade, fxScale,
+                        strike.Seed, strike.TargetPos.Y, strike.TargetPos.Y);
                 }
             }
         }
@@ -137,6 +142,8 @@ public class LightningRenderer
             var endSp = _renderer.WorldToScreen(zap.EndPos, zap.EndHeight, _camera);
             float fade = 1f - zap.Timer / zap.Duration;
             AddBoltStrips(startSp, endSp, zap.Style, fade, fxScale, zap.Seed);
+            AddBoltScatter(startSp, endSp, zap.Style, fade, fxScale, zap.Seed,
+                zap.StartPos.Y, zap.EndPos.Y);
         }
 
         // Draw active beams
@@ -157,32 +164,8 @@ public class LightningRenderer
             var endSp = _renderer.WorldToScreen(_sim.Units[targetIdx].Position, 1f, _camera);
             AddBoltStrips(startSp, endSp, beam.Style, 1f, fxScale, beam.Seed);
 
-            // ScatterGlow: lit-air sheath along the bolt. ComputeBoltShape is
-            // deterministic (same seed/jitter clock), so this re-derivation is the
-            // exact path AddBoltStrips just rasterized; strength tracks the same
-            // flicker so the air breathes with the bolt's surges.
-            if (beam.Style.ScatterRadius > 0f && _game._scatterGlow.Active)
-            {
-                float scatterFlicker = ComputeBoltShape(startSp, endSp, beam.Style, _gameTime,
-                    out var scatterPts, out var scatterBranches, beam.Seed, fxScale);
-                float casterY = _sim.Units[casterIdx].Position.Y;
-                float targetY = _sim.Units[targetIdx].Position.Y;
-                _game._scatterGlow.AddRibbonScreen(scatterPts, beam.Style.ScatterRadius,
-                    beam.Style.ScatterRgb, beam.Style.ScatterStrength * scatterFlicker,
-                    casterY, targetY);
-                // Side branches get the same lit-air treatment, thinner and dimmer —
-                // mirroring the ribbon pass's BranchDecay width / reduced alpha. The
-                // main+branch overlap at the fork is deliberate: real channels glow
-                // brighter below a junction (the branch current joins). Depth:
-                // branches are short, a flat mid-beam Y is indistinguishable.
-                float branchY = (casterY + targetY) * 0.5f;
-                foreach (var branch in scatterBranches)
-                    _game._scatterGlow.AddRibbonScreen(branch,
-                        beam.Style.ScatterRadius * beam.Style.BranchDecay,
-                        beam.Style.ScatterRgb,
-                        beam.Style.ScatterStrength * scatterFlicker * 0.5f,
-                        branchY, branchY);
-            }
+            AddBoltScatter(startSp, endSp, beam.Style, 1f, fxScale, beam.Seed,
+                _sim.Units[casterIdx].Position.Y, _sim.Units[targetIdx].Position.Y);
         }
 
         // Draw active drains (tendrils, additive endpoint flares, and the
@@ -194,7 +177,19 @@ public class LightningRenderer
         foreach (var drain in _sim.Lightning.Drains)
         {
             if (!drain.Alive) continue;
-            if (!TryGetDrainEndpoints(drain, out var startSp, out var endSp)) continue;
+            if (!TryGetDrainEndpoints(drain, out var startSp, out var endSp,
+                out var drainStartW, out var drainTargetW)) continue;
+            // ScatterGlow: lit-air sheath along the drain's line. The tendrils
+            // sway around the straight caster→target path, so a straight sheath
+            // (via the reduced-mist beam technique) reads as their shared air.
+            if (drain.Visuals.ScatterRadius > 0f && _game._scatterGlow.Active)
+            {
+                _drainScatterPts[0] = startSp;
+                _drainScatterPts[1] = endSp;
+                _game._scatterGlow.AddRibbonScreen(_drainScatterPts, drain.Visuals.ScatterRadius,
+                    drain.Visuals.ScatterRgb, drain.Visuals.ScatterStrength,
+                    drainStartW.Y, drainTargetW.Y);
+            }
             AddDrainTendrilStrips(startSp, endSp, drain.Visuals, drain.Elapsed, fxScale);
             AddDrainFlareSprites(_spriteBatch, _glowTex, startSp, endSp, drain.Visuals, drain.Elapsed, fxScale);
             AddDrainCloudSprites(_spriteBatch, _glowTex, drainCloudFb, startSp, endSp,
@@ -226,6 +221,8 @@ public class LightningRenderer
 
     // Scratch for the dev HDR bar polyline (render thread only).
     private static readonly List<Vector2> _barPts = new();
+    // Scratch for the drain scatter sheath endpoints (render thread only).
+    private readonly Vector2[] _drainScatterPts = new Vector2[2];
 
     /// <summary>Screen-space endpoints for a drain: caster hand anchor (sprite
     /// height convention, no YRatio foreshortening — same as the beam) and the
@@ -233,8 +230,13 @@ public class LightningRenderer
     /// mid-channel with no corpse: skip drawing rather than falling back to
     /// Vec2.Zero, which would draw tendrils to world origin).</summary>
     private bool TryGetDrainEndpoints(ActiveDrain drain, out Vector2 startSp, out Vector2 endSp)
+        => TryGetDrainEndpoints(drain, out startSp, out endSp, out _, out _);
+
+    private bool TryGetDrainEndpoints(ActiveDrain drain, out Vector2 startSp, out Vector2 endSp,
+        out Vec2 startWorld, out Vec2 targetWorld)
     {
         startSp = endSp = default;
+        startWorld = targetWorld = default;
         int casterIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.CasterID);
         if (casterIdx < 0) return false;
 
@@ -243,7 +245,9 @@ public class LightningRenderer
         Vec2 targetPos = drain.TargetCorpseIdx >= 0 ? drain.CorpsePos : Vec2.Zero;
         if (targetIdx >= 0) targetPos = _sim.Units[targetIdx].Position;
 
-        startSp = _renderer.WorldToScreenPx(_sim.Units[casterIdx].EffectSpawnPos2D,
+        startWorld = _sim.Units[casterIdx].EffectSpawnPos2D;
+        targetWorld = targetPos;
+        startSp = _renderer.WorldToScreenPx(startWorld,
             _sim.Units[casterIdx].EffectSpawnHeight * _camera.Zoom, _camera);
         endSp = _renderer.WorldToScreen(targetPos, 1f, _camera);
         return true;
@@ -336,6 +340,29 @@ public class LightningRenderer
         float widthScale, uint seedSalt = 0)
         => AddBoltStripsStatic(_strips, start, end, style, fade, _gameTime,
             widthScale: widthScale, seedSalt: seedSalt);
+
+    /// <summary>ScatterGlow: lit-air sheath along a bolt (beams, zaps, sky
+    /// strikes). ComputeBoltShape is deterministic (same seed/jitter clock), so
+    /// this re-derivation is the exact path AddBoltStrips just rasterized;
+    /// strength tracks the same flicker/fade so the air breathes with the bolt.
+    /// Side branches get a thinner, dimmer sheath (BranchDecay width, half
+    /// strength) — the main+branch overlap at the fork is deliberate junction
+    /// glow (real channels brighten below a fork as the branch current joins).</summary>
+    private void AddBoltScatter(Vector2 startSp, Vector2 endSp, LightningStyle style,
+        float fade, float fxScale, uint seed, float worldYStart, float worldYEnd)
+    {
+        if (style.ScatterRadius <= 0f || fade <= 0.01f || !_game._scatterGlow.Active) return;
+        float flicker = ComputeBoltShape(startSp, endSp, style, _gameTime,
+            out var pts, out var branches, seed, fxScale);
+        float s = style.ScatterStrength * flicker * fade;
+        _game._scatterGlow.AddRibbonScreen(pts, style.ScatterRadius, style.ScatterRgb,
+            s, worldYStart, worldYEnd);
+        // Branch depth: branches are short, a flat mid-bolt Y is indistinguishable.
+        float branchY = (worldYStart + worldYEnd) * 0.5f;
+        foreach (var branch in branches)
+            _game._scatterGlow.AddRibbonScreen(branch, style.ScatterRadius * style.BranchDecay,
+                style.ScatterRgb, s * 0.5f, branchY, branchY);
+    }
 
     /// <summary>
     /// Collect a bolt (main + branches) as miter-joined ribbons into a strip batch;

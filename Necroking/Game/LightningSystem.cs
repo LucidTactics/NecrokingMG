@@ -121,6 +121,13 @@ public class DrainVisualParams
     public float PulseStrength = 0.4f;
     public HdrColor CoreColor = new(120, 255, 80, 255, 2.5f);
     public HdrColor GlowColor = new(40, 120, 20, 160, 1.5f);
+
+    // ScatterGlow sheath along the drain's caster→target line (0 radius = none) —
+    // same convention as LightningStyle.Scatter*; mapped from the shared SpellDef
+    // SCATTER fields in BuildDrainVisuals.
+    public float ScatterRadius;
+    public Color ScatterRgb;
+    public float ScatterStrength = 1f;
     // Visual flow direction. false = life flows target→caster (the normal drain);
     // true = caster→target. Resolved in SpellDef.BuildDrainVisuals from
     // DrainReversed XOR DrainVisualReversed, so the renderer never re-derives it.

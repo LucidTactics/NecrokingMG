@@ -978,6 +978,9 @@ public class SpellDef : INamedDef
         FlickerMax = StrikeFlickerMax,
         FlickerHz = StrikeFlickerHz,
         JitterHz = StrikeJitterHz,
+        ScatterRadius = ScatterRadius,
+        ScatterRgb = new Microsoft.Xna.Framework.Color(ScatterColor.R, ScatterColor.G, ScatterColor.B),
+        ScatterStrength = ScatterStrength,
     };
 
     /// <summary>Build a LightningStyle from this spell's beam fields.</summary>
@@ -1027,6 +1030,9 @@ public class SpellDef : INamedDef
         ImpactSize = DrainImpactSize,
         ImpactFlipbookID = string.IsNullOrEmpty(DrainImpactFlipbook) ? "cloud03" : DrainImpactFlipbook,
         ImpactFlareScale = DrainImpactFlareScale,
+        ScatterRadius = ScatterRadius,
+        ScatterRgb = new Microsoft.Xna.Framework.Color(ScatterColor.R, ScatterColor.G, ScatterColor.B),
+        ScatterStrength = ScatterStrength,
     };
 
     /// <summary>Build GodRayParams from this spell's god ray fields.</summary>

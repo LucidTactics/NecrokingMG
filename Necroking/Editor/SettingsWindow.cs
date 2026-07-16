@@ -360,6 +360,27 @@ public class SettingsWindow
             "Tech: blends hue-preserving (max-channel) vs per-channel compression.");
         y += rowH;
 
+        y += 6; // spacing
+
+        // SET12: Light Scattering (world-space scatter halos — ScatterGlowSystem).
+        // Lives with bloom because both make bright things glow: bloom is the
+        // camera/eye layer, light scattering is the air layer. Backing fields are
+        // Performance.ScatterGlow* (the single source of truth the render system
+        // and dev command already use).
+        var perfLs = _gameData.Settings.Performance;
+        bool ls = _ui.DrawCheckbox("Light Scattering", perfLs.ScatterGlow, x, y);
+        if (ls != perfLs.ScatterGlow) { perfLs.ScatterGlow = ls; MarkDirty(); }
+        RowTip(x, y, w, "Spell light visibly lights up the air around it (mist, weather-aware).",
+            "Tech: world-space additive scatter halos drawn pre-bloom (ScatterGlow.fx); off = near-zero cost.");
+        y += rowH;
+
+        // SET13: Light Scattering Strength
+        float lsStr = _ui.DrawSliderFloat("set_scatter_strength", "Scatter Strength", perfLs.ScatterGlowStrength, 0f, 2f, x, y, w);
+        if (MathF.Abs(lsStr - perfLs.ScatterGlowStrength) > 0.0001f) { perfLs.ScatterGlowStrength = lsStr; MarkDirty(); }
+        RowTip(x, y, w, "How strongly the air glows around bright effects.",
+            "Tech: global multiplier on scatter halo density (also scaled by weather fog).");
+        y += rowH;
+
         return y - startY;
     }
 

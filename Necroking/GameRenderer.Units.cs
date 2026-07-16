@@ -441,6 +441,35 @@ partial class GameRenderer
                 _g._buffVisuals.UpdateWeaponParticles(_g._sim.Units[i].Id, _g._clock.WorldDt, _g._gameTime, _g._wpDefsCache, weaponAttach, _g._gameData.Buffs);
         }
 
+        // ScatterGlow: buff visuals light the air around their unit. Derived from
+        // each visual's EXISTING color/size (no new BuffDef data): the casting
+        // glow (a WeaponParticle buff) glows at the weapon tip; auras glow around
+        // the unit. One emitter per visual per unit — never per particle.
+        if (_g._scatterGlow.Active)
+        {
+            foreach (var ab in _g._sim.Units[i].ActiveBuffs)
+            {
+                var bd = _g._gameData.Buffs.Get(ab.BuffDefID);
+                if (bd == null) continue;
+                if (bd.HasWeaponParticle && bd.WeaponParticle != null)
+                    _g._scatterGlow.AddPoint(weaponAttach.TipWorld, 1.1f,
+                        new Color(bd.WeaponParticle.Color.R, bd.WeaponParticle.Color.G, bd.WeaponParticle.Color.B),
+                        0.45f, weaponAttach.TipHeight);
+                if (bd.HasGroundAura && bd.GroundAura != null)
+                    _g._scatterGlow.AddPoint(renderPos, MathF.Max(bd.GroundAura.Scale * 0.7f, 0.8f),
+                        new Color(bd.GroundAura.Color.R, bd.GroundAura.Color.G, bd.GroundAura.Color.B),
+                        0.3f);
+                if (bd.HasOrbital && bd.Orbital != null)
+                    _g._scatterGlow.AddPoint(renderPos, bd.Orbital.SunOrbitRadius + 0.8f,
+                        new Color(bd.Orbital.OrbColor.R, bd.Orbital.OrbColor.G, bd.Orbital.OrbColor.B),
+                        0.3f, 0.8f);
+                if (bd.HasLightningAura && bd.LightningAura != null)
+                    _g._scatterGlow.AddPoint(renderPos, bd.LightningAura.ArcRadius + 0.9f,
+                        new Color(bd.LightningAura.GlowColor.R, bd.LightningAura.GlowColor.G, bd.LightningAura.GlowColor.B),
+                        0.35f, 0.7f);
+            }
+        }
+
         // Buff visuals: phase 0 (behind sprite)
         _g._buffVisuals.DrawUnit(i, renderPos, 0, _g._gameTime,
             _g._spriteBatch, _g._camera, _g._renderer, _g._flipbooks, _g._gameData.Buffs, _g._sim.Units,

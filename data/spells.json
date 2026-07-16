@@ -116,6 +116,15 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1
+      },
+      "scatterRadius": 2.4,
+      "scatterStrength": 0.6,
+      "scatterColor": {
+        "r": 255,
+        "g": 150,
+        "b": 80,
+        "a": 255,
+        "intensity": 1
       }
     },
     {
@@ -156,7 +165,16 @@
       "trajectory": "Direct",
       "projectileSpeed": 50,
       "precisionBonus": -5,
-      "projectileDelay": 0.02
+      "projectileDelay": 0.02,
+      "scatterRadius": 1.2,
+      "scatterStrength": 0.35,
+      "scatterColor": {
+        "r": 255,
+        "g": 225,
+        "b": 190,
+        "a": 255,
+        "intensity": 1
+      }
     },
     {
       "name": "Darts Lob",
@@ -197,7 +215,16 @@
       "projectileSpeed": 50,
       "gravityScale": 2,
       "precisionBonus": -5,
-      "projectileDelay": 0.02
+      "projectileDelay": 0.02,
+      "scatterRadius": 1.2,
+      "scatterStrength": 0.35,
+      "scatterColor": {
+        "r": 255,
+        "g": 225,
+        "b": 190,
+        "a": 255,
+        "intensity": 1
+      }
     },
     {
       "name": "Nether Darts",
@@ -254,6 +281,15 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1
+      },
+      "scatterRadius": 1.6,
+      "scatterStrength": 0.5,
+      "scatterColor": {
+        "r": 190,
+        "g": 110,
+        "b": 255,
+        "a": 255,
+        "intensity": 1
       }
     },
     {
@@ -311,6 +347,15 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1
+      },
+      "scatterRadius": 1.6,
+      "scatterStrength": 0.5,
+      "scatterColor": {
+        "r": 190,
+        "g": 110,
+        "b": 255,
+        "a": 255,
+        "intensity": 1
       }
     },
     {
@@ -595,6 +640,14 @@
         "b": 255,
         "a": 255,
         "intensity": 4.072727
+      },
+      "scatterRadius": 2.4,
+      "scatterColor": {
+        "r": 200,
+        "g": 215,
+        "b": 255,
+        "a": 255,
+        "intensity": 1
       }
     },
     {
@@ -658,6 +711,15 @@
         "b": 253,
         "a": 140,
         "intensity": 3.1730769
+      },
+      "scatterRadius": 2.2,
+      "scatterStrength": 0.9,
+      "scatterColor": {
+        "r": 150,
+        "g": 190,
+        "b": 255,
+        "a": 255,
+        "intensity": 1
       }
     },
     {
@@ -706,7 +768,15 @@
       "beamChainBranches": 2,
       "beamChainDepth": 2,
       "beamChainRange": 16,
-      "beamChainWidthDecay": 0.9
+      "beamChainWidthDecay": 0.9,
+      "scatterRadius": 2.4,
+      "scatterColor": {
+        "r": 150,
+        "g": 190,
+        "b": 255,
+        "a": 255,
+        "intensity": 1
+      }
     },
     {
       "name": "Elite Skeleton Upgrade",
@@ -870,6 +940,15 @@
       "castingBuffID": "buff_4_copy",
       "armorNegating": true,
       "drn": 1,
+      "scatterRadius": 1.6,
+      "scatterStrength": 0.7,
+      "scatterColor": {
+        "r": 130,
+        "g": 230,
+        "b": 110,
+        "a": 255,
+        "intensity": 1
+      },
       "drainMaxDuration": 2,
       "drainArcHeight": 14,
       "drainSwayHz": 1,
@@ -1610,6 +1689,15 @@
         "duration": -1
       },
       "friendlyOnly": false,
+      "scatterRadius": 2,
+      "scatterStrength": 0.55,
+      "scatterColor": {
+        "r": 190,
+        "g": 110,
+        "b": 255,
+        "a": 255,
+        "intensity": 1
+      },
       "sacrificeHealFlat": 0,
       "blightAmount": 25
     },
@@ -2111,6 +2199,15 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1
+      },
+      "scatterRadius": 1.8,
+      "scatterStrength": 0.55,
+      "scatterColor": {
+        "r": 190,
+        "g": 110,
+        "b": 255,
+        "a": 255,
+        "intensity": 1
       }
     },
     {
@@ -2172,6 +2269,15 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1
+      },
+      "scatterRadius": 1.8,
+      "scatterStrength": 0.55,
+      "scatterColor": {
+        "r": 190,
+        "g": 110,
+        "b": 255,
+        "a": 255,
+        "intensity": 1
       }
     },
     {
@@ -2232,63 +2338,6 @@
         "r": 255,
         "g": 150,
         "b": 60,
-        "a": 255,
-        "intensity": 1
-      }
-    },
-    {
-      "name": "Lightning Beam Inbuilt",
-      "id": "lightning_beam_inbuilt",
-      "category": "Beam",
-      "school": "Evocation",
-      "tileTemplate": "evocation",
-      "icon": "assets/UI/Icons/Spells/lightning_beam.png",
-      "range": 30,
-      "primaryPath": "shock",
-      "primaryLevel": 1,
-      "masteryBonuses": [
-        "+1: fatigue -30%",
-        "+2: fatigue -50%",
-        "+3: fatigue -75%",
-        "+4: fatigue -85%"
-      ],
-      "cooldown": 3,
-      "castingBuffID": "buff_4_copy_copy",
-      "armorNegating": true,
-      "defenseNegating": false,
-      "damage": 1,
-      "beamTickRate": 0.5,
-      "beamDisplacement": 0.15,
-      "beamCoreWidth": 1,
-      "beamGlowWidth": 2,
-      "beamFlickerMin": 0.9,
-      "beamFlickerMax": 1.2,
-      "beamFlickerHz": 0.5,
-      "beamJitterHz": 7,
-      "beamCoreColor": {
-        "r": 255,
-        "g": 253,
-        "b": 196,
-        "a": 255,
-        "intensity": 6.4727273
-      },
-      "beamGlowColor": {
-        "r": 149,
-        "g": 231,
-        "b": 255,
-        "a": 255,
-        "intensity": 3.1272728
-      },
-      "beamChainBranches": 2,
-      "beamChainDepth": 2,
-      "beamChainRange": 16,
-      "beamChainWidthDecay": 0.9,
-      "scatterRadius": 2.4,
-      "scatterStrength": 1.0,
-      "scatterColor": {
-        "r": 150,
-        "g": 190,
-        "b": 255,
         "a": 255,
         "intensity": 1
       }
