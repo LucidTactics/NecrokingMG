@@ -21,6 +21,11 @@ public class BloomRenderer
 
     private RenderTarget2D? _sceneRT;
     private readonly RenderTarget2D?[] _mips = new RenderTarget2D?[MaxMips];
+    // Half-res scratch for the zoom-magnified halo (see EndScene): the fractional
+    // deep-mip mix is accumulated here with plain weighted-additive draws instead
+    // of in-place InverseBlendFactor lerps (which field-tested broken: a tiny
+    // blend factor gutted the destination instead of preserving it).
+    private RenderTarget2D? _haloScratch;
     private int _mipCount;
     private int _screenW, _screenH;
     private bool _initialized;
@@ -30,41 +35,20 @@ public class BloomRenderer
     private XnaEffect? _downsampleEffect;
     private XnaEffect? _bicubicUpsampleEffect;
 
-    // Cached scatter blend states — BlendState is a native graphics object, so
-    // they're rebuilt only when the quantized scatter value changes, not per
-    // frame. Two slots: the regular per-level scatter, and the deepest level's
-    // (which carries the fractional zoom-spread weight, so it differs).
-    private readonly BlendState?[] _scatterBlends = new BlendState?[2];
-    private readonly byte[] _scatterBlendBytes = new byte[2];
+    // Cached weighted-additive blend states, one slot per distinct per-frame
+    // weight (see GetWeightBlend).
+    private readonly BlendState?[] _scatterBlends = new BlendState?[5];
+    private readonly byte[] _scatterBlendBytes = new byte[5];
 
-    // Cached lerp blend (src*frac + dst*(1-frac)) for the fractional deep-mip
-    // magnification blend — same rebuild-on-change pattern as the scatter states.
-    private BlendState? _lerpBlend;
-    private byte _lerpBlendByte;
-
-    private BlendState GetLerpBlend(float frac)
+    /// <summary>Weighted-additive blend: dst + src * w. The ONE blend shape this
+    /// pipeline uses for mixing (proven by the scatter chain — InverseBlendFactor
+    /// lerps corrupted their destination at small factors and are banned here).
+    /// Slots keep distinct per-frame weights cached (BlendState is a native
+    /// object; rebuild only when the quantized weight changes). Slots: 0/1 =
+    /// upsample scatter (regular/deepest), 2/3 = halo scratch mix, 4 = halo add.</summary>
+    private BlendState GetWeightBlend(float w, int slot)
     {
-        byte fb = (byte)(Math.Clamp(frac, 0f, 1f) * 255f);
-        if (_lerpBlend == null || _lerpBlendByte != fb)
-        {
-            _lerpBlend?.Dispose();
-            _lerpBlend = new BlendState
-            {
-                ColorSourceBlend = Blend.BlendFactor,
-                ColorDestinationBlend = Blend.InverseBlendFactor,
-                AlphaSourceBlend = Blend.BlendFactor,
-                AlphaDestinationBlend = Blend.InverseBlendFactor,
-                BlendFactor = new Color(fb, fb, fb, fb)
-            };
-            _lerpBlendByte = fb;
-        }
-        return _lerpBlend;
-    }
-
-    private BlendState GetScatterBlend(float scatter, bool deepestSlot)
-    {
-        int slot = deepestSlot ? 1 : 0;
-        byte sb = (byte)(Math.Clamp(scatter, 0f, 1f) * 255f);
+        byte sb = (byte)(Math.Clamp(w, 0f, 1f) * 255f);
         if (_scatterBlends[slot] == null || _scatterBlendBytes[slot] != sb)
         {
             _scatterBlends[slot]?.Dispose();
@@ -134,6 +118,7 @@ public class BloomRenderer
         if (!_initialized || screenW <= 0 || screenH <= 0) return;
         if (screenW == _screenW && screenH == _screenH) return;
         _sceneRT?.Dispose(); _sceneRT = null;
+        _haloScratch?.Dispose(); _haloScratch = null;
         for (int i = 0; i < _mipCount; i++) { _mips[i]?.Dispose(); _mips[i] = null; }
         _mipCount = 0;
         _screenW = screenW;
@@ -181,6 +166,20 @@ public class BloomRenderer
             _mipCount++;
             mw /= 2;
             mh /= 2;
+        }
+
+        if (_mipCount > 0)
+        {
+            try
+            {
+                _haloScratch = new RenderTarget2D(device, _mips[0]!.Width, _mips[0]!.Height,
+                    false, bloomFmt, DepthFormat.None);
+            }
+            catch
+            {
+                _haloScratch = new RenderTarget2D(device, _mips[0]!.Width, _mips[0]!.Height,
+                    false, SurfaceFormat.Color, DepthFormat.None);
+            }
         }
 
         Console.Error.WriteLine($"[Bloom] Scene RT: {_sceneRT!.Format} ({_sceneRT.Width}x{_sceneRT.Height})");
@@ -289,7 +288,7 @@ public class BloomRenderer
         for (int i = iters - 2; i >= 0; i--)
         {
             bool deepest = i == iters - 2;
-            var scatterBlend = GetScatterBlend(deepest ? scatter * deepestFrac : scatter, deepest);
+            var scatterBlend = GetWeightBlend(deepest ? scatter * deepestFrac : scatter, deepest ? 1 : 0);
             device.SetRenderTarget(_mips[i]);
             if (useBicubic)
             {
@@ -312,34 +311,48 @@ public class BloomRenderer
         // pixels). Fractional bias lerps the next-deeper mip into the source mip
         // (it's rebuilt next frame, so blending in place is safe) for smooth
         // wheel-zoom. srcMip stays within the levels the chain actually filled.
+        // Zoomed IN (positive bias): grow the halo by ADDING a deeper (2x-wider
+        // per level) mip on top of the untouched mip0 — never attenuate or drop
+        // the tuned bloom. The sharp half-res core is what makes a thin beam's
+        // bloom read hot; any scheme that fades mip0 out produced hard thin/thick
+        // thresholds at the octave zooms (64/128), field-verified with the debug
+        // widget. Construction uses ONLY the proven weighted-additive blend
+        // (src*factor + dst, same as the scatter chain — the in-place
+        // InverseBlendFactor lerp corrupted its destination at small factors):
+        //   scratch = (1-frac)*stretch(mip[deep]) + frac*stretch(mip[deep+1])
+        //   mip0   += lambda * stretch(scratch),  lambda ramping to a cap over
+        // the first octave. Halo radius grows smoothly; the core never dims, so
+        // no intensity compensation is needed.
         int srcMip = 0;
         float intensityComp = 1f;
-        if (zoomSpreadBias > 0f)
+        if (zoomSpreadBias > 0f && _haloScratch != null)
         {
             float b = MathF.Min(zoomSpreadBias, iters - 1);
-            srcMip = (int)b;
-            float frac = b - srcMip;
-            if (frac > 0.001f && srcMip + 1 <= iters - 1)
-            {
-                var lerpBlend = GetLerpBlend(frac);
-                device.SetRenderTarget(_mips[srcMip]);
-                batch.Begin(SpriteSortMode.Immediate, lerpBlend, SamplerState.LinearClamp);
-                batch.Draw(_mips[srcMip + 1],
-                    new Rectangle(0, 0, _mips[srcMip]!.Width, _mips[srcMip]!.Height), Color.White);
-                batch.End();
+            int deep = Math.Max(1, (int)b);
+            float frac = b - (int)b;
+            if (deep + 1 > iters - 1) frac = 0f; // no deeper mip in the chain to mix
 
-                // The mip lerp is trilinear-style: for THIN bright features (beams)
-                // the wider mip's peak is only ~Rho of the finer one's, so mid-octave
-                // the composite peak dips ~25% and the visible halo contour shrinks,
-                // popping back at every octave boundary while zooming (the reported
-                // "bloom shrinks, then grows again" threshold). Compensate with the
-                // inverse of the expected peak loss — monotone contour growth; broad
-                // sources overbrighten mid-octave by at most 1/Rho-1, far milder
-                // than the dip this cures.
-                const float Rho = 0.6f;
-                intensityComp = 1f / ((1f - frac) + frac * Rho);
+            device.SetRenderTarget(_haloScratch);
+            device.Clear(Color.Black);
+            var scratchRect = new Rectangle(0, 0, _haloScratch.Width, _haloScratch.Height);
+            batch.Begin(SpriteSortMode.Immediate, GetWeightBlend(1f - frac, 2), SamplerState.LinearClamp);
+            batch.Draw(_mips[deep], scratchRect, Color.White);
+            batch.End();
+            if (frac > 0.001f)
+            {
+                batch.Begin(SpriteSortMode.Immediate, GetWeightBlend(frac, 3), SamplerState.LinearClamp);
+                batch.Draw(_mips[deep + 1], scratchRect, Color.White);
+                batch.End();
             }
-            DebugSrcMip = srcMip; DebugFrac = frac; DebugComp = intensityComp;
+
+            const float HaloShare = 0.6f; // added halo weight cap
+            float lambda = HaloShare * MathF.Min(1f, zoomSpreadBias);
+            device.SetRenderTarget(_mips[0]);
+            batch.Begin(SpriteSortMode.Immediate, GetWeightBlend(lambda, 4), SamplerState.LinearClamp);
+            batch.Draw(_haloScratch, new Rectangle(0, 0, _mips[0]!.Width, _mips[0]!.Height), Color.White);
+            batch.End();
+
+            DebugSrcMip = deep; DebugFrac = lambda; DebugComp = intensityComp;
         }
 
         // --- Step 4: Composite — scene + bloom * intensity → output target ---
@@ -381,6 +394,7 @@ public class BloomRenderer
     public void Unload()
     {
         _sceneRT?.Dispose(); _sceneRT = null;
+        _haloScratch?.Dispose(); _haloScratch = null;
         for (int i = 0; i < _mipCount; i++)
         {
             _mips[i]?.Dispose();
