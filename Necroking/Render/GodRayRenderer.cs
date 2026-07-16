@@ -20,9 +20,12 @@ public class GodRayRenderer
     private BasicEffect? _basicEffect;
     private readonly List<VertexPositionColor> _triVerts = new();
 
-    // Pending god rays collected during lightning Draw(), rendered in DrawGodRays()
+    // Pending god rays collected during lightning Draw(), rendered in DrawGodRays().
+    // widthScale = zoom coupling (Zoom/32 in-game, 1 in the editor preview): the
+    // beam widths and ground aura are pixel values authored at zoom 32 and must
+    // track world scale; the sky anchor stays screen-space by design.
     public readonly List<(Vector2 sky, Vector2 ground, LightningStyle style, GodRayParams p,
-        float elapsed, float effectTimer, float effectDuration)> PendingGodRays = new();
+        float elapsed, float effectTimer, float effectDuration, float widthScale)> PendingGodRays = new();
 
     public void Init(GraphicsDevice graphicsDevice,
                      Microsoft.Xna.Framework.Graphics.Effect? hdrIntensityEffect)
@@ -86,8 +89,8 @@ public class GodRayRenderer
         }
 
         _triVerts.Clear();
-        foreach (var (sky, ground, style, p, elapsed, effectTimer, effectDuration) in PendingGodRays)
-            DrawGodRay(sky, ground, style, p, elapsed, effectTimer, effectDuration);
+        foreach (var (sky, ground, style, p, elapsed, effectTimer, effectDuration, widthScale) in PendingGodRays)
+            DrawGodRay(sky, ground, style, p, elapsed, effectTimer, effectDuration, widthScale);
         FlushTriangles();
     }
 
@@ -109,7 +112,8 @@ public class GodRayRenderer
     // --- Main god ray drawing (matches C++ drawGodRay in god_ray.h) ---
 
     private void DrawGodRay(Vector2 sky, Vector2 ground, LightningStyle style, GodRayParams p,
-                             float elapsed, float effectTimer, float effectDuration)
+                             float elapsed, float effectTimer, float effectDuration,
+                             float widthScale = 1f)
     {
         float shimmer = MathF.Sin(elapsed * 8f) * 0.15f + 0.85f;
         float baseAlpha = shimmer;
@@ -127,8 +131,8 @@ public class GodRayRenderer
         var mid = new Color((byte)((core.R + glow.R) / 2), (byte)((core.G + glow.G) / 2),
                             (byte)((core.B + glow.B) / 2), (byte)((core.A + glow.A) / 2));
 
-        float cw = style.CoreWidth;
-        float gw = style.GlowWidth;
+        float cw = style.CoreWidth * widthScale;
+        float gw = style.GlowWidth * widthScale;
 
         // 4 layers from outer glow to inner core (all values match C++)
         float[] layerT = { 1f, 0.66f, 0.33f, 0f };

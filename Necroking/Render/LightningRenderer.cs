@@ -94,10 +94,12 @@ public class LightningRenderer
 
                 if (strike.Visual == StrikeVisual.GodRay)
                 {
-                    // Collect for separate god ray pass
+                    // Collect for separate god ray pass. Sky anchor stays
+                    // screen-space by design; widths scale with zoom (fxScale).
                     float sH = _graphicsDevice.Viewport.Height;
                     _godRayRenderer.PendingGodRays.Add((new Vector2(sp.X - 200f, sp.Y - sH * 0.6f), sp,
-                        strike.Style, strike.GodRay, _gameTime, strike.EffectTimer, strike.EffectDuration));
+                        strike.Style, strike.GodRay, _gameTime, strike.EffectTimer, strike.EffectDuration,
+                        fxScale));
                 }
                 else
                 {
