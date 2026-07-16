@@ -164,10 +164,22 @@ public class LightningRenderer
             if (beam.Style.ScatterRadius > 0f && _game._scatterGlow.Active)
             {
                 float scatterFlicker = ComputeBoltShape(startSp, endSp, beam.Style, _gameTime,
-                    out var scatterPts, out _, beam.Seed, fxScale);
+                    out var scatterPts, out var scatterBranches, beam.Seed, fxScale);
+                float casterY = _sim.Units[casterIdx].Position.Y;
+                float targetY = _sim.Units[targetIdx].Position.Y;
                 _game._scatterGlow.AddPolylineScreen(scatterPts, beam.Style.ScatterRadius,
                     beam.Style.ScatterRgb, beam.Style.ScatterStrength * scatterFlicker,
-                    _sim.Units[casterIdx].Position.Y, _sim.Units[targetIdx].Position.Y);
+                    casterY, targetY);
+                // Side branches get the same lit-air treatment, thinner and dimmer —
+                // mirroring the ribbon pass's BranchDecay width / reduced alpha. Depth:
+                // branches are short, a flat mid-beam Y is indistinguishable.
+                float branchY = (casterY + targetY) * 0.5f;
+                foreach (var branch in scatterBranches)
+                    _game._scatterGlow.AddPolylineScreen(branch,
+                        beam.Style.ScatterRadius * beam.Style.BranchDecay,
+                        beam.Style.ScatterRgb,
+                        beam.Style.ScatterStrength * scatterFlicker * 0.5f,
+                        branchY, branchY);
             }
         }
 
