@@ -133,8 +133,10 @@
 depth (fixed SCREEN pixels per level), so without compensation a thin bright beam wears
 the same halo at every zoom and reads ~6x fatter than the world when zoomed out (this
 masqueraded as "the drain doesn't scale" until a bloom on/off A-B at zoom 8 isolated it).
-The pipeline passes `log2(Zoom/32)` as an iteration-count bias with fractional scatter
-on the deepest mip (smooth while wheel-zooming); settings stay tuned at zoom 32;
+The pipeline passes `min(0, log2(Zoom/32))` as an iteration-count bias with fractional
+scatter on the deepest mip (smooth while wheel-zooming) — ONE-SIDED: shrink below the
+tuning zoom only. Widening above it dilutes the halo into invisible mist (glare is a
+screen-space phenomenon; fixed-px was always right zoomed in). Settings stay tuned at 32;
 `Editor/SpellPreview.cs` passes 0. Diagnostic recipe: `setting bloom.enabled false`
 mid-pause and compare screenshots.
 
