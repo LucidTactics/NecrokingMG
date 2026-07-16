@@ -42,8 +42,11 @@ exclusion → afford → deduct → run effect → roll back on failure) and `Le
 (gameplay auto-grants, no cost/prereq). Predicates the UI uses: `ArePrereqsMet`,
 `IsExcluded`/`ExclusionBlocker`, `CanAfford`, `IsAvailableAffordable/Unaffordable`,
 `GetProgress`. `InitFromDefs()` resets everything for a new game (applies `startLearned`).
-**Not persisted** — `Data/SaveGameData.cs` explicitly defers SkillBookState to a future
-save version, so learned skills reset per session.
+**Persisted in save games** via `ExportSave()`/`ApplySave()` ↔ `SavedSkillBook` DTO in
+`Data/SaveGameData.cs` (written in `Game1.Saves.cs` `WriteSaveGame`, restored in
+`ApplySaveToWorld`; `ApplySave` restores collections verbatim and replays only
+`grant_path` effects). **Adding a new unlock collection = 4 touches:** field here +
+`ExportSave` + `ApplySave` + a `[JsonPropertyName]` property on `SavedSkillBook`.
 **Look/edit here when…** adding a new unlock-state kind, a new cost predicate, or wiring
 "was skill X learned?" queries.
 
@@ -110,7 +113,13 @@ read `Events.Get`; milestones are never consumed.
 - **`passive_stat` args without a consumer are silent stubs** — `magic.json` late nodes
   `nether_storm`, `pyre`, `archmage` set flags no code checks.
 - Unknown effect ids **soft-pass**: the skill "learns" successfully and does nothing.
-- SkillBookState is **not saved** (per-run only); `InitFromDefs` on new game.
+- SkillBookState **is saved** (`SavedSkillBook` in the save game, see above) — the old
+  "per-run only" note is obsolete; v1 saves lacking the key load with a fresh book.
+- **`startLearned` skills never run their effect** — `InitFromDefs` only fills `_learned`
+  (and `ApplySave` replays only `grant_path`). A set-populating effect (`unlock_potion`,
+  a future `unlock_building`) on a `startLearned` node silently leaves the set empty —
+  use a zero-cost learnable node (empty `costs` passes `CanAfford`) or `LearnFree`
+  (which DOES run the effect) instead.
 - Scenario learns pass `Sim = null` — effects must (and do) soft-pass without a sim.
 - Skill defs bypass `RegistryBase`/`--roundtrip-data`; `SaveLayout` only rewrites x/y.
 

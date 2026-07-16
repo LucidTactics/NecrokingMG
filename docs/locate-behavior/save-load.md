@@ -3,9 +3,10 @@
 The player-facing save-game feature (distinct from **map** save, which writes
 `assets/maps/<map>.json` `placedObjects` via the map editor — see [editor.md](editor.md)).
 A save is a JSON snapshot of the *play session* that is re-applied on top of a normal
-`StartGame(mapName)` load. Deliberately partial: it currently captures map + player
-position/form/buffs + spellbar, and explicitly does **not** yet cover inventory, mana/
-NecromancerState, SkillBookState, or horde/world state.
+`StartGame(mapName)` load. Currently captures map + player position/form/buffs + spellbar
++ **inventory slots** (`SavedInventorySlot`, slot-indexed) + **the full skill book**
+(`SavedSkillBook` — learned set, point pools, event tallies, every unlock collection).
+Still **not** covered: raw mana/NecromancerState, `Inventory._everSeen`, horde/world state.
 
 ## Files
 
@@ -85,19 +86,19 @@ or adding save-row actions (delete/rename).
   `EditorBase.BeginScrollPanel`/`ScrollPanel.End` (or the interactive
   `DrawVScrollbar(id, …)` overload) for wheel + clip + draggable bar.
 
-## Player inventory (candidate for the next save extension)
+## Player inventory & skill book (both saved now)
 
-- **Runtime store:** `Game1._inventory` (`Necroking/Game1.cs`, field `internal Inventory _inventory`),
-  type **`Necroking.GameSystems.Inventory`** (`Necroking/Game/Inventory.cs`). Constructed in
-  `StartGame` as `new Inventory(20, _gameData.Items)` and `Clear()`-ed on each new game.
-- **`Inventory` shape:** fixed `InventorySlot[]` (`{ ItemId, Quantity }`), stackable per
-  `ItemDef.MaxStack`. Read via `SlotCount` + `GetSlot(i)`; there is **no public raw-slot
-  setter** — restoration today would go through `AddItem(itemId, qty)` (which re-packs/stacks
-  and would NOT preserve exact slot positions/ordering). For a faithful round-trip, add a
-  `SetSlot`/serialize+restore pair to `Inventory`.
-- **`_everSeen`** (grow-only "has the player ever held this" set, gates potion throw-spells in
-  the grimoire) is also **not persisted yet** — mirror of `SkillBookState`. Decide whether a
-  save should carry it too.
+- **Inventory** is persisted: `Game1.Saves.cs` `SnapshotInventory()` → `SavedPlayer.Inventory`
+  (`SavedInventorySlot { Slot, ItemId, Quantity }` — slot-indexed so gaps round-trip),
+  restored in `ApplySaveToWorld` after `StartGame` recreates+clears `_inventory`.
+  Runtime store: `Game1._inventory` (`Necroking.GameSystems.Inventory`, `Necroking/Game/Inventory.cs`).
+- **Skill book** is persisted: `SaveGameData.SkillBook` (`SavedSkillBook` DTO) ←
+  `SkillBookState.ExportSave()` / → `ApplySave()` (restores collections verbatim, replays
+  only `grant_path`; `Game1.Saves.cs` then re-applies CorpseEating/SoulConsumption stat
+  bonuses). **Adding a new unlock collection to the book = also add a `SavedSkillBook`
+  property + ExportSave/ApplySave lines** (see [skills.md](skills.md)).
+- **`Inventory._everSeen`** (grow-only "has the player ever held this" set, gates potion
+  throw-spells in the grimoire) is still **not persisted**.
 
 ## Pitfalls / gotchas
 - **Two DTO edits per new field:** property in `SaveGameData.cs` + write in `WriteSaveGame` +
