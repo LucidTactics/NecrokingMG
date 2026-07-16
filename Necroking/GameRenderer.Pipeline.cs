@@ -261,17 +261,16 @@ partial class GameRenderer
             ctx.Batch.End();
         }));
 
-        // End bloom and composite back to the backbuffer. Spread bias shrinks the
-        // bloom halo BELOW the tuning zoom (32) only: thin bright beams zoomed out
-        // otherwise wear a full-size fixed-pixel halo and read many times fatter
-        // than the world. Above 32 the bias stays 0 — glare is a screen-space
-        // phenomenon, and widening the chain there just dilutes the halo into
-        // invisible mist, leaving raw effect textures (see Bloom.EndScene doc).
+        // End bloom and composite back to the backbuffer. Spread bias makes the
+        // halo track WORLD scale at constant intensity (the realism model: a
+        // light source lights a fixed world distance of air) — zoomed out it
+        // tightens, zoomed in the whole tuned profile magnifies. Mechanics in
+        // Bloom.EndScene's doc comment; settings stay tuned at zoom 32.
         scene.OnEnd = ctx =>
         {
             if (_frameUseBloom)
                 _g._bloom.EndScene(ctx.Device, ctx.Batch, _frameBloomSettings!,
-                    zoomSpreadBias: MathF.Min(0f, MathF.Log2(_g._camera.Zoom / 32f)));
+                    zoomSpreadBias: MathF.Log2(_g._camera.Zoom / 32f));
         };
 
         // ---- Phase: Post — backbuffer composites and debug overlays ----

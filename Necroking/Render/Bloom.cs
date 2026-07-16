@@ -37,6 +37,30 @@ public class BloomRenderer
     private readonly BlendState?[] _scatterBlends = new BlendState?[2];
     private readonly byte[] _scatterBlendBytes = new byte[2];
 
+    // Cached lerp blend (src*frac + dst*(1-frac)) for the fractional deep-mip
+    // magnification blend — same rebuild-on-change pattern as the scatter states.
+    private BlendState? _lerpBlend;
+    private byte _lerpBlendByte;
+
+    private BlendState GetLerpBlend(float frac)
+    {
+        byte fb = (byte)(Math.Clamp(frac, 0f, 1f) * 255f);
+        if (_lerpBlend == null || _lerpBlendByte != fb)
+        {
+            _lerpBlend?.Dispose();
+            _lerpBlend = new BlendState
+            {
+                ColorSourceBlend = Blend.BlendFactor,
+                ColorDestinationBlend = Blend.InverseBlendFactor,
+                AlphaSourceBlend = Blend.BlendFactor,
+                AlphaDestinationBlend = Blend.InverseBlendFactor,
+                BlendFactor = new Color(fb, fb, fb, fb)
+            };
+            _lerpBlendByte = fb;
+        }
+        return _lerpBlend;
+    }
+
     private BlendState GetScatterBlend(float scatter, bool deepestSlot)
     {
         int slot = deepestSlot ? 1 : 0;
@@ -167,13 +191,16 @@ public class BloomRenderer
     }
 
     /// <param name="zoomSpreadBias">Zoom-relative bloom spread in mip levels:
-    /// log2(cameraZoom / authoringZoom). Bloom radius is set by how deep the mip
-    /// chain goes (each level doubles it), which is fixed SCREEN pixels — so a
-    /// thin bright beam zoomed out wears the same halo as zoomed in and reads
-    /// many times fatter than the world it belongs to. Biasing the effective
-    /// iteration count by log2(zoom) makes halo width track world scale; the
-    /// deepest level blends in fractionally so wheel-zoom doesn't pop between
-    /// integer depths. 0 (the default, and the editor preview) = tuned look.</param>
+    /// log2(cameraZoom / authoringZoom). Realism model: a light source lights a
+    /// fixed WORLD distance of nearby air, so the halo should occupy zoom-scaled
+    /// screen pixels at the SAME intensity — never a fixed pixel size (reads huge
+    /// zoomed out) and never energy-dispersed (reads absent zoomed in).
+    /// Below the authoring zoom (bias &lt; 0): the effective iteration count
+    /// shrinks, trimming the halo's outer levels (the finest mip is the floor —
+    /// can't blur less than half-res). Above it (bias &gt; 0): the bloom composites
+    /// from a DEEPER mip stretched up — the identical tuned profile magnified 2x
+    /// per level at full intensity — with a fractional lerp between adjacent mips
+    /// so wheel-zoom is smooth. 0 (the default, and the editor preview) = tuned look.</param>
     public void EndScene(GraphicsDevice device, SpriteBatch batch, BloomSettings settings,
         RenderTarget2D? outputTarget = null, float zoomSpreadBias = 0f)
     {
@@ -200,9 +227,9 @@ public class BloomRenderer
             return;
         }
 
-        // Effective chain depth in float mips; the fractional part becomes the
-        // deepest level's blend weight (smooth radius growth while zooming).
-        float fSpread = Math.Clamp(settings.Iterations + zoomSpreadBias, 1f, _mipCount);
+        // Zoomed OUT (negative bias): shrink the chain depth; the fractional part
+        // becomes the deepest level's blend weight (smooth radius change).
+        float fSpread = Math.Clamp(settings.Iterations + MathF.Min(0f, zoomSpreadBias), 1f, _mipCount);
         int iters = (int)MathF.Ceiling(fSpread);
         float deepestFrac = 1f - (iters - fSpread); // 1 when fSpread is integral
 
@@ -271,6 +298,29 @@ public class BloomRenderer
             batch.End();
         }
 
+        // Zoomed IN (positive bias): composite from a deeper mip — bilinear
+        // stretch magnifies the whole tuned halo profile 2x per level at full
+        // intensity (the realism model: same world illumination radius, more
+        // pixels). Fractional bias lerps the next-deeper mip into the source mip
+        // (it's rebuilt next frame, so blending in place is safe) for smooth
+        // wheel-zoom. srcMip stays within the levels the chain actually filled.
+        int srcMip = 0;
+        if (zoomSpreadBias > 0f)
+        {
+            float b = MathF.Min(zoomSpreadBias, iters - 1);
+            srcMip = (int)b;
+            float frac = b - srcMip;
+            if (frac > 0.001f && srcMip + 1 <= iters - 1)
+            {
+                var lerpBlend = GetLerpBlend(frac);
+                device.SetRenderTarget(_mips[srcMip]);
+                batch.Begin(SpriteSortMode.Immediate, lerpBlend, SamplerState.LinearClamp);
+                batch.Draw(_mips[srcMip + 1],
+                    new Rectangle(0, 0, _mips[srcMip]!.Width, _mips[srcMip]!.Height), Color.White);
+                batch.End();
+            }
+        }
+
         // --- Step 4: Composite — scene + bloom * intensity → output target ---
         // (The old extra Gaussian pass here was a band-aid for spread; the 13-tap
         // downsample chain provides the softness, and scatter/iterations tune it.)
@@ -282,16 +332,18 @@ public class BloomRenderer
         _combineEffect.Parameters["TonemapWhitePoint"]?.SetValue(settings.TonemapWhitePoint);
         _combineEffect.Parameters["TonemapDesaturate"]?.SetValue(settings.TonemapDesaturate);
 
-        // Bind the bloom texture to sampler slot 1 via the effect parameter
+        // Bind the bloom texture to sampler slot 1 via the effect parameter.
+        // srcMip > 0 stretches automatically: the combine shader samples
+        // normalized UVs, so a smaller RT magnifies under LinearClamp.
         var bloomParam = _combineEffect.Parameters["BloomSampler"];
         if (bloomParam != null)
         {
-            bloomParam.SetValue(_mips[0]);
+            bloomParam.SetValue(_mips[srcMip]);
         }
         else
         {
             Console.Error.WriteLine("[Bloom] WARNING: BloomSampler parameter not found, using fallback Textures[1]");
-            device.Textures[1] = _mips[0];
+            device.Textures[1] = _mips[srcMip];
             device.SamplerStates[1] = SamplerState.LinearClamp;
         }
 
