@@ -111,7 +111,11 @@ public static class SpellEffectSystem
         var casterUid = caster.Id;
         var casterFaction = caster.Faction;
         var effectOrigin = caster.EffectSpawnPos2D;
-        var effectOriginH = caster.EffectSpawnHeight + caster.Z;
+        // EffectSpawnHeight is sprite-rig units (px lift = h*Zoom, no YRatio);
+        // projectiles render through the PHYSICAL convention (lift = h*Zoom*YRatio),
+        // so divide by YRatio once here — same conversion as FloatingText.HeadHeight.
+        // Without it projectiles visually launched at HALF the hand height.
+        var effectOriginH = caster.EffectSpawnHeight / game._camera.YRatio + caster.Z;
 
         // Mastery = levels above the spell's primary path requirement, resolved at
         // effect time from the live caster (same pattern as SpellPenetration) so a
@@ -749,9 +753,16 @@ public static class SpellEffectSystem
             if (enemy >= 0)
             {
                 var targetPos = units[enemy].Position;
-                float targetH = 1.0f;
+                // Mid-sprite in the PHYSICAL height convention the zap end renders
+                // with (WorldToScreen: lift = h*Zoom*YRatio): sprite-rig height needs
+                // the /YRatio conversion plus SpriteScale and Z — mirrors
+                // FloatingText.HeadHeight. The raw *0.5f landed at knee height.
+                float yRatio = Game1.Instance._camera.YRatio;
+                float targetH = units[enemy].Z + 1.0f / yRatio * 0.5f;
                 var tDef = gameData.Units.Get(units[enemy].UnitDefID);
-                if (tDef != null) targetH = tDef.SpriteWorldHeight * 0.5f;
+                if (tDef != null)
+                    targetH = units[enemy].Z
+                        + tDef.SpriteWorldHeight * units[enemy].SpriteScale * 0.5f / yRatio;
 
                 sim.Lightning.SpawnZap(origin, targetPos,
                     spell.ZapDuration > 0 ? spell.ZapDuration : spell.StrikeDuration,
@@ -837,8 +848,11 @@ public static class SpellEffectSystem
         if (gained > 0)
         {
             // Weapon-tip anchor (EffectSpawnHeight), deliberately not head height.
+            // Sprite-rig → lift-unit conversion (/YRatio), same as HeadHeight —
+            // without it the text rendered at HALF the tip height.
             FloatingText.AddText(damageNumbers, units[casterIdx].Position,
-                gained.ToString(), units[casterIdx].EffectSpawnHeight);
+                gained.ToString(),
+                units[casterIdx].EffectSpawnHeight / Game1.Instance._camera.YRatio);
         }
 
         // The victim crumbles into a corpse — the visible "sacrifice".

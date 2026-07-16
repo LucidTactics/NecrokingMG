@@ -47,16 +47,17 @@ pending)** / **verified** / **clean** / **flagged(user decision)** / **skipped(r
 | GroundShader.fx | clean (all noise/scroll world-anchored) |
 | WeatherFog.fx | fog clean; haze = screen-Y ramp, **flagged: deliberate screen-anchor, needs justification comment** (or user may want world-anchored haze) |
 
-## Glue / spawn params — flagged, NOT fixed (zoom-consistent but wrongly anchored; changes tuned looks — user decision)
-- SpellEffectSystem.cs:754 — zap end height: sprite-rig value through physical convention → zap hits ~knee height, ignores SpriteScale/Z.
-- SpellEffectSystem.cs:114 / Game1.Spells.cs:622 — projectiles launch at HALF the hand height (missing /YRatio); volley follow-ups also drop caster Z (first shot has it).
-- SpellEffectSystem.cs:840 — sacrifice text lift renders at half the tip height (missing /YRatio).
+## Glue / spawn params — anchor-convention trio: FIXED (user-approved 2026-07-16)
+- Zap end height: mid-sprite via /YRatio + SpriteScale + Z (was knee) — **fixed+verified** (paused zap at 64: hits chest).
+- Projectile launch height /YRatio + volley follow-ups get caster Z — **fixed** (same conversion as the zap, code-verified).
+- Sacrifice text lift /YRatio — **fixed**.
 - Spirit Walk | clean (world-unit speed, generic ghost visuals; its outline fixed via DrawSpriteOutline).
 
-## Policy flags for user decision
-- Rain soft curve sqrt(zoom/48) — user-chosen r1; strict realism = linear.
-- Damage-number soft curve sqrt(zoom/32) — user-chosen r1; alternative = classify as legibility UI (screen-constant).
-- WeatherFog haze screen-Y ramp — keep as stylized screen effect (add comment) or world-anchor it.
+## Policy decisions (2026-07-16)
+- Rain soft curve sqrt(zoom/48) — KEPT (user-approved deviation; POLICY FLAG comment at the code site).
+- Damage-number soft curve sqrt(zoom/32) — KEPT (user-approved deviation; POLICY FLAG comment at the code site).
+- WeatherFog haze — **world-anchored** (fixed): ramp spans 45 world units north of camera
+  (= zoom-32/720p view height, authored look preserved at tuning zoom) — verified at 8/48.
 
 ## Ladder debt (staging heavier than the fix; do opportunistically)
 - Lightning-aura buff arcs at 8/32/128 (needs a shock-aura buff def staged).

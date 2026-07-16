@@ -19,6 +19,12 @@ float2 FogWorldScale;   // world units covered by screen (width, height)
 // Haze uniforms
 float HazeStrength;
 float3 HazeColor;
+// World-anchored haze ramp: anchor (bottom of the ramp, world Y) and inverse
+// depth (1 / ramp length in world units). Authored so zoom 32 @ 720p matches
+// the old screen-Y ramp exactly; at other zooms the haze band is world-locked
+// (realism model — see docs/vfx-zoom-audit.md).
+float HazeAnchorY;
+float HazeInvWorldDepth;
 
 // Brightness — NOTE: WeatherRenderer.cs currently always passes 1.0 (darkening
 // is applied pre-bloom as ambient light on sprites); block kept for the weather
@@ -130,10 +136,11 @@ float4 PixelShaderFunction(float2 texCoord : TEXCOORD0) : COLOR0
         result = float4(FogColor * fog, fog);
     }
 
-    // --- Haze (Y-based distance fade) ---
+    // --- Haze (world-anchored distance fade: north = farther) ---
     if (HazeStrength > 0.001)
     {
-        float depth = 1.0 - texCoord.y;
+        float hazeWorldY = FogWorldOrigin.y + texCoord.y * FogWorldScale.y;
+        float depth = saturate((HazeAnchorY - hazeWorldY) * HazeInvWorldDepth);
         float haze = smoothstep(HazeRampLo, HazeRampHi, depth) * HazeStrength;
 
         // Blend haze on top of fog using standard alpha compositing

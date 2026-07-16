@@ -619,6 +619,8 @@ partial class GameRenderer
         // a bit bigger/farther zoomed in, never unreadable at MinZoom. The rise is
         // converted to pixels here (dn.Height is authored in world units at zoom 32)
         // so text size and motion stay in one space instead of mixing conventions.
+        // POLICY FLAG (user-approved deviation, 2026-07): this sqrt curve is a sanctioned
+        // exception to the strict-realism linear rule — see vfx-zoom-audit.md policy flags.
         float softScale = _g._camera.SoftZoomScale(32f);
         float dnScale = dnSettings.DamageNumberSize / 16f * softScale; // normalize against default 16
 
