@@ -413,6 +413,50 @@ capture session-bound objects in one-shot-init'd UIs — read live via `Game1.In
 in `StartGame`. Closures over `this` (e.g. `GrimoireOverlay`'s predicate using `_sim.UnitsMut`)
 re-evaluate the property per call and are safe.
 
+## Menu screens (main/pause) & the Settings/Multiplayer/Save submenus
+
+One class per full-screen menu in `UI/`: `MainMenuScreen.cs` (title screen), `PauseMenuScreen.cs`
+(ESC menu), `ScenarioListScreen.cs`, `LoadMenuScreen.cs`. Each has a private `BuildLayout` that is
+the single source of truth its `Draw` and `Update`/`HandleClick` both consume. Shared button
+identities/style live in `UI/MenuCommon.cs`: `MenuButtonId` enum (ids are SHARED across screens —
+e.g. `LoadGame`/`Quit`/`Settings` exist once), `MenuButton` struct, static `MenuDraw`
+(`Button`/`Panel`/`Backdrop`/`Scrollbar`/`Text`).
+
+**Two dispatch families — main menu vs pause menu differ:**
+- **Main/scenario/load menus**: `Game1.Update` early-returns per state (`_mainMenu.Update()` etc.),
+  and `GameRenderer.Draw` early-outs with its own SpriteBatch (`Materials.Hud.Begin`) —
+  they bypass the UIRouter entirely.
+- **Pause menu + its submenus** (`MenuState.PauseMenu`/`Settings`/`Multiplayer`/`SaveMenu`):
+  drawn by `MenuHostLayer` in `UI/Layers/HostLayers.cs` (Menu band, `Blocking`, `Closable`;
+  `OnCancel` = ESC walk-back). Clicks: pause buttons via `_g._pauseMenu.HandleClick()` from
+  Game1.Update's PauseMenu block; the submenus are `WantsClose`-style windows updated from
+  Game1.Update state gates (`_settingsWindow.Update`, plus `_editorUi.UpdateInput` — the
+  Settings window is EditorBase-widget based).
+
+**Settings window open/close flow** (`Editor/SettingsWindow.cs`):
+- Open = just `_g._menuState = MenuState.Settings` (PauseMenuScreen `MenuButtonId.Settings` case;
+  dev verb `settings` in `Game1.Dev.cs` does the same). The window itself is app-lifetime —
+  created/wired once in `Game1.LoadContent` (`SetGameData` with user-settings paths,
+  `SetDayNightSystem`); it holds NO per-session refs (edits `_gameData.Settings` live,
+  auto-saves debounced; `_dayNightSystem` is an app-level Game1 field).
+- Close = TWO paths, both currently **hardcode return to PauseMenu**: the `WantsClose` block in
+  `Game1.cs` Update ("Settings window close handling": resets flag, `_editorUi.ResetAllState()`,
+  `_menuState = MenuState.PauseMenu`) and `MenuHostLayer.OnCancel` (ESC). To open Settings from
+  another root menu, route the close through `Game1._backMenuState` — the field the load menu
+  already uses (stamped `MainMenu`/`PauseMenu` every frame while on those screens;
+  `LoadMenuScreen.Open`/`Update` is the precedent).
+- Draw-frame housekeeping: `GameRenderer.Draw.cs` `DrawHudBlock` calls `_editorUi.EndDrawFrame()`
+  when `_menuState == Settings` (skipping it causes the ghost-click replay bug — see
+  [editor.md](editor.md)).
+- With `_menuState == Settings` the FULL world pipeline runs (no early-out): fine over a paused
+  world; from the main menu the backdrop is the empty `GameSession` world (exists from app start),
+  not the menu backdrop — cosmetic, consider `MenuDraw.Backdrop` in `MenuHostLayer.Draw` when
+  `!_gameWorldLoaded`.
+
+**Layout pitfall (main menu):** `MainMenuScreen.BuildLayout` stacks 55px buttons + 12px gaps +
+25px group gaps starting at `screenH/2 - 75`; the comment warns the stack must fit at 720p and
+it is already tight — adding a button means shrinking heights/gaps or raising the start Y.
+
 ## Cross-links
 - [corpses.md](corpses.md) — corpse data model, pile gather/withdraw (`TryTakeCorpseFromPile`,
   `FindCorpsePileUnderCursor` in `Game1.cs`).
