@@ -25,7 +25,7 @@ internal static class VillageThreat
         var me = ctx.MyPos;
         for (int j = 0; j < ctx.Units.Count; j++)
         {
-            if (!ctx.Units[j].Alive) continue;
+            if (!ctx.Units[j].Alive || ctx.Units[j].GhostMode) continue;
             if (ctx.Units[j].Faction != Faction.Undead) continue;
             float d = (ctx.Units[j].Position - me).LengthSq();
             if (d < best) { best = d; bestIdx = j; }

@@ -502,7 +502,7 @@ public static class SubroutineSteps
             foreach (uint nid in _nearbyScratch)
             {
                 int j = UnitUtil.ResolveUnitIndex(ctx.Units, nid);
-                if (j < 0 || j == ctx.UnitIndex) continue;
+                if (j < 0 || j == ctx.UnitIndex || ctx.Units[j].GhostMode) continue;
                 float d = (ctx.Units[j].Position - myPos).LengthSq();
                 if (d < bestDist) { bestDist = d; bestIdx = j; }
             }
@@ -512,6 +512,7 @@ public static class SubroutineSteps
         for (int j = 0; j < ctx.Units.Count; j++)
         {
             if (j == ctx.UnitIndex || !ctx.Units[j].Alive) continue;
+            if (ctx.Units[j].GhostMode) continue;
             if (ctx.Units[j].Faction == myFaction) continue;
             float d = (ctx.Units[j].Position - myPos).LengthSq();
             if (d < bestDist) { bestDist = d; bestIdx = j; }

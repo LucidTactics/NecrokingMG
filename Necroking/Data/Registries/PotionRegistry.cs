@@ -36,7 +36,7 @@ public class PotionDef : INamedDef
     [JsonPropertyName("buffDuration")] public float BuffDuration { get; set; }
 
     [EditorField(Label = "On Hit Effect", Order = 5)]
-    [EditorCombo("", "Frenzy", "Paralysis", "Zombie", "Poison")]
+    [EditorCombo("", "Frenzy", "Paralysis", "Zombie", "Poison", "SpiritWalk")]
     [JsonPropertyName("onHitEffect")] public string OnHitEffect { get; set; } = "";
 
     [EditorField(Label = "Hits Corpses", Order = 6)]

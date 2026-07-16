@@ -302,6 +302,24 @@ public static class SpellEffectSystem
             case "Toggle":
                 if (spell.ToggleEffect == "ghost_mode")
                    caster.GhostMode = !caster.GhostMode;
+                else if (spell.ToggleEffect == "spirit_walk")
+                {
+                    if (SpiritWalkSystem.Active)
+                    {
+                        // Recast while walking = come home early. Refund the
+                        // toggle-off cast — paying full price to END the effect
+                        // would read as a bug.
+                        if (casterIdx == sim.NecromancerIndex)
+                            SpellCaster.RefundSpellCast(spell.Id, gameData.Spells,
+                                sim.NecroState, units, casterIdx, gameData);
+                        SpiritWalkSystem.End(game);
+                    }
+                    else
+                    {
+                        SpiritWalkSystem.Begin(game, casterIdx,
+                            spell.ToggleDuration > 0f ? spell.ToggleDuration : SpiritWalkSystem.DefaultDuration);
+                    }
+                }
                 break;
         }
 

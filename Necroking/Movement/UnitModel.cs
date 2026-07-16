@@ -391,6 +391,9 @@ public class Unit
 
     // Ghost mode
     public bool GhostMode;
+    /// <summary>Flat MaxSpeed (wu/s) for a GhostMode unit; 0 = the dev-fly default
+    /// (Locomotion.GhostModeSpeed + sprint doubling). Set on spirit-walk spirits.</summary>
+    public float GhostSpeedOverride;
 
     // Dodge / React (set on combat events, cleared each tick)
     public bool Dodging;

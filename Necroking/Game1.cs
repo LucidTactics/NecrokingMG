@@ -461,6 +461,22 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         }
     }
 
+    /// <summary>Toggle the crafting menu — the single path behind the C key, the
+    /// HUD menu button, and the dev verb. Opening it also opens the inventory
+    /// docked at the craft menu's top-right edge (instead of centered) so the
+    /// player sees their materials while crafting.</summary>
+    internal void ToggleCraftingMenu(int screenW, int screenH)
+    {
+        EnsureInventoryUIsInitialized();
+        if (!_craftingMenu.IsVisible) CloseSameSidePanels(PanelSide.Left, _craftingMenu);
+        _craftingMenu.Toggle(screenW, screenH);
+        if (_craftingMenu.IsVisible)
+        {
+            var r = _craftingMenu.HitBounds(screenW, screenH);
+            if (r.HasValue) _inventoryUI.OpenAt(r.Value.Right + 8, r.Value.Y);
+        }
+    }
+
     private bool _uiEditorInitialized;
     /// <summary>Deferred init for the UI editor (F12 / menu). LoadDefinitions bakes
     /// every harmonized widget/element texture (~4s of CPU work) — a dev-only tool
@@ -1561,6 +1577,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // toward a coordinate from the old map).
         _devFreeCamera = false;
         _devWalkTarget = null;
+        // A spirit walk from the previous session must not leak its body/spirit ids
+        // (or the horde anchor) into the new world.
+        SpiritWalkSystem.Reset();
         // Kill mid-flight pickup arcs — they hold textures from the session being
         // disposed below and would deposit the old map's item into the new game.
         _foragables.Clear();
@@ -3555,12 +3574,20 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             if (aggrShift && _input.WasKeyPressed(Keys.E)) _sim.Horde.AggressionLevel++;
             if (aggrShift && _input.WasKeyPressed(Keys.Q)) _sim.Horde.AggressionLevel--;
 
+            // --- Spirit walk: Q while walking roots the spirit as a scrying eye
+            // and wakes the body. Same guard pattern as Shift+Q — the flag stops
+            // the press from also casting slot 0 below. ---
+            bool spiritRooted = !aggrShift && SpiritWalkSystem.Active
+                && _input.WasKeyPressed(Keys.Q);
+            if (spiritRooted) SpiritWalkSystem.RootSpirit(this);
+
             // --- Spell casting (keyboard-only; see SpellBarBindings for the
             // slot→key table). Mouse buttons never cast — they belong to the
             // world-click dispatch in Game1.WorldClicks.cs. ---
             for (int slot = 0; slot < SpellBarBindings.SlotCount; slot++)
             {
                 if (aggrShift && slot <= 1) continue; // Shift+Q/E = aggression, not a cast
+                if (spiritRooted && slot == 0) continue; // Q consumed by the spirit root
                 if (!SpellBarBindings.WasSlotPressed(_input, slot)) continue;
                 if (slot >= _spellBarState.Slots.Length) continue;
                 // Circle-targeted spells arm an aim mode instead of casting
@@ -3692,11 +3719,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
             // --- Crafting menu toggle (C) ---
             if (_input.WasKeyPressed(Keys.C))
-            {
-                EnsureInventoryUIsInitialized();
-                if (!_craftingMenu.IsVisible) CloseSameSidePanels(PanelSide.Left, _craftingMenu);
-                _craftingMenu.Toggle(screenW, screenH);
-            }
+                ToggleCraftingMenu(screenW, screenH);
 
             // (World mouse clicks — placement, building panels, pile gather,
             // foraging — are handled by WorldLayer in the router dispatch above;
@@ -3731,6 +3754,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _workerSystem.Update(_clock.WorldDt);
             ApplyBlightBombImpacts();
             FinalizeBushWorkIfPending();
+            // Spirit-walk countdown (possession swap + snap-back live in the system).
+            SpiritWalkSystem.Update(this, _clock.WorldDt);
             _dayNightSystem.Update(_clock.WorldDt, _gameData);
             _sim.MagicGlyphs.Update(_clock.WorldDt, _sim.UnitsMut, _sim.Quadtree, _sim, _sim.PoisonClouds, _gameData.Spells);
             _weatherRenderer.Update(_clock.WorldDt, _gameData);
@@ -4222,7 +4247,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// every cast-failure reason ("Too Far", "Horde Full", "Out of Range", "Not
     /// Enough Mana", "Need Death 1", …). Renders red via the DamageNumber alert
     /// path, starting at the unit's HEAD.</summary>
-    private void SpawnCastFailText(int necroIdx, string message)
+    internal void SpawnCastFailText(int necroIdx, string message)
     {
         if (necroIdx < 0 || necroIdx >= _sim.Units.Count) return;
         if (string.IsNullOrEmpty(message)) return;

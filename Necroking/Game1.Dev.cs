@@ -1929,6 +1929,16 @@ public partial class Game1 {
                break;
             }
 
+            // The dev-server stand-in for pressing Q mid spirit-walk.
+            case "spirit_root":
+               if (!GameSystems.SpiritWalkSystem.Active) {
+                  c.Complete(Necroking.Dev.DevServer.Error("not spirit walking"));
+                  break;
+               }
+               GameSystems.SpiritWalkSystem.RootSpirit(this);
+               c.Complete(Necroking.Dev.DevServer.Ok("spirit rooted as scrying eye"));
+               break;
+
             // Necromancer casts a spell at a world point (full player pipeline).
             // Cast may fail on mana/cooldown/range — set_mana necro first if needed.
             case "cast": {
@@ -2266,7 +2276,8 @@ public partial class Game1 {
                   "walk_necro <x> <y>  (or 'clear'; cancelled by any WASD press)",
                   "mark <selector|clear>", "unmark [selector]",
                   // spells & reanimation
-                  "cast <spellID> <x> <y>", "fireball <x> <y> [dmg] [radius] [name]",
+                  "cast <spellID> <x> <y>", "spirit_root  (Q stand-in: root the walking spirit)",
+                  "fireball <x> <y> [dmg] [radius] [name]",
                   "reanim_at <x> <y> [defId] [riseSpeed] [fogSpeed]",
                   "reanim_into <zombieDefId> [x] [y]", "learn_skill <skillId>",
                   "set_spell_slot <slot 0-9> <spellID|->", "give_item <itemID> [qty]",
@@ -2482,10 +2493,8 @@ public partial class Game1 {
          case "crafting_menu":
          case "craftingmenu":
             if (action == "close") _craftingMenu.Close();
-            else if (action == "toggle" || !_craftingMenu.IsVisible) {
-               if (!_craftingMenu.IsVisible) CloseSameSidePanels(PanelSide.Left, _craftingMenu);
-               _craftingMenu.Toggle(sw, sh);
-            }
+            else if (action == "toggle" || !_craftingMenu.IsVisible)
+               ToggleCraftingMenu(sw, sh);
             return $"crafting_menu visible={_craftingMenu.IsVisible}";
 
          case "character_sheet":
@@ -2749,6 +2758,7 @@ public partial class Game1 {
              $"\"poison\":{u.PoisonStacks}," +
              $"\"mana\":{u.Mana.ToString("F1", ci)},\"maxMana\":{u.MaxMana.ToString("F1", ci)}," +
              $"\"alive\":{(u.Alive ? "true" : "false")}," +
+             $"\"detectionRange\":{u.DetectionRange.ToString("F1", ci)}," +
              $"\"inCombat\":{(u.InCombat ? "true" : "false")}," +
              $"\"incapActive\":{(u.Incap.Active ? "true" : "false")}," +
              $"\"recovering\":{(u.Incap.Recovering ? "true" : "false")}," +

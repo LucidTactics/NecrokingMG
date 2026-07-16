@@ -685,8 +685,7 @@ partial class GameRenderer
                 _g._inventoryUI.Toggle(screenW, screenH);
                 break;
             case HUDRenderer.MenuCrafting:
-                if (!_g._craftingMenu.IsVisible) _g.CloseSameSidePanels(Game1.PanelSide.Left, _g._craftingMenu);
-                _g._craftingMenu.Toggle(screenW, screenH);
+                _g.ToggleCraftingMenu(screenW, screenH);
                 break;
             case HUDRenderer.MenuBuilding:
                 if (!_g._buildingMenuUI.IsVisible) _g.CloseSameSidePanels(Game1.PanelSide.Left, _g._buildingMenuUI);

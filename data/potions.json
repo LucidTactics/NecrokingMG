@@ -198,6 +198,31 @@
         }
       ],
       "itemID": "potion_death_poison"
+    },
+    {
+      "id": "potion_spirit_walk",
+      "displayName": "Spirit Walk Potion",
+      "icon": "assets/Items/Potions/EvolutionPotion.png",
+      "description": "Drink to leave your body: it drops lifeless while your spirit roams free for 30 seconds - swift, unseen, far-sighted.",
+      "targetType": "Self",
+      "throwRange": 0,
+      "buffDuration": 30,
+      "onHitEffect": "SpiritWalk",
+      "recipe": [
+        {
+          "itemId": "Ghostcap",
+          "amount": 2
+        },
+        {
+          "itemId": "",
+          "amount": 1
+        },
+        {
+          "itemId": "",
+          "amount": 1
+        }
+      ],
+      "itemID": "potion_spirit_walk"
     }
   ]
 }
