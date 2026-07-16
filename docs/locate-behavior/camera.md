@@ -128,6 +128,16 @@
 - Floating weapon-name labels, cursor tooltips, HUD chrome, combat log — pure
   screen-space, zoom-irrelevant.
 
+## Bloom is zoom-aware
+`Render/Bloom.cs` `EndScene(…, zoomSpreadBias)` — bloom radius comes from the mip-chain
+depth (fixed SCREEN pixels per level), so without compensation a thin bright beam wears
+the same halo at every zoom and reads ~6x fatter than the world when zoomed out (this
+masqueraded as "the drain doesn't scale" until a bloom on/off A-B at zoom 8 isolated it).
+The pipeline passes `log2(Zoom/32)` as an iteration-count bias with fractional scatter
+on the deepest mip (smooth while wheel-zooming); settings stay tuned at zoom 32;
+`Editor/SpellPreview.cs` passes 0. Diagnostic recipe: `setting bloom.enabled false`
+mid-pause and compare screenshots.
+
 ## Look/edit here when…
 - "Zoom feels wrong / clamp / speed" → `Render/Camera25D.cs` (`ZoomBy`, Min/Max/ZoomSpeed);
   input sites in `UI/Layers/HudLayers.cs` + `UI/Layers/HostLayers.cs`.
