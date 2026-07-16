@@ -475,6 +475,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             var r = _craftingMenu.HitBounds(screenW, screenH);
             if (r.HasValue) _inventoryUI.OpenAt(r.Value.Right + 8, r.Value.Y);
         }
+        else
+        {
+            if (_inventoryUI.IsVisible) _inventoryUI.Toggle(screenW, screenH);
+        }
     }
 
     private bool _uiEditorInitialized;
