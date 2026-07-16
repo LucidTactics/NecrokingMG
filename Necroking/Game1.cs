@@ -999,7 +999,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _inventoryUI,
             Necroking.UI.UIBand.Panels, "popup.InventoryUI",
             () => _inventoryUI.IsVisible,
-            (InputState inp, in Necroking.UI.UICtx c) => _inventoryUI.Update(inp),
+            (InputState inp, in Necroking.UI.UICtx c) => _inventoryUI.Update(inp, c.ScreenW, c.ScreenH),
             () => _inventoryUI.IsDragging)
             .WithDraw((in Necroking.UI.UICtx c) => _inventoryUI.Draw(c.ScreenW, c.ScreenH),
                 () => ShowUIForDraw && _inventoryUI.IsVisible));
@@ -4338,11 +4338,16 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal void OpenSpellAssignForSlot(int slot)
     {
         EnsureInventoryUIsInitialized();
-        _grimoireOverlay.OpenForAssign(id =>
-        {
-            _spellBarState.Slots[slot].SpellID = id;
-            SaveSpellBars();
-        });
+        _grimoireOverlay.OpenForAssign(id => AssignSpellToSlot(slot, id));
+    }
+
+    /// <summary>Write a spell id into a bar slot and persist. Shared by the
+    /// grimoire assign flow and inventory item drag-and-drop.</summary>
+    internal void AssignSpellToSlot(int slot, string spellId)
+    {
+        if (slot < 0 || slot >= _spellBarState.Slots.Length) return;
+        _spellBarState.Slots[slot].SpellID = spellId;
+        SaveSpellBars();
     }
 
     // "CastingEffect Green" buff — visual glow shown on the necromancer while it
