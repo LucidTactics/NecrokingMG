@@ -1891,7 +1891,7 @@
       "armors": [
         "hood"
       ],
-      "detectionRange": 20,
+      "detectionRange": 30,
       "targetWalkCycle": 1,
       "animJogVelOverride": 3
     },
