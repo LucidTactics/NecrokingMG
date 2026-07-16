@@ -10,6 +10,17 @@ using Necroking.Scenario;
 namespace Necroking;
 
 public partial class Game1 {
+   // `hdrbar` dev command: a plain world-anchored HDR rectangle drawn through the
+   // same strip+bloom pipeline as beams (LightningRenderer.Draw) — the controlled
+   // fixture for zoom/bloom testing: no flicker/jitter/style, constant world size.
+   internal bool _devHdrBar;
+   internal Vec2 _devHdrBarPos;
+   internal float _devHdrBarLen = 8f;        // world units
+   internal float _devHdrBarWidth = 0.15f;   // world units (thin: ~5px at zoom 32)
+   internal float _devHdrBarIntensity = 10f;
+   internal int _devHdrBarCount = 1;         // parallel bars (between-beam fill tests)
+   internal float _devHdrBarGap = 0.5f;      // world units between bar centers
+
    // Ring buffers behind the `perf` dev command — fed once per frame at the end of
    // GameRenderer.Draw. Frame = real wall-clock Draw-to-Draw interval (valid in both
    // fixed and variable timestep, unlike _rawDt under fixed-timestep catch-up).
@@ -193,6 +204,59 @@ public partial class Game1 {
                bool want = DevToggle(c.Args, has);
                if (want != has) ToggleGodMode(ni);
                c.Complete(Necroking.Dev.DevServer.Ok($"godmode {(want ? "on" : "off")}"));
+               break;
+            }
+
+            // Toggle the HDR test bar — a plain world-anchored rectangle through the
+            // beam strip+bloom pipeline, anchored at the current camera position.
+            // count/gap draw parallel bars for between-beam bloom-fill tests.
+            // devctl: cmd hdrbar on [len] [width] [intensity] [count] [gap] · cmd hdrbar off
+            case "hdrbar": {
+               bool want = DevToggle(c.Args, _devHdrBar);
+               _devHdrBar = want;
+               if (want)
+               {
+                  _devHdrBarPos = _camera.Position;
+                  if (c.Args.Length > 1) _devHdrBarLen = DevFloat(c.Args[1]);
+                  if (c.Args.Length > 2) _devHdrBarWidth = DevFloat(c.Args[2]);
+                  if (c.Args.Length > 3) _devHdrBarIntensity = DevFloat(c.Args[3]);
+                  if (c.Args.Length > 4) _devHdrBarCount = (int)DevFloat(c.Args[4]);
+                  if (c.Args.Length > 5) _devHdrBarGap = DevFloat(c.Args[5]);
+               }
+               c.Complete(Necroking.Dev.DevServer.Ok(want
+                  ? $"hdrbar on at ({_devHdrBarPos.X:F1},{_devHdrBarPos.Y:F1}) len={_devHdrBarLen} width={_devHdrBarWidth} intensity={_devHdrBarIntensity} count={_devHdrBarCount} gap={_devHdrBarGap}"
+                  : "hdrbar off"));
+               break;
+            }
+
+            // Set the bloom zoom-out dim exponent live (see BloomRenderer.DimPow).
+            // devctl: cmd bloomdim 0.75 · argless reads the current value.
+            case "bloomdim": {
+               if (c.Args.Length > 0) _bloom.DimPow = DevFloat(c.Args[0]);
+               c.Complete(Necroking.Dev.DevServer.Ok($"bloom DimPow = {_bloom.DimPow}"));
+               break;
+            }
+
+            // Tweak a field on the ACTIVE weather preset in memory (never saved):
+            // devctl: cmd weather rainAlpha 0.9 · cmd weather brightness 1 · argless lists fields.
+            // For visual verification (rain under zoom, etc.) without editing weather.json.
+            case "weather": {
+               string presetId = _gameData.Settings.Weather.ActivePreset;
+               var preset = _gameData.Weather.Get(presetId);
+               if (preset == null) { c.Complete(Necroking.Dev.DevServer.Error($"no active weather preset ('{presetId}')")); break; }
+               var props = typeof(Data.Registries.WeatherEffects).GetProperties();
+               if (c.Args.Length < 2)
+               {
+                   var names = string.Join(", ", props.Select(p => p.Name));
+                   c.Complete(Necroking.Dev.DevServer.Ok($"active={presetId}; fields: {names}"));
+                   break;
+               }
+               var prop = props.FirstOrDefault(p => string.Equals(p.Name, c.Args[0], StringComparison.OrdinalIgnoreCase));
+               if (prop == null) { c.Complete(Necroking.Dev.DevServer.Error($"unknown weather field: {c.Args[0]}")); break; }
+               if (prop.PropertyType == typeof(float)) prop.SetValue(preset.Effects, DevFloat(c.Args[1]));
+               else if (prop.PropertyType == typeof(bool)) prop.SetValue(preset.Effects, bool.Parse(c.Args[1]));
+               else { c.Complete(Necroking.Dev.DevServer.Error($"unsupported field type {prop.PropertyType.Name}")); break; }
+               c.Complete(Necroking.Dev.DevServer.Ok($"{presetId}.{prop.Name} = {c.Args[1]} (in-memory)"));
                break;
             }
 

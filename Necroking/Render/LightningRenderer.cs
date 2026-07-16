@@ -55,10 +55,19 @@ public class LightningRenderer
 
     public void SetGameTime(float gameTime) => _gameTime = gameTime;
 
+    // Bolt widths, drain arc heights, and cloud/flare sizes are pixel values authored
+    // at the default zoom (32). Scale them linearly with zoom so the effects track
+    // world size like the units they connect. No inflation floor — zoomed out the
+    // effect must shrink with the world (a floor here made drains read huge at far
+    // zoom); visibility at MinZoom is handled by per-width pixel floors in the
+    // rasterizers instead.
+    private float FxScale() => Math.Clamp(_camera.Zoom / 32f, 0f, 4f);
+
     public void Draw()
     {
         _godRayRenderer.PendingGodRays.Clear();
         _strips.Clear();
+        float fxScale = FxScale();
 
         // Draw active strikes
         foreach (var strike in _sim.Lightning.Strikes)
@@ -85,10 +94,18 @@ public class LightningRenderer
 
                 if (strike.Visual == StrikeVisual.GodRay)
                 {
-                    // Collect for separate god ray pass
-                    float sH = _graphicsDevice.Viewport.Height;
-                    _godRayRenderer.PendingGodRays.Add((new Vector2(sp.X - 200f, sp.Y - sH * 0.6f), sp,
-                        strike.Style, strike.GodRay, _gameTime, strike.EffectTimer, strike.EffectDuration));
+                    // Collect for separate god ray pass. The sky anchor is in
+                    // WORLD units (authored: 200px left, 432px up at zoom 32 /
+                    // 720p) so the ray's angle and the point its cone converges
+                    // toward stay fixed in the world — a screen-space anchor made
+                    // the apex wander with zoom. Widths scale via fxScale.
+                    const float SkyOffXWorld = 6.25f;   // 200px / 32
+                    const float SkyLiftWorld = 13.5f;   // 432px / 32 (pixel-lift units)
+                    var skyAnchor = new Vector2(sp.X - SkyOffXWorld * _camera.Zoom,
+                                                sp.Y - SkyLiftWorld * _camera.Zoom);
+                    _godRayRenderer.PendingGodRays.Add((skyAnchor, sp,
+                        strike.Style, strike.GodRay, _gameTime, strike.EffectTimer, strike.EffectDuration,
+                        fxScale));
                 }
                 else
                 {
@@ -102,7 +119,7 @@ public class LightningRenderer
                     // Procedural lightning bolt from sky (start above top of screen)
                     float skyY = -50f; // well above screen edge
                     float skyX = sp.X - 50f + (sp.Y - skyY) * 0.05f; // slight angle
-                    AddBoltStrips(new Vector2(skyX, skyY), sp, strike.Style, fade, strike.Seed);
+                    AddBoltStrips(new Vector2(skyX, skyY), sp, strike.Style, fade, fxScale, strike.Seed);
                 }
             }
         }
@@ -117,7 +134,7 @@ public class LightningRenderer
             var startSp = _renderer.WorldToScreenPx(zap.StartPos, zap.StartHeight * _camera.Zoom, _camera);
             var endSp = _renderer.WorldToScreen(zap.EndPos, zap.EndHeight, _camera);
             float fade = 1f - zap.Timer / zap.Duration;
-            AddBoltStrips(startSp, endSp, zap.Style, fade, zap.Seed);
+            AddBoltStrips(startSp, endSp, zap.Style, fade, fxScale, zap.Seed);
         }
 
         // Draw active beams
@@ -136,7 +153,7 @@ public class LightningRenderer
             var startSp = _renderer.WorldToScreenPx(_sim.Units[casterIdx].EffectSpawnPos2D,
                 _sim.Units[casterIdx].EffectSpawnHeight * _camera.Zoom, _camera);
             var endSp = _renderer.WorldToScreen(_sim.Units[targetIdx].Position, 1f, _camera);
-            AddBoltStrips(startSp, endSp, beam.Style, 1f, beam.Seed);
+            AddBoltStrips(startSp, endSp, beam.Style, 1f, fxScale, beam.Seed);
         }
 
         // Draw active drains (tendrils, additive endpoint flares, and the
@@ -149,12 +166,37 @@ public class LightningRenderer
         {
             if (!drain.Alive) continue;
             if (!TryGetDrainEndpoints(drain, out var startSp, out var endSp)) continue;
-            AddDrainTendrilStrips(startSp, endSp, drain.Visuals, drain.Elapsed);
-            AddDrainFlareSprites(_spriteBatch, _glowTex, startSp, endSp, drain.Visuals, drain.Elapsed);
+            AddDrainTendrilStrips(startSp, endSp, drain.Visuals, drain.Elapsed, fxScale);
+            AddDrainFlareSprites(_spriteBatch, _glowTex, startSp, endSp, drain.Visuals, drain.Elapsed, fxScale);
             AddDrainCloudSprites(_spriteBatch, _glowTex, drainCloudFb, startSp, endSp,
-                drain.Visuals, drain.Elapsed);
+                drain.Visuals, drain.Elapsed, fxScale);
+        }
+
+        // Dev HDR test bar (`hdrbar` command): a plain world-anchored rectangle
+        // through the same strips+bloom path as beams — the controlled fixture
+        // for zoom/bloom testing. No flicker/jitter/style; hard edges; constant
+        // world size, so its pixel width scales exactly with zoom.
+        if (_game._devHdrBar)
+        {
+            var barPos = _game._devHdrBarPos;
+            float halfLen = _game._devHdrBarLen * 0.5f;
+            float wPx = _game._devHdrBarWidth * _camera.Zoom;
+            var barVerts = _strips.GetBucket(
+                MathF.Min(_game._devHdrBarIntensity, HdrColor.MaxHdrIntensity));
+            int count = Math.Max(1, _game._devHdrBarCount);
+            for (int i = 0; i < count; i++)
+            {
+                float oy = (i - (count - 1) * 0.5f) * _game._devHdrBarGap;
+                var pA = _renderer.WorldToScreen(new Vec2(barPos.X - halfLen, barPos.Y + oy), 0f, _camera);
+                var pB = _renderer.WorldToScreen(new Vec2(barPos.X + halfLen, barPos.Y + oy), 0f, _camera);
+                _barPts.Clear(); _barPts.Add(pA); _barPts.Add(pB);
+                PolylineStrip.Build(barVerts, _barPts, Color.White, 1f, 1f, wPx, wPx, 0f);
+            }
         }
     }
+
+    // Scratch for the dev HDR bar polyline (render thread only).
+    private static readonly List<Vector2> _barPts = new();
 
     /// <summary>Screen-space endpoints for a drain: caster hand anchor (sprite
     /// height convention, no YRatio foreshortening — same as the beam) and the
@@ -205,6 +247,7 @@ public class LightningRenderer
 
         var mat = Materials.HdrAlpha ?? Materials.Scene;
         mat.Begin(_spriteBatch);
+        float fxScale = FxScale();
         foreach (var drain in _sim.Lightning.Drains)
         {
             if (!drain.Alive) continue;
@@ -214,7 +257,8 @@ public class LightningRenderer
             Flipbook? impactFb = cloudFb;
             if (v.ImpactFlipbookID != "cloud03" && _game._flipbooks != null)
                 _game._flipbooks.TryGetValue(v.ImpactFlipbookID, out impactFb);
-            AddDrainImpactSprites(_spriteBatch, _glowTex, impactFb, startSp, endSp, v, drain.Elapsed);
+            AddDrainImpactSprites(_spriteBatch, _glowTex, impactFb, startSp, endSp, v,
+                drain.Elapsed, fxScale);
         }
         _spriteBatch.End();
     }
@@ -260,8 +304,9 @@ public class LightningRenderer
     }
 
     private void AddBoltStrips(Vector2 start, Vector2 end, LightningStyle style, float fade,
-        uint seedSalt = 0)
-        => AddBoltStripsStatic(_strips, start, end, style, fade, _gameTime, seedSalt: seedSalt);
+        float widthScale, uint seedSalt = 0)
+        => AddBoltStripsStatic(_strips, start, end, style, fade, _gameTime,
+            widthScale: widthScale, seedSalt: seedSalt);
 
     /// <summary>
     /// Collect a bolt (main + branches) as miter-joined ribbons into a strip batch;
@@ -292,9 +337,11 @@ public class LightningRenderer
         // Style.WidthFade controls how much the bolt's width follows the fade:
         // 1 = full coupling (width*ef, the classic collapse-to-a-thread; also the
         // pre-knob behavior), 0 = constant width with only brightness fading.
+        // Width floors keep far-zoom bolts a visible hairline (widthScale shrinks
+        // proportionally with zoom, unfloored) while wf still fades to nothing.
         float wf = MathHelper.Lerp(1f, ef, Math.Clamp(style.WidthFade, 0f, 1f));
-        float coreW = style.CoreWidth * widthScale * wf;
-        float glowW = style.GlowWidth * widthScale * wf;
+        float coreW = MathF.Max(style.CoreWidth * widthScale, 0.6f) * wf;
+        float glowW = MathF.Max(style.GlowWidth * widthScale, 1.2f) * wf;
 
         foreach (var branch in branches)
         {
@@ -408,15 +455,17 @@ public class LightningRenderer
     private static readonly List<Vector2> _tendrilPts = new();
 
     /// <summary>Perpendicular displacement of the tendril path at parameter t
-    /// (arc + travelling wave). Shared by the ribbon rasterizer and the cloud
-    /// sprites so the puffs ride exactly on the beam.</summary>
+    /// (arc + travelling wave), in authored pixels — callers multiply by their
+    /// fxScale. Shared by the ribbon rasterizer and the cloud sprites so the
+    /// puffs ride exactly on the beam.</summary>
     private static float TendrilLateral(float t, float time, float arcHeight)
         => MathF.Sin(t * MathF.PI) * arcHeight + MathF.Sin(time * 4f + t * 8f) * 5f;
 
     /// <summary>Shared tendril shape (arc + travelling wave) for the ribbon and
-    /// sprite paths. Fills outPts; empty when start/end are too close.</summary>
+    /// sprite paths. fxScale scales the lateral displacement (arc + wave) with
+    /// zoom. Fills outPts; empty when start/end are too close.</summary>
     private static void BuildTendrilPoints(Vector2 start, Vector2 end, float time,
-        float arcHeight, List<Vector2> outPts)
+        float arcHeight, float fxScale, List<Vector2> outPts)
     {
         outPts.Clear();
         var dir = end - start;
@@ -430,12 +479,13 @@ public class LightningRenderer
         {
             float t = i / (float)segments;
             var basePos = Vector2.Lerp(start, end, t);
-            outPts.Add(basePos + perp * TendrilLateral(t, time, arcHeight));
+            outPts.Add(basePos + perp * (TendrilLateral(t, time, arcHeight) * fxScale));
         }
     }
 
-    private void AddDrainTendrilStrips(Vector2 start, Vector2 end, DrainVisualParams v, float elapsed)
-        => AddDrainTendrilStripsStatic(_strips, start, end, v, elapsed);
+    private void AddDrainTendrilStrips(Vector2 start, Vector2 end, DrainVisualParams v,
+        float elapsed, float fxScale)
+        => AddDrainTendrilStripsStatic(_strips, start, end, v, elapsed, fxScale);
 
     /// <summary>
     /// Collect a drain effect (multiple arcing tendrils with sway and pulse) as
@@ -458,7 +508,7 @@ public class LightningRenderer
     }
 
     public static void AddDrainTendrilStripsStatic(HdrStripBatch strips,
-        Vector2 start, Vector2 end, DrainVisualParams v, float elapsed)
+        Vector2 start, Vector2 end, DrainVisualParams v, float elapsed, float fxScale = 1f)
     {
         float pulse = 1f + v.PulseStrength * MathF.Sin(elapsed * v.PulseHz * 2f * MathF.PI);
 
@@ -491,42 +541,49 @@ public class LightningRenderer
         // travels from the flow source toward the destination. Arc grows
         // start→end, so flowing toward the START means features move to smaller
         // arc — U = (arc + off)/scale; reversed flips the sign.
+        // Scroll offset and feature scale both carry fxScale so the noise features
+        // keep their world size and world-space travel speed at any zoom (the strip's
+        // U is arc length in screen pixels, which already scales with zoom).
         bool scroll = v.ScrollSpeed > 0.001f && v.ScrollAlpha > 0.001f;
-        float scrollOff = elapsed * v.ScrollSpeed * (v.FlowReversed ? -1f : 1f);
+        float scrollOff = elapsed * v.ScrollSpeed * fxScale * (v.FlowReversed ? -1f : 1f);
         var scrollVerts = scroll ? strips.GetTexturedBucket(coreI) : null;
 
+        // Same hairline floors as the bolt path — far zoom thins, never vanishes.
+        float glowW = MathF.Max(v.GlowWidth * fxScale, 1.2f);
+        float coreW = MathF.Max(v.CoreWidth * fxScale, 0.6f);
         for (int t = 0; t < v.TendrilCount; t++)
         {
-            float offset = (t - v.TendrilCount / 2f) * v.SwayAmplitude;
-            float sway = MathF.Sin(elapsed * v.SwayHz * 2f * MathF.PI + t * 2f) * v.SwayAmplitude * 0.75f;
+            float offset = (t - v.TendrilCount / 2f) * v.SwayAmplitude * fxScale;
+            float sway = MathF.Sin(elapsed * v.SwayHz * 2f * MathF.PI + t * 2f)
+                * v.SwayAmplitude * fxScale * 0.75f;
             var s = start;
             var e = end;
             if (v.FlowReversed) s.X += offset + sway;
             else e.X += offset + sway;
-            BuildTendrilPoints(s, e, elapsed, v.ArcHeight, _tendrilPts);
+            BuildTendrilPoints(s, e, elapsed, v.ArcHeight, fxScale, _tendrilPts);
             if (_tendrilPts.Count < 2) continue;
 
             // Same fade constants as the retired sprite path (glow 120/255, core 200/255).
             PolylineStrip.Build(glowVerts, _tendrilPts, glowTintStart, glowTintEnd,
                 120f / 255f, 120f / 255f,
-                v.GlowWidth * pulse * wStartScale, v.GlowWidth * pulse * wEndScale, GlowEdgeSoft);
+                glowW * pulse * wStartScale, glowW * pulse * wEndScale, GlowEdgeSoft);
             PolylineStrip.Build(coreVerts, _tendrilPts, coreTintStart, coreTintEnd,
                 200f / 255f, 200f / 255f,
-                v.CoreWidth * pulse * wStartScale, v.CoreWidth * pulse * wEndScale, CoreEdgeSoft);
+                coreW * pulse * wStartScale, coreW * pulse * wEndScale, CoreEdgeSoft);
 
             if (scroll)
             {
                 // Two noise layers at different scales/speeds (the classic
                 // anti-tiling trick) spanning most of the glow width.
-                float sw = v.GlowWidth * 0.9f * pulse;
+                float sw = glowW * 0.9f * pulse;
                 PolylineStrip.BuildTextured(scrollVerts!, _tendrilPts,
                     coreTintStart, coreTintEnd, v.ScrollAlpha, v.ScrollAlpha,
                     sw * wStartScale, sw * wEndScale, GlowEdgeSoft,
-                    scrollOff, v.ScrollScale);
+                    scrollOff, v.ScrollScale * fxScale);
                 PolylineStrip.BuildTextured(scrollVerts!, _tendrilPts,
                     coreTintStart, coreTintEnd, v.ScrollAlpha * 0.55f, v.ScrollAlpha * 0.55f,
                     sw * wStartScale, sw * wEndScale, GlowEdgeSoft,
-                    scrollOff * 0.55f, v.ScrollScale * 1.9f);
+                    scrollOff * 0.55f, v.ScrollScale * fxScale * 1.9f);
             }
         }
     }
@@ -536,7 +593,7 @@ public class LightningRenderer
     /// hand. Must be called while the additive HDR sprite batch is open (colors
     /// via ToHdrVertex). Shared by the in-game renderer and SpellPreview.</summary>
     public static void AddDrainFlareSprites(SpriteBatch sb, Texture2D glowTex,
-        Vector2 start, Vector2 end, DrainVisualParams v, float elapsed)
+        Vector2 start, Vector2 end, DrainVisualParams v, float elapsed, float fxScale = 1f)
     {
         if (v.ImpactFlareScale <= 0f) return;
         var srcPos = v.FlowReversed ? start : end;
@@ -546,7 +603,7 @@ public class LightningRenderer
         float pulse = 1f + 0.18f * MathF.Sin(elapsed * MathF.Max(v.PulseHz, 0.5f) * 2f * MathF.PI);
 
         float srcR = MathF.Max(v.ImpactSize * 1.6f,
-            v.GlowWidth * MathF.Max(1f, v.SourceWidthScale)) * v.ImpactFlareScale * pulse;
+            v.GlowWidth * MathF.Max(1f, v.SourceWidthScale)) * v.ImpactFlareScale * pulse * fxScale;
         var srcC = v.SourceCoreColor;
         float srcI = MathF.Min(srcC.Intensity, HdrColor.MaxHdrIntensity);
         // Hot center + wider soft halo.
@@ -567,9 +624,10 @@ public class LightningRenderer
     /// (and after the traveling clouds) so the cluster occludes the junction.
     /// Shared by the in-game renderer and SpellPreview.</summary>
     public static void AddDrainImpactSprites(SpriteBatch sb, Texture2D glowTex, Flipbook? fb,
-        Vector2 start, Vector2 end, DrainVisualParams v, float elapsed)
+        Vector2 start, Vector2 end, DrainVisualParams v, float elapsed, float fxScale = 1f)
     {
         if (v.ImpactPuffCount <= 0 || v.ImpactSize <= 0f) return;
+        float impactSize = v.ImpactSize * fxScale;
         var srcPos = v.FlowReversed ? start : end;
         var toDst = (v.FlowReversed ? end : start) - srcPos;
         float len = toDst.Length();
@@ -592,13 +650,13 @@ public class LightningRenderer
             // Slow churn: each puff orbits the junction at its own speed and
             // direction, breathing in and out a little.
             float angle = rA * MathF.Tau + elapsed * (0.35f + rPh * 0.5f) * (i % 2 == 0 ? 1f : -1f);
-            float radius = v.ImpactSize * (0.25f + 0.75f * rR)
+            float radius = impactSize * (0.25f + 0.75f * rR)
                 * (1f + 0.15f * MathF.Sin(elapsed * 2f + i * 1.7f));
             var pos = srcPos
                 + new Vector2(MathF.Cos(angle), MathF.Sin(angle) * 0.7f) * radius
-                + toDst * v.ImpactSize * 0.3f; // bias the cluster over the beam end
+                + toDst * impactSize * 0.3f; // bias the cluster over the beam end
 
-            float size = v.ImpactSize * (0.8f + 0.5f * rSz);
+            float size = impactSize * (0.8f + 0.5f * rSz);
             var color = HdrColor.ToHdrVertexAlpha(tint, 0.9f, intensity);
 
             if (useFb)
@@ -629,9 +687,10 @@ public class LightningRenderer
     /// AddDrainTendrilStripsStatic.
     /// </summary>
     public static void AddDrainCloudSprites(SpriteBatch sb, Texture2D glowTex, Flipbook? cloudFb,
-        Vector2 start, Vector2 end, DrainVisualParams v, float elapsed)
+        Vector2 start, Vector2 end, DrainVisualParams v, float elapsed, float fxScale = 1f)
     {
         if (v.CloudCount <= 0 || v.CloudSize <= 0f) return;
+        float cloudSize = v.CloudSize * fxScale;
         var dir = end - start;
         float length = dir.Length();
         if (length < 1f) return;
@@ -674,16 +733,16 @@ public class LightningRenderer
             // Smoke drift: puffs wobble across the beam and float upward as they
             // age (p is age since spawning at the source), so they read as smoke
             // boiling off the beam instead of beads threaded on it.
-            float wobble = MathF.Sin(elapsed * 1.7f + i * 2.4f) * v.CloudSize * 0.5f * p;
-            float lateral = TendrilLateral(t, elapsed, v.ArcHeight)
-                + (rLat * v.CloudSize * 0.8f + wobble) * envelope;
+            float wobble = MathF.Sin(elapsed * 1.7f + i * 2.4f) * cloudSize * 0.5f * p;
+            float lateral = TendrilLateral(t, elapsed, v.ArcHeight) * fxScale
+                + (rLat * cloudSize * 0.8f + wobble) * envelope;
             var pos = Vector2.Lerp(start, end, t) + perp * lateral;
-            pos.Y -= p * v.CloudSize * 0.9f * envelope; // screen-up drift
+            pos.Y -= p * cloudSize * 0.9f * envelope; // screen-up drift
 
             // Fade in/out near the ends; shrink with the beam width.
             float fade = Math.Clamp(MathF.Min(p, 1f - p) * 6f, 0f, 1f);
             if (fade <= 0.01f) continue;
-            float size = v.CloudSize * (0.75f + rSize * 0.5f) * (0.55f + 0.55f * envelope);
+            float size = cloudSize * (0.75f + rSize * 0.5f) * (0.55f + 0.55f * envelope);
 
             if (useFb)
             {

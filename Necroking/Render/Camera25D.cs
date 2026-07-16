@@ -1,6 +1,6 @@
+using System;
 using Necroking.Core;
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Input;
 using Necroking.Lib;
 
 namespace Necroking.Render;
@@ -16,19 +16,6 @@ public class Camera25D
     public float MinZoom = 4.0f;
     public float MaxZoom = 128.0f;
 
-    public void HandleInput(InputState input, float dt)
-    {
-        float speed = PanSpeed / Zoom * 32.0f;
-
-        if (input.IsKeyDown(Keys.W) || input.IsKeyDown(Keys.Up)) Position.Y -= speed * dt;
-        if (input.IsKeyDown(Keys.S) || input.IsKeyDown(Keys.Down)) Position.Y += speed * dt;
-        if (input.IsKeyDown(Keys.A) || input.IsKeyDown(Keys.Left)) Position.X -= speed * dt;
-        if (input.IsKeyDown(Keys.D) || input.IsKeyDown(Keys.Right)) Position.X += speed * dt;
-
-        if (!input.IsScrollConsumed && input.ScrollDelta != 0)
-            ZoomBy(input.ScrollDelta / 120f);
-    }
-
     // World-unit height: scales with zoom, same scale as Y position (foreshortened).
     // Use this for anything physical: unit jumps, projectile altitude, arc heights, corpse Z.
     public Vector2 WorldToScreen(Vec2 worldPos, float worldHeight, int screenW, int screenH)
@@ -38,9 +25,11 @@ public class Camera25D
         return new Vector2(sx, sy);
     }
 
-    // Pixel-space height: literal screen pixels, zoom-independent.
-    // Use this for screen-space effects that should look the same at every zoom:
-    // rain streaks, lightning arc shapes, screen-space overlays anchored to world points.
+    // Pixel-space height: literal screen pixels, no zoom applied by the projection.
+    // Use this to anchor pixel-authored effects (rain streaks, lightning/drain shapes,
+    // damage-number lift) to a world point. The effect itself should still couple its
+    // pixel dimensions to zoom — softly via SoftZoomScale for screen-space-authored
+    // effects, or linearly (Zoom / 32) for effects meant to track world size.
     public Vector2 WorldToScreenPx(Vec2 worldPos, float pixelHeight, int screenW, int screenH)
     {
         float sx = (worldPos.X - Position.X) * Zoom + screenW * 0.5f;
@@ -60,4 +49,11 @@ public class Camera25D
         Zoom *= (1.0f + delta * ZoomSpeed);
         Zoom = MathUtil.Clamp(Zoom, MinZoom, MaxZoom);
     }
+
+    // THE canonical softened zoom coupling for pixel-authored effects (rain streaks,
+    // damage numbers): sqrt keeps them legible at the extremes — full linear coupling
+    // would shrink them 8x at MinZoom / grow them 4x at MaxZoom; sqrt gives ~0.35x–2x
+    // around a reference zoom where the effect was tuned. Don't hand-roll this curve
+    // per system; world-tracking effects use plain linear (Zoom / refZoom) instead.
+    public float SoftZoomScale(float refZoom) => MathF.Sqrt(Zoom / refZoom);
 }

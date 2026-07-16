@@ -770,7 +770,7 @@ public class SpellPreview
                 {
                     var skyPos = new Vector2(screen.X - _previewWidth * 0.1f, groundY - _previewHeight * 0.6f);
                     _godRays.PendingGodRays.Add((skyPos, groundPos,
-                        s.Style, s.GodRay, _elapsed, s.EffectTimer, s.EffectDuration));
+                        s.Style, s.GodRay, _elapsed, s.EffectTimer, s.EffectDuration, 1f));
                 }
                 else
                 {

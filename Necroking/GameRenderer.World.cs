@@ -608,7 +608,12 @@ partial class GameRenderer
         var dnSettings = _g._gameData.Settings.General;
         if (!dnSettings.DamageNumbersEnabled) return;
         var dnColor = dnSettings.DamageNumberColor;
-        float dnScale = dnSettings.DamageNumberSize / 16f; // normalize against default 16
+        // Text size and float-up rise both couple softly to zoom (same curve as rain):
+        // a bit bigger/farther zoomed in, never unreadable at MinZoom. The rise is
+        // converted to pixels here (dn.Height is authored in world units at zoom 32)
+        // so text size and motion stay in one space instead of mixing conventions.
+        float softScale = _g._camera.SoftZoomScale(32f);
+        float dnScale = dnSettings.DamageNumberSize / 16f * softScale; // normalize against default 16
 
         foreach (var dn in _g._damageNumbers)
         {
@@ -618,7 +623,8 @@ partial class GameRenderer
             // the "from non-undead" case — numbers pinned to hidden enemies don't
             // render, while numbers appearing on your own (visible) units do.
             if (!_g._fogOfWar.IsVisible(dn.WorldPos)) continue;
-            var sp = _g._renderer.WorldToScreen(dn.WorldPos, dn.Height, _g._camera);
+            float risePx = dn.Height * 32f * _g._camera.YRatio * softScale;
+            var sp = _g._renderer.WorldToScreenPx(dn.WorldPos, risePx, _g._camera);
             byte alpha = (byte)(255 * fade);
 
             // Pickup text or damage number. Alerts (e.g. "Horde Full") render

@@ -25,30 +25,14 @@ public class Renderer
         _screenH = h;
     }
 
-    public void HandleCameraInput(Camera25D cam, InputState input, float dt)
-    {
-        float speed = cam.PanSpeed / cam.Zoom * 32f;
-
-        if (input.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.W) || input.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Up))
-            cam.Position.Y -= speed * dt;
-        if (input.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.S) || input.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Down))
-            cam.Position.Y += speed * dt;
-        if (input.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.A) || input.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Left))
-            cam.Position.X -= speed * dt;
-        if (input.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.D) || input.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Right))
-            cam.Position.X += speed * dt;
-
-        if (!input.IsScrollConsumed && input.ScrollDelta != 0)
-            cam.ZoomBy(input.ScrollDelta / 120f);
-    }
-
     // World-unit height: scales with zoom. Use for jumps, projectile altitude, arc heights, Z.
     // Delegates to Camera25D (single home for the 2.5D projection) with our screen size.
     public Vector2 WorldToScreen(Vec2 worldPos, float worldHeight, Camera25D cam)
         => cam.WorldToScreen(worldPos, worldHeight, _screenW, _screenH);
 
-    // Pixel-space height: literal screen pixels, zoom-independent.
-    // Use for screen-space effects (rain streaks, lightning arcs) anchored to a world point.
+    // Pixel-space height: literal screen pixels, no zoom applied by the projection.
+    // Anchors pixel-authored effects to a world point; see Camera25D.WorldToScreenPx
+    // and SoftZoomScale for how those effects should couple their dimensions to zoom.
     public Vector2 WorldToScreenPx(Vec2 worldPos, float pixelHeight, Camera25D cam)
         => cam.WorldToScreenPx(worldPos, pixelHeight, _screenW, _screenH);
 

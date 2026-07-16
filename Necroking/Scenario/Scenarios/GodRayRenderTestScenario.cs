@@ -155,7 +155,7 @@ public class GodRayRenderTestScenario : ScenarioBase
         // Queue the god ray
         GodRayRef!.PendingGodRays.Clear();
         GodRayRef.PendingGodRays.Add((sky, ground, style, godRayParams,
-            elapsed, effectTimer, effectDuration));
+            elapsed, effectTimer, effectDuration, 1f));
         GodRayRef.DrawAll();
 
         Device.SetRenderTarget(null);
