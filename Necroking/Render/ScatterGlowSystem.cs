@@ -130,6 +130,13 @@ public sealed class ScatterGlowSystem
         });
     }
 
+    /// <summary>Register a point emitter from a SpellDef's SCATTER fields — the
+    /// single SpellDef→emitter conversion point (no-op when scatterRadius is 0).</summary>
+    public void AddSpellPoint(SpellDef spell, Vec2 pos, float strengthScale = 1f, float height = 0f)
+        => AddPoint(pos, spell.ScatterRadius,
+            new Color(spell.ScatterColor.R, spell.ScatterColor.G, spell.ScatterColor.B),
+            spell.ScatterStrength * strengthScale, height);
+
     /// <summary>Register a polyline emitter (beams): splats point halos along the
     /// path. Splat spacing is radius-relative, so brightness per world unit stays
     /// constant; strength is pre-dimmed for the additive overlap of neighbors.</summary>

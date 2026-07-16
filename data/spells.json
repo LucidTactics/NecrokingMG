@@ -51,7 +51,16 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1
-      }
+      },
+      "scatterRadius": 2.8,
+      "scatterColor": {
+        "r": 190,
+        "g": 110,
+        "b": 255,
+        "a": 255,
+        "intensity": 1
+      },
+      "scatterStrength": 0.6
     },
     {
       "name": "Nether Blast (KB)",

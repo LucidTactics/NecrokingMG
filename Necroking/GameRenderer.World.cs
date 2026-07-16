@@ -479,6 +479,16 @@ partial class GameRenderer
         {
             if (!proj.Alive || !RendersInHdrPass(proj)) continue;
             if (!_g._fogOfWar.IsVisible(proj.Position)) continue;
+
+            // ScatterGlow: one point emitter per spell projectile in flight
+            // (radius/color from the spell's SCATTER fields; 0 radius = no-op).
+            if (proj.SpellID.Length > 0)
+            {
+                var scatterSpell = _g._gameData.Spells.Get(proj.SpellID);
+                if (scatterSpell != null)
+                    _g._scatterGlow.AddSpellPoint(scatterSpell, proj.Position, height: proj.Height);
+            }
+
             var sp = _g._renderer.WorldToScreen(proj.Position, proj.Height, _g._camera);
 
             string fbId = proj.FlipbookID;
@@ -554,6 +564,13 @@ partial class GameRenderer
             if (!eff.Alive || eff.BlendMode != blendMode) continue;
             float t = eff.Age / eff.Lifetime;
             float alpha = eff.AlphaCurve.Evaluate(t);
+
+            // ScatterGlow: impact explosions light the air, breathing with the
+            // effect's alpha envelope. (Each effect matches exactly one blendMode,
+            // so this registers once per frame despite the two filtered calls.)
+            if (eff.ScatterRadius > 0f)
+                _g._scatterGlow.AddPoint(eff.Position, eff.ScatterRadius, eff.ScatterRgb,
+                    eff.ScatterStrength * alpha);
             // ScaleCurve is WORLD units — the world→px multiply happens once below.
             // (A stray extra *Zoom/32 here made every impact flipbook scale ∝ Zoom²:
             // right at 32, 2x too big at 64, 4x too small at 8. Round-2 sweep find.)
@@ -598,9 +615,17 @@ partial class GameRenderer
             string fbId = impact.HitEffectFlipbookID;
             if (!string.IsNullOrEmpty(fbId))
             {
+                // Thread the firing spell's SCATTER fields into the impact effect so
+                // the explosion registers a scatter halo while it plays.
+                var impactSpell = impact.SpellID.Length > 0 ? _g._gameData.Spells.Get(impact.SpellID) : null;
                 _g._effectManager.SpawnSpellImpact(impact.Position, impact.HitEffectScale,
                     impact.HitEffectColor.ToColor(), fbId, hdrIntensity: impact.HitEffectColor.Intensity,
-                    blendMode: impact.HitEffectBlendMode, alignment: impact.HitEffectAlignment);
+                    blendMode: impact.HitEffectBlendMode, alignment: impact.HitEffectAlignment,
+                    scatterRadius: (impactSpell?.ScatterRadius ?? 0f) * 1.6f, // burst > flight orb
+                    scatterRgb: impactSpell != null
+                        ? new Color(impactSpell.ScatterColor.R, impactSpell.ScatterColor.G, impactSpell.ScatterColor.B)
+                        : default,
+                    scatterStrength: impactSpell?.ScatterStrength ?? 1f);
             }
             else if (impact.AoeRadius > 0)
             {

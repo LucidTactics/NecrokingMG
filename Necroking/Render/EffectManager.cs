@@ -20,6 +20,13 @@ public class Effect
     public float AnchorY = 0.5f;
     public int BlendMode; // 0=alpha, 1=additive
     public int Alignment; // 0=ground, 1=upright
+
+    // ScatterGlow emitter (0 radius = none): DrawEffectsFiltered registers a
+    // point halo each frame, scaled by the alpha curve so the lit air breathes
+    // with the effect's envelope. World units.
+    public float ScatterRadius;
+    public Color ScatterRgb;
+    public float ScatterStrength = 1f;
 }
 
 public class EffectManager
@@ -69,7 +76,9 @@ public class EffectManager
 
     public void SpawnSpellImpact(Vec2 pos, float scale, Color tint, string flipbookKey,
                                   float hdrIntensity = 1f, int blendMode = 0, int alignment = 0,
-                                  float duration = -1f)
+                                  float duration = -1f,
+                                  float scatterRadius = 0f, Color scatterRgb = default,
+                                  float scatterStrength = 1f)
     {
         _effects.Add(new Effect
         {
@@ -83,7 +92,10 @@ public class EffectManager
             BlendMode = blendMode,
             Alignment = alignment,
             AnchorX = 0.5f,
-            AnchorY = alignment == 1 ? 1f : 0.5f // ground-aligned effects sit on their bottom edge
+            AnchorY = alignment == 1 ? 1f : 0.5f, // ground-aligned effects sit on their bottom edge
+            ScatterRadius = scatterRadius,
+            ScatterRgb = scatterRgb,
+            ScatterStrength = scatterStrength,
         });
     }
 

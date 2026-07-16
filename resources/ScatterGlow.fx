@@ -30,7 +30,7 @@ float SolidIntensity;   // HDR multiplier for the Solid (test-shape emission) te
 
 // ─── Mist tuning (world-space) ───
 static const float2 MistWindDir      = float2(1.0, 0.35);  // scroll direction (world)
-static const float  MistWindSpeed    = 0.55;               // world units / sec
+static const float  MistWindSpeed    = 0.275;              // world units / sec (halved per review — drift, don't race)
 static const float2 MistOctaveScale  = float2(0.13, 0.42); // cycles per world unit (features ~8 / ~2.4 wu)
 static const float2 MistOctaveWeight = float2(0.62, 0.38);
 static const float  MistCoverLo      = 0.18;               // noise below = thin air
