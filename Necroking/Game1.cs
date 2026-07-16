@@ -1095,6 +1095,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // share the opaque EditorHostLayer. Mutually exclusive via _menuState.
         _uiRouter.Register(new Necroking.UI.MenuHostLayer(this));
         _uiRouter.Register(new Necroking.UI.MapEditorLayer(this, _popups));
+        _uiRouter.Register(new Necroking.UI.MapEditorMarkersLayer(this, _popups));
         _uiRouter.Register(new Necroking.UI.UIEditorLayer(this));
         _uiRouter.Register(new Necroking.UI.EditorHostLayer(this));
         _uiRouter.Register(new Necroking.UI.ModalStackLayer(_popups));

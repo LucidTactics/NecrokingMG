@@ -91,6 +91,39 @@ public sealed class MapEditorLayer : UILayer
 }
 
 /// <summary>
+/// Draws map editors markers on the map, not the window. Has another draw order Band.
+/// </summary>
+public sealed class MapEditorMarkersLayer : UILayer
+{
+    private readonly Game1 _g;
+    private readonly PopupManager _popups;
+    public MapEditorMarkersLayer(Game1 g, PopupManager popups)
+    {
+        _g = g;
+        _popups = popups;
+        Band = UIBand.Hud;
+    }
+
+    public override string Id => "editor.map.markers";
+    public override bool Visible => _g._menuState == MenuState.MapEditor && _g._gameWorldLoaded;
+    public override bool Closable => true;
+
+    public override void OnCancel()
+    {
+        _g._editorUi?.ResetAllState();
+        _g._menuState = MenuState.None;
+    }
+
+    public override bool ContainsMouse(int mx, int my, in UICtx ctx)
+    {
+        return false;
+    }
+
+    public override void Draw(in UICtx ctx)
+        => _g._mapEditor.DrawMapMarkers(ctx.ScreenW, ctx.ScreenH);
+}
+
+/// <summary>
 /// The UI editor as its own router layer. Unlike the map editor it IS modal —
 /// a full-screen dim with a large centered window — so it stays BLOCKING, but
 /// its ContainsMouse is the actual window rect (via

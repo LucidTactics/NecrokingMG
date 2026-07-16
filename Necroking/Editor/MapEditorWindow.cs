@@ -1207,12 +1207,9 @@ public class MapEditorWindow
             Render.EnvGhostRenderer.EditorValidTint, _pixel);
     }
 
-    public void Draw(int screenW, int screenH)
+    // Done in the HUD layer to handle render order.
+    public void DrawMapMarkers(int screenW, int screenH)
     {
-        int panelX = PanelLeftX(screenW);
-        int panelY = 10;
-        int panelH = screenH - 20;
-
         // World overlays draw first — under the panels and OUTSIDE the tab
         // scissor clip. (They can't live in the tab draw methods: the tab body
         // is scissor-clipped to the panel rect, which silently discarded the
@@ -1224,6 +1221,13 @@ public class MapEditorWindow
         // they must draw BEFORE the panel so a marker whose screen position
         // falls behind the side panel doesn't paint on top of the UI.
         DrawPlacedUnitMarkers(screenW, screenH);
+    }
+
+    public void Draw(int screenW, int screenH)
+    {
+        int panelX = PanelLeftX(screenW);
+        int panelY = 10;
+        int panelH = screenH - 20;
 
         // Panel background
         Scope.Draw(_pixel, new Rectangle(panelX, panelY, PanelWidth, panelH), BgColor);
