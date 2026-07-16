@@ -172,13 +172,18 @@ public class LightningRenderer
         {
             var barPos = _game._devHdrBarPos;
             float halfLen = _game._devHdrBarLen * 0.5f;
-            var pA = _renderer.WorldToScreen(new Vec2(barPos.X - halfLen, barPos.Y), 0f, _camera);
-            var pB = _renderer.WorldToScreen(new Vec2(barPos.X + halfLen, barPos.Y), 0f, _camera);
             float wPx = _game._devHdrBarWidth * _camera.Zoom;
-            _barPts.Clear(); _barPts.Add(pA); _barPts.Add(pB);
             var barVerts = _strips.GetBucket(
                 MathF.Min(_game._devHdrBarIntensity, HdrColor.MaxHdrIntensity));
-            PolylineStrip.Build(barVerts, _barPts, Color.White, 1f, 1f, wPx, wPx, 0f);
+            int count = Math.Max(1, _game._devHdrBarCount);
+            for (int i = 0; i < count; i++)
+            {
+                float oy = (i - (count - 1) * 0.5f) * _game._devHdrBarGap;
+                var pA = _renderer.WorldToScreen(new Vec2(barPos.X - halfLen, barPos.Y + oy), 0f, _camera);
+                var pB = _renderer.WorldToScreen(new Vec2(barPos.X + halfLen, barPos.Y + oy), 0f, _camera);
+                _barPts.Clear(); _barPts.Add(pA); _barPts.Add(pB);
+                PolylineStrip.Build(barVerts, _barPts, Color.White, 1f, 1f, wPx, wPx, 0f);
+            }
         }
     }
 

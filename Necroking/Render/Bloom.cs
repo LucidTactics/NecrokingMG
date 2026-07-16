@@ -21,9 +21,14 @@ public class BloomRenderer
 
     // Zoom-out halo dimming exponent: below the authoring zoom the blur floor
     // can't shrink further, so intensity scales by 2^(DimPow * bias) instead
-    // (energy of a lit region smaller than representable). Tuned on the hdrbar
-    // fixture; 2.0 would be strict area-proportional, lower reads warmer.
-    private const float DimPow = 1.5f;
+    // (energy of a lit region smaller than representable). NOTE the blur already
+    // dims sub-floor features naturally (~linearly: less extracted energy over
+    // the same fixed footprint), so this is only the EXTRA correction — too high
+    // and faint sums like the fill between drain tendrils vanish (1.5 killed it;
+    // 0 keeps full fill but a single hot beam's far-zoom glow reads a bit soft).
+    // Live-tunable via the `bloomdim` dev command; tuned on the hdrbar fixture
+    // (multi-bar: `hdrbar on 8 0.08 3 3 1.2`) + lifedrain.
+    public float DimPow = 0.4f;
 
     private RenderTarget2D? _sceneRT;
     private readonly RenderTarget2D?[] _mips = new RenderTarget2D?[MaxMips];

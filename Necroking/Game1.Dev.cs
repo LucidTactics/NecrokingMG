@@ -18,6 +18,8 @@ public partial class Game1 {
    internal float _devHdrBarLen = 8f;        // world units
    internal float _devHdrBarWidth = 0.15f;   // world units (thin: ~5px at zoom 32)
    internal float _devHdrBarIntensity = 10f;
+   internal int _devHdrBarCount = 1;         // parallel bars (between-beam fill tests)
+   internal float _devHdrBarGap = 0.5f;      // world units between bar centers
 
    // Ring buffers behind the `perf` dev command — fed once per frame at the end of
    // GameRenderer.Draw. Frame = real wall-clock Draw-to-Draw interval (valid in both
@@ -207,7 +209,8 @@ public partial class Game1 {
 
             // Toggle the HDR test bar — a plain world-anchored rectangle through the
             // beam strip+bloom pipeline, anchored at the current camera position.
-            // devctl: cmd hdrbar on [len] [width] [intensity] · cmd hdrbar off
+            // count/gap draw parallel bars for between-beam bloom-fill tests.
+            // devctl: cmd hdrbar on [len] [width] [intensity] [count] [gap] · cmd hdrbar off
             case "hdrbar": {
                bool want = DevToggle(c.Args, _devHdrBar);
                _devHdrBar = want;
@@ -217,10 +220,20 @@ public partial class Game1 {
                   if (c.Args.Length > 1) _devHdrBarLen = DevFloat(c.Args[1]);
                   if (c.Args.Length > 2) _devHdrBarWidth = DevFloat(c.Args[2]);
                   if (c.Args.Length > 3) _devHdrBarIntensity = DevFloat(c.Args[3]);
+                  if (c.Args.Length > 4) _devHdrBarCount = (int)DevFloat(c.Args[4]);
+                  if (c.Args.Length > 5) _devHdrBarGap = DevFloat(c.Args[5]);
                }
                c.Complete(Necroking.Dev.DevServer.Ok(want
-                  ? $"hdrbar on at ({_devHdrBarPos.X:F1},{_devHdrBarPos.Y:F1}) len={_devHdrBarLen} width={_devHdrBarWidth} intensity={_devHdrBarIntensity}"
+                  ? $"hdrbar on at ({_devHdrBarPos.X:F1},{_devHdrBarPos.Y:F1}) len={_devHdrBarLen} width={_devHdrBarWidth} intensity={_devHdrBarIntensity} count={_devHdrBarCount} gap={_devHdrBarGap}"
                   : "hdrbar off"));
+               break;
+            }
+
+            // Set the bloom zoom-out dim exponent live (see BloomRenderer.DimPow).
+            // devctl: cmd bloomdim 0.75 · argless reads the current value.
+            case "bloomdim": {
+               if (c.Args.Length > 0) _bloom.DimPow = DevFloat(c.Args[0]);
+               c.Complete(Necroking.Dev.DevServer.Ok($"bloom DimPow = {_bloom.DimPow}"));
                break;
             }
 
