@@ -236,8 +236,10 @@ partial class GameRenderer
             // Stamp units' depth silhouettes into the scene RT's (already-bound,
             // already-cleared) depth buffer so depth-tested fog (reanim smoke,
             // ground-fog wisps) can test against them below. Runs for the
-            // DepthSortedFog perf setting OR whenever ground fog is active.
-            if (_g._gameData.Settings.Performance.DepthSortedFog || _g._groundFog.HasActiveBanks)
+            // DepthSortedFog perf setting, whenever ground fog is active, OR when
+            // scatter-glow halos need per-pixel unit occlusion.
+            if (_g._gameData.Settings.Performance.DepthSortedFog || _g._groundFog.HasActiveBanks
+                || _g._scatterGlow.NeedsDepthStamps)
                 DrawFogDepthOccluders();
         }));
 
@@ -259,6 +261,12 @@ partial class GameRenderer
         // Lightning ribbons + god rays (HDR intensity triangle passes) — manage
         // their own device state, must run after the additive sprite batch ends.
         scene.Add(new CustomPass("LightningTris", ctx => _g._lightningRenderer.DrawTriangleEffects()));
+
+        // World-space light-scatter halos — after every effect has registered its
+        // emitters (fx queue + lightning), depth-testing the unit stamps, still
+        // inside the HDR scene RT so it lands pre-bloom. Manages its own device
+        // state (one-two DrawUserPrimitives calls); near-zero cost when disabled.
+        scene.Add(new CustomPass("ScatterGlow", ctx => _g._scatterGlow.Draw(ctx)));
 
         scene.Add(new CustomPass("ForagablesDamageNumbers", ctx =>
         {

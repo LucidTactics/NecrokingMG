@@ -1465,6 +1465,19 @@ public partial class Game1 {
                break;
             }
 
+            // ScatterGlow (world-space light-scatter halos): toggle or set global strength.
+            case "scatterglow": {   // window.dev('scatterglow',['on'|'off'|'toggle'])  or  ['strength', v]
+               var sperf = _gameData.Settings.Performance;
+               if (c.Args.Length >= 2 && c.Args[0] == "strength")
+                  sperf.ScatterGlowStrength = DevFloat(c.Args[1]);
+               else
+                  sperf.ScatterGlow = DevToggle(c.Args, sperf.ScatterGlow);
+               c.Complete(Necroking.Dev.DevServer.Ok(
+                  $"scatterGlow={sperf.ScatterGlow} strength={sperf.ScatterGlowStrength:F2} " +
+                  $"halos={_scatterGlow.LastHaloCount} dropped={_scatterGlow.LastDroppedCount}"));
+               break;
+            }
+
             // A/B the depth-sorted reanimation fog (same as the in-game 'H' key).
             case "depthfog": {   // window.dev('depthfog',['on'|'off'|'toggle'])
                var perf = _gameData.Settings.Performance;
@@ -2341,7 +2354,7 @@ public partial class Game1 {
                   "screenshot [name]  opts:{no_ui,no_ground,downsample_to}",
                   "pass list|on <name>|off <name>",
                   "groundfog add <x> <y> [radius] [density] [ttl] | at_camera [radius] [density] | clear",
-                  "depthfog [on|off]", "gpdebug [0|1|2]",
+                  "depthfog [on|off]", "scatterglow [on|off] | strength <v>", "gpdebug [0|1|2]",
                   // UI panels
                   "panels", "panel <name> [tab]", "tab <name>", "ui_rects",
                   "overlay <name> [open|close|toggle]", "select <name|id|index>",

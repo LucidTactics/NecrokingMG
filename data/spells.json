@@ -2190,6 +2190,42 @@
       "consumesItem": "potion_spirit_walk",
       "range": 1,
       "manaCost": 0
+    },
+    {
+      "name": "Glow Line (test)",
+      "id": "test_glow_line",
+      "category": "TestShape",
+      "school": "Evocation",
+      "tileTemplate": "evocation",
+      "icon": "assets/UI/Icons/Spells/fireball.png",
+      "range": 40,
+      "manaCost": 0,
+      "scatterRadius": 2.5,
+      "scatterColor": {
+        "r": 255,
+        "g": 150,
+        "b": 60,
+        "a": 255,
+        "intensity": 1
+      }
+    },
+    {
+      "name": "Glow Circle (test)",
+      "id": "test_glow_circle",
+      "category": "TestShape",
+      "school": "Evocation",
+      "tileTemplate": "evocation",
+      "icon": "assets/UI/Icons/Spells/fireball.png",
+      "range": 40,
+      "manaCost": 0,
+      "scatterRadius": 3,
+      "scatterColor": {
+        "r": 255,
+        "g": 150,
+        "b": 60,
+        "a": 255,
+        "intensity": 1
+      }
     }
   ]
 }

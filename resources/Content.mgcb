@@ -134,3 +134,8 @@
 /processor:EffectProcessor
 /build:UICircleEffect.fx
 
+#begin ScatterGlow.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/build:ScatterGlow.fx
+

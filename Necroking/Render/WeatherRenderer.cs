@@ -422,7 +422,9 @@ public class WeatherRenderer
     /// Returns the effective weather effects for rendering: day/night runtime blend if active,
     /// otherwise the raw preset effects. Returns null if no valid preset is configured.
     /// </summary>
-    private WeatherEffects? GetEffectiveEffects()
+    // internal (was private): ScatterGlowSystem reads FogDensity as its global
+    // medium-density scalar so scatter halos swell in fog and tighten in clear air.
+    internal WeatherEffects? GetEffectiveEffects()
     {
         if (!_gameData.Settings.Weather.Enabled) return null;
         string presetId = _gameData.Settings.Weather.ActivePreset;

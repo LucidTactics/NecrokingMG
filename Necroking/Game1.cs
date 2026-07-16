@@ -613,6 +613,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal DeathFogRenderer _deathFogRenderer = new();
     internal GroundFogSystem _groundFog = new();   // depth-stamped ground-fog volume (wisps + blanket)
     internal ReanimEffectSystem _reanimFx = new();
+    internal ScatterGlowSystem _scatterGlow = new();   // world-space light-scatter halos (pre-bloom "air glow")
     internal Render.ReanimMorph _reanimMorph = new();   // SDF body-morph data cache for the reanimation rise
     internal MagicGlyphRenderer _glyphRenderer = new();
     internal DebugDraw _debugDraw = new();
@@ -2611,6 +2612,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         catch (Exception ex) { _wadingEffect = null; DebugLog.Log("startup", $"Wading NOT loaded: {ex.Message}"); }
         try { _hdrIntensityEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("HdrIntensity"); }
         catch (Exception ex) { _hdrIntensityEffect = null; DebugLog.Log("startup", $"HdrIntensity not loaded: {ex.Message}"); }
+        {
+            Microsoft.Xna.Framework.Graphics.Effect? scatterFx = null;
+            try { scatterFx = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("ScatterGlow"); }
+            catch (Exception ex) { DebugLog.Log("startup", $"ScatterGlow not loaded: {ex.Message}"); }
+            _scatterGlow.Init(this, scatterFx);   // null effect → system stays inert
+        }
         try
         {
             _hdrSpriteEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("HdrSprite");

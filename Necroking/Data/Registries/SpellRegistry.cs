@@ -669,6 +669,20 @@ public class SpellDef : INamedDef
     [EditorField(Label = "Chain W.Decay", Group = "BEAM", Order = 617, Step = 0.01f, Decimals = 2, Tooltip = "Beam width multiplier per hop; below 1 thins each fork.")]
     [JsonPropertyName("beamChainWidthDecay")] public float BeamChainWidthDecay { get; set; } = 0.8f;
 
+    // ============ SCATTER GLOW (cross-category) ============
+    // World-space light-scatter halo around this spell's visuals — the pre-bloom
+    // "lit air" layer drawn by Render/ScatterGlowSystem.cs. 0 radius = none.
+    // Consumed per category at that category's draw site (test shapes, beams,
+    // projectiles, ...); categories that don't consume it simply ignore it.
+    [EditorField(Label = "Scatter Radius", Group = "SCATTER", Order = 900, Step = 0.1f, Decimals = 1, GroupColorR = 255, GroupColorG = 200, GroupColorB = 120, Tooltip = "World-unit radius the air glows around this spell's\nvisuals (pre-bloom scatter halo). 0 = off.")]
+    [JsonPropertyName("scatterRadius")] public float ScatterRadius { get; set; }
+
+    [EditorField(Label = "Scatter Strength", Group = "SCATTER", Order = 901, Step = 0.05f, Decimals = 2, Tooltip = "Halo brightness (0-1). Weather fog density\nscales it further at runtime.")]
+    [JsonPropertyName("scatterStrength")] public float ScatterStrength { get; set; } = 1.0f;
+
+    [EditorField(Label = "Scatter Color", Group = "SCATTER", Order = 902, Compact = true, Tooltip = "Color the nearby air glows. Often warmer/softer\nthan the effect's own core color.")]
+    [JsonPropertyName("scatterColor")] [JsonConverter(typeof(HdrColorJsonConverter))] public HdrColor ScatterColor { get; set; } = new(255, 255, 255, 255, 1.0f);
+
     // ============ DRAIN ============
     [EditorVisible("Category", "Drain")]
     [EditorField(Label = "Tick Rate", Group = "DRAIN", Order = 701, Step = 0.01f, Decimals = 2, GroupColorR = 80, GroupColorG = 255, GroupColorB = 80, Tooltip = "Seconds between drain ticks.")]

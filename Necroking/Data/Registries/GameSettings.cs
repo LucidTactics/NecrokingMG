@@ -259,6 +259,13 @@ public class PerformanceSettings
     // silhouette and the additive fog depth-TESTS against it, so a risen unit can walk in front of
     // its own lingering smoke instead of the smoke always covering it. A/B dev toggle.
     [JsonPropertyName("depthSortedFog")] public bool DepthSortedFog { get; set; }
+
+    // World-space light-scatter halos around spell VFX (Render/ScatterGlowSystem.cs —
+    // the "air has weight" layer drawn pre-bloom). Off = every emitter registration
+    // early-outs; the feature costs ~nothing. Strength is a global multiplier on top
+    // of the weather's fog density.
+    [JsonPropertyName("scatterGlow")] public bool ScatterGlow { get; set; } = true;
+    [JsonPropertyName("scatterGlowStrength")] public float ScatterGlowStrength { get; set; } = 1.0f;
 }
 
 public class FogOfWarSettings

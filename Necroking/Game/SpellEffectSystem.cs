@@ -251,6 +251,13 @@ public static class SpellEffectSystem
                 ExecuteCloud(spell, sim, target, casterFaction, casterIdx, mastery);
                 break;
 
+            case "TestShape":
+                // ScatterGlow review primitives (glow line / glow circle) — bright
+                // solid shapes + data-driven scatter halos, fully owned by
+                // Render/ScatterGlowSystem.cs. Dev/test spells only.
+                game._scatterGlow.SpawnTestShape(spell, effectOrigin, target);
+                break;
+
             case "WolfHunt":
                 // Point the player's zombie wolves at the herd near the cast point: they flank to the
                 // far side and drive it toward the necromancer. The behavior lives in AI.WolfPackHuntAI;
