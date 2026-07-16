@@ -94,10 +94,16 @@ public class LightningRenderer
 
                 if (strike.Visual == StrikeVisual.GodRay)
                 {
-                    // Collect for separate god ray pass. Sky anchor stays
-                    // screen-space by design; widths scale with zoom (fxScale).
-                    float sH = _graphicsDevice.Viewport.Height;
-                    _godRayRenderer.PendingGodRays.Add((new Vector2(sp.X - 200f, sp.Y - sH * 0.6f), sp,
+                    // Collect for separate god ray pass. The sky anchor is in
+                    // WORLD units (authored: 200px left, 432px up at zoom 32 /
+                    // 720p) so the ray's angle and the point its cone converges
+                    // toward stay fixed in the world — a screen-space anchor made
+                    // the apex wander with zoom. Widths scale via fxScale.
+                    const float SkyOffXWorld = 6.25f;   // 200px / 32
+                    const float SkyLiftWorld = 13.5f;   // 432px / 32 (pixel-lift units)
+                    var skyAnchor = new Vector2(sp.X - SkyOffXWorld * _camera.Zoom,
+                                                sp.Y - SkyLiftWorld * _camera.Zoom);
+                    _godRayRenderer.PendingGodRays.Add((skyAnchor, sp,
                         strike.Style, strike.GodRay, _gameTime, strike.EffectTimer, strike.EffectDuration,
                         fxScale));
                 }
