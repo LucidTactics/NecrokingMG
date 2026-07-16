@@ -131,7 +131,6 @@ the full player pipeline (`set_mana necro 9999` first to dodge mana/cooldown), o
 `panel spell_editor` + `select <name>` to inspect a def. Screenshot the impact to
 confirm the payoff lands.
 
-**If the spell has any visual effect, also run the zoom check** — pause mid-effect and
-screenshot at zoom 8/32/128; every px-authored value must scale (`Zoom/32`), offsets and
-anchors included. Full checklist + staging recipes (long-duration `spawn_lightning`
-clones, cast timing, corpse rules): [vfx-zoom-audit.md](vfx-zoom-audit.md).
+**Any visual effect: also run the zoom check** — pause mid-effect, screenshot at zoom
+8/32/128; px-authored values scale by `Zoom/32`, offsets/anchors included. Checklist +
+staging recipes: [vfx-zoom-audit.md](vfx-zoom-audit.md).

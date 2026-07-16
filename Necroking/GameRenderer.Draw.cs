@@ -310,6 +310,18 @@ partial class GameRenderer
             DrawText(_g._smallFont, dbg, new Vector2(10, screenH - 18), new Color(120, 120, 120));
         }
 
+        // Zoom/bloom debug readout (`zoomhud` dev command): the exact zoom and
+        // bloom code-path values for THIS frame, so sweep screenshots carry data.
+        if (_g._devZoomHud && _g._smallFont != null && showUI)
+        {
+            var bl = _g._bloom;
+            string zdbg = $"ZOOM {_g._camera.Zoom:F1} | bias {bl.DebugBias:+0.00;-0.00} | "
+                + $"vres x{bl.DebugFSpread:F2} iters {bl.DebugIters} | dim x{bl.DebugComp:F2}";
+            var zsize = _g._smallFont.MeasureString(zdbg);
+            DrawText(_g._smallFont, zdbg,
+                new Vector2((int)(screenW - zsize.X - 10), 86), new Color(255, 230, 90));
+        }
+
         // Show collision debug mode label when active
         if (_g._collisionDebugMode != CollisionDebugMode.Off && _g._smallFont != null)
         {

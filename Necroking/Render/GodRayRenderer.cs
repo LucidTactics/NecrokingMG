@@ -178,11 +178,14 @@ public class GodRayRenderer
                     float hw0 = (widthTop + (widthBottom - widthTop) * t0) * wMul;
                     float hw1 = (widthTop + (widthBottom - widthTop) * t1) * wMul;
 
-                    // Noise modulation on innermost sub-layer
+                    // Noise modulation on innermost sub-layer. X-phase is
+                    // ray-relative in authored-px space (raw screen X made the
+                    // banding slide when panning and densify with zoom).
                     float n = 1f;
                     if (p.NoiseStrength > 0.001f && sub == 0)
                     {
-                        float raw = GodRayNoise(t0 * 10f, cx0 * 0.01f, elapsed, p.NoiseScale, p.NoiseSpeed);
+                        float nx = (cx0 - ground.X) / MathF.Max(widthScale, 0.01f) * 0.01f;
+                        float raw = GodRayNoise(t0 * 10f, nx, elapsed, p.NoiseScale, p.NoiseSpeed);
                         n = 1f - p.NoiseStrength * 0.6f + p.NoiseStrength * 0.6f * raw;
                     }
 

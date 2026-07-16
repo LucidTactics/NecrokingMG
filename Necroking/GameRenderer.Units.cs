@@ -507,9 +507,10 @@ partial class GameRenderer
             if (attach.Valid)
                 sourcePos = _g._renderer.WorldToScreenPx(attach.HiltWorld, attach.HiltHeight * _g._camera.Zoom, _g._camera);
             var bagFr = GetBodyBagFrame(_g._sim.Units[i].FacingAngle);
-            float ofsX = bagFr.FlipX ? -CarryOffsetX : CarryOffsetX;
+            float carryZoom = _g._camera.Zoom / 32f; // offsets are px-at-32
+            float ofsX = (bagFr.FlipX ? -CarryOffsetX : CarryOffsetX) * carryZoom;
             sourcePos.X += ofsX;
-            sourcePos.Y += CarryOffsetY;
+            sourcePos.Y += CarryOffsetY * carryZoom;
 
             // Destination pose: table-overlay anchor (mirrors DrawSingleEnvObject's
             // table body-bag block). Same lift formula keeps position consistent
@@ -1695,6 +1696,10 @@ partial class GameRenderer
         var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
 
+        // Outline widths (buff/reanim/ghost/aim data) are px authored at zoom 32 —
+        // scale so the rim hugs the sprite proportionally at every zoom, with a
+        // hairline floor for MinZoom legibility. (Round-2 sweep: was constant px.)
+        offset = MathF.Max(0.6f, offset * _g._camera.Zoom / 32f);
         for (int d = 0; d < 8; d++)
         {
             float dx = _outlineDirs[d][0] * offset;

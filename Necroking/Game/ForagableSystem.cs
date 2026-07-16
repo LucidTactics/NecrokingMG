@@ -33,7 +33,7 @@ public class ForagableSystem
         public float ArcDuration;      // total flight time
         public string ResourceType;    // what to add to inventory on complete
         public Texture2D? Texture;     // cached texture for rendering
-        public float BaseScale;        // original render scale
+        public float WorldH;           // sprite world height (scale computed per-frame from live zoom)
         public float PivotX, PivotY;   // texture pivot
     }
 
@@ -109,9 +109,10 @@ public class ForagableSystem
         var def = _env.Defs[obj.DefIndex];
         var tex = _env.GetDefTexture(obj.DefIndex);
 
+        // Store the WORLD height; the render scale is computed per-frame in Draw()
+        // from the live zoom (capturing it here froze the pickup-time zoom into the
+        // 0.35s flight — round-2 zoom sweep).
         float worldH = def.SpriteWorldHeight * obj.Scale * def.Scale;
-        float pixelH = worldH * _camera.Zoom;
-        float baseScale = tex != null ? pixelH / tex.Height : 1f;
 
         _inFlight.Add(new CollectingForagable
         {
@@ -122,7 +123,7 @@ public class ForagableSystem
             ArcDuration = ArcDuration,
             ResourceType = resourceType,
             Texture = tex,
-            BaseScale = baseScale,
+            WorldH = worldH,
             PivotX = def.PivotX,
             PivotY = def.PivotY,
         });
@@ -195,7 +196,7 @@ public class ForagableSystem
             float arcHeight = 2f * (1f - (t - 0.3f) * (t - 0.3f) / 0.49f);
             if (arcHeight < 0f) arcHeight = 0f;
 
-            float scale = cf.BaseScale * (1f - t * 0.6f);
+            float scale = (cf.WorldH * _camera.Zoom / cf.Texture.Height) * (1f - t * 0.6f);
             float rotation = t * t * 6f;
 
             var sp = _renderer.WorldToScreen(pos, arcHeight, _camera);

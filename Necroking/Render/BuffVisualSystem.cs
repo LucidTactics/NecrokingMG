@@ -569,6 +569,12 @@ public class BuffVisualSystem
         var coreColor = EncodeColor(la.CoreColor, flicker, 1);
         var glowColor = EncodeColor(la.GlowColor, 0.5f * flicker, 1);
 
+        // Arc widths are px authored at zoom 32 — scale with zoom like the arc
+        // radius does (one policy per effect; DrawThickLine's 1px floor keeps
+        // MinZoom legibility). Round-2 sweep: widths were constant px.
+        float arcWidthScale = System.Math.Clamp(cam.Zoom / 32f, 0f, 4f);
+        float arcGlowW = la.GlowWidth * arcWidthScale;
+        float arcCoreW = la.CoreWidth * arcWidthScale;
         foreach (var points in arcs)
         {
             if (points.Length < 2) continue;
@@ -576,8 +582,8 @@ public class BuffVisualSystem
             {
                 var p1 = sp + points[i] * radiusPixels;
                 var p2 = sp + points[i + 1] * radiusPixels;
-                DrawThickLine(batch, p1, p2, la.GlowWidth, glowColor);
-                DrawThickLine(batch, p1, p2, la.CoreWidth, coreColor);
+                DrawThickLine(batch, p1, p2, arcGlowW, glowColor);
+                DrawThickLine(batch, p1, p2, arcCoreW, coreColor);
             }
         }
     }

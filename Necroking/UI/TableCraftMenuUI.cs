@@ -582,7 +582,9 @@ public class TableCraftMenuUI : IModalLayer
 
     private void DrawBorder(Rectangle r, Color c, int t = 1)
     {
-        Necroking.Render.DrawUtils.DrawRectBorder(_batch, _pixel, r, c, t);
+        // Borders scale with the panel like every other layout term (1px floor) —
+        // fixed 1px read as hairlines on a zoom-128 panel (round-2 zoom sweep).
+        Necroking.Render.DrawUtils.DrawRectBorder(_batch, _pixel, r, c, Math.Max(1, Scaled(t)));
     }
 
     /// <summary>Mouse-over-menu test (callers use to suppress world clicks).</summary>

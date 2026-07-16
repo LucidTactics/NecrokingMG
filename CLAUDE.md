@@ -109,11 +109,10 @@ and how to test a cast on the empty test map. Most spells are pure data (a `Spel
 `data/spells.json`) and need no code.
 
 ## VFX & Zoom
-**Any new or changed visual effect must pass the zoom check before committing**: classify
-every constant (world units vs px-at-zoom-32 vs screen — including offsets/anchors/speeds,
-not just sizes), keep ONE scaling policy per effect (realism model, no middle-ground
-curves), and screenshot-verify the actual effect paused at zoom 8/32/128.
-Protocol, staging recipes, and fixtures (`hdrbar`, `spawn_lightning`): [docs/vfx-zoom-audit.md](docs/vfx-zoom-audit.md).
+Any new or changed visual effect must pass the zoom check before committing: every
+constant classified (world vs px-at-32 vs screen — offsets/anchors/speeds too), ONE
+scaling policy per effect, screenshot-verified paused at zoom 8/32/128. Full protocol +
+staging recipes: [docs/vfx-zoom-audit.md](docs/vfx-zoom-audit.md).
 
 ## UI Text Rendering
 - SpriteBatch uses `SamplerState.PointClamp` — text drawn at sub-pixel positions gets aliasing artifacts
