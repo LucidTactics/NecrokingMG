@@ -19,7 +19,7 @@ public static class SkillBookDefs
     /// order of the known ones. Any extra tab file (e.g. lich.json) appends after
     /// these, sorted by its optional "order" field then id, so new tabs can be
     /// dropped in without code changes.</summary>
-    public static readonly string[] TabIds = { "potions", "monstrology", "necromancy", "magic", "metamorphosis" };
+    public static readonly string[] TabIds = { "potions", "monstrology", "necromancy", "magic", "metamorphosis", "construction" };
 
     public static List<SkillTab> Tabs { get; private set; } = new();
 

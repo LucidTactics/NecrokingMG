@@ -63,6 +63,11 @@ public class SkillBookState
     /// recipe list by this set.</summary>
     private readonly HashSet<string> _unlockedPotions = new();
 
+    /// <summary>Buildings (env def ids) unlocked by the construction skill tree.
+    /// The building menu filters its PlayerBuildable list by this set — nothing
+    /// is constructible until its skill node is learned.</summary>
+    private readonly HashSet<string> _unlockedBuildings = new();
+
     /// <summary>Boolean passive flags toggled on by passive_stat skills. Lookup
     /// by the effectArg string (e.g. "efficient_tinctures"). Cheaper than a real
     /// passive stack since these are simple on/off perks.</summary>
@@ -102,6 +107,10 @@ public class SkillBookState
     public bool IsPotionUnlocked(string potionId) => _unlockedPotions.Contains(potionId);
     public void UnlockPotion(string potionId)     => _unlockedPotions.Add(potionId);
     public IReadOnlyCollection<string> UnlockedPotions => _unlockedPotions;
+
+    public bool IsBuildingUnlocked(string envDefId) => _unlockedBuildings.Contains(envDefId);
+    public void UnlockBuilding(string envDefId)     { if (!string.IsNullOrEmpty(envDefId)) _unlockedBuildings.Add(envDefId); }
+    public IReadOnlyCollection<string> UnlockedBuildings => _unlockedBuildings;
 
     public bool HasPassive(string flag) => _passiveFlags.Contains(flag);
     public void SetPassive(string flag) => _passiveFlags.Add(flag);
@@ -177,6 +186,7 @@ public class SkillBookState
         _learned.Clear();
         _skillPoints.Clear();
         _unlockedPotions.Clear();
+        _unlockedBuildings.Clear();
         _passiveFlags.Clear();
         _intrinsicBuffs.Clear();
         _unlockedSummons.Clear();
@@ -198,6 +208,7 @@ public class SkillBookState
             Learned = new List<string>(_learned),
             SkillPoints = new Dictionary<string, int>(_skillPoints),
             UnlockedPotions = new List<string>(_unlockedPotions),
+            UnlockedBuildings = new List<string>(_unlockedBuildings),
             PassiveFlags = new List<string>(_passiveFlags),
             UnlockedSummons = new List<string>(_unlockedSummons),
             UnlockedAI = new Dictionary<string, int>(_unlockedAI),
@@ -238,6 +249,7 @@ public class SkillBookState
         Events.Reset();
         foreach (var kv in save.Events) Events.Tally(kv.Key, kv.Value);
         foreach (var p in save.UnlockedPotions) _unlockedPotions.Add(p);
+        foreach (var b in save.UnlockedBuildings) UnlockBuilding(b);
         foreach (var f in save.PassiveFlags) _passiveFlags.Add(f);
         foreach (var b in save.IntrinsicBuffs) AddIntrinsicBuff(b.BuffId, b.Tags);
         foreach (var s in save.UnlockedSummons) UnlockSummon(s);

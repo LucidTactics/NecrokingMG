@@ -569,6 +569,28 @@ public class SkillBookOverlay : IModalLayer
     {
         string rel = $"assets/UI/Icons/Skills/{def.Id}.png";
         if (System.IO.File.Exists(GamePaths.Resolve(rel))) return rel;
+
+        // Building unlocks: show the building's own sprite (glyph traps have no
+        // sprite — use their trap spell's grimoire icon, like the build menu).
+        // Animated defs are sprite sheets the icon element can't slice; those
+        // fall through to the generic sigil.
+        if (def.Effect == "unlock_building" && !string.IsNullOrEmpty(def.EffectArg))
+        {
+            var env = Game1.Instance?._envSystem;
+            int di = env?.FindDef(def.EffectArg) ?? -1;
+            if (di >= 0)
+            {
+                var ed = env!.Defs[di];
+                if (ed.IsGlyphTrap)
+                {
+                    var spell = _gameData.Spells?.Get(ed.TrapSpellId);
+                    if (spell != null && !string.IsNullOrEmpty(spell.Icon)) return spell.Icon;
+                }
+                else if (!ed.IsAnimated && !string.IsNullOrEmpty(ed.TexturePath))
+                    return ed.TexturePath;
+            }
+        }
+
         foreach (var c in def.Costs)
             if (c.Type == "item")
             {

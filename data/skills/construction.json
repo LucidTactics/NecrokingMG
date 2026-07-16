@@ -1,0 +1,185 @@
+{
+  "displayName": "Construction",
+  "skills": [
+    {
+      "id": "skill_build_necro_bench",
+      "name": "Necro Bench",
+      "description": "Unlocks construction of the Necro Bench — the foundation of the necromantic workshop.",
+      "x": 300,
+      "y": 60,
+      "parents": [],
+      "costs": [],
+      "effect": "unlock_building",
+      "effectArg": "Table2",
+      "startLearned": false
+    },
+    {
+      "id": "skill_build_corpse_pile",
+      "name": "Corpse Pile",
+      "description": "Unlocks construction of the Corpse Pile.",
+      "x": 160,
+      "y": 220,
+      "parents": [
+        "skill_build_necro_bench"
+      ],
+      "costs": [],
+      "effect": "unlock_building",
+      "effectArg": "corpse_pile"
+    },
+    {
+      "id": "skill_build_empty_grave",
+      "name": "Empty Grave",
+      "description": "Unlocks construction of the Empty Grave.",
+      "x": 440,
+      "y": 220,
+      "parents": [
+        "skill_build_necro_bench"
+      ],
+      "costs": [],
+      "effect": "unlock_building",
+      "effectArg": "empty_grave"
+    },
+    {
+      "id": "skill_build_necro_table",
+      "name": "Necro Table",
+      "description": "Unlocks construction of the Necro Table.",
+      "x": 160,
+      "y": 380,
+      "parents": [
+        "skill_build_corpse_pile"
+      ],
+      "costs": [],
+      "effect": "unlock_building",
+      "effectArg": "necro_table"
+    },
+    {
+      "id": "skill_build_obelisk",
+      "name": "Obelisk",
+      "description": "Unlocks construction of the Obelisk.",
+      "x": 340,
+      "y": 380,
+      "parents": [
+        "skill_build_empty_grave"
+      ],
+      "costs": [],
+      "effect": "unlock_building",
+      "effectArg": "obelisk"
+    },
+    {
+      "id": "skill_build_small_mausoleum",
+      "name": "Small Mausoleum",
+      "description": "Unlocks construction of the Small Mausoleum.",
+      "x": 540,
+      "y": 380,
+      "parents": [
+        "skill_build_empty_grave"
+      ],
+      "costs": [],
+      "effect": "unlock_building",
+      "effectArg": "small_mausoleum"
+    },
+    {
+      "id": "skill_build_blight_altar",
+      "name": "Blight Altar",
+      "description": "Unlocks construction of the Blight Altar.",
+      "x": 160,
+      "y": 540,
+      "parents": [
+        "skill_build_necro_table"
+      ],
+      "costs": [],
+      "effect": "unlock_building",
+      "effectArg": "blight_altar"
+    },
+    {
+      "id": "skill_build_alchemist_table",
+      "name": "Alchemist Table",
+      "description": "Unlocks construction of the Alchemist Table — the heart of the alchemical trade.",
+      "x": 940,
+      "y": 60,
+      "parents": [],
+      "costs": [],
+      "effect": "unlock_building",
+      "effectArg": "alchemist_table",
+      "startLearned": false
+    },
+    {
+      "id": "skill_build_mushroom_pile",
+      "name": "Mushroom Pile",
+      "description": "Unlocks construction of the Mushroom Pile.",
+      "x": 820,
+      "y": 220,
+      "parents": [
+        "skill_build_alchemist_table"
+      ],
+      "costs": [],
+      "effect": "unlock_building",
+      "effectArg": "mushroom_pile"
+    },
+    {
+      "id": "skill_build_harvesting_table",
+      "name": "Harvesting Table",
+      "description": "Unlocks construction of the Harvesting Table.",
+      "x": 1080,
+      "y": 220,
+      "parents": [
+        "skill_build_alchemist_table"
+      ],
+      "costs": [],
+      "effect": "unlock_building",
+      "effectArg": "harvesting_table"
+    },
+    {
+      "id": "skill_build_poison_vat",
+      "name": "Poison Vat",
+      "description": "Unlocks construction of the Poison Vat.",
+      "x": 820,
+      "y": 380,
+      "parents": [
+        "skill_build_mushroom_pile"
+      ],
+      "costs": [],
+      "effect": "unlock_building",
+      "effectArg": "poison_vat"
+    },
+    {
+      "id": "skill_build_wooden_shed",
+      "name": "Wooden Shed",
+      "description": "Unlocks construction of the Wooden Shed.",
+      "x": 1080,
+      "y": 380,
+      "parents": [
+        "skill_build_harvesting_table"
+      ],
+      "costs": [],
+      "effect": "unlock_building",
+      "effectArg": "wooden_shed"
+    },
+    {
+      "id": "skill_build_poison_trap",
+      "name": "Poison Trap",
+      "description": "Unlocks construction of the Poison Trap glyph.",
+      "x": 820,
+      "y": 540,
+      "parents": [
+        "skill_build_poison_vat"
+      ],
+      "costs": [],
+      "effect": "unlock_building",
+      "effectArg": "poison_trap"
+    },
+    {
+      "id": "skill_build_paralyze_trap",
+      "name": "Paralyze Trap",
+      "description": "Unlocks construction of the Paralyze Trap glyph.",
+      "x": 820,
+      "y": 700,
+      "parents": [
+        "skill_build_poison_trap"
+      ],
+      "costs": [],
+      "effect": "unlock_building",
+      "effectArg": "paralyze_trap"
+    }
+  ]
+}

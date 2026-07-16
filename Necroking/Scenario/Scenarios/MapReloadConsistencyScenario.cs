@@ -148,6 +148,11 @@ public class MapReloadConsistencyScenario : ScenarioBase
         // The player-facing check: open the build menu the way pressing B would
         // and record what it actually lists. A menu holding a stale session ref
         // shows nothing here even when the env system above reloaded fine.
+        // The menu is gated on construction-skill unlocks (empty for a fresh
+        // book), so unlock every buildable first — the subject here is session
+        // wiring, not the skill gate.
+        for (int di = 0; di < env.DefCount; di++)
+            if (env.Defs[di].PlayerBuildable) g._skillBookState.UnlockBuilding(env.Defs[di].Id);
         g.EnsureInventoryUIsInitialized();
         var menu = g._buildingMenuUI;
         menu.Open(g.GraphicsDevice.Viewport.Width, g.GraphicsDevice.Viewport.Height);

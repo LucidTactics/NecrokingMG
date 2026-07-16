@@ -41,6 +41,7 @@ public static class SkillEffectRegistry
         Register("noop",      new NoOpEffect());
         Register("add_spell", new AddSpellToBarEffect());
         Register("unlock_potion",     new UnlockPotionEffect());
+        Register("unlock_building",   new UnlockBuildingEffect());
         Register("passive_stat",      new PassiveStatEffect());
         Register("morph_necromancer", new MorphNecromancerEffect());
         Register("metamorph_action",  new MetamorphActionEffect());
@@ -53,7 +54,6 @@ public static class SkillEffectRegistry
         Register("compound",             new CompoundEffect());
         // Stubs — log only. Wire to real systems when the corresponding gameplay is in.
         Register("unlock_unit",     new LogStubEffect("unlock_unit"));
-        Register("unlock_building", new LogStubEffect("unlock_building"));
     }
 
     public static void Register(string id, ISkillEffect effect) => _effects[id] = effect;
@@ -95,6 +95,20 @@ public sealed class UnlockPotionEffect : ISkillEffect
         if (string.IsNullOrEmpty(arg)) return true;
         ctx.BookState.UnlockPotion(arg);
         DebugLog.Log("skillbook", $"unlock_potion: '{arg}' added to unlocked set");
+        return true;
+    }
+}
+
+/// <summary>Adds the env def id (arg) to the book's UnlockedBuildings set so the
+/// building menu surfaces it. Idempotent for the same re-fire reasons as
+/// unlock_potion.</summary>
+public sealed class UnlockBuildingEffect : ISkillEffect
+{
+    public bool Apply(SkillEffectContext ctx, string arg)
+    {
+        if (string.IsNullOrEmpty(arg)) return true;
+        ctx.BookState.UnlockBuilding(arg);
+        DebugLog.Log("skillbook", $"unlock_building: '{arg}' added to unlocked set");
         return true;
     }
 }

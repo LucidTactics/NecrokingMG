@@ -1160,6 +1160,32 @@ public partial class Game1 {
                break;
             }
 
+            // Dump the construction gate: building ids unlocked via the skill
+            // tree + what the build menu currently lists (post-filter, as of its
+            // last Open) — lets a drive-game check verify the gate without UI
+            // scraping.
+            case "build_unlocks": {
+               var bj = new System.Text.StringBuilder("{\"unlocked\":[");
+               bool bf = true;
+               foreach (var id in _skillBookState.UnlockedBuildings) {
+                  if (!bf) bj.Append(',');
+                  bf = false;
+                  bj.Append(System.Text.Json.JsonSerializer.Serialize(id));
+               }
+               bj.Append("],\"menuVisible\":");
+               bj.Append(_buildingMenuUI.IsVisible ? "true" : "false");
+               bj.Append(",\"menu\":[");
+               bf = true;
+               foreach (int di in _buildingMenuUI.BuildableDefIndices) {
+                  if (!bf) bj.Append(',');
+                  bf = false;
+                  bj.Append(System.Text.Json.JsonSerializer.Serialize(_envSystem.Defs[di].Id));
+               }
+               bj.Append($"],\"defCount\":{_envSystem.DefCount}}}");
+               c.Complete(Necroking.Dev.DevServer.OkRaw(bj.ToString()));
+               break;
+            }
+
             // Dump the skill-book economy (skill-point pools + milestone-event
             // tallies) so drive-game checks can verify earn paths (e.g. monster
             // kills granting monstrology points) without UI scraping.

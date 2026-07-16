@@ -35,6 +35,7 @@ public class SavedSkillBook
     /// <summary>Cumulative milestone tallies (monster_kill, cast_spell, …).</summary>
     [JsonPropertyName("events")] public Dictionary<string, int> Events { get; set; } = new();
     [JsonPropertyName("unlockedPotions")] public List<string> UnlockedPotions { get; set; } = new();
+    [JsonPropertyName("unlockedBuildings")] public List<string> UnlockedBuildings { get; set; } = new();
     [JsonPropertyName("passiveFlags")] public List<string> PassiveFlags { get; set; } = new();
     [JsonPropertyName("intrinsicBuffs")] public List<SavedIntrinsicBuff> IntrinsicBuffs { get; set; } = new();
     [JsonPropertyName("unlockedSummons")] public List<string> UnlockedSummons { get; set; } = new();

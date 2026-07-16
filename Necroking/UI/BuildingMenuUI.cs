@@ -78,11 +78,14 @@ public class BuildingMenuUI : SideListMenu
         _selectedIndex = -1;
         OpenAnchorStretch(screenH);
 
-        // Cache buildable defs
+        // Cache buildable defs — gated on the construction skill tree, so a
+        // building only shows up once its unlock_building node is learned.
+        // (Cached at open: learning a skill while the menu is up needs a reopen.)
+        var book = Game1.Instance._skillBookState;
         _buildableDefIndices.Clear();
         for (int di = 0; di < _envSystem.DefCount; di++)
         {
-            if (_envSystem.Defs[di].PlayerBuildable)
+            if (_envSystem.Defs[di].PlayerBuildable && book.IsBuildingUnlocked(_envSystem.Defs[di].Id))
                 _buildableDefIndices.Add(di);
         }
 
@@ -171,6 +174,9 @@ public class BuildingMenuUI : SideListMenu
         int defIdx = _buildableDefIndices[_selectedIndex];
         var envDef = _envSystem.Defs[defIdx];
 
+        // Defensive: the open-time filter already hides locked defs, but placement
+        // must hold on its own if some other path ever arms a selection.
+        if (!Game1.Instance._skillBookState.IsBuildingUnlocked(envDef.Id)) return false;
         if (!CanAfford(envDef)) return false;
 
         // Glyph traps spawn a MagicGlyph blueprint instead of an env object. The glyph
