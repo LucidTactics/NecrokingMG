@@ -864,8 +864,8 @@
       "drainMaxDuration": 2,
       "drainArcHeight": 14,
       "drainSwayHz": 1,
-      "drainCoreWidth": 3,
-      "drainGlowWidth": 5.5,
+      "drainCoreWidth": 2,
+      "drainGlowWidth": 3.5,
       "drainPulseHz": 1.2,
       "drainPulseStrength": 0.3,
       "drainFlickerMin": 1,
@@ -883,9 +883,8 @@
         "a": 27,
         "intensity": 5.9423075
       },
-      "drainSourceWidthScale": 3,
+      "drainSourceWidthScale": 2,
       "drainCloudCount": 7,
-      "drainCloudSize": 15,
       "drainCloudSpeed": 0.7,
       "drainCloudColor": {
         "r": 212,
