@@ -10,7 +10,9 @@ registries — they have their own loader and their own JSON folder.
 
 ### `data/skills/*.json` — the skill trees (data)
 One file per tab: `potions.json`, `monstrology.json`, `necromancy.json`, `magic.json`,
-`metamorphosis.json`, `lich.json`. Tabs are **discovered dynamically** from the folder —
+`metamorphosis.json`, `lich.json`, `construction.json` (the build-menu gate tree: Necro
+Bench + Alchemist Table as free roots, the other buildables as free child `unlock_building`
+nodes). Tabs are **discovered dynamically** from the folder —
 dropping in a new `<tab>.json` adds a tab (order = optional `"order"` field, else the
 canonical `TabIds` order, else appended). Per skill: `id`, `name`, `description`,
 `x`/`y` (tree position in a logical 1280x680 space), `parents` (AND-prereq),
@@ -34,7 +36,8 @@ builds `ChildIds` + bounds), `SkillDef`, `SkillCost`.
 `Game1._skillBookState` is the live instance; `Simulation.SetSkillBook` shares it with the
 sim (and repoints `Events` at `Simulation.PlayerEvents`). Holds: `_learned` set,
 per-tab skill-point pools (`SKILL_POINT_TYPES` = potions/monstrology), `UnlockedPotions`,
-passive flags (`HasPassive`/`SetPassive` — also carries `morphed:<id>` and `action:<id>`
+`UnlockedBuildings` (env def ids; `IsBuildingUnlocked`/`UnlockBuilding` — gates the build
+menu), passive flags (`HasPassive`/`SetPassive` — also carries `morphed:<id>` and `action:<id>`
 markers), `IntrinsicBuffs` (tag→buff bindings for future spawns), `UnlockedSummons`,
 `_unlockedAI` (behavior→payload, monotone via `UnlockAI`), `PotionSlotsUnlocked`,
 `CorpseEatingBonus`/`SoulConsumptionBonus` (+caps). Learn paths: `TryLearn` (prereqs →
@@ -59,6 +62,7 @@ test/scenario learns). Registered effects and their downstream consumers:
 |---|---|---|
 | `add_spell` | spell → first empty spellbar slot | spellbar itself — wired |
 | `unlock_potion` | adds to `UnlockedPotions` | `UI/CraftingMenuUI.cs` recipe filter — wired |
+| `unlock_building` | adds env def id to `UnlockedBuildings` (`UnlockBuildingEffect`, idempotent) | `UI/BuildingMenuUI.cs` `Open()` filters PlayerBuildable defs by the set; `TryPlace` re-checks defensively — wired. `build_unlocks` dev verb dumps the set |
 | `passive_stat` | sets flag; known flags also apply necro buffs via `PassiveBuffMap` | `unholy_movement`/`unholy_strength` → buffs (wired); `death_fog_consumption` → `Game1.Animation.cs` fog-mana tick (wired); `efficient_tinctures` → `CraftingMenuUI` (wired); **any other arg is flag-only = silent stub** |
 | `morph_necromancer` | `Sim.TransformUnit` to a `PlayerForm` def, records `morphed:<id>`, re-applies passive buffs | wired; `morphed:` flag also gates the lich tab |
 | `metamorph_action` | sets `action:<id>` flag | `UI/CharacterStatsUI.cs` buttons + `TryConsumeNearestCorpse` (consume corpse → heal + capped max-stat bonus) — wired. NB the comment naming `Game1.PerformMetamorphActiveOnCorpse` is stale; no such method |
@@ -70,7 +74,7 @@ test/scenario learns). Registered effects and their downstream consumers:
 | `unlock_summon` | adds to `UnlockedSummons` | **NOTHING reads it** — `IsSummonUnlocked`/`UnlockedSummons` have zero callers outside the class; the reanimation flow does NOT filter by it despite doc comments claiming so. Effectively a stub with state |
 | `compound` | `fx1=arg\|fx2=arg` runs sub-effects | wired (delegates) |
 | `noop` | nothing | — |
-| `unlock_unit`, `unlock_building` | `LogStubEffect` — log only | explicit stubs; no JSON skill currently uses them |
+| `unlock_unit` | `LogStubEffect` — log only | the last explicit stub; no JSON skill currently uses it |
 
 Unknown effect ids log + **soft-pass as noop** (the learn still succeeds).
 **Look/edit here when…** adding a new effect type, or wiring a stub to real gameplay.
@@ -117,9 +121,10 @@ read `Events.Get`; milestones are never consumed.
   "per-run only" note is obsolete; v1 saves lacking the key load with a fresh book.
 - **`startLearned` skills never run their effect** — `InitFromDefs` only fills `_learned`
   (and `ApplySave` replays only `grant_path`). A set-populating effect (`unlock_potion`,
-  a future `unlock_building`) on a `startLearned` node silently leaves the set empty —
+  `unlock_building`) on a `startLearned` node silently leaves the set empty —
   use a zero-cost learnable node (empty `costs` passes `CanAfford`) or `LearnFree`
-  (which DOES run the effect) instead.
+  (which DOES run the effect) instead. This is exactly why `construction.json`'s free
+  roots are zero-cost learnable nodes, not `startLearned`.
 - Scenario learns pass `Sim = null` — effects must (and do) soft-pass without a sim.
 - Skill defs bypass `RegistryBase`/`--roundtrip-data`; `SaveLayout` only rewrites x/y.
 

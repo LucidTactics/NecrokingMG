@@ -5,8 +5,11 @@ The player-facing save-game feature (distinct from **map** save, which writes
 A save is a JSON snapshot of the *play session* that is re-applied on top of a normal
 `StartGame(mapName)` load. Currently captures map + player position/form/buffs + spellbar
 + **inventory slots** (`SavedInventorySlot`, slot-indexed) + **the full skill book**
-(`SavedSkillBook` — learned set, point pools, event tallies, every unlock collection).
-Still **not** covered: raw mana/NecromancerState, `Inventory._everSeen`, horde/world state.
+(`SavedSkillBook` — learned set, point pools, event tallies, every unlock collection incl.
+`UnlockedBuildings` from the construction tree).
+Still **not** covered: raw mana/NecromancerState, `Inventory._everSeen`, horde/world state,
+and **player-placed world buildings** (those survive only via map save — see the comment in
+`UI/BuildingMenuUI.cs` `TryPlace`).
 
 ## Files
 
