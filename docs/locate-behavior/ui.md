@@ -416,17 +416,19 @@ re-evaluate the property per call and are safe.
 ## Menu screens (main/pause) & the Settings/Multiplayer/Save submenus
 
 One class per full-screen menu in `UI/`: `MainMenuScreen.cs` (title screen), `PauseMenuScreen.cs`
-(ESC menu), `ScenarioListScreen.cs`, `LoadMenuScreen.cs`. Each has a private `BuildLayout` that is
+(ESC menu), `ScenarioListScreen.cs`. (There is NO `LoadMenuScreen.cs` anymore — `MenuState.LoadMenu`
+is drawn by `UI/LoadGameWindow.cs`, a `WantsClose` window like Save/Multiplayer, from `MenuHostLayer`.)
+Each screen has a private `BuildLayout` that is
 the single source of truth its `Draw` and `Update`/`HandleClick` both consume. Shared button
 identities/style live in `UI/MenuCommon.cs`: `MenuButtonId` enum (ids are SHARED across screens —
 e.g. `LoadGame`/`Quit`/`Settings` exist once), `MenuButton` struct, static `MenuDraw`
 (`Button`/`Panel`/`Backdrop`/`Scrollbar`/`Text`).
 
 **Two dispatch families — main menu vs pause menu differ:**
-- **Main/scenario/load menus**: `Game1.Update` early-returns per state (`_mainMenu.Update()` etc.),
+- **Main/scenario menus**: `Game1.Update` early-returns per state (`_mainMenu.Update()` etc.),
   and `GameRenderer.Draw` early-outs with its own SpriteBatch (`Materials.Hud.Begin`) —
   they bypass the UIRouter entirely.
-- **Pause menu + its submenus** (`MenuState.PauseMenu`/`Settings`/`Multiplayer`/`SaveMenu`):
+- **Pause menu + its submenus** (`MenuState.PauseMenu`/`Settings`/`Multiplayer`/`SaveMenu`/`LoadMenu`):
   drawn by `MenuHostLayer` in `UI/Layers/HostLayers.cs` (Menu band, `Blocking`, `Closable`;
   `OnCancel` = ESC walk-back). Clicks: pause buttons via `_g._pauseMenu.HandleClick()` from
   Game1.Update's PauseMenu block; the submenus are `WantsClose`-style windows updated from
@@ -452,6 +454,31 @@ e.g. `LoadGame`/`Quit`/`Settings` exist once), `MenuButton` struct, static `Menu
   world; from the main menu the backdrop is the empty `GameSession` world (exists from app start),
   not the menu backdrop — cosmetic, consider `MenuDraw.Backdrop` in `MenuHostLayer.Draw` when
   `!_gameWorldLoaded`.
+
+### Modal background-dim census (who darkens the screen behind them)
+
+Full-screen translucent black rect as the window's first draw call:
+- **Unconditional dims:** `UI/SaveGameWindow.cs` `Draw` (`_ui.DrawRect(new Rectangle(0,0,w,h),
+  new Color(0,0,0,180))`), `UI/MultiplayerWindow.cs` `Draw` (180), `UI/LoadGameWindow.cs` `Draw` (180),
+  `UI/SkillBookOverlay.cs` `Draw` (180, "Dim the world behind the modal"). Full-screen editors each
+  dim too, with drifting alphas: `Editor/UIEditorWindow.cs` (180), `ItemEditorWindow` (180),
+  `SpellEditorWindow` (180; sub-popups 100), `WallEditorWindow` (180), `UnitEditorWindow` (160;
+  sub-popups 120), `EnvObjectEditorWindow` (150), `ColorPickerPopup` (160), `WadingEditorPopup` (150),
+  `EditorBase.DrawConfirmDialog` (150). Game over = `GameRenderer.Hud.cs` `DrawGameOver` (160).
+- **Setting-gated (`Settings.General.PauseDimBackground`, default FALSE):** `UI/PauseMenuScreen.cs`
+  `Draw` (150) and `Editor/SettingsWindow.cs` `Draw` (180). Checkbox = `Editor/SettingsGeneralTab.cs`
+  "Dim Background on Pause". **Gotcha:** `GameSettingsData.Save` uses `JsonDefaults.Indented` (no
+  `DefaultIgnoreCondition`), so an existing `user settings/settings.json` stores an explicit
+  `"pauseDimBackground": false` — flipping the C# default won't change machines that already have the
+  file; remove/bypass the gate to force the dim.
+- **Opaque menu backdrop:** `UI/MenuCommon.cs` `MenuDraw.Backdrop` (bg image cover-scaled + alpha-120
+  dim) — main menu / scenario list, and drawn by `MenuHostLayer` under Settings/LoadMenu when
+  `!_gameWorldLoaded`.
+- **Central place to standardize:** `MenuHostLayer.Draw` (`UI/Layers/HostLayers.cs`) is the ONE draw
+  dispatcher for PauseMenu/Settings/Multiplayer/SaveMenu/LoadMenu — one dim at the top of its switch
+  covers the whole menu family (then delete the per-window rects, or the alphas stack/double-darken).
+  Non-menu-band self-dimmers (skill book Overlay band, editors in `EditorHostLayer`/`UIEditorLayer`)
+  draw their own; share the color via a `MenuDraw` const if unifying alpha.
 
 **Layout pitfall (main menu):** `MainMenuScreen.BuildLayout` stacks 55px buttons + 12px gaps +
 25px group gaps starting at `screenH/2 - 75`; the comment warns the stack must fit at 720p and
