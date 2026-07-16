@@ -350,10 +350,12 @@ The scene→bloom→screen chain, concrete files:
   UI in `Editor/SettingsWindow.cs` `DrawBloomTab`. Wired in
   `GameRenderer.Pipeline.cs` (`_frameBloomSettings`, `BeginScene` at Scene `OnBegin`,
   `EndScene` at `OnEnd`).
-- **HDR intensity encoding** = `Core/HdrColor.cs`, cap **`MaxHdrIntensity=4f`** (must match
-  `HdrSprite.fx` `MaxIntensity`). Two encoders: `ToHdrVertex` (additive — fade baked into
-  RGB, `intensity/4` in the alpha byte) and `ToHdrVertexAlpha` (alpha mode — `intensity/4`
-  baked into RGB, real fade in alpha). `HdrSprite.fx` decodes both (AlphaMode lerp); scene
+- **HDR intensity encoding** = `Core/HdrColor.cs`, cap **`MaxHdrIntensity=16f`** (sqrt
+  encoding since the sqrt-encode change — the alpha byte stores `sqrt(I/16)`, the shader
+  squares it back; must match `HdrSprite.fx`'s decode. It was 4 before — old docs/comments
+  saying 4 are stale). Two encoders: `ToHdrVertex` (additive — fade baked into RGB,
+  encoded intensity in the alpha byte) and `ToHdrVertexAlpha` (alpha mode — encoded
+  intensity baked into RGB, real fade in alpha). `HdrSprite.fx` decodes both (AlphaMode lerp); scene
   emissives thus write >1.0 into the HalfVector4 RT and feed bloom. `ToScaledColor` bleaches
   HDR — **color-picker only**. `HdrIntensity.fx` = god-ray VS/PS (`rgb*max(Intensity,0)`).
 
@@ -560,12 +562,24 @@ by `DrawUserPrimitives` with `HdrIntensity.fx` — seamless bends, soft cross-se
   `Simulation.Tick`) ages them and applies drain/beam damage-heal ticks (`ActiveDrain.Elapsed`,
   `LightningDamage` with `IsHeal`/`DrainHealTargetIdx` coupling). `LightningStyle` carries
   bolt-shape knobs (`Subdivisions`, `Displacement`, branch params, `CoreColor`/`GlowColor` as
-  `HdrColor`, `CoreWidth`/`GlowWidth`, `FlickerHz`/`JitterHz`). Drains carry
+  `HdrColor`, `CoreWidth`/`GlowWidth`, `WidthFade`, `FlickerHz`/`JitterHz`). Drains carry
   **`DrainVisualParams`** (`TendrilCount`, `ArcHeight`, `SwayAmplitude/Hz`, `CoreWidth`/
   `GlowWidth`, `PulseHz/Strength`, `CoreColor`/`GlowColor`), built per-cast from spell data by
   `SpellRegistry.cs` `SpellDef.BuildDrainVisuals()` (`drain*` fields in `data/spells.json`;
   spawn = `SpellEffectSystem.cs` `case "Drain"` → `Lightning.SpawnDrain`). **No point list is
   stored** — geometry is regenerated every frame at draw time from live endpoints.
+- **Beam spells are fully data-driven the same way**: a `category:"Beam"` SpellDef (e.g.
+  `lightning_beam`) → `SpellEffectSystem.Execute` `case "Beam"` → `Lightning.SpawnBeam(casterUid,
+  targetUid, spellId, ScaledDamage, BeamTickRate, BeamRetargetRadius, spell.BuildBeamStyle())` +
+  `StartChannel` (channel-hold). `SpellDef.BuildBeamStyle()` (`SpellRegistry.cs`) maps the
+  `beam*` JSON fields (`beamCoreColor`/`beamGlowColor` = HdrColor incl. bloom intensity,
+  `beamCoreWidth`/`beamGlowWidth` px-at-zoom-32, `beamDisplacement`, `beamBranches`,
+  `beamFlicker*`, `beamJitterHz`) into a fresh per-cast `LightningStyle`; matching
+  `BuildStrikeStyle()`/zap builders exist for the other categories. **Duplicating a beam spell
+  is data-only** (no code) as long as the visual change is expressible in existing style knobs.
+  **GOTCHA: the `beamChain*` / `strikeChain*` / `chainQuantity` fields are declared in
+  SpellDef and persisted in spells.json but consumed by NOTHING** (planned chain lightning) —
+  copying them changes nothing.
 - **Draw flow**: `LightningRenderer.Draw()` (`Render/LightningRenderer.cs`) runs inside the
   `_cbFxLightning` callback (`GameRenderer.Pipeline.cs`, `WorldLayer.EffectsHdrAdditive`);
   it only *collects* — projects endpoints to screen (caster anchor = `EffectSpawnPos2D` +
