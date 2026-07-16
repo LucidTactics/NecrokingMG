@@ -26,20 +26,31 @@ namespace Necroking.UI;
 /// </summary>
 public class MinimapHUD
 {
-    public const int MapSize = 192;
+    public const int BaseSize = 192;
+    // The map editor docks a bigger minimap (1.5× each side, 2.25× the world
+    // area at the same units/px) — an overview map is worth more screen there.
+    public const int EditorSize = BaseSize * 3 / 2;
     // Just below the editor-launcher row (HUDRenderer: EditorBtnTop 36 + MenuBtnH 24 + 6 gap).
     public const int Top = 66;
     public const int RightMargin = 8;
-    /// <summary>Bottom edge — HUD elements that used to sit under the button
-    /// rows (horde caps) now sit under this.</summary>
-    public const int Bottom = Top + MapSize;
+    /// <summary>Bottom edge in normal play — HUD elements that used to sit
+    /// under the button rows (horde caps) now sit under this. Deliberately
+    /// base-size: its only consumer never shows in the map editor.</summary>
+    public const int Bottom = Top + BaseSize;
     // Gap between the minimap and the map editor's right-side panel when the
     // editor is open (the minimap docks left of the panel so it doesn't cover it).
     private const int EditorPanelGap = 8;
 
-    // World units the window spans (2 units/px at MapSize 192): one tree ≈ one
-    // darkened pixel. Shrinks to the map size on maps smaller than this.
-    private const int ViewRange = 384;
+    /// <summary>Rendered pixel size (and baked texture resolution) for the
+    /// current mode. Everything — bounds, bake, window span — scales off this,
+    /// so per-mode sizes only need a new case here.</summary>
+    public static int CurrentSize
+        => Game1.Instance._menuState == MenuState.MapEditor ? EditorSize : BaseSize;
+
+    // World units each minimap pixel spans: one tree ≈ one darkened pixel. The
+    // window covers CurrentSize * this (384 at the base 192px size), shrinking
+    // to the map size on maps smaller than that.
+    private const int WorldUnitsPerPixel = 2;
     // How far (world units) the player may drift from the baked window's center
     // before a rebake re-centers it.
     private const float RecenterDistance = 8f;
@@ -82,6 +93,9 @@ public class MinimapHUD
     // The world window the baked texture covers (origin + span, world units).
     // Markers use the SAME window so they stay registered with the terrain.
     private float _winX, _winY, _winW, _winH;
+    // Pixel size the terrain texture was baked at (CurrentSize can change on a
+    // mode switch mid-frame-cycle; the fog overlay must match the bake).
+    private int _texSize = BaseSize;
 
     public void Init(GraphicsDevice device, SpriteBatch batch, Texture2D pixel)
     {
@@ -96,10 +110,11 @@ public class MinimapHUD
     /// mapping all derive from it.</summary>
     public static Rectangle Bounds(int screenW)
     {
+        int size = CurrentSize;
         int x = Game1.Instance._menuState == MenuState.MapEditor
-            ? Editor.MapEditorWindow.PanelLeftX(screenW) - EditorPanelGap - MapSize
-            : screenW - RightMargin - MapSize;
-        return new(x, Top, MapSize, MapSize);
+            ? Editor.MapEditorWindow.PanelLeftX(screenW) - EditorPanelGap - size
+            : screenW - RightMargin - size;
+        return new(x, Top, size, size);
     }
 
     public void Draw(int screenW, int screenH)
@@ -111,7 +126,10 @@ public class MinimapHUD
         var (wantX, wantY, wantW, wantH) = DesiredWindow(g, ground);
         bool drifted = MathF.Abs(wantX + wantW * 0.5f - (_winX + _winW * 0.5f)) > RecenterDistance
                     || MathF.Abs(wantY + wantH * 0.5f - (_winY + _winH * 0.5f)) > RecenterDistance;
-        if (_terrainTex == null || _bakedGround != ground || drifted
+        // Width check: a mode switch (editor <-> play) changes CurrentSize
+        // without necessarily drifting the center — the texture must follow.
+        if (_terrainTex == null || _terrainTex.Width != CurrentSize
+            || _bakedGround != ground || drifted
             || ++_framesSinceBake >= RebakeFrames)
             Bake(g, ground, wantX, wantY, wantW, wantH);
         if (_terrainTex == null) return;
@@ -167,15 +185,16 @@ public class MinimapHUD
     private void RefreshFogTexture(FogOfWarSystem fog)
     {
         _framesSinceFog = 0;
-        int n = MapSize * MapSize;
+        int size = _texSize; // must match the baked terrain texture, not CurrentSize
+        int n = size * size;
         if (_fogBuffer.Length != n) _fogBuffer = new Color[n];
-        for (int py = 0; py < MapSize; py++)
+        for (int py = 0; py < size; py++)
         {
-            int ty = (int)(_winY + (py + 0.5f) * _winH / MapSize);
-            int row = py * MapSize;
-            for (int px = 0; px < MapSize; px++)
+            int ty = (int)(_winY + (py + 0.5f) * _winH / size);
+            int row = py * size;
+            for (int px = 0; px < size; px++)
             {
-                int tx = (int)(_winX + (px + 0.5f) * _winW / MapSize);
+                int tx = (int)(_winX + (px + 0.5f) * _winW / size);
                 _fogBuffer[row + px] = fog.GetTileState(tx, ty) switch
                 {
                     FogTileState.Unexplored => FogUnexplored,
@@ -184,8 +203,11 @@ public class MinimapHUD
                 };
             }
         }
-        if (_fogTex == null || _fogTex.IsDisposed)
-            _fogTex = new Texture2D(_device, MapSize, MapSize);
+        if (_fogTex == null || _fogTex.IsDisposed || _fogTex.Width != size)
+        {
+            _fogTex?.Dispose();
+            _fogTex = new Texture2D(_device, size, size);
+        }
         _fogTex.SetData(_fogBuffer);
     }
 
@@ -210,15 +232,17 @@ public class MinimapHUD
 
     public Vec2 baked_map_center => new Vec2(_winX + _winW * 0.5f, _winY + _winH * 0.5f);
 
-    /// <summary>The window of the world the minimap should show: ViewRange
-    /// world units centered on the player (map center if none), clamped to the
-    /// map — whole map when it's smaller than ViewRange. In the map editor it
-    /// centers on the free camera instead, so the minimap follows where you're
-    /// working rather than staying pinned to the necromancer.</summary>
+    /// <summary>The window of the world the minimap should show: CurrentSize *
+    /// WorldUnitsPerPixel world units centered on the player (map center if
+    /// none), clamped to the map — whole map when it's smaller than that. In
+    /// the map editor it centers on the free camera instead, so the minimap
+    /// follows where you're working rather than staying pinned to the
+    /// necromancer.</summary>
     private (float x, float y, float w, float h) DesiredWindow(Game1 g, GroundSystem ground)
     {
-        float w = Math.Min(ViewRange, ground.WorldW);
-        float h = Math.Min(ViewRange, ground.WorldH);
+        int viewRange = CurrentSize * WorldUnitsPerPixel;
+        float w = Math.Min(viewRange, ground.WorldW);
+        float h = Math.Min(viewRange, ground.WorldH);
         float cx = ground.WorldW * 0.5f, cy = ground.WorldH * 0.5f;
         if (g._menuState == MenuState.MapEditor)
         {
@@ -258,7 +282,8 @@ public class MinimapHUD
         _winX = winX; _winY = winY; _winW = winW; _winH = winH;
         _framesSinceFog = 999; // window moved — fog overlay must follow this frame
 
-        int n = MapSize * MapSize;
+        int size = _texSize = CurrentSize;
+        int n = size * size;
         if (_bakeBuffer.Length != n)
         {
             _bakeBuffer = new Color[n];
@@ -268,14 +293,14 @@ public class MinimapHUD
         var vmap = ground.GetVertexMap();
         int vw = ground.VertexW, vh = ground.VertexH;
         var fallback = FallbackTerrainColor(TerrainType.Open);
-        for (int py = 0; py < MapSize; py++)
+        for (int py = 0; py < size; py++)
         {
-            int vy = Math.Clamp((int)(winY + (py + 0.5f) * winH / MapSize), 0, vh - 1);
+            int vy = Math.Clamp((int)(winY + (py + 0.5f) * winH / size), 0, vh - 1);
             int vrow = vy * vw;
-            int row = py * MapSize;
-            for (int px = 0; px < MapSize; px++)
+            int row = py * size;
+            for (int px = 0; px < size; px++)
             {
-                int vx = Math.Clamp((int)(winX + (px + 0.5f) * winW / MapSize), 0, vw - 1);
+                int vx = Math.Clamp((int)(winX + (px + 0.5f) * winW / size), 0, vw - 1);
                 byte t = vmap[vrow + vx];
                 _bakeBuffer[row + px] = t < _typeColors.Length ? _typeColors[t] : fallback;
             }
@@ -292,11 +317,11 @@ public class MinimapHUD
         {
             var def = defs[objects[i].DefIndex];
             if (def.IsBuilding || def.CollisionRadius <= 0) continue;
-            int px = (int)((objects[i].X - winX) * MapSize / winW);
-            int py = (int)((objects[i].Y - winY) * MapSize / winH);
-            if (px < 0 || px >= MapSize || py < 0 || py >= MapSize) continue;
+            int px = (int)((objects[i].X - winX) * size / winW);
+            int py = (int)((objects[i].Y - winY) * size / winH);
+            if (px < 0 || px >= size || py < 0 || py >= size) continue;
             if (!env.IsObjectVisible(i)) continue;
-            int idx = py * MapSize + px;
+            int idx = py * size + px;
             if (_obstacleMask[idx]) continue;
             _obstacleMask[idx] = true;
             var c = _bakeBuffer[idx];
@@ -305,8 +330,11 @@ public class MinimapHUD
                 (byte)(c.B * ObstacleDarken), c.A);
         }
 
-        if (_terrainTex == null || _terrainTex.IsDisposed)
-            _terrainTex = new Texture2D(_device, MapSize, MapSize);
+        if (_terrainTex == null || _terrainTex.IsDisposed || _terrainTex.Width != size)
+        {
+            _terrainTex?.Dispose();
+            _terrainTex = new Texture2D(_device, size, size);
+        }
         _terrainTex.SetData(_bakeBuffer);
     }
 
