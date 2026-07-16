@@ -123,20 +123,27 @@ public abstract class SideListMenu : IModalLayer
 
     // === Widget child pool ===
 
+    // Item-cell size cached from the first template child seen. The rebuild
+    // removes ALL item children and re-adds ItemCount clones, so an open with
+    // zero items would otherwise destroy the def's template — every later open
+    // would fall back to the hardcoded size and mis-wrap the grid.
+    private int _templateW, _templateH;
+
     /// <summary>Ensure the widget def has exactly <see cref="ItemCount"/> item
     /// children, cloning the template's dimensions.</summary>
     private void EnsureItemChildren(Editor.UIEditorWidgetDef def)
     {
-        int templateW = 218, templateH = 68;
         for (int i = 0; i < def.Children.Count; i++)
         {
             if (def.Children[i].Widget == ItemWidgetId)
             {
-                templateW = def.Children[i].Width;
-                templateH = def.Children[i].Height;
+                _templateW = def.Children[i].Width;
+                _templateH = def.Children[i].Height;
                 break;
             }
         }
+        int templateW = _templateW > 0 ? _templateW : 218;
+        int templateH = _templateH > 0 ? _templateH : 68;
 
         def.Children.RemoveAll(c => c.Widget == ItemWidgetId);
 
