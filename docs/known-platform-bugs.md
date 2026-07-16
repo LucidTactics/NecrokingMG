@@ -66,3 +66,30 @@ becomes annoying, the known remedy is a swallow-until-release latch on the
 falls back to the buggy `IsActive`, so Linux/macOS builds would re-inherit the bug —
 add an equivalent foreground poll per platform (or fix upstream: MonoGame could
 initialise `IsActive` from `SDL_GetKeyboardFocus()`).
+
+## MonoGame DX `Blend.InverseBlendFactor` corrupts the destination at small factors
+
+**Symptom.** A SpriteBatch draw using a custom `BlendState` with
+`ColorSourceBlend = Blend.BlendFactor, ColorDestinationBlend = Blend.InverseBlendFactor`
+(the classic "lerp toward src by factor f" shape) destroys the destination render
+target when `f` is small: with f ≈ 0.01 the result should be ≈ 99% of the existing
+dst content, but the dst comes out gutted/near-empty. At larger f (≈ 0.5) the output
+looks plausible, which makes the bug read as a *threshold* artifact in whatever
+system uses it (for us: bloom collapsing in a narrow zoom band just past each mip
+octave — beams thick at zoom 64.0, thin at 64.4, thick again at 90).
+
+**How it was isolated.** Paused scene, identical geometry, screenshot ladder: the
+only code-path difference between the good and bad frames was whether the
+InverseBlendFactor pass ran. Bisected 2026-07-15 during the zoom-bloom work.
+
+**Workaround (the rule this repo uses).** Don't use `InverseBlendFactor` at all.
+Any fractional mix is built from the proven weighted-additive shape only —
+`src * BlendFactor + dst * One` — accumulating into a cleared scratch RT when true
+lerp semantics are needed (see `BloomRenderer.GetWeightBlend` / `_haloScratch` in
+`Necroking/Render/Bloom.cs`). The scatter chain has used the additive shape for
+months without issue; `BlendFactor` as a *source* factor is fine.
+
+**If it regresses / porting note.** Unverified whether the fault is MonoGame's
+DX blend-state mapping or driver-level; not reproduced in isolation. If a future
+MonoGame update fixes it, the scratch-RT construction is still fine to keep — it's
+equivalent math with one extra half-res pass.
