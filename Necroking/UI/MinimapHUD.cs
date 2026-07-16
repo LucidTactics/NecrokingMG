@@ -43,6 +43,7 @@ public class MinimapHUD
 
     private static readonly Color BorderColor = new(20, 20, 30, 220);
     private static readonly Color MarkerOutline = new(10, 10, 12);
+    private static readonly Color ViewportColor = Color.White * 0.5f; // premultiplied 50% white
     private static readonly Color PlayerColor = Color.White;
     private static readonly Color AnimalColor = new(90, 240, 70);
     private static readonly Color HumanColor = new(255, 215, 60);
@@ -94,6 +95,24 @@ public class MinimapHUD
         float sy = rect.Height / _winH;
         DrawBuildingMarkers(g, rect, sx, sy);
         DrawUnitMarkers(g, rect, sx, sy);
+        DrawCameraViewport(g, rect, sx, sy, screenW, screenH);
+    }
+
+    /// <summary>Outline of the world area the camera currently renders.</summary>
+    private void DrawCameraViewport(Game1 g, Rectangle rect, float sx, float sy, int screenW, int screenH)
+    {
+        var tl = g._camera.ScreenToWorld(Vector2.Zero, screenW, screenH);
+        var br = g._camera.ScreenToWorld(new Vector2(screenW, screenH), screenW, screenH);
+        int x0 = rect.X + (int)((tl.X - _winX) * sx);
+        int y0 = rect.Y + (int)((tl.Y - _winY) * sy);
+        int x1 = rect.X + (int)((br.X - _winX) * sx);
+        int y1 = rect.Y + (int)((br.Y - _winY) * sy);
+        // Sides skip the corners the top/bottom strips already covered — at 50%
+        // alpha a double-drawn corner pixel would pop brighter.
+        ClippedRect(x0, y0, x1 - x0 + 1, 1, ViewportColor, rect);
+        ClippedRect(x0, y1, x1 - x0 + 1, 1, ViewportColor, rect);
+        ClippedRect(x0, y0 + 1, 1, y1 - y0 - 1, ViewportColor, rect);
+        ClippedRect(x1, y0 + 1, 1, y1 - y0 - 1, ViewportColor, rect);
     }
 
     /// <summary>The window of the world the minimap should show: ViewRange
