@@ -117,6 +117,12 @@ public sealed class ScatterGlowSystem
     public int LastHaloCount { get; private set; }
     public int LastDroppedCount { get; private set; }
 
+    // Mist shaping — live-tunable via `scatterglow mist <gamma> <floor> [knee]`
+    // while values are being dialed in; bake into a texture once approved.
+    public float MistGamma = 0.45f;
+    public float MistFloor = 0.38f;
+    public float MistKnee = 0.3f;
+
     // ─────────────────────────── Emitter API ───────────────────────────
 
     /// <summary>Register a point light-scatter emitter for this frame. One call
@@ -316,6 +322,9 @@ public sealed class ScatterGlowSystem
         _effect.Parameters["Time"]?.SetValue(_time);
         _effect.Parameters["Density"]?.SetValue(density);
         _effect.Parameters["MistStrength"]?.SetValue(0.75f);
+        _effect.Parameters["MistGamma"]?.SetValue(MistGamma);
+        _effect.Parameters["MistFloor"]?.SetValue(MistFloor);
+        _effect.Parameters["MistKnee"]?.SetValue(MistKnee);
         _effect.Parameters["WorldOrigin"]?.SetValue(
             new Vector2(cam.Position.X - vp.Width * 0.5f / cam.Zoom,
                         cam.Position.Y - vp.Height * 0.5f / (cam.Zoom * cam.YRatio)));

@@ -1465,15 +1465,23 @@ public partial class Game1 {
                break;
             }
 
-            // ScatterGlow (world-space light-scatter halos): toggle or set global strength.
-            case "scatterglow": {   // window.dev('scatterglow',['on'|'off'|'toggle'])  or  ['strength', v]
+            // ScatterGlow (world-space light-scatter halos): toggle, global strength,
+            // or live mist shaping while values are dialed in.
+            case "scatterglow": {   // ['on'|'off'|'toggle'] | ['strength', v] | ['mist', gamma, floor, [knee]]
                var sperf = _gameData.Settings.Performance;
                if (c.Args.Length >= 2 && c.Args[0] == "strength")
                   sperf.ScatterGlowStrength = DevFloat(c.Args[1]);
+               else if (c.Args.Length >= 3 && c.Args[0] == "mist")
+               {
+                  _scatterGlow.MistGamma = DevFloat(c.Args[1]);
+                  _scatterGlow.MistFloor = DevFloat(c.Args[2]);
+                  if (c.Args.Length >= 4) _scatterGlow.MistKnee = DevFloat(c.Args[3]);
+               }
                else
                   sperf.ScatterGlow = DevToggle(c.Args, sperf.ScatterGlow);
                c.Complete(Necroking.Dev.DevServer.Ok(
                   $"scatterGlow={sperf.ScatterGlow} strength={sperf.ScatterGlowStrength:F2} " +
+                  $"mist(gamma={_scatterGlow.MistGamma:F2},floor={_scatterGlow.MistFloor:F2},knee={_scatterGlow.MistKnee:F2}) " +
                   $"halos={_scatterGlow.LastHaloCount} dropped={_scatterGlow.LastDroppedCount}"));
                break;
             }

@@ -28,6 +28,12 @@ float2 WorldOrigin;     // world position at screen (0,0)
 float2 WorldPerPixel;   // (1/zoom, 1/(zoom*yRatio))
 float SolidIntensity;   // HDR multiplier for the Solid (test-shape emission) technique
 
+// Mist shaping (live-tunable via the 'scatterglow mist' dev verb; once values
+// are approved these get baked into a texture and the realtime path retired):
+float MistGamma;        // <1 pushes the field toward 1 (denser mist)
+float MistFloor;        // smooth lower clamp — dark pockets lift to this
+float MistKnee;         // transition width of the smooth clamp
+
 // ─── Mist tuning (world-space) ───
 static const float2 MistWindDir      = float2(1.0, 0.35);  // scroll direction (world)
 static const float  MistWindSpeed    = 0.275;              // world units / sec (halved per review — drift, don't race)
@@ -112,6 +118,12 @@ float MistAt(float2 world)
     float n2 = snoise((world + scroll * 1.7 + float2(137.0, 71.0)) * MistOctaveScale.y) * 0.5 + 0.5;
     float n = n1 * MistOctaveWeight.x + n2 * MistOctaveWeight.y;
     n = smoothstep(MistCoverLo, MistCoverHi, n);
+    // Densify: fractional power pulls the field toward 1 (mist was too sparse).
+    n = pow(saturate(n), max(MistGamma, 0.05));
+    // Smooth lower clamp (smooth-max vs MistFloor, knee-wide transition) so
+    // thin-air pockets dim the glow without punching hollow holes in it.
+    float d = n - MistFloor;
+    n = saturate(MistFloor + 0.5 * (d + sqrt(d * d + MistKnee * MistKnee)));
     // Range at MistStrength 1: x0.25 in thin air .. x1.35 in a dense wisp.
     return lerp(1.0 - 0.75 * MistStrength, 1.0 + 0.35 * MistStrength, n);
 }

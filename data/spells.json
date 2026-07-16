@@ -2283,8 +2283,8 @@
       "beamChainDepth": 2,
       "beamChainRange": 16,
       "beamChainWidthDecay": 0.9,
-      "scatterRadius": 1.7,
-      "scatterStrength": 0.75,
+      "scatterRadius": 2.4,
+      "scatterStrength": 1.0,
       "scatterColor": {
         "r": 150,
         "g": 190,
