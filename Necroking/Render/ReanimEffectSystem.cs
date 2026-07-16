@@ -367,6 +367,7 @@ internal class ReanimEffectSystem
                     float scale = (inst.Cfg.LightWorldSize * zoom) / _glow.Width;
                     var origin = new Vector2(_glow.Width * 0.5f, _glow.Height * 0.5f);
                     _batch.Draw(_glow, sp, null, inst.Cfg.LightColor.ToHdrVertex(la), 0f, origin, scale, SpriteEffects.None, 0f);
+                    RegisterScatter(inst, la);
                 }
             }
 
@@ -398,6 +399,23 @@ internal class ReanimEffectSystem
                 }
             }
         }
+    }
+
+    /// <summary>ScatterGlow: the ritual light also lights the surrounding AIR —
+    /// one point emitter per rise, green, breathing with the same LightAlpha
+    /// envelope, so the glow swells with the light and yields to the dark smoke
+    /// as it fades. Called from whichever draw path runs this frame (they are
+    /// mutually exclusive), keeping registration once-per-frame. Strength is
+    /// deliberately modest so the opaque dust reads dark against the lit air
+    /// instead of being washed out.</summary>
+    private static void RegisterScatter(Instance inst, float lightAlpha)
+    {
+        var g = Game1.Instance;
+        if (g == null) return;
+        g._scatterGlow.AddPoint(inst.Ground,
+            inst.Cfg.LightWorldSize * 0.7f * inst.Scale,
+            new Color(inst.Cfg.LightColor.R, inst.Cfg.LightColor.G, inst.Cfg.LightColor.B),
+            0.55f * lightAlpha, height: 0.5f);
     }
 
     // ---- Depth-sorted particle pass (Performance.DepthSortedFog): clouds + dust interleaved ----
@@ -443,6 +461,7 @@ internal class ReanimEffectSystem
                         Origin = new Vector2(_glow.Width * 0.5f, _glow.Height * 0.5f), Scale = lscale, Rot = 0f,
                         Color = inst.Cfg.LightColor.ToHdrVertex(la), Additive = true,
                         SortY = inst.Ground.Y, LayerDepth = FogDepth(inst.Ground.Y) });
+                    RegisterScatter(inst, la);
                 }
             }
 
