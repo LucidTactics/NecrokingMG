@@ -346,6 +346,24 @@ public sealed class EditorLauncherLayer : UILayer
     }
 }
 
+/// <summary>Top-right minimap under the button rows — draw-only (no input yet).
+/// Unlike the button rows it hides outside normal play so it can't cover the
+/// map editor's right-side panels.</summary>
+public sealed class MinimapLayer : UILayer
+{
+    private readonly Game1 _g;
+    public MinimapLayer(Game1 g) { _g = g; Band = UIBand.HudTop; }
+
+    public override string Id => "hud.minimap";
+    public override bool Visible => false; // draw-only
+    public override bool VisibleForDraw => _g._gameWorldLoaded && _g.ShowUIForDraw
+        && _g._menuState == MenuState.None;
+    public override bool ContainsMouse(int mx, int my, in UICtx ctx) => false;
+    public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { }
+
+    public override void Draw(in UICtx ctx) => _g._minimap.Draw(ctx.ScreenW, ctx.ScreenH);
+}
+
 /// <summary>Bottom-right skill-learn toasts — clickable to jump to the relevant
 /// skill-book tab. Toast band: above HudTop, so a toast overlapping the button
 /// rows wins the click, matching its draw position.</summary>

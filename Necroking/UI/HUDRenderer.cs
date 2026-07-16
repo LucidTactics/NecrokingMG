@@ -237,7 +237,7 @@ public partial class HUDRenderer
         if (monsterCap <= 0 && humanCap <= 0) return;
 
         int x = screenW - 110;
-        int y = EditorBtnTop + MenuBtnH + 6; // sit below the core-menu + editor-launcher rows
+        int y = MinimapHUD.Bottom + 6; // sit below the minimap (itself under the button rows)
         const int lineH = 16;
 
         if (humanCap > 0)

@@ -72,6 +72,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal SpriteFont _largeFont;
     internal ShadowRenderer _shadowRenderer = new();
     internal HUDRenderer _hudRenderer = new();
+    internal UI.MinimapHUD _minimap = new();
     internal CharacterStatsUI _characterStatsUI = new();
     internal UI.UnitInfoPanel _unitInfoPanel = new();
     internal UI.GrimoireOverlay _grimoireOverlay = new();
@@ -1084,6 +1085,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 () => ShowUIForDraw && _skillBookOverlay.IsVisible));
         _uiRouter.Register(new Necroking.UI.CoreMenuButtonsLayer(this));
         _uiRouter.Register(new Necroking.UI.EditorLauncherLayer(this));
+        _uiRouter.Register(new Necroking.UI.MinimapLayer(this));
         _uiRouter.Register(new Necroking.UI.SkillToastLayer(this));
 
         // Menus, editors, and the editors' transient sub-popup stack, top bands.
@@ -2539,6 +2541,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _debugDraw.SetFont(_smallFont);
         _hudRenderer.Init(_spriteBatch, _pixel, _font, _smallFont, _widgetRenderer);
         _hudRenderer.SetInput(_input);
+        _minimap.Init(GraphicsDevice, _spriteBatch, _pixel);
         _characterStatsUI.Init(_spriteBatch, _pixel, _font, _smallFont);
         // Note: _uiShaders is initialized later after Content.Load path -- we
         // set it on the panel below after Load completes.
