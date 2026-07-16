@@ -96,7 +96,7 @@ public sealed class PauseMenuScreen
                     _g.OpenSaveMenu();
                     break;
                 case MenuButtonId.LoadGame:
-                    _g._loadMenu.Open();
+                    _g._loadGameWindow.Open();
                     return true;
                 case MenuButtonId.UnitEditor:
                     _g._menuState = MenuState.UnitEditor;

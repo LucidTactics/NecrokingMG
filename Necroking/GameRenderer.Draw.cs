@@ -60,17 +60,6 @@ partial class GameRenderer
             return;
         }
 
-        if (_g._menuState == MenuState.LoadMenu)
-        {
-            _g.GraphicsDevice.Clear(new Color(20, 15, 30));
-            Materials.Hud.Begin(_g._spriteBatch);
-            _g._loadMenu.Draw(screenW, screenH);
-            _g._spriteBatch.End();
-            _g.CompletePendingDevScreenshot();
-            _g.BaseDraw(gameTime);
-            return;
-        }
-
         // Snap camera to pixel grid to prevent subpixel shimmer on ground/sprites
         // X pixel size = 1/Zoom, Y pixel size = 1/(Zoom*YRatio) due to isometric compression.
         // The Hud phase restores the real (smooth) position for input/HUD.

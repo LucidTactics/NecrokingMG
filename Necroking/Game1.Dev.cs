@@ -2346,9 +2346,7 @@ public partial class Game1 {
             return true;
          case "load_menu":
          case "loadmenu":
-            _loadMenuSaves = ListSaveGames();
-            _loadMenuScrollPx = 0f;
-            _menuState = MenuState.LoadMenu;
+            _loadGameWindow.Open();
             return true;
       }
 

@@ -889,9 +889,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     private Vec2? _devWalkTarget;                  // dev "walk_necro" goal; drives WASD-equivalent input, cancelled by any WASD press
     private bool _devWalkSprint;                   // dev "walk_necro" sprint=true opt: hold virtual Shift while auto-walking
     // Menu scroll offsets stay here (dev commands poke them); the scrollbar
-    // drag state lives on the owning ScenarioListScreen / LoadMenuScreen.
+    // drag state lives on the owning ScenarioListScreen.
     internal float _scenarioScrollPx;             // scenario-menu scroll, in pixels (smooth, sub-row)
-    internal float _loadMenuScrollPx;              // load-menu scroll, in pixels (smooth, sub-row)
 
     // --- Tethers / drag ropes (Shift+T target, Shift+R attach) ---
     // A tether connects two endpoints, each a live unit or a corpse. When a unit end is
@@ -950,11 +949,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
     // Full-screen menu screens (UI/*Screen.cs): each owns its layout, drawing
     // and click handling. Drawn from GameRenderer.Draw's early-outs
-    // (main/scenario/load) or MenuHostLayer (pause); updated from the matching
-    // _menuState blocks in Update.
+    // (main/scenario) or MenuHostLayer (pause); updated from the matching
+    // _menuState blocks in Update. (The load menu is a MenuHostLayer-hosted
+    // window now — UI.LoadGameWindow, declared in Game1.Saves.cs.)
     internal readonly UI.MainMenuScreen _mainMenu;
     internal readonly UI.PauseMenuScreen _pauseMenu;
-    internal readonly UI.LoadMenuScreen _loadMenu;
     internal readonly UI.ScenarioListScreen _scenarioList;
 
     public Game1()
@@ -965,7 +964,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _gameRenderer = new GameRenderer(this);
         _mainMenu = new UI.MainMenuScreen(this);
         _pauseMenu = new UI.PauseMenuScreen(this);
-        _loadMenu = new UI.LoadMenuScreen(this);
         _scenarioList = new UI.ScenarioListScreen(this);
 
         // Editors read mouse state live through the shared InputState (see
@@ -2733,6 +2731,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         _saveGameWindow = new SaveGameWindow(_editorUi);
         _saveGameWindow.SetCallbacks(ListSaveGames, UniqueSaveName, SaveFileExists, WriteSaveGame, DeleteSaveGame, SanitizeSaveName);
+        _loadGameWindow = new UI.LoadGameWindow(_editorUi);
 
         _settingsWindow = new SettingsWindow(_editorUi);
         System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.UserSettingsDir));
@@ -3079,7 +3078,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // --- Full-screen menus (each screen owns its layout/draw/input —
-        // UI/MainMenuScreen.cs, UI/ScenarioListScreen.cs, UI/LoadMenuScreen.cs) ---
+        // UI/MainMenuScreen.cs, UI/ScenarioListScreen.cs) ---
         if (_menuState == MenuState.MainMenu)
         {
             _mainMenu.Update();
@@ -3092,15 +3091,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (_menuState == MenuState.ScenarioList)
         {
             _scenarioList.Update();
-            _prevKb = kb;
-            _prevMouse = mouse;
-            base.Update(gameTime);
-            return;
-        }
-
-        if (_menuState == MenuState.LoadMenu)
-        {
-            _loadMenu.Update();
             _prevKb = kb;
             _prevMouse = mouse;
             base.Update(gameTime);
@@ -3306,6 +3296,26 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _menuState = MenuState.PauseMenu;
         }
 
+        // --- Load-game window close handling (Back button; reachable from both
+        // root menus, so return via _backMenuState like the settings window) ---
+        if (_menuState == MenuState.LoadMenu && _loadGameWindow.WantsClose)
+        {
+            _loadGameWindow.WantsClose = false;
+            _editorUi.ResetAllState();
+            _menuState = _backMenuState;
+        }
+
+        // --- Load-game window row click: the click lands during the Hud render
+        // pass (immediate-mode), where rebuilding the world isn't safe — run the
+        // actual load here. On success LoadSaveGame switches _menuState to None;
+        // on a validation failure (logged) we stay on the window.
+        if (_menuState == MenuState.LoadMenu && _loadGameWindow.PendingLoad is string pendingLoad)
+        {
+            _loadGameWindow.PendingLoad = null;
+            _editorUi.ResetAllState();
+            LoadSaveGame(pendingLoad);
+        }
+
         // --- ESC: gameplay → pause menu only ---
         // (The "ESC with nothing open → pause menu" fallback now lives AFTER
         // the router dispatch below, since panels/editors/popups consume ESC
@@ -3346,7 +3356,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // (which consume MouseOverUI and OverGameplayHud).
         RebuildUIHitRects(screenW, screenH);
 
-        if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor || _menuState == MenuState.MapEditor || _menuState == MenuState.Settings || _menuState == MenuState.Multiplayer || _menuState == MenuState.ItemEditor || _menuState == MenuState.SaveMenu)
+        if (_menuState == MenuState.UnitEditor || _menuState == MenuState.SpellEditor || _menuState == MenuState.MapEditor || _menuState == MenuState.Settings || _menuState == MenuState.Multiplayer || _menuState == MenuState.ItemEditor || _menuState == MenuState.SaveMenu || _menuState == MenuState.LoadMenu)
         {
             _editorUi.UpdateInput(mouse, _prevMouse, kb, _prevKb, screenW, screenH, gameTime, _input);
         }

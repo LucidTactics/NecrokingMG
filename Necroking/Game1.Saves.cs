@@ -19,9 +19,10 @@ public partial class Game1
     /// <summary>Map name passed to the current StartGame — what a save records.</summary>
     internal string _currentMapName = "default";
     internal UI.SaveGameWindow _saveGameWindow = null!;
+    internal UI.LoadGameWindow _loadGameWindow = null!;
 
-    // Load-menu (main-menu family) state: list refreshed when the menu opens.
-    // Internal — GameRenderer.Hud.cs reads it to draw the rows.
+    // Main-menu save list: refreshed on entering the main menu, read by its
+    // Continue button. (The load window keeps its own list, refreshed in Open.)
     internal List<SaveGameInfo> _loadMenuSaves = new();
 
     /// <summary>The single pathing choke point for save files. A future move to a

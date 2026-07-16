@@ -26,7 +26,7 @@ internal struct MenuButton
 }
 
 /// <summary>Shared drawing vocabulary of the full-screen menu family
-/// (MainMenuScreen, PauseMenuScreen, LoadMenuScreen, ScenarioListScreen — plus
+/// (MainMenuScreen, PauseMenuScreen, ScenarioListScreen — plus
 /// GameRenderer.DrawSaveGameText, which reuses the button-text style): the menu
 /// button, backdrop, panel and scrollbar. One canonical implementation — the
 /// screens differ only in layout, not look.</summary>

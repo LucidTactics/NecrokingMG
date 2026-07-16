@@ -74,7 +74,7 @@ public sealed class MainMenuScreen
                     _g._scenarioScrollPx = 0f;
                     return;
                 case MenuButtonId.LoadGame:
-                    _g._loadMenu.Open();
+                    _g._loadGameWindow.Open();
                     return;
                 case MenuButtonId.Settings:
                     _g._menuState = MenuState.Settings;
