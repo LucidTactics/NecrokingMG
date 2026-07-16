@@ -356,8 +356,7 @@ public sealed class MinimapLayer : UILayer
 
     public override string Id => "hud.minimap";
     public override bool Visible => false; // draw-only
-    public override bool VisibleForDraw => _g._gameWorldLoaded && _g.ShowUIForDraw
-        && _g._menuState == MenuState.None;
+    public override bool VisibleForDraw => _g._gameWorldLoaded && _g.ShowUIForDraw;
     public override bool ContainsMouse(int mx, int my, in UICtx ctx) => false;
     public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { }
 

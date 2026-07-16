@@ -289,8 +289,8 @@ partial class GameRenderer
             // Fog of war overlay (after bloom, before HUD).
             // Skip entirely when Off or when any editor is open.
             bool fogActive = (FogOfWarMode)_g._gameData.Settings.FogOfWar.Mode != FogOfWarMode.Off;
-            bool editorOpen = _g._menuState != MenuState.None && _g._menuState != MenuState.MainMenu;
-            if (fogActive && !editorOpen)
+            bool mapEditorOpen = _g._menuState == MenuState.MapEditor;
+            if (fogActive && !mapEditorOpen)
             {
                 // Draw fog overlay (RTs already updated before bloom pass)
                 _g._fogOfWar.Draw(_g._spriteBatch, _g._camera, _g._renderer, ctx.ScreenW, ctx.ScreenH, _g._gameData.Settings.FogOfWar);
