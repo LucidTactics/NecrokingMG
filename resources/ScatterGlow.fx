@@ -128,6 +128,12 @@ float MistAt(float2 world)
     return lerp(1.0 - 0.75 * MistStrength, 1.0 + 0.35 * MistStrength, n);
 }
 
+// Beam sheaths only partially follow the mist: the air hugging a lightning
+// channel glows mostly by direct emission (uniform along the bolt), with mist
+// scatter as a secondary term. Full-depth mist inside a ~1-lump-wide tube read
+// as periodic bright beads (review find); 0.35 keeps it breathing, not beading.
+static const float BeamMistDepth = 0.35;
+
 // Halo: soft radial falloff x mist x density. Output stays LDR-ish (below the
 // bloom-extract knee) so the halo adds light IN the scene instead of being
 // re-amplified by bloom. Additive One/One blend; alpha out = 0 keeps RT alpha clean.
@@ -139,6 +145,17 @@ float4 PixelHalo(VSOutput input) : COLOR0
     // polyline splats blend into one tube instead of beading).
     float falloff = baseFall * baseFall * (1.0 + 0.5 * baseFall * baseFall * baseFall);
     float mist = MistAt(input.WorldPos);
+    float3 rgb = input.Color.rgb * (input.Color.a * falloff * mist * Density);
+    return float4(rgb, 0.0);
+}
+
+// Beam-sheath halo: same radial splat as PixelHalo, mist depth reduced.
+float4 PixelHaloBeam(VSOutput input) : COLOR0
+{
+    float d = length(input.TexCoord);
+    float baseFall = saturate(1.0 - d);
+    float falloff = baseFall * baseFall * (1.0 + 0.5 * baseFall * baseFall * baseFall);
+    float mist = lerp(1.0, MistAt(input.WorldPos), BeamMistDepth);
     float3 rgb = input.Color.rgb * (input.Color.a * falloff * mist * Density);
     return float4(rgb, 0.0);
 }
@@ -159,6 +176,15 @@ technique ScatterHalo
     {
         VertexShader = compile VS_SHADERMODEL VertexShaderFunction();
         PixelShader = compile PS_SHADERMODEL PixelHalo();
+    }
+}
+
+technique ScatterHaloBeam
+{
+    pass Pass1
+    {
+        VertexShader = compile VS_SHADERMODEL VertexShaderFunction();
+        PixelShader = compile PS_SHADERMODEL PixelHaloBeam();
     }
 }
 

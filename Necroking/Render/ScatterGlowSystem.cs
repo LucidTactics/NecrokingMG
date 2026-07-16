@@ -56,6 +56,7 @@ public sealed class ScatterGlowSystem
         public Color Rgb;        // straight color, A ignored
         public float Strength;   // 0..1, folded into vertex alpha
         public float Depth;      // FogDepthForY value for the DepthRead test
+        public bool BeamMist;    // true = reduced-mist beam-sheath technique
     }
     private readonly List<Halo> _halos = new(64);
 
@@ -83,6 +84,7 @@ public sealed class ScatterGlowSystem
 
     // ─── Draw scratch ───
     private readonly List<VertexPositionColorTexture> _haloVerts = new(256);
+    private readonly List<VertexPositionColorTexture> _beamVerts = new(256);
     private readonly List<VertexPositionColorTexture> _solidVerts = new(16);
     private VertexPositionColorTexture[] _flushScratch = new VertexPositionColorTexture[256];
     private float _time;
@@ -137,13 +139,15 @@ public sealed class ScatterGlowSystem
             GameRenderer.FogDepthForY(worldPos.Y, cam.Position.Y));
     }
 
-    private void AddScreenHalo(Vector2 screenPos, float radiusPx, Color rgb, float strength, float depth)
+    private void AddScreenHalo(Vector2 screenPos, float radiusPx, Color rgb, float strength,
+        float depth, bool beamMist = false)
     {
         if (_halos.Count >= MaxHalosPerFrame) { _droppedThisFrame++; return; }
         _halos.Add(new Halo
         {
             ScreenPos = screenPos, RadiusPx = radiusPx, Rgb = rgb,
             Strength = MathHelper.Clamp(strength, 0f, 1f), Depth = depth,
+            BeamMist = beamMist,
         });
     }
 
@@ -233,7 +237,8 @@ public sealed class ScatterGlowSystem
                 float frac = (arc + t) / totalLen;
                 float depth = GameRenderer.FogDepthForY(
                     MathHelper.Lerp(worldYStart, worldYEnd, frac), camY);
-                AddScreenHalo(a + (b - a) * (t / segLen), radiusPx, rgb, splatStrength, depth);
+                AddScreenHalo(a + (b - a) * (t / segLen), radiusPx, rgb, splatStrength, depth,
+                    beamMist: true);
                 t += spacingPx;
             }
             carry = t - segLen;
@@ -305,6 +310,7 @@ public sealed class ScatterGlowSystem
         float camY = cam.Position.Y;
         _haloVerts.Clear();
         _solidVerts.Clear();
+        _beamVerts.Clear();
 
         for (int i = 0; i < _shapes.Count; i++)
             BuildShapeEmission(_shapes[i], ctx);
@@ -318,11 +324,14 @@ public sealed class ScatterGlowSystem
                 continue;
             var col = new Color(h.Rgb.R, h.Rgb.G, h.Rgb.B,
                 (byte)Math.Clamp((int)(h.Strength * 255f + 0.5f), 0, 255));
-            AddQuad(_haloVerts, sp, rPx, rPx, 0f, h.Depth, col, uvExtent: 1f);
+            AddQuad(h.BeamMist ? _beamVerts : _haloVerts, sp, rPx, rPx, 0f, h.Depth, col, uvExtent: 1f);
         }
         _halos.Clear();
 
-        if (_haloVerts.Count == 0 && _solidVerts.Count == 0) return;
+        // NOTE: every vert list must appear in this guard — a missing one means
+        // "that emitter type only renders when another type is also on screen"
+        // (bit us twice: first ribbons, then beam splats).
+        if (_haloVerts.Count == 0 && _solidVerts.Count == 0 && _beamVerts.Count == 0) return;
 
         var device = ctx.Device;
         var vp = device.Viewport;
@@ -354,6 +363,7 @@ public sealed class ScatterGlowSystem
 
         FlushList(device, _solidVerts, "ScatterSolid");
         FlushList(device, _haloVerts, "ScatterHalo");
+        FlushList(device, _beamVerts, "ScatterHaloBeam");
     }
 
     private void FlushList(GraphicsDevice device, List<VertexPositionColorTexture> verts, string technique)
