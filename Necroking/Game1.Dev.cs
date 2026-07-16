@@ -2429,10 +2429,8 @@ public partial class Game1 {
          case "crafting_menu":
          case "craftingmenu":
             if (action == "close") _craftingMenu.Close();
-            else if (action == "toggle" || !_craftingMenu.IsVisible) {
-               if (!_craftingMenu.IsVisible) CloseSameSidePanels(PanelSide.Left, _craftingMenu);
-               _craftingMenu.Toggle(sw, sh);
-            }
+            else if (action == "toggle" || !_craftingMenu.IsVisible)
+               ToggleCraftingMenu(sw, sh);
             return $"crafting_menu visible={_craftingMenu.IsVisible}";
 
          case "character_sheet":

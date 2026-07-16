@@ -148,6 +148,15 @@ public class InventoryUI : IModalLayer
         CenterOnScreen(screenW, screenH);
     }
 
+    /// <summary>Open at an explicit screen position (e.g. docked beside the
+    /// crafting menu) instead of centered.</summary>
+    public void OpenAt(int x, int y)
+    {
+        _visible = true;
+        _screenX = x;
+        _screenY = y;
+    }
+
     public void Close()
     {
         _visible = false;

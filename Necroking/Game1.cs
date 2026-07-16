@@ -461,6 +461,22 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         }
     }
 
+    /// <summary>Toggle the crafting menu — the single path behind the C key, the
+    /// HUD menu button, and the dev verb. Opening it also opens the inventory
+    /// docked at the craft menu's top-right edge (instead of centered) so the
+    /// player sees their materials while crafting.</summary>
+    internal void ToggleCraftingMenu(int screenW, int screenH)
+    {
+        EnsureInventoryUIsInitialized();
+        if (!_craftingMenu.IsVisible) CloseSameSidePanels(PanelSide.Left, _craftingMenu);
+        _craftingMenu.Toggle(screenW, screenH);
+        if (_craftingMenu.IsVisible)
+        {
+            var r = _craftingMenu.HitBounds(screenW, screenH);
+            if (r.HasValue) _inventoryUI.OpenAt(r.Value.Right + 8, r.Value.Y);
+        }
+    }
+
     private bool _uiEditorInitialized;
     /// <summary>Deferred init for the UI editor (F12 / menu). LoadDefinitions bakes
     /// every harmonized widget/element texture (~4s of CPU work) — a dev-only tool
@@ -3703,11 +3719,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
             // --- Crafting menu toggle (C) ---
             if (_input.WasKeyPressed(Keys.C))
-            {
-                EnsureInventoryUIsInitialized();
-                if (!_craftingMenu.IsVisible) CloseSameSidePanels(PanelSide.Left, _craftingMenu);
-                _craftingMenu.Toggle(screenW, screenH);
-            }
+                ToggleCraftingMenu(screenW, screenH);
 
             // (World mouse clicks — placement, building panels, pile gather,
             // foraging — are handled by WorldLayer in the router dispatch above;
