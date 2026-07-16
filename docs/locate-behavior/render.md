@@ -82,6 +82,47 @@ dissolve, morph, outlines, glyphs) or `scope.Suspend()/Resume()` for raw-device 
   `Data/Enums.cs`), view-cull it, and make `UpdateOcclusionFade` early-out on first
   overlapping box — mind the O(objects×hordeUnits) cost (see Pitfalls in answer).
 
+### Where a new full-res DepthRead additive pass goes (post-occluder, pre-bloom)
+The seam for any effect that must depth-test against the unit silhouette stamps AND land
+in the HDR scene RT before bloom extract: **inside the Scene phase, after the
+`FogDepthOccluders` CustomPass, before `scene.OnEnd` (bloom `EndScene`)**. Two mechanisms,
+both live in `GameRenderer.Pipeline.cs`:
+1. **Submit into the existing `HdrEffects` SpriteQueuePass** (`CollectFxItems`) — the
+   preferred route. Precedents: `GroundFogSystem.CollectWisps` submits per-wisp
+   `SubmitSprite(WorldLayer.FogWisps, …, Materials.FogWisp, layerDepth:
+   GameRenderer.FogDepthForY(sortY, camY))`; reanim's depth-tested particles ride the
+   `_cbFxReanim` callback (`WorldLayer.EffectsHdrAdditive`) which `s.Suspend()`s the batch
+   and calls `ReanimEffectSystem.DrawSortedParticles` (own batches). A DepthRead material
+   MUST set `layerDepth` via `FogDepthForY(worldY, cameraY)` or the depth test against the
+   stamps is garbage (stamps map larger Y → smaller depth).
+2. **A new `scene.Add(new CustomPass(...))` between `FogDepthOccluders` and `_fxPass`**
+   (or after it, before `LightningTris`) — for imperative work that owns its device state.
+Materials: `Materials.FogWisp` = AlphaBlend + **DepthStencilState.DepthRead**;
+`Materials.HdrAdditive` = Additive but NO DepthRead — an additive+DepthRead effect needs a
+new `Materials.Register(name, effect, BlendState.Additive, LinearClamp,
+DepthStencilState.DepthRead, RasterizerState.CullNone)` entry in `Render/Material.cs`.
+Gotcha: the occluder stamps only exist when `Performance.DepthSortedFog` OR
+`_groundFog.HasActiveBanks` — a new depth-testing consumer must OR its own "is active"
+flag into the `FogDepthOccluders` gate.
+
+### Adding a new .fx shader (the load chain)
+1. Write `resources/YourShader.fx` (pixel-shader-only — SpriteBatch's built-in VS;
+   MGFX-on-GL defaults every uniform to 0, set them all each draw —
+   `memory/mgfx_shader_gotchas.md`).
+2. Register it in `resources/Content.mgcb` (`#begin YourShader.fx` … `/build:YourShader.fx`
+   block, copy an existing one). `dotnet build` compiles it — the csproj has
+   `<MonoGameContentReference Include="..\resources\Content.mgcb" />`.
+3. Load in `Game1.LoadContent` (`Game1.cs` ~ln 2590-2640):
+   `Content.Load<Effect>("YourShader")` in a try/catch that null-fallbacks + logs to
+   `DebugLog.Log("startup", …)` — every shader consumer must survive a null effect.
+4. Bind: either `Materials.Register(...)` (batch material) or pass the Effect into a
+   renderer's `LoadEffect(...)` (WeatherRenderer/MagicGlyphRenderer pattern).
+Shared textures: `TextureUtil.GetRadialGlow(device, size=64)` = THE cached soft radial
+glow (`Game1._glowTex`, shared by weather/lightning/poison/glyph renderers — never dispose
+it). There is **no noise texture** — fog noise is procedural in-shader simplex
+(`WeatherFog.fx` `snoise`, world-anchored via `worldPos * FogUvScale + scroll`); copy that
+block for any world-anchored scrolling noise.
+
 ### Batch-state rules (post-redesign)
 - `EffectBatch` is now a thin shim (`BeginScenePass`/`BeginHudPass` delegate to
   `Materials.Scene/Hud`); its suspend/resume helpers are **deleted**. Never hand-roll
