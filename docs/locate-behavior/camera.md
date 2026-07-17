@@ -89,6 +89,18 @@
   `Editor/MapEditorWindow.cs`.
 - Map editor gizmos: `Editor/MapEditorWindow.cs` — region/zone circles ×Zoom, drag-handle
   tolerance `8 / Zoom` (constant screen px), camera pan speed clamped `∝ 1/Zoom`.
+  - **Map-editor WASD pan** lives in `MapEditorWindow.Update` ("M16: Smooth WASD camera"
+    block, gated on `CameraInputEnabled`): W/A/S/D add `CamAcceleration`(100, ×5 on Shift)
+    to velocity fields `_camVelX`/`_camVelY` (world u/s) each frame at a fixed `dt=1/60`
+    (real-time, NOT world-clock — pans while the editor freezes the world), exp friction
+    `CamFriction`(8), then **the existing inverse-zoom clamp `camMaxSpeed = CamBaseSpeed(30)
+    / _camera.Zoom * 100f`** (RM36) before `_camera.Position += vel*dt`. That clamp already
+    makes terminal world-space pan speed `∝ 1/Zoom` (= constant on-SCREEN speed: slower in
+    world units zoomed in, faster zoomed out); the *acceleration* is still constant across
+    zoom. To reference it to a "default game zoom" scale `cam_accel` (and/or the clamp) by
+    `refZoom / Zoom`. `_camera` here is a property forwarding to `_game._camera` — the SAME
+    `Camera25D` gameplay uses; only this pan CODE is editor-specific (gameplay pan/follow is
+    in `Game1.cs` Update).
 - Table-craft world menu: `UI/TableCraftMenuUI.cs` — `_uiScale = Zoom / BaseZoom(32)` so
   the whole panel scales like an in-world object (the world-anchored-UI precedent).
 - Debug overlays: `Render/DebugDraw.cs` (tiles ×Zoom, labels only when `Zoom >= 8`),
