@@ -123,12 +123,25 @@ per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, pr
   potion payload). `ProjectileType` is behavior-named: **`RegularHit`** strikes the first unit
   it touches along its flight path (arrows, magic darts), **`Explosive`** bursts on
   proximity/ground with AoE, **`Potion`** delivers a potion payload to the closest
-  unit/corpse. `lob:false` = near-flat 5° direct shot; `lob:true` = ballistic arc solved
-  from `dist*Gravity/speed²`. A **RegularHit lob** (arrow volley) also gets precision-scaled
-  scatter + a 10°–45° arc clamp; an Explosive/Potion lob flies the exact min-energy arc
-  (or the mortar-style high arc with `preferHighArc`, spell `Trajectory` `"HighLob"`).
-  `NoFriendlyFire` derives from type (RegularHit respects factions; Explosive/Potion hit
-  everyone). Arc choice is made by the CALLER (`Simulation.FireArrowAt` uses
+  unit/corpse. **`lob` vs direct:** BOTH now solve the launch angle from the aim distance
+  via `SolveLobTheta` (θ = ½·asin(dist·g/v²)) — `lob:false` ("direct fire") = the exact
+  min-energy arc to the aim point, NO scatter; `lob:true` adds precision-scaled scatter
+  around the target and (RegularHit only) a 10°–45° arc clamp; `preferHighArc` (spell
+  `Trajectory` `"HighLob"`) takes the mirrored mortar arc. **`DirectFireTheta` (5°) is DEAD
+  in the sim** — its only remaining consumers are `Editor/SpellPreview.cs` arcs, so the
+  editor preview diverges from actual direct-fire flight. Consequence: a direct shot aimed
+  PAST a unit rises on a taller arc and can exceed the in-flight hit window (below) over
+  the unit's head; aimed short, it grounds before reaching it.
+  `NoFriendlyFire` (public field on `Projectile`, settable post-spawn) is defaulted by
+  `Spawn` to `type == RegularHit` (RegularHit skips the owner's faction via
+  `FactionMaskExt.AllExcept(OwnerFaction)`; Explosive/Potion hit everyone). It gates
+  **every** unit query on the projectile: RegularHit in-flight collision, Explosive
+  proximity-trigger AND ground-burst AoE, RegularHit ground-hit pick — one flag, all phases.
+  **In-flight unit collision has NO per-unit hitbox height**: RegularHit hits only while
+  `0 < Height < UnitHitHeight` (const 2.0), 2D quadtree query at `HitRadius` 0.6, point
+  test per frame (no segment sweep). Explosive proximity triggers below
+  `ExplosiveHitHeight` 5.0 after `ExplosiveArmTime`. Arc choice is made by the CALLER
+  (`Simulation.FireArrowAt` uses
   `lob = !(dist <= directRange && IsFireLaneClear)`). `spawnHeight` should be the
   attacker's `Unit.EffectSpawnHeight` (bow-tip anim point). `DetonateAtTarget` bursts
   exactly at the aimed point instead of overshooting.
@@ -175,16 +188,15 @@ per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, pr
   ballistics in `ProjectileManager.Update`: `Position += Velocity*dt; Height += VelocityZ*dt;
   VelocityZ -= Gravity*dt` (Gravity=13.89, MagicSpeed=28.29, ArrowSpeed=23.58 consts at top
   of `Projectile.cs`). A projectile dies by (a) in-flight unit collision, (b)
-  `DetonateAtTarget` overshoot check (set ONLY for `spell.Category == "Blight"` in
-  `SpawnProjectile`), (c) **ground impact** (`Height <= 0 && VelocityZ < 0` — detonates
-  wherever the arc lands), or (d) `MaxAge = 10s`. **Trap:** the non-Lob trajectories
-  (`Trajectory.DirectFire/Swirly/Homing/HomingSwirly` in `SpellEffectSystem.SpawnProjectile`)
-  all launch at a fixed 5° and still take full gravity, so their max flat-ground travel is
-  ≈ `speed²·sin(10°)/Gravity` + spawn-height bonus — ~19–20u at speed 28.3. Raising a
-  spell's `range` past that makes the cast legal but the projectile lands/detonates midway.
-  Only `Lob`/`HighLob` (`Lob` is the trajectory default) solve the launch angle from the
-  actual distance (`asin(dist·Gravity/speed²)`, silently clamped when
-  `dist > speed²/Gravity`; `HighLob` takes the mirrored high arc).
+  `DetonateAtTarget` overshoot check (set for `spell.Category == "Blight"` OR the
+  `SpellDef.DetonateAtTarget` opt-in field, in `SpawnProjectile`), (c) **ground impact**
+  (`Height <= 0 && VelocityZ < 0` — detonates wherever the arc lands), or (d)
+  `MaxAge = 10s`. ALL trajectories (incl. `Trajectory.DirectFire/Swirly/Homing/HomingSwirly`
+  in `SpellEffectSystem.SpawnProjectile`) now solve the launch angle from the aim distance
+  via `SolveLobTheta` (`½·asin(dist·Gravity/speed²)`, silently clamped when
+  `dist > speed²/Gravity` — past that the shot still lands short; `HighLob` takes the
+  mirrored high arc; `Lob` is the trajectory default). The old fixed-5° direct launch (and
+  its ~19–20u max-travel trap) is GONE from the sim.
 - **Spell-projectile spawn/config chokepoint**: `SpellEffectSystem.SpawnProjectile(spell,
   projectiles, origin, target, ownerUid, spawnHeight, casterFaction)` — calls
   `ProjectileManager.Spawn` (Explosive when `AoeRadius > 0`, else RegularHit) and
