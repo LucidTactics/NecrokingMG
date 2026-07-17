@@ -135,7 +135,9 @@ public class MinimapHUD
         if (_terrainTex == null) return;
 
         var rect = Bounds(screenW);
-        FillRect(new Rectangle(rect.X - 2, rect.Y - 2, rect.Width + 4, rect.Height + 4), BorderColor);
+        // This is premultiplied for some reason!!
+        FillRect(new Rectangle(rect.X - 2, rect.Y - 2, rect.Width + 4, rect.Height + 4), new(80, 80, 70, 80));
+        FillRect(new Rectangle(rect.X - 1, rect.Y - 1, rect.Width + 2, rect.Height + 2), BorderColor);
         _batch.Draw(_terrainTex, rect, Color.White);
 
         // Fog over terrain, markers over fog: buildings stay full-bright inside
