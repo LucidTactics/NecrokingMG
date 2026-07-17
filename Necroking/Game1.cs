@@ -1270,6 +1270,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             new AI.CombatUnitHandler(AI.ArchetypeRegistry.GuardStationary));
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.ArmyUnit, "ArmyUnit",
             new AI.CombatUnitHandler(AI.ArchetypeRegistry.ArmyUnit));
+        AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.WildUndead, "WildUndead",
+            new AI.CombatUnitHandler(AI.ArchetypeRegistry.WildUndead));
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.ArcherUnit, "ArcherUnit",
             new AI.RangedUnitHandler(AI.ArchetypeRegistry.ArcherUnit));
         AI.ArchetypeRegistry.Register(AI.ArchetypeRegistry.CasterUnit, "CasterUnit",
@@ -1644,6 +1646,24 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     _sim.UnitsMut[lastIdx].Routine = 0;
                     _sim.UnitsMut[lastIdx].Subroutine = 0;
                     break;
+                }
+            }
+            // Map-placed units never start in the player's horde. SpawnUnit
+            // (archetype-less defs) or HordeMinionHandler.OnSpawn (HordeMinion
+            // defs) just auto-enrolled them — undo that, and hand undead the
+            // WildUndead sentry brain (idle-roam near spawn, awareness aggro,
+            // no dependence on the necromancer). They enroll when the
+            // necromancer walks up — see AI.WildUndeadJoinAI. Also covers the
+            // pu.Faction override: a unit re-factioned away from Undead must
+            // not linger in the membership list either.
+            if (_sim.Units[lastIdx].AI != AIBehavior.PlayerControlled)
+            {
+                _sim.Horde.RemoveUnit(_sim.Units[lastIdx].Id);
+                if (_sim.Units[lastIdx].Faction == Faction.Undead
+                    && (_sim.Units[lastIdx].Archetype == AI.ArchetypeRegistry.None
+                        || _sim.Units[lastIdx].Archetype == AI.ArchetypeRegistry.HordeMinion))
+                {
+                    MakeUnitWild(lastIdx);
                 }
             }
             // Editor-placed corpse: spawn the unit (so it resolves its def/sprite/scale),
@@ -2288,6 +2308,21 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _unitAnims[_sim.Units[idx].Id] = anim.Value;
 
         return idx;
+    }
+
+    /// <summary>Convert a just-spawned undead unit into a WILD undead: out of the
+    /// horde, WildUndead sentry brain, idle-roam anchor at its current position.
+    /// Used by the map-placed-unit loader and the spawn_wild dev command; the
+    /// reverse conversion is Simulation.EnrollInHorde (via AI.WildUndeadJoinAI).</summary>
+    internal void MakeUnitWild(int idx)
+    {
+        _sim.Horde.RemoveUnit(_sim.Units[idx].Id);
+        _sim.UnitsMut[idx].Archetype = AI.ArchetypeRegistry.WildUndead;
+        _sim.UnitsMut[idx].Routine = 0;
+        _sim.UnitsMut[idx].Subroutine = 0;
+        // CombatUnitHandler.OnSpawn never ran for this unit — stamp the
+        // idle-roam/return anchor it would have set.
+        _sim.UnitsMut[idx].SpawnPosition = _sim.Units[idx].Position;
     }
 
     protected override void LoadContent()

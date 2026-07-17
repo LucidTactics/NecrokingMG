@@ -663,6 +663,11 @@ public class Simulation
         _pendingAISpellCasts.Clear();
         PhaseStart(); UpdateAI(dt); PhaseEnd("ai");
 
+        // Wild map-placed undead join the horde when the necromancer walks up.
+        // Runs after the archetype pass so the Interrupt + brain swap never
+        // fights the handler that drove the unit this frame.
+        PhaseStart(); AI.WildUndeadJoinAI.Update(this, dt); PhaseEnd("wild_join");
+
         // Zombie boars peel off the horde to eat nearby mushrooms. Runs after the
         // archetype AI pass (so it can override the follow velocity) and before
         // UpdateMovement (so the override steers the boar this frame).
@@ -4103,20 +4108,36 @@ public class Simulation
     {
         int idx = SpawnUnitByID(unitID, pos);
         if (idx < 0) return idx;
+        EnrollInHorde(idx);
+        return idx;
+    }
 
+    /// <summary>
+    /// Canonical "make this existing unit a horde member": Undead faction, def
+    /// archetype (HordeMinion fallback), Following routine, horde enrollment.
+    /// Shared by <see cref="SpawnZombieMinion"/> (fresh spawns) and
+    /// <see cref="AI.WildUndeadJoinAI"/> (live wild→minion conversions — those
+    /// callers AIControl.Interrupt first so no combat pin survives the brain swap).
+    /// </summary>
+    public void EnrollInHorde(int idx)
+    {
         _units[idx].Faction = Faction.Undead;
 
         // Resolve the def's archetype (HordeMinion for deer/wolf/bear zombies),
         // falling back to HordeMinion for any undead def that didn't specify one.
+        // A def-authored WildUndead archetype must not survive enrollment — the
+        // whole point of joining is that the unit stops being wild.
         byte arch = AI.ArchetypeRegistry.HordeMinion;
-        var def = _gameData.Units.Get(unitID);
+        var def = _gameData?.Units.Get(_units[idx].UnitDefID);
         if (def != null && !string.IsNullOrEmpty(def.Archetype))
         {
             byte resolved = AI.ArchetypeRegistry.FromName(def.Archetype);
-            if (resolved != AI.ArchetypeRegistry.None) arch = resolved;
+            if (resolved != AI.ArchetypeRegistry.None && resolved != AI.ArchetypeRegistry.WildUndead)
+                arch = resolved;
         }
         _units[idx].Archetype = arch;
-        _units[idx].Routine = AI.HordeMinionHandler.RoutineFollowing; // fresh-spawn init
+        _units[idx].Routine = AI.HordeMinionHandler.RoutineFollowing;
+        _units[idx].Subroutine = 0;
 
         // Cap-count safeguard. The horde count isn't an incremented counter — it's
         // derived live by HordeCapTracker, which counts undead units whose def
@@ -4128,11 +4149,10 @@ public class Simulation
         // it's caught at author time instead of discovered in-game.
         if (def != null && def.UndeadCategory == Data.Registries.UndeadCategory.None)
             DebugLog.Log("horde",
-                $"[SpawnZombieMinion] '{unitID}' raised into the horde with undeadCategory=None — " +
+                $"[EnrollInHorde] '{_units[idx].UnitDefID}' enrolled in the horde with undeadCategory=None — " +
                 "it will NOT count toward any cap. Set undeadCategory (Monster/Human) on its def.");
 
         _horde.AddUnit(_units[idx].Id);
-        return idx;
     }
 
     /// <summary>

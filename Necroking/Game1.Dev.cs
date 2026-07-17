@@ -808,6 +808,29 @@ public partial class Game1 {
                break;
             }
 
+            // Spawn an undead def as a WILD undead (WildUndead archetype, not in the
+            // horde) — same conversion the map-placed-unit loader applies, for testing
+            // the wild→join flow without editing a map: spawn_wild <unitID> <x> <y>
+            case "spawn_wild": {
+               if (c.Args.Length < 3) {
+                  c.Complete(Necroking.Dev.DevServer.Error("spawn_wild needs: <unitID> <x> <y>"));
+                  break;
+               }
+               if (_gameData.Units.Get(c.Args[0]) == null) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"unknown unit def: {c.Args[0]}"));
+                  break;
+               }
+               int wIdx = SpawnUnit(c.Args[0], new Vec2(DevFloat(c.Args[1]), DevFloat(c.Args[2])));
+               if (wIdx < 0 || _sim.Units[wIdx].Faction != Faction.Undead) {
+                  c.Complete(Necroking.Dev.DevServer.Error("spawn failed or def is not undead"));
+                  break;
+               }
+               MakeUnitWild(wIdx);
+               c.Complete(Necroking.Dev.DevServer.OkRaw(
+                  $"{{\"def\":{System.Text.Json.JsonSerializer.Serialize(c.Args[0])},\"index\":{wIdx},\"id\":{_sim.Units[wIdx].Id}}}"));
+               break;
+            }
+
             // Add a runtime map zone with one spawn-table entry, for driving the periodic
             // zone spawn system without editor mouse work:
             // zone_add <kind> <x> <y> <halfW> <halfH> [defId] [perMinute] [maxAlive]
@@ -2329,6 +2352,7 @@ public partial class Game1 {
                   // spawning & world objects
                   "spawn <type> <x> <y>", "spawn_def <unitID> <x> <y> [count]",
                   "spawn_horde <unitID> <x> <y> [count]",
+                  "spawn_wild <unitID> <x> <y>",
                   "place_obj <defId> <x> <y> [scale]",
                   "procgen_paint <styleName> <x> <y> [seconds]",
                   // unit manipulation

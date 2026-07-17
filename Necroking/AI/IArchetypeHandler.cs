@@ -96,6 +96,7 @@ public static class ArchetypeRegistry
         "Watchdog" => Watchdog,
         "SoloPredator" => SoloPredator,
         "AmbushPredator" => AmbushPredator,
+        "WildUndead" => WildUndead,
         _ => None,
     };
 
@@ -119,4 +120,8 @@ public static class ArchetypeRegistry
     public const byte SoloPredator = 15;
     /// <summary>SoloPredator that waits for the target to face away before committing (bears).</summary>
     public const byte AmbushPredator = 16;
+    /// <summary>Undead not (yet) in the player's horde — idle-roams near spawn and fights
+    /// through the sentry ladder, no dependence on the necromancer existing. Joins the
+    /// horde when the necromancer walks up (see <see cref="WildUndeadJoinAI"/>).</summary>
+    public const byte WildUndead = 17;
 }

@@ -209,6 +209,8 @@ public class FogOfWarSystem
             {
                 var unit = units[i];
                 if (!unit.Alive || unit.Faction != Faction.Undead) continue;
+                // Wild undead aren't the player's units (yet) — no sight grant.
+                if (unit.Archetype == AI.ArchetypeRegistry.WildUndead) continue;
 
                 float sightRange = unit.DetectionRange;
                 if (sightRange <= 0f) sightRange = settings.DefaultSightRange;
