@@ -2280,6 +2280,32 @@ public partial class Game1 {
                break;
             }
 
+            // Fully-parameterized projectile spawn for testing flight/collision.
+            // devctl: cmd shoot <x> <y> [dmg=10] [radius=0] [speed=20] [lob=false] [ff=false]
+            // radius>0 -> Explosive, else RegularHit; ff=true forces friendly fire
+            // (NoFriendlyFire=false) to test the per-projectile override.
+            case "shoot": {
+               if (c.Args.Length < 2) {
+                  c.Complete(Necroking.Dev.DevServer.Error("shoot needs: <x> <y> [dmg=10 radius=0 speed=20 lob=false ff=false]"));
+                  break;
+               }
+               var target = new Vec2(DevFloat(c.Args[0]), DevFloat(c.Args[1]));
+               int dmg = c.Opt("dmg") is string ds ? (int)DevFloat(ds) : 10;
+               float radius = c.Opt("radius") is string rs ? DevFloat(rs) : 0f;
+               float speed = c.Opt("speed") is string ss ? DevFloat(ss) : 20f;
+               bool lob = c.OptBool("lob");
+               int ni = _sim.NecromancerIndex;
+               Vec2 from = ni >= 0 ? _sim.Units[ni].Position : target + new Vec2(-6f, 0f);
+               uint owner = ni >= 0 ? _sim.Units[ni].Id : 0u;
+               var proj = _sim.Projectiles.Spawn(from, target, Faction.Undead, owner,
+                  radius > 0f ? ProjectileType.Explosive : ProjectileType.RegularHit,
+                  dmg, speed, lob, aoeRadius: radius, weaponName: "DevShot");
+               if (c.OptBool("ff")) proj.NoFriendlyFire = false;
+               c.Complete(Necroking.Dev.DevServer.Ok(
+                  $"shot from ({from.X:F1},{from.Y:F1}) -> ({target.X:F1},{target.Y:F1}) type={proj.Type} lob={lob} speed={speed} noFF={proj.NoFriendlyFire}"));
+               break;
+            }
+
             // Queue a batch script: a list of commands with waits between them,
             // stepped over the game's update loop. Returns a job id immediately;
             // poll progress + results with `job`. opts.script = [ {cmd,args,opts}

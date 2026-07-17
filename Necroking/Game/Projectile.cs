@@ -241,8 +241,11 @@ public class ProjectileManager
             Position = from, Height = spawnHeight, Type = type,
             OwnerFaction = faction, OwnerID = owner, Damage = damage,
             AoeRadius = aoeRadius, Precision = precision, WeaponName = weaponName,
-            // A RegularHit shot respects factions; explosions and potion splashes hit everyone.
-            NoFriendlyFire = type == ProjectileType.RegularHit,
+            // A RegularHit shot respects factions, and so does any direct-fire shot
+            // (a flat-flying fireball shouldn't clip the allies it skims past);
+            // lobbed explosions and potion splashes hit everyone. Callers can
+            // post-configure NoFriendlyFire to override.
+            NoFriendlyFire = type == ProjectileType.RegularHit || !lob,
             IsLob = lob, GravityScale = gravityScale, BaseDirection = dir
         };
         (p.Velocity, p.VelocityZ) = BallisticVelocity(dir, speed, theta);
@@ -319,13 +322,21 @@ public class ProjectileManager
                 }
             }
 
-            // Explosive in-flight collision
+            // Explosive in-flight collision. Direct-fire shots ignore the height gate:
+            // overshooting the aim point solves a taller arc, and sailing over the
+            // target's head reads as a miss the player didn't cause.
             if (proj.Alive && proj.Type == ProjectileType.Explosive &&
-                proj.Age > ExplosiveArmTime && proj.Height < ExplosiveHitHeight)
+                proj.Age > ExplosiveArmTime && (!proj.IsLob || proj.Height < ExplosiveHitHeight))
             {
                 nearbyIDs.Clear();
                 float collisionRadius = MathF.Max(proj.AoeRadius * 0.5f, HitRadius);
-                qt.QueryRadius(proj.Position, collisionRadius, nearbyIDs);
+                // The trigger respects NoFriendlyFire too — a projectile that can't
+                // damage allies shouldn't detonate on one it flies through either.
+                if (proj.NoFriendlyFire)
+                    qt.QueryRadiusByFaction(proj.Position, collisionRadius,
+                        FactionMaskExt.AllExcept(proj.OwnerFaction), nearbyIDs);
+                else
+                    qt.QueryRadius(proj.Position, collisionRadius, nearbyIDs);
                 // Ensure we deal damage to what we collided with at least.
                 // TODO: Clear up the logic here, this is not good, but at least this way we can see logs of what happened.
                 float aoe_radius = MathF.Max(proj.AoeRadius, HitRadius);
@@ -358,8 +369,11 @@ public class ProjectileManager
                 }
             }
 
-            // Direct-hit in-flight collision (arrows, magic darts)
-            if (proj.Alive && proj.Type == ProjectileType.RegularHit && proj.Height < UnitHitHeight && proj.Height > 0f)
+            // Direct-hit in-flight collision (arrows, magic darts). The height window
+            // only applies to lobs (which must arc OVER intervening units); a
+            // direct-fire shot hits anything it crosses regardless of arc height.
+            if (proj.Alive && proj.Type == ProjectileType.RegularHit &&
+                (!proj.IsLob || (proj.Height < UnitHitHeight && proj.Height > 0f)))
             {
                 nearbyIDs.Clear();
                 if (proj.NoFriendlyFire)
