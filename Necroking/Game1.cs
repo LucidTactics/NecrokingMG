@@ -25,7 +25,11 @@ using Necroking.UI;
 namespace Necroking;
 
 public enum MenuState { MainMenu, None, PauseMenu, Settings, Multiplayer, UnitEditor, SpellEditor, MapEditor, UIEditor,
-    ItemEditor, ScenarioList, SaveMenu, LoadMenu }
+    ItemEditor, ScenarioList, SaveMenu, LoadMenu,
+    // Boot loading screen, shown before the main menu while Game1.Loading.cs
+    // drains the startup step queue. Appended last so existing values keep
+    // their ordinals (default(MenuState) stays MainMenu).
+    Loading }
 
 /// <summary>
 /// The MonoGame app shell and orchestrator — everything platform- and presentation-side.
@@ -613,14 +617,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal DebugDraw _debugDraw = new();
     internal List<GameSystems.DamageNumber> _damageNumbers = new();
 
-    // Game state
-    internal MenuState _menuState = MenuState.MainMenu;
+    // Game state — boots into the loading screen; TickLoading flips to MainMenu
+    // once the startup step queue (Game1.Loading.cs) drains.
+    internal MenuState _menuState = MenuState.Loading;
     /// <summary>Last frame's <see cref="_menuState"/>, snapshotted at end of
     /// Update. Used to detect transitions — specifically MapEditor → anything
     /// else, where the suppressed per-click pathfinder rebuilds during the
     /// editor session need to fire once so gameplay resumes with current
     /// collision data.</summary>
-    private MenuState _prevMenuState = MenuState.MainMenu;
+    private MenuState _prevMenuState = MenuState.Loading;
     internal bool _gameWorldLoaded;
     internal MenuState _backMenuState = MenuState.MainMenu; // where the load menu's and settings window's Back/ESC returns (MainMenu or PauseMenu)
     /// <summary>True while anything holds the game paused (forwarder for
@@ -955,6 +960,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal readonly UI.MainMenuScreen _mainMenu;
     internal readonly UI.PauseMenuScreen _pauseMenu;
     internal readonly UI.ScenarioListScreen _scenarioList;
+    internal readonly UI.LoadingScreen _loadingScreen;
 
     public Game1()
     {
@@ -965,6 +971,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _mainMenu = new UI.MainMenuScreen(this);
         _pauseMenu = new UI.PauseMenuScreen(this);
         _scenarioList = new UI.ScenarioListScreen(this);
+        _loadingScreen = new UI.LoadingScreen(this);
 
         // Editors read mouse state live through the shared InputState (see
         // EditorBase._mouse) — wire it up before any editor can draw so they
@@ -1128,6 +1135,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // presets, and spell bar slot assignments when the game exits. Atomic writes.
         Exiting += (_, _) =>
         {
+            // Quit while the boot loading screen is still running: the user's
+            // settings/weather/spellbar aren't fully loaded yet, so saving now
+            // would overwrite their files with defaults. Nothing can have
+            // changed on the loading screen — skip the save entirely.
+            if (_menuState == MenuState.Loading) return;
             System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.UserSettingsDir));
             _gameData.Settings.General.MapEditorLastTab = (int)_mapEditor.ActiveTab;
             _gameData.Settings.Save(GamePaths.Resolve(GamePaths.UserSettingsJson));
@@ -1287,235 +1299,31 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         else if (LaunchArgs.ResolutionW <= 0 && LaunchArgs.ResolutionH <= 0)
             Window.Position = new Point(0, 0);
 
-        // Load game data
-        _gameData.Load();
-
         // Restore the persisted window mode/size unless a launch override
         // (--resolution) or headless mode owns the window (the constructor set the
         // borderless-fullscreen default, which is also the Display default).
+        // Only settings.json is loaded here (cheap, one small file) so the window
+        // appears in the right mode from the very first loading-screen frame; the
+        // full GameData.Load in the step queue re-reads it along with everything
+        // else — same file, idempotent.
         if (!LaunchArgs.Headless && LaunchArgs.ResolutionW <= 0 && LaunchArgs.ResolutionH <= 0)
         {
+            _gameData.Settings.Load(GamePaths.SeededUserFile(
+                GamePaths.UserSettingsJson, Path.Combine(GamePaths.Resolve("data"), "settings.json")));
             var disp = _gameData.Settings.Display;
             if (disp.WindowedWidth > 0) _windowedW = disp.WindowedWidth;
             if (disp.WindowedHeight > 0) _windowedH = disp.WindowedHeight;
             if (disp.Windowed) ApplyWindowMode(true);
         }
 
-        _inventory = new Inventory(20, _gameData.Items);
-        SkillBookDefs.Load();
-        _skillBookState.InitFromDefs();
-        LogTiming($"GameData loaded: {_gameData.Units.Count} units, {_gameData.Spells.Count} spells, {_gameData.Weapons.Count} weapons, {_gameData.Items.Count} items");
-
-        // Init renderer
+        // Init renderer (stores screen dims — cheap)
         _renderer.Init(_graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
 
-        // Scan for sprite sheets and load atlases (parallel file read + sequential GPU upload)
-        AtlasDefs.ScanSpritesDirectory();
-        int atlasCount = AtlasDefs.TotalCount;
-        _atlases = new SpriteAtlas[atlasCount];
-
-        // Phase 1: Read PNG files, decode to pixels, and parse metadata in parallel (no GPU)
-        var pngBytes = new byte[atlasCount][];
-        var decodedPixels = new Color[atlasCount][];
-        var decodedW = new int[atlasCount];
-        var decodedH = new int[atlasCount];
-        var metaParsed = new bool[atlasCount];
-        for (int i = 0; i < atlasCount; i++)
-            _atlases[i] = new SpriteAtlas();
-
-        // Build per-atlas work list: base sheet at index 0, overflow __N sheets after.
-        // Each entry: (atlasIdx, pngPath, metaPath, isExtension).
-        var extSheets = new List<(string png, string meta)>[atlasCount];
-        for (int i = 0; i < atlasCount; i++)
-            extSheets[i] = new List<(string, string)>(AtlasDefs.FindExtensionSheets(AtlasDefs.Names[i]));
-
-        // Flat parallel decode of every PNG (base + all extension sheets) so the
-        // largest single atlas isn't gated by its own extension on the same thread.
-        // Meta parsing is fast and runs serially after decode (extension meta has
-        // to be parsed after the base meta, per atlas).
-        var extDecoded = new (Color[] pixels, int w, int h, bool decoded)[atlasCount][];
-        for (int i = 0; i < atlasCount; i++)
-            extDecoded[i] = new (Color[], int, int, bool)[extSheets[i].Count];
-
-        // Build flat work list: (atlasIdx, extIdx=-1 for base, pngPath).
-        var decodeJobs = new List<(int ai, int ei, string png)>(atlasCount * 2);
-        for (int i = 0; i < atlasCount; i++)
-        {
-            string name = AtlasDefs.Names[i];
-            decodeJobs.Add((i, -1, GamePaths.Resolve($"assets/Sprites/{name}.png")));
-            for (int e = 0; e < extSheets[i].Count; e++)
-                decodeJobs.Add((i, e, extSheets[i][e].png));
-        }
-
-        // BENCHMARK: per-job timing across the flat decode pool. Each job tries
-        // the .pcache (zstd-compressed pre-decoded RGBA) first; on miss falls
-        // back to PNG decode and writes a fresh cache for next launch.
-        var decodeBench = new (string label, int sizeMb, long readMs, long decodeMs, long pmaMs, long totalMs, int threadId, bool skia, bool cacheHit, bool wroteCache)[decodeJobs.Count];
-        var phaseStart = System.Diagnostics.Stopwatch.StartNew();
-        System.Threading.Tasks.Parallel.For(0, decodeJobs.Count, j =>
-        {
-            var (ai, ei, png) = decodeJobs[j];
-            string label = ei < 0 ? AtlasDefs.Names[ai] : $"{AtlasDefs.Names[ai]}__{ei + 1}";
-            if (!File.Exists(png)) return;
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            int tid = System.Threading.Thread.CurrentThread.ManagedThreadId;
-
-            // FAST PATH: try the zstd-decoded pixel cache.
-            long t0 = sw.ElapsedMilliseconds;
-            if (Render.AtlasCache.TryLoad(png, out var cachedPixels, out int cw, out int ch))
-            {
-                long readMs = sw.ElapsedMilliseconds - t0;
-                if (ei < 0)
-                {
-                    decodedPixels[ai] = cachedPixels;
-                    decodedW[ai] = cw;
-                    decodedH[ai] = ch;
-                }
-                else
-                {
-                    extDecoded[ai][ei] = (cachedPixels, cw, ch, true);
-                }
-                int sizeMbCache = (int)(new FileInfo(Render.AtlasCache.GetCachePath(png)).Length / (1024 * 1024));
-                decodeBench[j] = (label, sizeMbCache, readMs, 0, 0, sw.ElapsedMilliseconds, tid, true, true, false);
-                return;
-            }
-
-            // SLOW PATH: cache miss. Decode the PNG and write a fresh cache.
-            t0 = sw.ElapsedMilliseconds;
-            byte[] bytes = File.ReadAllBytes(png);
-            long pngReadMs = sw.ElapsedMilliseconds - t0;
-            int sizeMb = bytes.Length / (1024 * 1024);
-            var (pixels, w, h, decTicks, pmaTicks, skia) = TextureUtil.DecodePngPremultipliedTimed(bytes);
-            long decodeMs = decTicks * 1000 / System.Diagnostics.Stopwatch.Frequency;
-            long pmaMs = pmaTicks * 1000 / System.Diagnostics.Stopwatch.Frequency;
-            if (ei < 0)
-            {
-                decodedPixels[ai] = pixels;
-                decodedW[ai] = w;
-                decodedH[ai] = h;
-            }
-            else
-            {
-                extDecoded[ai][ei] = (pixels, w, h, true);
-            }
-            // Write cache for next launch (best-effort; failure logs to startup but doesn't abort).
-            Render.AtlasCache.Save(png, pixels, w, h);
-            decodeBench[j] = (label, sizeMb, pngReadMs, decodeMs, pmaMs, sw.ElapsedMilliseconds, tid, skia, false, true);
-        });
-        long phaseWallMs = phaseStart.ElapsedMilliseconds;
-
-        // Meta parse: sequential per atlas (base before extensions). Cheap.
-        for (int i = 0; i < atlasCount; i++)
-        {
-            string name = AtlasDefs.Names[i];
-            string metaPath = GamePaths.Resolve($"assets/Sprites/{name}.spritemeta");
-            if (File.Exists(metaPath))
-                metaParsed[i] = _atlases[i].ParseMetaOnly(metaPath);
-            for (int e = 0; e < extSheets[i].Count; e++)
-            {
-                string extMeta = extSheets[i][e].meta;
-                bool metaOk = File.Exists(extMeta) && _atlases[i].ParseExtensionMeta(extMeta);
-                if (!metaOk) extDecoded[i][e] = (extDecoded[i][e].pixels, extDecoded[i][e].w, extDecoded[i][e].h, false);
-            }
-        }
-        int extCount = extSheets.Sum(l => l.Count);
-        LogTiming($"Atlas PNG decode + metadata parsed (flat parallel, {atlasCount} base + {extCount} ext)");
-        // Aggregate parallelism across the flat decode pool.
-        long sumWork = 0; var threadSet = new HashSet<int>();
-        foreach (var b in decodeBench) { sumWork += b.totalMs; threadSet.Add(b.threadId); }
-        int cacheHits = 0, cacheWrites = 0;
-        foreach (var b in decodeBench) { if (b.cacheHit) cacheHits++; if (b.wroteCache) cacheWrites++; }
-        DebugLog.Log("startup",
-            $"  [BENCH] flat decode pool: wall={phaseWallMs}ms sumWork={sumWork}ms parallelism={(double)sumWork / Math.Max(1, phaseWallMs):F2}x threads={threadSet.Count} cacheHits={cacheHits}/{decodeJobs.Count} cacheWrites={cacheWrites}");
-        foreach (var b in decodeBench)
-            DebugLog.Log("startup",
-                $"  [BENCH] {b.label,-22} {b.sizeMb,3}MB tid={b.threadId,2} read={b.readMs,4}ms decode={b.decodeMs,5}ms pma={b.pmaMs,5}ms total={b.totalMs,5}ms {(b.cacheHit ? "CACHE-HIT" : b.skia ? "skia" : "stb")}{(b.wroteCache && !b.cacheHit ? " (wrote cache)" : "")}");
-
-        // Fresh asset log per process so it doesn't grow unbounded across runs (mirrors the
-        // perf-log Clear in Simulation.Init). Prior runs' AnimMeta/buff warnings are discarded.
-        DebugLog.Clear("asset");
-
-        // Load animation metadata BEFORE GPU upload so the stride calibration pass
-        // (which runs in the upload loop, while decoded pixels are still live) can
-        // read per-gait cycle durations from animationmeta. Animationmeta is CPU-
-        // only — no dependency on GPU textures.
-        foreach (string name in AtlasDefs.Names)
-        {
-            string metaPath = GamePaths.Resolve($"assets/Sprites/{name}.animationmeta");
-            if (File.Exists(metaPath))
-                AnimMetaLoader.Load(metaPath, _animMeta);
-            foreach (string extMeta in AtlasDefs.FindExtensionAnimMeta(name))
-                AnimMetaLoader.Load(extMeta, _animMeta);
-        }
-        // Validate effect_time ONCE over the fully-loaded dict (not per-file inside Load — that
-        // was O(files × keys) and dumped tens of thousands of duplicate warnings into asset.log).
-        AnimMetaLoader.ValidateEffectTimes(_animMeta);
-        LogTiming($"Animation metadata: {_animMeta.Count} entries");
-        _sim.SetAnimMeta(_animMeta);
-
-        // Phase 2: Upload decoded pixels to GPU (fast — just SetData, no PNG decode).
-        // Stride calibration runs per-atlas in this loop, BEFORE pixels are freed,
-        // so it can scan the source rgba without a GPU readback. Cache hit skips
-        // the pixel scan; only the first launch (or asset edit) pays the cost.
-        int strideCacheHits = 0, strideCacheBuilds = 0;
-        for (int i = 0; i < atlasCount; i++)
-        {
-            if (decodedPixels[i] != null && metaParsed[i])
-            {
-                var tex = TextureUtil.CreateTextureFromPixels(GraphicsDevice,
-                    decodedPixels[i], decodedW[i], decodedH[i]);
-                _atlases[i].SetTextureAndFinalize(tex, decodedW[i], decodedH[i]);
-
-                // Calibrate stride per unit. Y-coords in the spritemeta have been
-                // flipped by SetTextureAndFinalize (top-left origin), matching the
-                // pixel buffer layout we're handing to StrideCalibration.
-                string atlasName = AtlasDefs.Names[i];
-                string pngPath = GamePaths.Resolve($"assets/Sprites/{atlasName}.png");
-                string smPath  = GamePaths.Resolve($"assets/Sprites/{atlasName}.spritemeta");
-                string amPath  = GamePaths.Resolve($"assets/Sprites/{atlasName}.animationmeta");
-                bool cacheHit = Render.StrideCalibration.CalibrateAtlas(_atlases[i], atlasName,
-                    pngPath, smPath, amPath, decodedPixels[i], decodedW[i], decodedH[i], _animMeta);
-                if (cacheHit) strideCacheHits++; else strideCacheBuilds++;
-
-                decodedPixels[i] = null!; // free memory after calibration is done with it
-            }
-            // Attach extension sheets in the order they were decoded (matches the
-            // TextureIndex assigned by ParseExtensionMeta).
-            foreach (var ext in extDecoded[i])
-            {
-                if (!ext.decoded || ext.pixels == null) continue;
-                var extTex = TextureUtil.CreateTextureFromPixels(GraphicsDevice,
-                    ext.pixels, ext.w, ext.h);
-                _atlases[i].AttachExtensionTexture(extTex, ext.w, ext.h);
-            }
-        }
-        LogTiming($"Atlases GPU upload + stride calibration: {atlasCount} ({string.Join(", ", AtlasDefs.Names)}) — strideCacheHits={strideCacheHits} builds={strideCacheBuilds}");
-
-        // Wire each UnitDef's runtime SpriteData reference now that both registries
-        // (loaded in _gameData.Load above) and atlases (just uploaded) exist. Lets
-        // LocomotionProfile.FromUnit reach stride calibration without separately
-        // plumbing atlas access through AI / render call sites.
-        int spriteWireCount = 0;
-        foreach (var def in _gameData.Units.All())
-        {
-            if (def.Sprite == null || string.IsNullOrEmpty(def.Sprite.AtlasName)) continue;
-            int aIdx = AtlasDefs.ResolveAtlasName(def.Sprite.AtlasName);
-            if (aIdx < 0 || aIdx >= _atlases.Length) continue;
-            def.SpriteData = _atlases[aIdx].GetUnit(def.Sprite.SpriteName);
-            if (def.SpriteData != null) spriteWireCount++;
-        }
-        LogTiming($"UnitDef→SpriteData wired for {spriteWireCount}/{_gameData.Units.Count} units");
-
-        // Push corpse.json pivot overrides into the BodyBag/Icon atlas frames now
-        // that the Corpses atlas exists. Spritemeta provides the defaults; this
-        // step lets the editor tune per-angle hand-attach points without re-export.
-        {
-            int corpsesIdx = AtlasDefs.ResolveAtlasName("Corpses");
-            if (corpsesIdx >= 0 && corpsesIdx < _atlases.Length)
-                _gameData.Corpse.ApplyToAtlas(_atlases[corpsesIdx]);
-        }
-
-        _loadMenuSaves = ListSaveGames();
+        // Everything heavy — game data, atlas decode, GPU uploads, animation
+        // metadata, shaders, editors — is queued as loading-screen steps that run
+        // one per frame from Update (see Game1.Loading.cs), so the window appears
+        // immediately and shows what's currently loading instead of freezing.
+        BuildLoadingSteps();
 
         base.Initialize();
     }
@@ -2508,17 +2316,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
         LogTiming("Glow texture created");
 
-        // Shadow renderer (BasicEffect for parallelogram quads)
-        _shadowRenderer.Init(GraphicsDevice);
-
-        // Load main menu background
-        string menuBgPath = GamePaths.Resolve(Path.Combine("assets", "UI", "Background", "VampireBackground.png"));
-        if (File.Exists(menuBgPath))
-        {
-            _mainMenuBg = TextureUtil.LoadPremultiplied(GraphicsDevice, menuBgPath);
-        }
-
-        LogTiming("Menu background loaded");
+        // (Shadow renderer, menu background, TTF fonts, shaders, audio, system
+        // wiring and editors all load as loading-screen steps — Game1.Loading.cs.)
 
         _font = Content.Load<SpriteFont>("DefaultFont");
         _smallFont = Content.Load<SpriteFont>("SmallFont");
@@ -2538,117 +2337,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Note: _uiShaders is initialized later after Content.Load path -- we
         // set it on the panel below after Load completes.
         _skillBookOverlay.Init(_widgetRenderer, _spriteBatch, _pixel);
-        // Early bind so scenarios (which skip StartGame) still have state. The spell-
-        // bar Slots may be null at this point — re-bind happens in StartGame once the
-        // bar is allocated. AddSpellToBarEffect handles null Slots gracefully.
-        _skillBookOverlay.Bind(_skillBookState, _inventory, _gameData,
-            _spellBarState, _sim);
-
-        // Load TrueType fonts via FontStashSharp (dynamic sizing)
-        _fontManager.LoadFontsFromDirectory(GamePaths.Resolve(GamePaths.FontsDir));
-        if (_fontManager.HasFonts)
-        {
-            // Prefer "Standard" as default, fall back to first loaded
-            if (_fontManager.FontFamilies.Any(f => f == "Standard"))
-                _fontManager.SetDefault("Standard");
-        }
-        LogTiming("Fonts loaded");
-
-        _bloom.Init(GraphicsDevice, Content,
-            _graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
-        LogTiming("Bloom initialized");
-
-        try { _groundEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("GroundShader"); }
-        catch (Exception ex) { _groundEffect = null; DebugLog.Log("startup", $"GroundShader not loaded: {ex.Message}"); }
-
-        try {
-            _dissolveTreeEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("DissolveTree");
-            DebugLog.Log("startup", $"DissolveTree shader loaded — params: {string.Join(", ", _dissolveTreeEffect.Parameters.Cast<Microsoft.Xna.Framework.Graphics.EffectParameter>().Select(p => p.Name))}");
-        }
-        catch (Exception ex) { _dissolveTreeEffect = null; DebugLog.Log("startup", $"DissolveTree shader not loaded: {ex.Message}"); }
-
-        _uiShaders = new UIShaders(GraphicsDevice, _pixel, BlendState.AlphaBlend, SamplerState.PointClamp);
-        _uiShaders.Load(Content);
-
-        try { _outlineFlatEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("OutlineFlat"); }
-        catch (Exception ex) { _outlineFlatEffect = null; DebugLog.Log("startup", $"OutlineFlat not loaded: {ex.Message}"); }
-        try
-        {
-            _morphSdfEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("MorphSDF");
-            // Constant look parameters, set once (MGFX on GL ignores .fx initializers;
-            // dynamic params — MorphT, GreenFill, OutlineColor, OutlinePulse, textures —
-            // are set per draw in DrawReanimMorph). Bulge is the amoeba swell that opens
-            // bridge gaps (was 4.0 — gentler swell reads as a quiet wisp, and the green
-            // gap-fill is dimmed at the call site so it doesn't glow).
-            _morphSdfEffect.Parameters["Bulge"]?.SetValue(2.0f);
-            _morphSdfEffect.Parameters["EdgeSoftness"]?.SetValue(1.5f); // AA band, px
-            _morphSdfEffect.Parameters["OutlineWidth"]?.SetValue(1.2f); // px
-        }
-        catch (Exception ex) { _morphSdfEffect = null; DebugLog.Log("startup", $"MorphSDF not loaded: {ex.Message}"); }
-        try { _depthCutoutEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("DepthCutout"); }
-        catch (Exception ex) { _depthCutoutEffect = null; DebugLog.Log("startup", $"DepthCutout not loaded: {ex.Message}"); }
-        try {
-            _wadingEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("Wading");
-            var pnames = string.Join(",", _wadingEffect.Parameters.Select(p => p.Name));
-            DebugLog.Log("startup", $"Wading loaded. params=[{pnames}]");
-            // Constant look parameters, set once (MGFX on GL ignores .fx initializers).
-            // The per-frame waterline/frame-UV params are set in DrawWadingSpriteFrame
-            // and the WadingEditorPopup preview — both share this Effect instance.
-            _wadingEffect.Parameters["FoamHalfWidth"]?.SetValue(0.05f);    // half-width of the foam band, local V
-            _wadingEffect.Parameters["TopFoamHalfWidth"]?.SetValue(0.05f);
-            _wadingEffect.Parameters["UnderwaterAlpha"]?.SetValue(0.0f);   // submerged pixels fully hidden
-            _wadingEffect.Parameters["FoamColor"]?.SetValue(new Vector3(0.88f, 0.94f, 0.96f));
-        }
-        catch (Exception ex) { _wadingEffect = null; DebugLog.Log("startup", $"Wading NOT loaded: {ex.Message}"); }
-        try { _hdrIntensityEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("HdrIntensity"); }
-        catch (Exception ex) { _hdrIntensityEffect = null; DebugLog.Log("startup", $"HdrIntensity not loaded: {ex.Message}"); }
-        {
-            Microsoft.Xna.Framework.Graphics.Effect? scatterFx = null;
-            try { scatterFx = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("ScatterGlow"); }
-            catch (Exception ex) { DebugLog.Log("startup", $"ScatterGlow not loaded: {ex.Message}"); }
-            _scatterGlow.Init(this, scatterFx);   // null effect → system stays inert
-        }
-        try
-        {
-            _hdrSpriteEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("HdrSprite");
-            if (_hdrSpriteEffect != null)
-            {
-                _hdrSpriteEffect.Parameters["MaxIntensity"]?.SetValue(HdrColor.MaxHdrIntensity);
-                _hdrSpriteEffect.Parameters["MaxAlphaIntensity"]?.SetValue(HdrColor.MaxHdrAlphaIntensity);
-                _hdrSpriteEffect.Parameters["AlphaMode"]?.SetValue(0f);
-            }
-        }
-        catch (Exception ex) { _hdrSpriteEffect = null; DebugLog.Log("startup", $"HdrSprite not loaded: {ex.Message}"); }
-
-        // Register the effect-backed materials now that shaders are loaded
-        // (Materials is the canonical pass-state registry for the render
-        // pipeline — see todos/render-pipeline-design.md).
-        Render.Materials.InitEffectMaterials(_wadingEffect, _dissolveTreeEffect,
-            _hdrSpriteEffect, _depthCutoutEffect, _morphSdfEffect, _outlineFlatEffect);
-
-        {
-            Microsoft.Xna.Framework.Graphics.Effect? glyphEffect = null;
-            try { glyphEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("MagicCircle"); }
-            catch (Exception ex) { DebugLog.Log("startup", $"MagicCircle not loaded: {ex.Message}"); }
-            _glyphRenderer.LoadEffect(glyphEffect);
-        }
-
-        {
-            Microsoft.Xna.Framework.Graphics.Effect? fogEffect = null;
-            try { fogEffect = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("WeatherFog"); }
-            catch (Exception ex) { DebugLog.Log("startup", $"WeatherFog not loaded: {ex.Message}"); }
-            _weatherRenderer.LoadEffect(fogEffect);
-        }
-        _weatherRenderer.Init(_graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
-        _weatherRenderer.SetDayNight(_dayNightSystem);
-
-        _grassRenderer.Init(GraphicsDevice);
-        Necroking.Render.MagicPathIcons.SetDevice(GraphicsDevice);
-        _lightningRenderer.Init(_spriteBatch, _pixel, _glowTex, this, _camera, _renderer, GraphicsDevice, _hdrIntensityEffect);
-        // When a ground vertex newly corrupts, fade nearby grass tufts toward
-        // their CorruptedTint over GrassTuftRenderer.CorruptionFadeDuration.
-        _groundSystem.OnVertexCorrupted = OnGroundVertexCorruptedForGrass;
-        LogTiming("Renderers initialized (weather, grass, lightning)");
+        // (The overlay's Bind runs in the "Loading game data" step — it needs the
+        // inventory that step creates.)
 
         // UI editor (F12 / menu) is a dev-only tool — its LoadDefinitions bakes
         // every harmonized texture (~4s). Deferred to first open via
@@ -2663,37 +2353,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // most launches never open any of them so this is pure savings.
         _widgetRendererUiDefPath = uiDefPath;
 
-        // Load audio
-        try
-        {
-            string pickupPath = GamePaths.Resolve("assets/Audio/Interaction/PickupPop.wav");
-            if (System.IO.File.Exists(pickupPath))
-            {
-                using var stream = System.IO.File.OpenRead(pickupPath);
-                _pickupSound = SoundEffect.FromStream(stream);
-            }
-        }
-        catch { /* audio is optional */ }
-
-        // Wire the foragable subsystem now that all its dependencies exist.
-        // Callbacks bridge back to Game1-private state (damage numbers, skill book).
-        _foragables.Bind(this, _camera, _renderer, _spriteBatch,
-            _inventory, _effectManager, _pickupSound,
-            onPickup: OnForagablePickedUp,
-            onLearnTrigger: OnForagableLearnTrigger);
-
-        // Worker job system: brain that assigns grave workers to jobs.
-        _workerSystem.Bind(this, _gameData);
-        _workerSystem.Reset();
-
-        // Install the Game1→Simulation back-references onto the current Sim. Also called
-        // from StartGame after every session recreation (see WireSimCallbacks).
-        WireSimCallbacks();
-        // Reanimate job spawns through the canonical reanim pipeline (green rise effect).
-        _workerSystem.SpawnWorkerUnit = (defId, pos) =>
-            QueueReanimRise(defId, -1, "", posOverride: pos);  // "" → the unit's own effect (else reanim_smoke)
-
         // Lean dev control server: only when launched with --devserver <port>.
+        // Started here rather than as a loading step so devctl/the MCP server can
+        // reach the game while the loading screen is still working through steps.
         if (LaunchArgs.DevServerPort > 0)
         {
             _devServer = new Necroking.Dev.DevServer(LaunchArgs.DevServerPort);
@@ -2712,37 +2374,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             }
         }
 
-        // Init property editor infrastructure
-        _editorUi.SetContext(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
-        _unitEditor = new UnitEditorWindow(_editorUi);
-        _unitEditor.SetGameData(_gameData);
-        _unitEditor.SetAtlases(_atlases, GraphicsDevice);
-        _unitEditor.SetAnimMeta(_animMeta);
-        // Hand the wading effect + camera Y-ratio to the wading sub-editor
-        // so its preview applies the actual shader (matching in-game look).
-        _unitEditor.SetWadingShader(_wadingEffect, _camera.YRatio);
-        _spellEditor = new SpellEditorWindow(_editorUi);
-        _spellEditor.SetGameData(_gameData);
-        _spellEditor.SetHdrEffect(_hdrSpriteEffect);
-        _spellEditor.SetFlipbooks(_flipbooks);
-        _spellEditor.SetContent(Content);
-        _itemEditor = new ItemEditorWindow(_editorUi);
-        _itemEditor.SetGameData(_gameData);
-        _net = new Necroking.Net.NetSession();
-        _multiplayerWindow = new MultiplayerWindow(_editorUi);
-        _multiplayerWindow.SetSession(_net);
-        // Clean disconnect on quit so peers see us leave immediately instead of timing out.
-        Exiting += (s, e) => _net.Stop();
-
-        _saveGameWindow = new SaveGameWindow(_editorUi);
-        _loadGameWindow = new UI.LoadGameWindow(_editorUi);
-
-        _settingsWindow = new SettingsWindow(_editorUi);
-        System.IO.Directory.CreateDirectory(GamePaths.Resolve(GamePaths.UserSettingsDir));
-        _settingsWindow.SetGameData(_gameData, GamePaths.Resolve(GamePaths.UserSettingsJson), GamePaths.Resolve(GamePaths.UserWeatherJson));
-        _settingsWindow.SetDayNightSystem(_dayNightSystem);
-        LogTiming("Editors initialized");
-        DebugLog.Log("startup", $"=== LoadContent complete ===");
+        // Audio, foragable/worker/sim wiring, and the editor windows load as
+        // steps — see BuildLoadingSteps (Game1.Loading.cs).
+        LogTiming("LoadContent: core resources ready (SpriteBatch, fonts, dev server)");
+        DebugLog.Log("startup", $"=== LoadContent complete — remaining steps run on the loading screen ===");
     }
 
     /// <summary>Read-only "what is under the cursor" picking that drives the debug
@@ -2862,6 +2497,20 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Drain dev-server commands first so they run even if the window is
         // unfocused (we bail out below in that case) and regardless of menu state.
         _devServer?.Drain(ExecuteDevCommand);
+
+        // Boot loading screen: run the next startup step (Game1.Loading.cs) and
+        // skip the rest of Update — systems it touches (network session, input
+        // capture, menus) don't exist until the queue drains. Placed BEFORE the
+        // focus gate on purpose: a game launched unfocused must still finish
+        // loading (see docs/known-platform-bugs.md for the stale-IsActive trap).
+        if (_menuState == MenuState.Loading)
+        {
+            TickLoading();
+            _prevKb = Keyboard.GetState();
+            _prevMouse = Mouse.GetState();
+            base.Update(gameTime);
+            return;
+        }
 
         // Real OS window focus. MonoGame/SDL's IsActive is event-driven and starts
         // true: a game launched while another app holds focus never receives a

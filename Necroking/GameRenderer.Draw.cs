@@ -37,6 +37,21 @@ partial class GameRenderer
         _g._hoverBoxObject = _g._hoverBoxCorpse = _g._hoverBoxUnit = null;
         _g._devMarkBoxes.Clear();
 
+        // --- Boot loading screen (before the main menu, while Game1.Loading.cs
+        // drains the startup step queue). MarkLoadingFrameDrawn tells the loader
+        // its current label has been presented, unblocking the next step. ---
+        if (_g._menuState == MenuState.Loading)
+        {
+            _g.GraphicsDevice.Clear(new Color(20, 15, 30));
+            Materials.Hud.Begin(_g._spriteBatch);
+            _g._loadingScreen.Draw(screenW, screenH);
+            _g._spriteBatch.End();
+            _g.MarkLoadingFrameDrawn();
+            _g.CompletePendingDevScreenshot();
+            _g.BaseDraw(gameTime);
+            return;
+        }
+
         // --- Full-screen menus (each screen class owns its drawing — UI/*Screen.cs) ---
         if (_g._menuState == MenuState.MainMenu)
         {
