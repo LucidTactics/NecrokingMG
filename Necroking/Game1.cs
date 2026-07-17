@@ -80,15 +80,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal SkillBookState _skillBookState = new();
     internal GameSystems.DeathFogSystem _deathFog = new();
 
-    internal struct SkillLearnToast
-    {
-        public string Header;   // e.g. "Recipe Learned"
-        public string SkillName;
-        public string SkillId;  // for clicking through to the right tab
-        public float Timer;     // seconds shown so far
-        public float Duration;  // seconds total
-    }
-    internal readonly List<SkillLearnToast> _skillLearnToasts = new();
+    // Bottom-right corner toasts — the game-wide feedback channel; push from
+    // anywhere via Toasts.Push(header, body, onClick?) (see UI/ToastSystem.cs).
+    internal readonly UI.ToastSystem Toasts = new();
     internal UIShaders _uiShaders = null!;
 
     // Data
@@ -1087,7 +1081,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _uiRouter.Register(new Necroking.UI.CoreMenuButtonsLayer(this));
         _uiRouter.Register(new Necroking.UI.EditorLauncherLayer(this));
         _uiRouter.Register(new Necroking.UI.MinimapLayer(this));
-        _uiRouter.Register(new Necroking.UI.SkillToastLayer(this));
+        _uiRouter.Register(new Necroking.UI.ToastLayer(this));
 
         // Menus, editors, and the editors' transient sub-popup stack, top bands.
         // The map editor gets its own panel-like seat (non-blocking, footprint =
@@ -1592,7 +1586,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Reset per-game skill book progress (learned set + event tally) so
         // returning to the main menu and starting a new game wipes prior unlocks.
         _skillBookState.InitFromDefs();
-        _skillLearnToasts.Clear();
+        Toasts.Clear();
         // Fresh playthrough inventory (StartGame re-adds StartingInventory at the end
         // of its load; scenarios seed their own items).
         _inventory.Clear();
@@ -2045,15 +2039,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (!learned) return;
         var def = _skillBookState.FindSkill(skillId);
         if (def == null) return;
-        _skillLearnToasts.Add(new SkillLearnToast
-        {
-            Header = header,
-            SkillName = def.Name,
-            SkillId = skillId,
-            Timer = 0f,
-            Duration = 5f,
-        });
+        PushSkillToast(header, def.Name, skillId);
     }
+
+    /// <summary>Skill-flavored corner toast: clicking it opens the skill book on
+    /// the tab holding skillId (or just the book when skillId is empty).</summary>
+    internal void PushSkillToast(string header, string body, string skillId)
+        => Toasts.Push(header, body, () =>
+        {
+            int tabIdx = SkillBookDefs.FindTabIndexFor(skillId);
+            _skillBookOverlay.Open();
+            if (tabIdx >= 0) _skillBookOverlay.SetActiveTab(tabIdx);
+        });
 
     /// <summary>Use a consumable inventory item by id. Currently supports skill-point
     /// potions (grant SkillPointAmount to the SkillPointPool). Returns true if the
@@ -2069,16 +2066,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             DebugLog.Log("items",
                 $"Consumed '{itemId}': +{def.SkillPointAmount} '{def.SkillPointPool}' skill points " +
                 $"(now {_skillBookState.GetSkillPoints(def.SkillPointPool)})");
-            // Reuse the skill-learn toast for feedback; empty SkillId just opens the
-            // skill book (where the new points are visible) if clicked.
-            _skillLearnToasts.Add(new SkillLearnToast
-            {
-                Header = "Skill Points",
-                SkillName = $"+{def.SkillPointAmount} {def.SkillPointPool}",
-                SkillId = "",
-                Timer = 0f,
-                Duration = 5f,
-            });
+            // Toast feedback; empty skillId just opens the skill book (where the
+            // new points are visible) if clicked.
+            PushSkillToast("Skill Points", $"+{def.SkillPointAmount} {def.SkillPointPool}", "");
             return true;
         }
 
@@ -2847,7 +2837,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         {
             _hudRenderer.AppendHitRects(_uiHits, screenW, screenH,
                 _gameData.Settings.General.ShowTimeControls);
-            _gameRenderer.AppendSkillToastHitRects(_uiHits, screenW, screenH);
+            Toasts.AppendHitRects(_uiHits, screenW, screenH);
             if (_gameRenderer.GetAggressionBarLayout(screenW, screenH, out var aggroBar, out _))
             {
                 aggroBar.Inflate(0, 8); // same hover slack as the click handler
@@ -4241,6 +4231,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
        // Potions needed for metamorphosis.
        _inventory.AddItem("potion_death_evolution", amount);
+
+       // Cheat feedback — click-through opens the skill book.
+       PushSkillToast("Cheat", $"+{amount} skill points (all pools)", "");
     }
 
     /// <summary>Shift+P cheat. Applies / removes buff_god_mode on the

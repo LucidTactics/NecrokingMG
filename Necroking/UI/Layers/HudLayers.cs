@@ -443,32 +443,32 @@ public sealed class MinimapLayer : UILayer
     }
 }
 
-/// <summary>Bottom-right skill-learn toasts — clickable to jump to the relevant
-/// skill-book tab. Toast band: above HudTop, so a toast overlapping the button
-/// rows wins the click, matching its draw position.</summary>
-public sealed class SkillToastLayer : UILayer
+/// <summary>Bottom-right corner toasts (ToastSystem) — clickable to run each
+/// toast's OnClick action. Toast band: above HudTop, so a toast overlapping the
+/// button rows wins the click, matching its draw position.</summary>
+public sealed class ToastLayer : UILayer
 {
     private readonly Game1 _g;
-    public SkillToastLayer(Game1 g) { _g = g; Band = UIBand.Toast; }
+    public ToastLayer(Game1 g) { _g = g; Band = UIBand.Toast; }
 
-    public override string Id => "toast.skill_learn";
-    public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { } // HUD rects catalogued by HUDRenderer.AppendHitRects (see file header)
+    public override string Id => "toast";
+    public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { } // rects catalogued centrally in Game1.RebuildUIHitRects (HudVisible gate)
     public override bool Visible => _g.HudVisible && _g._menuState == MenuState.None
-        && _g._skillLearnToasts.Count > 0;
+        && _g.Toasts.Count > 0;
 
     public override bool ContainsMouse(int mx, int my, in UICtx ctx)
-        => _g._gameRenderer.SkillToastIndexAt(ctx.ScreenW, ctx.ScreenH, mx, my) >= 0;
+        => _g.Toasts.IndexAt(ctx.ScreenW, ctx.ScreenH, mx, my) >= 0;
 
     protected override void OnPointer(InputState input, in UICtx ctx)
     {
         if (!input.LeftPressed) return;
-        int idx = _g._gameRenderer.SkillToastIndexAt(ctx.ScreenW, ctx.ScreenH,
+        int idx = _g.Toasts.IndexAt(ctx.ScreenW, ctx.ScreenH,
             (int)input.MousePos.X, (int)input.MousePos.Y);
-        if (idx >= 0) _g._gameRenderer.ActivateSkillToast(idx);
+        if (idx >= 0) _g.Toasts.Activate(idx);
     }
 
-    public override bool VisibleForDraw => _g.ShowUIForDraw; // DrawSkillLearnToasts self-guards on count
+    public override bool VisibleForDraw => _g.ShowUIForDraw; // ToastSystem.Draw self-guards on count
 
     public override void Draw(in UICtx ctx)
-        => _g._gameRenderer.DrawSkillLearnToasts(ctx.ScreenW, ctx.ScreenH);
+        => _g.Toasts.Draw(ctx.ScreenW, ctx.ScreenH);
 }

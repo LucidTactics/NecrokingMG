@@ -88,6 +88,22 @@ public static class DrawUtils
         batch.Draw(tex, fitted, src, color);
     }
 
+    /// <summary>Replace characters the embedded ASCII-only SpriteFonts can't render
+    /// with '?'. Run any dynamic string through this before MeasureString/DrawString —
+    /// an out-of-range char throws in SpriteFont. The canonical sanitize (was private
+    /// in GameRenderer.Hud.cs).</summary>
+    public static string SanitizeAscii(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        bool needs = false;
+        for (int i = 0; i < text.Length; i++)
+            if (text[i] > 126 || (text[i] < 32 && text[i] != '\n')) { needs = true; break; }
+        if (!needs) return text;
+        var sb = new System.Text.StringBuilder(text.Length);
+        foreach (var ch in text) sb.Append(ch >= 32 && ch <= 126 ? ch : '?');
+        return sb.ToString();
+    }
+
     /// <summary>Draw a rectangle outline. The single canonical rect-stroke — replaces
     /// ~13 per-file DrawBorder/DrawRectOutline copies. Corners are non-overlapping (drawn
     /// once each) so the stroke is correct under a translucent color as well as solid.</summary>

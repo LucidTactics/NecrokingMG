@@ -971,7 +971,7 @@ public partial class Game1
         TickPendingReanimRises(dt);   // spawn deferred rises in lockstep with their effect clock
         _buffVisuals.Update(dt, _sim.Units, _gameData.Buffs, _gameTime);
         _foragables.Update(dt);
-        _gameRenderer.UpdateSkillLearnToasts(dt);
+        Toasts.Update(dt);
         SyncCorruptionSettings();
 
         // Death Fog Consumption passive: while the necromancer stands in any
