@@ -166,13 +166,19 @@ public class BloomRenderer
         int mh = screenH / 2;
         for (int i = 0; i < MaxMips && mw >= 2 && mh >= 2; i++)
         {
+            // PreserveContents: the upsample pass rebinds each mip and additively
+            // blends onto its downsampled content — the default DiscardContents
+            // makes MonoGame clear the target to black on bind, which silently
+            // reduced the whole chain to just the deepest mip.
             try
             {
-                _mips[i] = new RenderTarget2D(device, mw, mh, false, bloomFmt, DepthFormat.None);
+                _mips[i] = new RenderTarget2D(device, mw, mh, false, bloomFmt, DepthFormat.None,
+                    0, RenderTargetUsage.PreserveContents);
             }
             catch
             {
-                _mips[i] = new RenderTarget2D(device, mw, mh, false, SurfaceFormat.Color, DepthFormat.None);
+                _mips[i] = new RenderTarget2D(device, mw, mh, false, SurfaceFormat.Color, DepthFormat.None,
+                    0, RenderTargetUsage.PreserveContents);
             }
             _mipCount++;
             mw /= 2;
@@ -184,12 +190,12 @@ public class BloomRenderer
             try
             {
                 _haloScratch = new RenderTarget2D(device, _mips[0]!.Width, _mips[0]!.Height,
-                    false, bloomFmt, DepthFormat.None);
+                    false, bloomFmt, DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
             }
             catch
             {
                 _haloScratch = new RenderTarget2D(device, _mips[0]!.Width, _mips[0]!.Height,
-                    false, SurfaceFormat.Color, DepthFormat.None);
+                    false, SurfaceFormat.Color, DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
             }
         }
 
