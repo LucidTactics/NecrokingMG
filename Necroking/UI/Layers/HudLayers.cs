@@ -99,13 +99,18 @@ public sealed class SpellBarLayer : UILayer
 
     public override string Id => "hud.spell_bar";
     public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { } // HUD rects catalogued by HUDRenderer.AppendHitRects (see file header)
-    public override bool Visible => _g.HudVisible && _g._menuState == MenuState.None;
+    public override bool Visible => _g.HudVisible && _g._menuState != MenuState.MapEditor;
 
     private int HitSlot(int mx, int my, in UICtx ctx)
         => _g._hudRenderer.HitTestBarSlot(ctx.ScreenW, ctx.ScreenH, mx, my);
 
     public override bool ContainsMouse(int mx, int my, in UICtx ctx)
         => HitSlot(mx, my, in ctx) >= 0;
+
+    public override void Draw(in UICtx ctx)
+    {
+        _g._hudRenderer.DrawSpellbar_Public(ctx.ScreenW, ctx.ScreenH, _g);
+    }
 
     protected override void OnPointer(InputState input, in UICtx ctx)
     {

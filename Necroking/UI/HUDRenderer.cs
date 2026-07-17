@@ -181,6 +181,13 @@ public partial class HUDRenderer
     /// <summary>Set the input state reference for hover detection in draw calls.</summary>
     public void SetInput(InputState input) => _input = input;
 
+    public void DrawSpellbar_Public(int screenW, int screenH, Game1 _g)
+    {
+        int necroIdx = FindNecromancer(_g._sim);
+        DrawSpellBar(screenW, screenH,
+            SpellBarBindings.SlotLabels, _g._spellBarState, _g._sim, _g._gameData, _g._inventory, necroIdx, _g._slotFlash);
+    }
+
     /// <summary>Draw the HUD. <paramref name="drawTopRows"/> excludes the
     /// top-right core-menu/editor-launcher rows — those are drawn by their own
     /// router layers (HudTop band, ABOVE panels and blocking overlays), so
@@ -189,7 +196,7 @@ public partial class HUDRenderer
         Inventory inventory, bool inventoryVisible,
         SpellBarState bar,
         float timeScale,
-        Action<string, int, int> drawSpellCategoryIcon, int menuOpenMask = 0, bool paused = false,
+        int menuOpenMask = 0, bool paused = false,
         float[]? slotFlash = null,
         int editorOpenMask = 0, bool drawTopRows = true)
     {
@@ -204,9 +211,6 @@ public partial class HUDRenderer
         // The tooltip itself draws later via DrawCursorTooltips (Tooltip band, topmost).
         _hoverSlotSpell = null;
         _hoverSlotMelee = false;
-
-        DrawSpellBar(screenW, screenH,
-            SpellBarBindings.SlotLabels, bar, sim, gameData, inventory, drawSpellCategoryIcon, necroIdx, slotFlash);
 
         // Controls hint intentionally omitted — overlapped the FPS/zoom bottom-
         // left readout. Re-enable if we add a menu page for it.
@@ -499,7 +503,7 @@ public partial class HUDRenderer
 
     private void DrawSpellBar(int screenW, int screenH,
         string[] keys, SpellBarState bar, Simulation sim, GameData gameData,
-        Inventory inventory, Action<string, int, int> drawCategoryIcon, int necroIdx, float[]? flash = null)
+        Inventory inventory, int necroIdx, float[]? flash = null)
     {
         // Same caster-level resolution as the cast gate (TryStartSpellCast), so
         // the castability cues below can't drift from what a cast would actually

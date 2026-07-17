@@ -4046,7 +4046,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     /// DrawHudBlock; the single visibility source for the HUD's router layers
     /// and RebuildUIHitRects.</summary>
     internal bool HudVisible => _gameWorldLoaded
-        && (_menuState == MenuState.None || _menuState == MenuState.MapEditor)
+        && (_menuState == MenuState.None || _menuState == MenuState.MapEditor || _menuState == MenuState.PauseMenu)
         && (_activeScenario == null || _activeScenario.WantsUI);
 
     /// <summary>The DrawHudBlock "showUI" gate: scenario wants UI and no no-UI

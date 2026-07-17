@@ -483,7 +483,7 @@ partial class GameRenderer
             _g._inventory, _g._inventoryUI.IsVisible,
             _g._spellBarState,
             _g._timeScale,
-            DrawSpellCategoryIcon, BuildMenuOpenMask(), _g._paused,
+            BuildMenuOpenMask(), _g._paused,
             _g._slotFlash, BuildEditorOpenMask(),
             // Top-right button rows are drawn by their own HudTop-band router
             // layers so they sit ABOVE panels/overlays, matching where they
