@@ -952,7 +952,7 @@ public partial class HUDRenderer
                               : new Color(20, 20, 30, 140);
             Scope.Draw(_pixel, r, bg);
             // "=" (twin bars) reads as pause; flips to ">" (play) once paused.
-            string pauseLabel = paused ? ">" : "=";
+            string pauseLabel = "=";
             var labelSize = _smallFont.MeasureString(pauseLabel);
             Text(_smallFont, pauseLabel,
                 new Vector2(r.X + r.Width / 2f - labelSize.X / 2f, r.Y + r.Height / 2f - labelSize.Y / 2f),
