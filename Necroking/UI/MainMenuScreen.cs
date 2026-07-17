@@ -48,16 +48,17 @@ public sealed class MainMenuScreen
     }
 
     /// <summary>Left-click dispatch — called from Game1.Update's MainMenu block,
-    /// hit-testing the same layout Draw renders.</summary>
+    /// hit-testing the same layout Draw renders. Buttons fire on release, and
+    /// only when the press started on the same button (InputState.ClickOn) —
+    /// dragging off before releasing cancels the click.</summary>
     public void Update()
     {
-        if (!_g._input.LeftPressed) return;
+        if (!_g._input.LeftReleased) return;
         int sw = _g.GraphicsDevice.Viewport.Width;
         int sh = _g.GraphicsDevice.Viewport.Height;
-        int mx = (int)_g._input.MousePos.X, my = (int)_g._input.MousePos.Y;
         foreach (var b in BuildLayout(sw, sh))
         {
-            if (!b.Interactable || !b.Rect.Contains(mx, my)) continue;
+            if (!b.Interactable || _g._input.ClickOn("menu:" + b.Id, b.Rect) == Necroking.Core.ClickKind.None) continue;
             switch (b.Id)
             {
                 case MenuButtonId.Continue:

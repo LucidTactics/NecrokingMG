@@ -106,6 +106,10 @@ public class GeneralSettings
     /// unfocused regardless — this only controls whether the simulation advances.</summary>
     [JsonPropertyName("runWhenUnfocused")] public bool RunWhenUnfocused { get; set; }
 
+    /// <summary>Max gap (ms) between two clicks on the same UI object for the
+    /// pair to count as a double-click (InputState's click-gesture chain).</summary>
+    [JsonPropertyName("doubleClickMs")] public int DoubleClickMs { get; set; } = 500;
+
     /// <summary>World-Z gravity (units/sec²) applied to physics-launched bodies
     /// during their flight arc. Realistic value is ~10 if 1 world unit ≈ 1 metre
     /// (the scale sprites are sized for). The engine default of 15 is moderately

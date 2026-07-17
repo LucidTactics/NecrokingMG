@@ -2218,7 +2218,7 @@ public partial class Game1 {
                   btnUp, btnUp);
                var kbNow = Microsoft.Xna.Framework.Input.Keyboard.GetState();
                var syn = new Necroking.Core.InputState();
-               syn.Capture(downNow, upPrev, kbNow, kbNow);
+               syn.Capture(downNow, upPrev, kbNow, kbNow, _input.Time);
                syn.MouseOverUI = _uiHits.Hit(sx, sy);
                string? uiHitId = _uiHits.HitId(sx, sy);
                _uiRouter.DispatchInput(syn,
@@ -2248,7 +2248,7 @@ public partial class Game1 {
                var synk = new Necroking.Core.InputState();
                synk.Capture(kMouse, kMouse,
                   new Microsoft.Xna.Framework.Input.KeyboardState(Microsoft.Xna.Framework.Input.Keys.Escape),
-                  new Microsoft.Xna.Framework.Input.KeyboardState());
+                  new Microsoft.Xna.Framework.Input.KeyboardState(), _input.Time);
                _uiRouter.DispatchInput(synk,
                   new Necroking.UI.UICtx(ksw, ksh, _clock.VisualTime));
                bool escConsumed = synk.IsKeyConsumed(Microsoft.Xna.Framework.Input.Keys.Escape);

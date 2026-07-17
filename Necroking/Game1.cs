@@ -2648,6 +2648,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _menuStateAtLastCapture = _menuState;
         }
 
+        // Wall-clock stamp + double-click window for InputState's click gestures.
+        double inputTime = gameTime.TotalGameTime.TotalSeconds;
+        _input.DoubleClickWindow = _gameData.Settings.General.DoubleClickMs / 1000.0;
+
         if (unfocused && !_devRawMouse.HasValue)
         {
             // Kept running (dev server or "run when unfocused"): feed NEUTRAL input — no
@@ -2659,7 +2663,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             var neutral = new MouseState(vpW / 2, vpH / 2, mouse.ScrollWheelValue,
                 ButtonState.Released, ButtonState.Released, ButtonState.Released,
                 ButtonState.Released, ButtonState.Released);
-            _input.Capture(neutral, neutral, new KeyboardState(), new KeyboardState());
+            _input.Capture(neutral, neutral, new KeyboardState(), new KeyboardState(), inputTime);
         }
         else if (cursorOutside)
         {
@@ -2668,11 +2672,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             var noButtons = new MouseState(mouse.X, mouse.Y, mouse.ScrollWheelValue,
                 ButtonState.Released, ButtonState.Released, ButtonState.Released,
                 ButtonState.Released, ButtonState.Released);
-            _input.Capture(noButtons, noButtons, kb, _prevKb);
+            _input.Capture(noButtons, noButtons, kb, _prevKb, inputTime);
         }
         else
         {
-            _input.Capture(mouse, _prevMouse, kb, _prevKb);
+            _input.Capture(mouse, _prevMouse, kb, _prevKb, inputTime);
         }
 
         // Dev-only cursor override (the `mousepos` dev command): headless runs have no

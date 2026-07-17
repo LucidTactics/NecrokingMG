@@ -1248,6 +1248,7 @@ public partial class UIEditorWindow : EditorBase
             var nsIds = new[] { "(none)" }.Concat(_nineSlices.Select(ns => ns.Id)).ToArray();
             string curNs = string.IsNullOrEmpty(def.NineSlice) ? "(none)" : def.NineSlice;
             string newNs = DrawCombo("el_ns", "Nine-Slice", curNs, nsIds, x + pad, curY, propW);
+            if (ComboDoubleClicked("el_ns")) GoToDef(UIEditorTab.NineSlices, def.NineSlice);
             if (newNs == "(none)") newNs = "";
             if (newNs != def.NineSlice) { def.NineSlice = newNs; _unsavedChanges = true; }
             curY += 24;
@@ -1741,6 +1742,7 @@ public partial class UIEditorWindow : EditorBase
         // Frame (topmost layer)
         string curFrame = string.IsNullOrEmpty(def.Frame) ? "(none)" : def.Frame;
         string newFrame = DrawCombo("wd_frame", "Frame", curFrame, nsIds, x + pad, curY, propW);
+        if (ComboDoubleClicked("wd_frame")) GoToDef(UIEditorTab.NineSlices, def.Frame);
         if (newFrame == "(none)") newFrame = "";
         if (newFrame != def.Frame) { def.Frame = newFrame; _unsavedChanges = true; }
         curY += 24;
@@ -1760,6 +1762,7 @@ public partial class UIEditorWindow : EditorBase
         // Background
         string curBg = string.IsNullOrEmpty(def.Background) ? "(none)" : def.Background;
         string newBg = DrawCombo("wd_bg", "Background", curBg, nsIds, x + pad, curY, propW);
+        if (ComboDoubleClicked("wd_bg")) GoToDef(UIEditorTab.NineSlices, def.Background);
         if (newBg == "(none)") newBg = "";
         if (newBg != def.Background) { def.Background = newBg; _unsavedChanges = true; }
         curY += 24;
@@ -1795,6 +1798,7 @@ public partial class UIEditorWindow : EditorBase
         // Stencil (nine-slice OR image)
         string curSt = string.IsNullOrEmpty(def.Stencil) ? "(none)" : def.Stencil;
         string newSt = DrawCombo("wd_stencil", "Stencil NS", curSt, nsIds, x + pad, curY, propW);
+        if (ComboDoubleClicked("wd_stencil")) GoToDef(UIEditorTab.NineSlices, def.Stencil);
         if (newSt == "(none)") newSt = "";
         if (newSt != def.Stencil) { def.Stencil = newSt; _unsavedChanges = true; }
         curY += 24;
@@ -2113,17 +2117,29 @@ public partial class UIEditorWindow : EditorBase
     private void GoToChildTarget(UIEditorChildDef child)
     {
         if (!string.IsNullOrEmpty(child.Element))
-        {
-            for (int i = 0; i < _elements.Count; i++)
-                if (_elements[i].Id == child.Element)
-                { ActiveTab = UIEditorTab.Elements; SelectedIndex = i; _selectedChildIdx = -1; _selectedChildPath.Clear(); return; }
-        }
+            GoToDef(UIEditorTab.Elements, child.Element);
         else if (!string.IsNullOrEmpty(child.Widget))
+            GoToDef(UIEditorTab.Widgets, child.Widget);
+    }
+
+    /// <summary>Switch to a tab and select the def with the given id — the shared
+    /// jump used by the "-> Go to" button and by double-clicking any reference
+    /// combo. No-op (returns false) when the id is empty or not found.</summary>
+    private bool GoToDef(UIEditorTab tab, string id)
+    {
+        if (string.IsNullOrEmpty(id)) return false;
+        int idx = tab switch
         {
-            for (int i = 0; i < _widgets.Count; i++)
-                if (_widgets[i].Id == child.Widget)
-                { ActiveTab = UIEditorTab.Widgets; SelectedIndex = i; _selectedChildIdx = -1; _selectedChildPath.Clear(); return; }
-        }
+            UIEditorTab.NineSlices => _nineSlices.FindIndex(ns => ns.Id == id),
+            UIEditorTab.Elements => _elements.FindIndex(e => e.Id == id),
+            _ => _widgets.FindIndex(wd => wd.Id == id),
+        };
+        if (idx < 0) return false;
+        ActiveTab = tab;
+        SelectedIndex = idx;
+        _selectedChildIdx = -1;
+        _selectedChildPath.Clear();
+        return true;
     }
 
     /// <summary>Draws the selected child's property block. Returns the pixel
@@ -2146,6 +2162,7 @@ public partial class UIEditorWindow : EditorBase
         var elemIds = new[] { "(none)" }.Concat(_elements.Select(e => e.Id)).ToArray();
         string curEl = string.IsNullOrEmpty(child.Element) ? "(none)" : child.Element;
         string newEl = DrawCombo("ch_elem", "Element", curEl, elemIds, x, curY, propW);
+        if (ComboDoubleClicked("ch_elem")) GoToDef(UIEditorTab.Elements, child.Element);
         if (newEl == "(none)") newEl = "";
         if (newEl != child.Element) { child.Element = newEl; _unsavedChanges = true; }
         curY += 22;
@@ -2154,6 +2171,7 @@ public partial class UIEditorWindow : EditorBase
         var widgetIds = new[] { "(none)" }.Concat(_widgets.Select(wd => wd.Id)).ToArray();
         string curWd = string.IsNullOrEmpty(child.Widget) ? "(none)" : child.Widget;
         string newWd = DrawCombo("ch_widget", "Widget", curWd, widgetIds, x, curY, propW);
+        if (ComboDoubleClicked("ch_widget")) GoToDef(UIEditorTab.Widgets, child.Widget);
         if (newWd == "(none)") newWd = "";
         if (newWd != child.Widget)
         {

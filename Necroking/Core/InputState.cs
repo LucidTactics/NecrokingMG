@@ -4,6 +4,9 @@ using Microsoft.Xna.Framework.Input;
 
 namespace Necroking.Core;
 
+/// <summary>Result of a UI click gesture (see <see cref="InputState.ClickOn"/>).</summary>
+public enum ClickKind { None, Click, DoubleClick }
+
 /// <summary>
 /// Centralized input state captured once per frame. All systems read from this
 /// instead of calling Mouse.GetState() / Keyboard.GetState() directly.
@@ -31,6 +34,22 @@ public class InputState
     // the press to have STARTED inside their rect, so clearing this kills the
     // whole press→release gesture in one place.
     public Point PressStartPos = new(-1, -1);
+
+    // Wall-clock seconds at the last Capture (framework total time, NOT world
+    // time — double-click timing must keep working while the world is paused
+    // or a menu is up). Stays put on frames where Capture doesn't run (focus
+    // freeze), which absolute timestamps tolerate.
+    public double Time;
+
+    // Max gap between two clicks on the SAME object to count as a double-click.
+    // Mirrored from GeneralSettings.DoubleClickMs by Game1 each frame.
+    public double DoubleClickWindow = 0.5;
+
+    // Double-click chain: the one most-recent completed click. A click on a
+    // different object simply restarts the chain (two clicks on different
+    // objects are two separate clicks, never a double).
+    private string? _lastClickId;
+    private double _lastClickTime = double.NegativeInfinity;
 
     // Derived helpers
     public Vector2 MousePos;
@@ -80,10 +99,12 @@ public class InputState
     /// </summary>
     public bool MouseOverUI;
 
-    /// <summary>Capture raw input state at the top of each frame. Resets all consumption flags.</summary>
+    /// <summary>Capture raw input state at the top of each frame. Resets all consumption flags.
+    /// <paramref name="time"/> is wall-clock seconds (gameTime.TotalGameTime) for click timing.</summary>
     public void Capture(MouseState mouse, MouseState prevMouse,
-                        KeyboardState kb, KeyboardState prevKb)
+                        KeyboardState kb, KeyboardState prevKb, double time)
     {
+        Time = time;
         Mouse = mouse;
         PrevMouse = prevMouse;
         Kb = kb;
@@ -118,8 +139,49 @@ public class InputState
     /// mode change (opened an editor, toggled a menu) belongs to the widget it
     /// started on and must not also fire a widget that appeared under the cursor
     /// in the new mode — e.g. the spell editor's [X] eating the launcher click
-    /// that opened it. The next physical press re-stamps PressStartPos.</summary>
-    public void ConsumeGesture() => PressStartPos = new Point(-1, -1);
+    /// that opened it. The next physical press re-stamps PressStartPos. Also
+    /// kills the double-click chain — a click on the old screen must not pair
+    /// with a click on whatever the new mode put under the cursor.</summary>
+    public void ConsumeGesture() { PressStartPos = new Point(-1, -1); _lastClickId = null; }
+
+    /// <summary>Feed one completed click on a UI object into the double-click
+    /// chain. Returns true when it pairs with the previous click — same id,
+    /// within <see cref="DoubleClickWindow"/> — in which case the chain resets
+    /// (a triple click is a double + a fresh single). Any other click just
+    /// (re)starts the chain. Use a stable, globally unique id per object
+    /// (e.g. "menu:Play", "combo:ch_elem").</summary>
+    public bool RegisterClick(string id)
+    {
+        bool isDouble = id == _lastClickId && Time - _lastClickTime <= DoubleClickWindow;
+        if (isDouble)
+        {
+            _lastClickId = null;
+        }
+        else
+        {
+            _lastClickId = id;
+            _lastClickTime = Time;
+        }
+        return isDouble;
+    }
+
+    /// <summary>Forget the pending double-click chain without touching the
+    /// press gesture (e.g. a drag started, or the clicked object vanished).</summary>
+    public void InvalidateDoubleClick() => _lastClickId = null;
+
+    /// <summary>UI click gesture for release-fired widgets, evaluated against the
+    /// Update-side edges. Fires only on release, and only when the press STARTED
+    /// inside <paramref name="rect"/> and was released inside it — press-in/
+    /// release-out and press-out/release-in both cancel. Returns DoubleClick when
+    /// this click is the second on the same <paramref name="id"/> within the
+    /// window. World-object clicks should stay on the eager LeftPressed edge
+    /// instead, so time-critical clicks (targeting a moving unit) aren't delayed.</summary>
+    public ClickKind ClickOn(string id, Rectangle rect)
+    {
+        if (!LeftReleased || _mouseConsumed) return ClickKind.None;
+        if (!rect.Contains(Mouse.X, Mouse.Y) || !rect.Contains(PressStartPos)) return ClickKind.None;
+        return RegisterClick(id) ? ClickKind.DoubleClick : ClickKind.Click;
+    }
 
     // Keyboard helpers
     public bool WasKeyPressed(Keys key) => Kb.IsKeyDown(key) && PrevKb.IsKeyUp(key);

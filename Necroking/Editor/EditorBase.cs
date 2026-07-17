@@ -396,6 +396,11 @@ public class EditorBase
     // Guards against a shared color picker being drawn twice per frame when
     // nested editors (wall/env inside map editor) each call DrawColorPickerPopup.
     private bool _colorPickerDrawnThisFrame;
+    // FieldId of the combo whose header was double-clicked this frame (two rapid
+    // presses within InputState.DoubleClickWindow); cleared each UpdateInput.
+    // Callers query ComboDoubleClicked right after their DrawCombo call to bind
+    // an action to it (e.g. UI editor jumps to the referenced def).
+    private string? _comboDoubleClickedField;
     // Set by DrawCombo while its dropdown is open; EndDrawFrame closes the
     // dropdown if the owning combo stopped being drawn (e.g. its tab was
     // switched away by a hotkey) — otherwise the pre-raised layer 2 would
@@ -463,6 +468,7 @@ public class EditorBase
         _mouseOverEditorUI = false;
         _pendingDropdown = null;
         _dropdownOverlayConsumedClick = false;
+        _comboDoubleClickedField = null;
         _colorPickerDrawnThisFrame = false;
         // Defensive: if a widget scope leaked (exception between Begin/EndOverlay),
         // don't let it poison every later frame.
@@ -1503,6 +1509,21 @@ public class EditorBase
 
         if (hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released)
         {
+            // Double-click on the header is its own gesture, checked before the
+            // open/close logic. Chained on PRESS edges (the dropdown opens on
+            // press, so the second press of a double lands on the open combo):
+            // two rapid presses close the dropdown and report via
+            // ComboDoubleClicked instead of the normal close-on-release.
+            if (_input.RegisterClick("combo:" + fieldId))
+            {
+                _comboDoubleClickedField = fieldId;
+                CloseActiveDropdown();
+                _comboEager.Close();
+                // Swallow the in-flight press so its release can't land on a
+                // widget the double-click action may have put under the cursor.
+                _dropdownHoldingMousePress = true;
+                return value;
+            }
             if (isOpen)
             {
                 // Eager: a second press on the open button closes on RELEASE
@@ -2617,6 +2638,10 @@ public class EditorBase
     /// Editors should call this at the top of their Escape cascade so that
     /// Escape closes the dropdown first before closing sub-editors/popups.
     /// </summary>
+    /// <summary>True when <paramref name="fieldId"/>'s combo header was
+    /// double-clicked this frame. Query right after the DrawCombo call.</summary>
+    public bool ComboDoubleClicked(string fieldId) => _comboDoubleClickedField == fieldId;
+
     public bool CloseActiveDropdown()
     {
         if (_activeFieldId != null && _activeFieldId.EndsWith("_combo"))

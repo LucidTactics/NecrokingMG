@@ -34,6 +34,10 @@ public static class SettingsGeneralTab
         s.RunWhenUnfocused = ui.DrawCheckbox("Keep Running When Unfocused", s.RunWhenUnfocused, x, curY);
         curY += RowH;
 
+        int newDblClick = ui.DrawIntField("gen_doubleClickMs", "Double Click (ms)", s.DoubleClickMs, x, curY, w);
+        s.DoubleClickMs = Math.Clamp(newDblClick, 100, 2000);
+        curY += RowH;
+
         // --- Ground Rendering ---
         curY += 4;
         ui.DrawSectionHeader("Ground Rendering", x, ref curY, w);
