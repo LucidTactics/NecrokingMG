@@ -936,7 +936,9 @@ public partial class HUDRenderer
         if (!gameData.Settings.General.ShowTimeControls || _smallFont == null) return;
 
         ReadOnlySpan<float> speeds = stackalloc float[] { 0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f };
-        string[] labels = { "<<<", "<<", "<", "=", ">", ">>" };
+        // Slow presets read as their multiplier (a "<" arrow would imply rewind);
+        // normal-and-faster read as play/fast-forward triangles (> = 1x, >>> = 2x).
+        string[] labels = { ".1", ".25", ".5", ">", ">>", ">>>" };
         LayoutTimeControls(screenW, screenH, _timeCtrlRects);
 
         int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
@@ -949,7 +951,8 @@ public partial class HUDRenderer
                      : hover  ? new Color(50, 60, 80, 180)
                               : new Color(20, 20, 30, 140);
             Scope.Draw(_pixel, r, bg);
-            string pauseLabel = paused ? ">" : "||";
+            // "=" (twin bars) reads as pause; flips to ">" (play) once paused.
+            string pauseLabel = paused ? ">" : "=";
             var labelSize = _smallFont.MeasureString(pauseLabel);
             Text(_smallFont, pauseLabel,
                 new Vector2(r.X + r.Width / 2f - labelSize.X / 2f, r.Y + r.Height / 2f - labelSize.Y / 2f),
