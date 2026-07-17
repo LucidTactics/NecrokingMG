@@ -5767,12 +5767,15 @@ public class MapEditorWindow
         {
             var sp = _camera.WorldToScreen(new Vec2(pu.X, pu.Y), 0f, screenW, screenH);
             float r = 6f;
-            Color markerColor = pu.Faction switch
-            {
-                "Human" => new Color(100, 150, 255, 200),
-                "Animal" => new Color(100, 200, 100, 200),
-                _ => new Color(200, 100, 255, 200) // Undead = purple
-            };
+            // Faction color matches the minimap (undead grey / human gold / animal
+            // green). A placed unit's Faction override is "" when it inherits the
+            // def default, so resolve that to the def's faction string first —
+            // otherwise a human/animal placed without an explicit override reads
+            // as undead.
+            string factionStr = string.IsNullOrEmpty(pu.Faction)
+                ? (_gameData.Units.Get(pu.UnitDefId)?.Faction ?? "Undead")
+                : pu.Faction;
+            Color markerColor = FactionColors.For(factionStr);
 
             // Text stays readable (the marker shape, not the text, carries the
             // faction/corpse coding). Dimming the label made corpse names unreadable.

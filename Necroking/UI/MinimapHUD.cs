@@ -67,10 +67,13 @@ public class MinimapHUD
     // but deliberately dark gray, not pure black (too stark next to the terrain).
     private static readonly Color FogUnexplored = new(26, 26, 32, 255);
     private static readonly Color FogExplored = new Color(0, 0, 0, 90); // ~35% dim: terrain readable, clearly fogged
-    private static readonly Color PlayerColor = Color.White;
-    private static readonly Color AnimalColor = new(90, 240, 70);
-    private static readonly Color HumanColor = new(255, 215, 60);
-    private static readonly Color UndeadColor = new(180, 180, 190);
+    // Canonical faction palette lives in Render.FactionColors (shared with the
+    // map editor's placed-unit labels). These aliases keep the local call sites
+    // terse — change a color there, not here.
+    private static readonly Color PlayerColor = FactionColors.Player;
+    private static readonly Color AnimalColor = FactionColors.Animal;
+    private static readonly Color HumanColor = FactionColors.Human;
+    private static readonly Color UndeadColor = FactionColors.Undead;
 
     private GraphicsDevice _device = null!;
     private SpriteBatch _batch = null!;
@@ -421,12 +424,7 @@ public class MinimapHUD
                 && (!fog.IsVisible(u.Position)
                     || fog.GetTileState((int)u.Position.X, (int)u.Position.Y) == FogTileState.Unexplored))
                 continue;
-            Color col = u.Faction switch
-            {
-                Faction.Animal => AnimalColor,
-                Faction.Human => HumanColor,
-                _ => UndeadColor,
-            };
+            Color col = FactionColors.For(u.Faction);
             ClippedRect(rect.X + (int)((u.Position.X - _winX) * sx) - 1,
                         rect.Y + (int)((u.Position.Y - _winY) * sy) - 1, 2, 2, col, rect);
         }
