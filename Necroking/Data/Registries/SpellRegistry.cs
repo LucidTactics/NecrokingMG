@@ -680,8 +680,34 @@ public class SpellDef : INamedDef
     [EditorField(Label = "Scatter Strength", Group = "SCATTER", Order = 901, Step = 0.05f, Decimals = 2, Tooltip = "Halo brightness (0-1). Weather fog density\nscales it further at runtime.")]
     [JsonPropertyName("scatterStrength")] public float ScatterStrength { get; set; } = 1.0f;
 
-    [EditorField(Label = "Scatter Color", Group = "SCATTER", Order = 902, Compact = true, Tooltip = "Color the nearby air glows. Often warmer/softer\nthan the effect's own core color.")]
+    [EditorField(Label = "Auto Color", Group = "SCATTER", Order = 902, Tooltip = "ON: the air glows in the spell's own visual color\n(glow/particle color per category). OFF: use the\ncustom Scatter Color below.")]
+    [JsonPropertyName("scatterAutoColor")] public bool ScatterAutoColor { get; set; } = true;
+
+    [EditorField(Label = "Scatter Color", Group = "SCATTER", Order = 903, Compact = true, Tooltip = "Custom air-glow color — used only when Auto Color\nis off.")]
     [JsonPropertyName("scatterColor")] [JsonConverter(typeof(HdrColorJsonConverter))] public HdrColor ScatterColor { get; set; } = new(255, 255, 255, 255, 1.0f);
+
+    /// <summary>Effective scatter halo color: the explicit ScatterColor when
+    /// Auto Color is off, else derived from the spell's own visual palette
+    /// (glow/particle color per category). The single conversion point every
+    /// scatter consumer (style builders, projectile/impact paths, test shapes)
+    /// goes through.</summary>
+    public Microsoft.Xna.Framework.Color ScatterRgb()
+    {
+        HdrColor c;
+        if (!ScatterAutoColor)
+            c = ScatterColor;
+        else
+            c = Category switch
+            {
+                "Beam" => BeamGlowColor,
+                "Strike" => StrikeGlowColor,
+                "Drain" => DrainGlowColor,
+                _ => ProjectileFlipbook != null && !string.IsNullOrEmpty(ProjectileFlipbook.FlipbookID)
+                    ? ProjectileFlipbook.Color
+                    : HitEffectFlipbook?.Color ?? ScatterColor,
+            };
+        return new Microsoft.Xna.Framework.Color(c.R, c.G, c.B);
+    }
 
     // ============ DRAIN ============
     [EditorVisible("Category", "Drain")]
@@ -979,7 +1005,7 @@ public class SpellDef : INamedDef
         FlickerHz = StrikeFlickerHz,
         JitterHz = StrikeJitterHz,
         ScatterRadius = ScatterRadius,
-        ScatterRgb = new Microsoft.Xna.Framework.Color(ScatterColor.R, ScatterColor.G, ScatterColor.B),
+        ScatterRgb = ScatterRgb(),
         ScatterStrength = ScatterStrength,
     };
 
@@ -997,7 +1023,7 @@ public class SpellDef : INamedDef
         FlickerHz = BeamFlickerHz,
         JitterHz = BeamJitterHz,
         ScatterRadius = ScatterRadius,
-        ScatterRgb = new Microsoft.Xna.Framework.Color(ScatterColor.R, ScatterColor.G, ScatterColor.B),
+        ScatterRgb = ScatterRgb(),
         ScatterStrength = ScatterStrength,
     };
 
@@ -1031,7 +1057,7 @@ public class SpellDef : INamedDef
         ImpactFlipbookID = string.IsNullOrEmpty(DrainImpactFlipbook) ? "cloud03" : DrainImpactFlipbook,
         ImpactFlareScale = DrainImpactFlareScale,
         ScatterRadius = ScatterRadius,
-        ScatterRgb = new Microsoft.Xna.Framework.Color(ScatterColor.R, ScatterColor.G, ScatterColor.B),
+        ScatterRgb = ScatterRgb(),
         ScatterStrength = ScatterStrength,
     };
 

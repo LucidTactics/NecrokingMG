@@ -952,26 +952,26 @@
       "drainMaxDuration": 2,
       "drainArcHeight": 14,
       "drainSwayHz": 1,
-      "drainCoreWidth": 2,
-      "drainGlowWidth": 3.5,
+      "drainCoreWidth": 7,
+      "drainGlowWidth": 8,
       "drainPulseHz": 1.2,
-      "drainPulseStrength": 0.3,
+      "drainPulseStrength": 0.2,
       "drainFlickerMin": 1,
       "drainCoreColor": {
         "r": 156,
         "g": 255,
         "b": 79,
         "a": 155,
-        "intensity": 2.5
+        "intensity": 1.0181818
       },
       "drainGlowColor": {
         "r": 97,
         "g": 255,
         "b": 128,
         "a": 27,
-        "intensity": 5.9423075
+        "intensity": 4.2181816
       },
-      "drainSourceWidthScale": 2,
+      "drainSourceWidthScale": 3,
       "drainCloudCount": 7,
       "drainCloudSpeed": 0.7,
       "drainCloudColor": {
@@ -1275,17 +1275,17 @@
       "strikeFlickerHz": 1,
       "strikeCoreColor": {
         "r": 255,
-        "g": 247,
-        "b": 200,
+        "g": 205,
+        "b": 100,
         "a": 255,
-        "intensity": 2.590909
+        "intensity": 1.1
       },
       "strikeGlowColor": {
-        "r": 254,
-        "g": 192,
-        "b": 82,
+        "r": 255,
+        "g": 170,
+        "b": 60,
         "a": 180,
-        "intensity": 2.4545453
+        "intensity": 1.5
       },
       "godRayEdgeSoftness": 0.8,
       "godRayNoiseStrength": 0.3,

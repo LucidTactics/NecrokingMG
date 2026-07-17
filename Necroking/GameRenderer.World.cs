@@ -622,9 +622,7 @@ partial class GameRenderer
                     impact.HitEffectColor.ToColor(), fbId, hdrIntensity: impact.HitEffectColor.Intensity,
                     blendMode: impact.HitEffectBlendMode, alignment: impact.HitEffectAlignment,
                     scatterRadius: (impactSpell?.ScatterRadius ?? 0f) * 1.6f, // burst > flight orb
-                    scatterRgb: impactSpell != null
-                        ? new Color(impactSpell.ScatterColor.R, impactSpell.ScatterColor.G, impactSpell.ScatterColor.B)
-                        : default,
+                    scatterRgb: impactSpell?.ScatterRgb() ?? default,
                     scatterStrength: impactSpell?.ScatterStrength ?? 1f);
             }
             else if (impact.AoeRadius > 0)

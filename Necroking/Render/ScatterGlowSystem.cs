@@ -154,8 +154,7 @@ public sealed class ScatterGlowSystem
     /// <summary>Register a point emitter from a SpellDef's SCATTER fields — the
     /// single SpellDef→emitter conversion point (no-op when scatterRadius is 0).</summary>
     public void AddSpellPoint(SpellDef spell, Vec2 pos, float strengthScale = 1f, float height = 0f)
-        => AddPoint(pos, spell.ScatterRadius,
-            new Color(spell.ScatterColor.R, spell.ScatterColor.G, spell.ScatterColor.B),
+        => AddPoint(pos, spell.ScatterRadius, spell.ScatterRgb(),
             spell.ScatterStrength * strengthScale, height);
 
     /// <summary>Register a polyline emitter (beams): splats point halos along the
@@ -388,7 +387,7 @@ public sealed class ScatterGlowSystem
         var spell = s.Spell;
         if (spell.ScatterRadius <= 0f) return;
         float fade = MathHelper.Clamp(s.TtlLeft / TestShapeFadeSecs, 0f, 1f);
-        var rgb = new Color(spell.ScatterColor.R, spell.ScatterColor.G, spell.ScatterColor.B);
+        var rgb = spell.ScatterRgb();
         float strength = spell.ScatterStrength * fade;
         if (s.IsCircle)
         {

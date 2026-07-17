@@ -134,10 +134,16 @@ public class GodRayRenderer
         float cw = style.CoreWidth * widthScale;
         float gw = style.GlowWidth * widthScale;
 
-        // 4 layers from outer glow to inner core (all values match C++)
+        // 4 layers from outer glow to inner core. Layer alphas were the C++
+        // values {0.12, 0.25, 0.45, 0.75} — their additive sum (~1.6x before
+        // intensity) pushed the core past the tonemap's desaturation range, so
+        // the ray read pure white regardless of the authored style color
+        // (review find 2026-07-16: god ray should be sun-warm). Halved, the
+        // authored color reaches the screen; brightness is the style
+        // intensity's job.
         float[] layerT = { 1f, 0.66f, 0.33f, 0f };
         Color[] layerColors = { glow, mid, core, core };
-        float[] layerAlphas = { 0.12f, 0.25f, 0.45f, 0.75f };
+        float[] layerAlphas = { 0.06f, 0.13f, 0.22f, 0.38f };
         float edgeSoft = MathF.Max(0f, MathF.Min(1f, p.EdgeSoftness));
         const int EdgeSublayers = 3;
         const int Slices = 20;

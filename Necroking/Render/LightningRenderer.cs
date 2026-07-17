@@ -76,16 +76,11 @@ public class LightningRenderer
 
             if (strike.TelegraphTimer < strike.TelegraphDuration)
             {
-                // Telegraph: pulsing circle on ground (only if visible)
-                if (strike.TelegraphVisible)
-                {
-                    var sp = _renderer.WorldToScreen(strike.TargetPos, 0f, _camera);
-                    float pulse = 0.5f + 0.5f * MathF.Sin(strike.TelegraphTimer * 20f);
-                    float radius = strike.AoeRadius * _camera.Zoom * pulse;
-                    byte alpha = (byte)(100 * pulse);
-                    _spriteBatch.Draw(_glowTex, sp, null, new Color((byte)255, (byte)200, (byte)100, alpha),
-                        0f, new Vector2(32f, 32f), new Vector2(radius * 2 / 32f, radius * _camera.YRatio / 32f), SpriteEffects.None, 0f);
-                }
+                // Telegraph ground flash removed per review (2026-07-16) — the
+                // pulsing pre-strike circle read as a stray artifact. The timing
+                // logic stays (strikes still fire after TelegraphDuration); to
+                // restore the warning visual, draw at strike.TargetPos gated on
+                // strike.TelegraphVisible here.
             }
             else
             {
