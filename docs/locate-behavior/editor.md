@@ -498,10 +498,16 @@ All cross-def reference fields in the widget editor are **`EditorBase.DrawCombo`
   in `DrawWidgetDetail`.
 - Child → element / child-widget: `"ch_elem"` / `"ch_widget"` in `DrawChildProperties`.
 - Add-child pickers: `"addchild_elem"` / `"addchild_wgt"` (widget detail, child list foot).
-There is **no "jump to referenced def" affordance** — selecting a value just rewrites the
-string ref. A double-click-to-navigate feature would have to coexist with the combo's
-open-on-press gesture (no double-click detection exists anywhere; `Core/InputState.cs` has
-only single-frame `LeftPressed`/`LeftReleased` edges + `PressStartPos`).
+**Jump-to-referenced-def**: a partial affordance exists — `GoToChildTarget(child)` in
+`UIEditorWindow.cs` (switches `ActiveTab` + `SelectedIndex` to the element/sub-widget a
+child references, clearing child selection), fired by a `"-> Go to {target}"` `DrawButton`
+at the top of `DrawChildProperties`. It covers **child → element/widget refs only**; the
+nine-slice combos (`el_ns`/`wd_frame`/`wd_bg`/`wd_stencil`) have no jump. There is also a
+public `SelectWidgetById(id)` test hook (Widgets tab only). A double-click-to-navigate
+feature on the combos would have to coexist with `DrawCombo`'s open-on-press gesture
+(no double-click detection exists anywhere; `Core/InputState.cs` has only single-frame
+`LeftPressed`/`LeftReleased` edges + `PressStartPos`), and should route through
+`GoToChildTarget` / a generalized select-by-id rather than a new selection path.
 
 ### Look / edit here when…
 - **"copy/duplicate/paste a widget or child drops properties"** → `CloneWidget` / `CloneChild`
