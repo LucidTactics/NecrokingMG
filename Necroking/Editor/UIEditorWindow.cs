@@ -1247,8 +1247,8 @@ public partial class UIEditorWindow : EditorBase
         {
             var nsIds = new[] { "(none)" }.Concat(_nineSlices.Select(ns => ns.Id)).ToArray();
             string curNs = string.IsNullOrEmpty(def.NineSlice) ? "(none)" : def.NineSlice;
-            string newNs = DrawCombo("el_ns", "Nine-Slice", curNs, nsIds, x + pad, curY, propW);
-            if (ComboDoubleClicked("el_ns")) GoToDef(UIEditorTab.NineSlices, def.NineSlice);
+            string newNs = DrawCombo("el_ns", "Nine-Slice", curNs, nsIds, x + pad, curY, propW - GotoBtnW - 4);
+            DrawGotoRefButton(x + pad + propW - GotoBtnW, curY, UIEditorTab.NineSlices, def.NineSlice);
             if (newNs == "(none)") newNs = "";
             if (newNs != def.NineSlice) { def.NineSlice = newNs; _unsavedChanges = true; }
             curY += 24;
@@ -1741,8 +1741,8 @@ public partial class UIEditorWindow : EditorBase
 
         // Frame (topmost layer)
         string curFrame = string.IsNullOrEmpty(def.Frame) ? "(none)" : def.Frame;
-        string newFrame = DrawCombo("wd_frame", "Frame", curFrame, nsIds, x + pad, curY, propW);
-        if (ComboDoubleClicked("wd_frame")) GoToDef(UIEditorTab.NineSlices, def.Frame);
+        string newFrame = DrawCombo("wd_frame", "Frame", curFrame, nsIds, x + pad, curY, propW - GotoBtnW - 4);
+        DrawGotoRefButton(x + pad + propW - GotoBtnW, curY, UIEditorTab.NineSlices, def.Frame);
         if (newFrame == "(none)") newFrame = "";
         if (newFrame != def.Frame) { def.Frame = newFrame; _unsavedChanges = true; }
         curY += 24;
@@ -1761,8 +1761,8 @@ public partial class UIEditorWindow : EditorBase
 
         // Background
         string curBg = string.IsNullOrEmpty(def.Background) ? "(none)" : def.Background;
-        string newBg = DrawCombo("wd_bg", "Background", curBg, nsIds, x + pad, curY, propW);
-        if (ComboDoubleClicked("wd_bg")) GoToDef(UIEditorTab.NineSlices, def.Background);
+        string newBg = DrawCombo("wd_bg", "Background", curBg, nsIds, x + pad, curY, propW - GotoBtnW - 4);
+        DrawGotoRefButton(x + pad + propW - GotoBtnW, curY, UIEditorTab.NineSlices, def.Background);
         if (newBg == "(none)") newBg = "";
         if (newBg != def.Background) { def.Background = newBg; _unsavedChanges = true; }
         curY += 24;
@@ -1797,8 +1797,8 @@ public partial class UIEditorWindow : EditorBase
 
         // Stencil (nine-slice OR image)
         string curSt = string.IsNullOrEmpty(def.Stencil) ? "(none)" : def.Stencil;
-        string newSt = DrawCombo("wd_stencil", "Stencil NS", curSt, nsIds, x + pad, curY, propW);
-        if (ComboDoubleClicked("wd_stencil")) GoToDef(UIEditorTab.NineSlices, def.Stencil);
+        string newSt = DrawCombo("wd_stencil", "Stencil NS", curSt, nsIds, x + pad, curY, propW - GotoBtnW - 4);
+        DrawGotoRefButton(x + pad + propW - GotoBtnW, curY, UIEditorTab.NineSlices, def.Stencil);
         if (newSt == "(none)") newSt = "";
         if (newSt != def.Stencil) { def.Stencil = newSt; _unsavedChanges = true; }
         curY += 24;
@@ -2122,9 +2122,29 @@ public partial class UIEditorWindow : EditorBase
             GoToDef(UIEditorTab.Widgets, child.Widget);
     }
 
+    // Width reserved beside a reference combo for its "goto" button (+gap).
+    private const int GotoBtnW = 38;
+
+    /// <summary>Small "goto" button drawn to the right of a reference combo —
+    /// jumps to the referenced def; greyed out while nothing is referenced.</summary>
+    private void DrawGotoRefButton(int x, int y, UIEditorTab tab, string refId)
+    {
+        if (string.IsNullOrEmpty(refId))
+        {
+            var r = new Rectangle(x, y, GotoBtnW, 20);
+            DrawRect(r, new Color(40, 40, 55, 200));
+            DrawBorder(r, new Color(70, 70, 90, 200));
+            DrawText("goto", new Vector2(x + 6, y + 2), TextDim);
+            return;
+        }
+        if (DrawButton("goto", x, y, GotoBtnW, 20))
+            GoToDef(tab, refId);
+    }
+
     /// <summary>Switch to a tab and select the def with the given id — the shared
-    /// jump used by the "-> Go to" button and by double-clicking any reference
-    /// combo. No-op (returns false) when the id is empty or not found.</summary>
+    /// jump used by the "-> Go to" button, the per-combo "goto" buttons and
+    /// double-clicking a child row. No-op (returns false) when the id is empty
+    /// or not found.</summary>
     private bool GoToDef(UIEditorTab tab, string id)
     {
         if (string.IsNullOrEmpty(id)) return false;
@@ -2161,8 +2181,8 @@ public partial class UIEditorWindow : EditorBase
         // Element ref dropdown
         var elemIds = new[] { "(none)" }.Concat(_elements.Select(e => e.Id)).ToArray();
         string curEl = string.IsNullOrEmpty(child.Element) ? "(none)" : child.Element;
-        string newEl = DrawCombo("ch_elem", "Element", curEl, elemIds, x, curY, propW);
-        if (ComboDoubleClicked("ch_elem")) GoToDef(UIEditorTab.Elements, child.Element);
+        string newEl = DrawCombo("ch_elem", "Element", curEl, elemIds, x, curY, propW - GotoBtnW - 4);
+        DrawGotoRefButton(x + propW - GotoBtnW, curY, UIEditorTab.Elements, child.Element);
         if (newEl == "(none)") newEl = "";
         if (newEl != child.Element) { child.Element = newEl; _unsavedChanges = true; }
         curY += 22;
@@ -2170,8 +2190,8 @@ public partial class UIEditorWindow : EditorBase
         // Widget ref dropdown (with UI15 circular reference guard)
         var widgetIds = new[] { "(none)" }.Concat(_widgets.Select(wd => wd.Id)).ToArray();
         string curWd = string.IsNullOrEmpty(child.Widget) ? "(none)" : child.Widget;
-        string newWd = DrawCombo("ch_widget", "Widget", curWd, widgetIds, x, curY, propW);
-        if (ComboDoubleClicked("ch_widget")) GoToDef(UIEditorTab.Widgets, child.Widget);
+        string newWd = DrawCombo("ch_widget", "Widget", curWd, widgetIds, x, curY, propW - GotoBtnW - 4);
+        DrawGotoRefButton(x + propW - GotoBtnW, curY, UIEditorTab.Widgets, child.Widget);
         if (newWd == "(none)") newWd = "";
         if (newWd != child.Widget)
         {
@@ -3153,17 +3173,29 @@ public partial class UIEditorWindow : EditorBase
             if (depth == 0 && rowRect.Contains(_mouse.X, _mouse.Y) && LeftJustPressed
                 && !new Rectangle(x + 4 + depth * indent, drawY, 14, rowH).Contains(_mouse.X, _mouse.Y))
             {
-                // ch_*/co_* field ids are selection-agnostic — abandon any
-                // in-progress edit so it can't commit into the new child.
-                if (i != _selectedChildIdx) ClearActiveField();
-                _selectedChildIdx = i;
-                _selectedChildPath = path;
+                // Double-click on the row jumps to the element/widget it
+                // references (same navigate as the "-> Go to" button). The
+                // remaining rows still draw this frame; the tab switch takes
+                // over next frame.
+                if (_input.RegisterClick("uied_child:" + pathKey))
+                {
+                    _childDragActive = false;
+                    GoToChildTarget(child);
+                }
+                else
+                {
+                    // ch_*/co_* field ids are selection-agnostic — abandon any
+                    // in-progress edit so it can't commit into the new child.
+                    if (i != _selectedChildIdx) ClearActiveField();
+                    _selectedChildIdx = i;
+                    _selectedChildPath = path;
 
-                // Start drag-reorder (UI12)
-                _childDragActive = true;
-                _childDragSourceIdx = i;
-                _childDragStartY = _mouse.Y;
-                _childDragInsertIdx = -1;
+                    // Start drag-reorder (UI12)
+                    _childDragActive = true;
+                    _childDragSourceIdx = i;
+                    _childDragStartY = _mouse.Y;
+                    _childDragInsertIdx = -1;
+                }
             }
 
             // Update drag insert position (UI12)
