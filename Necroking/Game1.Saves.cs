@@ -279,6 +279,12 @@ public partial class Game1
         _camera.Zoom = camZoom;
         _menuState = menuState;
         _mapEditor.SetMapFilename(editorFilename);
+        // Come back paused: StartGame's OnWorldStart cleared every pause holder,
+        // and the editor-entry default-pause transition doesn't re-fire (we never
+        // observably left MapEditor) — so without this the fresh world would start
+        // ticking immediately. Same User source as editor entry / the time
+        // controls, so the pause button reflects it and unpausing works normally.
+        _clock.Pause(GameClock.PauseSource.User);
         DebugLog.Log("saves", $"Editor-reloaded map '{save.MapName}' in place (from live editor state)");
         _mapEditor.OnMapReloaded(true, save.MapName);
     }
