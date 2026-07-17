@@ -547,6 +547,14 @@ map editor; clamped to the map. The baked window is `_winX/_winY/_winW/_winH` (p
   `DrawCameraViewport` (outline of the camera's world rect). Fog is editor-aware:
   `fogOn = fog.Mode != Off && _menuState != MenuState.MapEditor` (mirrors the world
   pass skip — the old "fogs in the editor" gotcha is fixed).
+- **Per-faction marker colors** = private static `Color` fields in `MinimapHUD.cs`:
+  `UndeadColor`(180,180,190 grey) / `HumanColor`(255,215,60 gold) / `AnimalColor`(90,240,70
+  green) + `PlayerColor`(white, necromancer). `DrawUnitMarkers` switches on the `Unit.Faction`
+  **enum** (`Data/Enums.cs`); `DrawBuildingMarkers` reuses Undead/Human. **There is no shared
+  `Faction→Color` helper** — the map editor's `Editor/MapEditorWindow.cs` `DrawPlacedUnitMarkers`
+  hardcodes a **different** palette keyed on `PlacedUnit.Faction` (a *string*, ""=def default):
+  Undead purple / Human blue / Animal green (+ bone-grey corpse override). Unifying these is a
+  clean single-source-of-truth extraction (e.g. `Render/FactionColors.cs`).
 - **Screen→world**: public `TryScreenToWorld(mx,my,screenW,out world)` (bounds-checked)
   and `TryScreenToWorldNoBoundsCheck` — the inverse marker mapping against the baked
   window; both used by `MinimapLayer` drags.
