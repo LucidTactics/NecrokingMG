@@ -2745,7 +2745,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         Exiting += (s, e) => _net.Stop();
 
         _saveGameWindow = new SaveGameWindow(_editorUi);
-        _saveGameWindow.SetCallbacks(ListSaveGames, UniqueSaveName, SaveFileExists, WriteSaveGame, DeleteSaveGame, SanitizeSaveName);
         _loadGameWindow = new UI.LoadGameWindow(_editorUi);
 
         _settingsWindow = new SettingsWindow(_editorUi);

@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Necroking.Data;
@@ -23,13 +22,6 @@ public class SaveGameWindow
     /// (ESC goes through the modal layer).</summary>
     public bool WantsClose { get; set; }
 
-    private Func<List<SaveGameInfo>> _listSaves = () => new List<SaveGameInfo>();
-    private Func<string, string> _uniqueName = b => b;
-    private Func<string, bool> _fileExists = _ => false;
-    private Func<string, bool> _writeSave = _ => false;
-    private Func<string, bool> _deleteSave = _ => false;
-    private Func<string, string> _sanitize = s => s;
-
     private List<SaveGameInfo> _saves = new();
     private string _name = "";
     private string _error = "";
@@ -46,25 +38,13 @@ public class SaveGameWindow
         _ui = ui;
     }
 
-    public void SetCallbacks(Func<List<SaveGameInfo>> listSaves, Func<string, string> uniqueName,
-        Func<string, bool> fileExists, Func<string, bool> writeSave, Func<string, bool> deleteSave,
-        Func<string, string> sanitize)
-    {
-        _listSaves = listSaves;
-        _uniqueName = uniqueName;
-        _fileExists = fileExists;
-        _writeSave = writeSave;
-        _deleteSave = deleteSave;
-        _sanitize = sanitize;
-    }
-
     /// <summary>Called when the pause-menu Save Game button opens this window:
     /// refresh the save list, prefill a free default name, and snapshot the
     /// current game's preview data (form + first spellbar spells).</summary>
     public void OnOpen(string currentFormId, List<string> currentSpells)
     {
-        _saves = _listSaves();
-        _name = _uniqueName("Quicksave");
+        _saves = Game1.ListSaveGames();
+        _name = Game1.UniqueSaveName("Quicksave");
         _error = "";
         _currentFormId = currentFormId;
         _currentSpells = currentSpells;
@@ -154,21 +134,21 @@ public class SaveGameWindow
         }
 
         // ── Confirm / Cancel ─────────────────────────────────────────────
-        string clean = _sanitize(_name);
-        bool overwrite = clean != "" && _fileExists(clean);
+        string clean = Game1.SanitizeSaveName(_name);
+        bool overwrite = clean != "" && Game1.SaveFileExists(clean);
         string confirmLabel = overwrite ? "Overwrite Save" : "New Save";
         Color confirmBg = overwrite ? new Color(120, 50, 50, 240) : EditorBase.ButtonBg;
         if (_ui.DrawButton(confirmLabel, panelX + PanelW / 2 - 170, btnY, 200, 30, confirmBg))
         {
-            if (clean == "") clean = _uniqueName("Quicksave");
-            if (_writeSave(clean))
+            if (clean == "") clean = Game1.UniqueSaveName("Quicksave");
+            if (Game1.Instance.WriteSaveGame(clean))
             {
                 WantsClose = true;
             }
             else
             {
                 _error = "Save failed - see log";
-                _saves = _listSaves();
+                _saves = Game1.ListSaveGames();
             }
         }
         if (_ui.DrawButton("Cancel", panelX + PanelW / 2 + 50, btnY, 120, 30))
@@ -180,10 +160,10 @@ public class SaveGameWindow
                 panelX + PanelW / 2 - 110, deleteBtnY, 220, 30,
                 canDelete ? new Color(120, 50, 50, 240) : EditorBase.ButtonBg) && canDelete)
         {
-            if (_deleteSave(clean))
+            if (Game1.Instance.DeleteSaveGame(clean))
             {
-                _saves = _listSaves();
-                _name = _uniqueName("Quicksave");
+                _saves = Game1.ListSaveGames();
+                _name = Game1.UniqueSaveName("Quicksave");
                 _error = "";
             }
             else
