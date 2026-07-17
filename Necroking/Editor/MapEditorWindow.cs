@@ -293,6 +293,12 @@ public class MapEditorWindow
     private string _statusMessage = "";
     private float _statusTimer;
 
+    /// <summary>Set by the bottom-bar "Reload Map" button. Game1.Update performs
+    /// the actual world reload next frame — StartGame re-enters _mapEditor.Init /
+    /// SetPlacedUnits, so it must run outside this editor's own Update stack
+    /// (same deferral as LoadGameWindow.PendingLoad).</summary>
+    public bool PendingMapReload { get; set; }
+
     // Panel dimensions
     public const int PanelWidth = 320;
     private const int TabRowHeight = 26;
@@ -301,6 +307,12 @@ public class MapEditorWindow
     private const int ButtonHeight = 22;
     private const int Margin = 6;
     private const int FieldHeight = 22;
+    private const int ReloadButtonHeight = 26;
+    // Total bottom-bar height: 2 + filename field + 2 + Save/Load/Undo row + 2
+    // + Reload Map row + 2 + shortcuts hint + status line. The Draw layout, the
+    // UpdateBottomBarClicks hit-tests, the tab-content reserve, and Update's
+    // click-ownership guard all derive from this one constant so they can't drift.
+    private const int BottomBarHeight = 2 + FieldHeight + 2 + ButtonHeight + 2 + ReloadButtonHeight + 2 + LineHeight + 20;
 
     // Colors
     private static readonly Color BgColor = new(25, 25, 40, 235);
@@ -598,6 +610,11 @@ public class MapEditorWindow
         _mapFilename = name;
         _wallEditor?.SetMapFilename(name);
     }
+
+    /// <summary>The editor's current Save target (no ".json"), as typed in the
+    /// bottom-bar field. Game1 reads it around Reload Map so a typed-but-unsaved
+    /// name survives StartGame's SetMapFilename reset.</summary>
+    public string MapFilename => _mapFilename;
 
     /// <summary>Dev-command hook (`save_map [name]`): trigger the same save as the
     /// editor's Save Map button, optionally to a different filename (the editor's
@@ -1004,7 +1021,7 @@ public class MapEditorWindow
         bool rawLeftClick = leftClick;
         {
             int contentTopY = panelY + TabRowHeight * 2 + 2;
-            int bottomBarTop = panelY + (screenH - 20) - 92;
+            int bottomBarTop = panelY + (screenH - 20) - (BottomBarHeight + 2);
             if (overPanel && (mouse.Y < contentTopY || mouse.Y >= bottomBarTop))
                 leftClick = false;
         }
@@ -1110,28 +1127,50 @@ public class MapEditorWindow
         if (!leftClick) return;
 
         int panelH = screenH - 20;
-        int bottomH = 90;
-        int buttonRowY = panelY + panelH - bottomH + 2 + FieldHeight + 2;
-
-        if (mouse.Y < buttonRowY || mouse.Y >= buttonRowY + ButtonHeight) return;
-
-        int btnW3 = (PanelWidth - Margin * 2 - 8) / 3;
+        int buttonRowY = panelY + panelH - BottomBarHeight + 2 + FieldHeight + 2;
         int relX = mouse.X - (panelX + Margin);
 
-        if (relX >= 0 && relX < btnW3)
+        // Row 1: Save / Load / Undo thirds.
+        if (mouse.Y >= buttonRowY && mouse.Y < buttonRowY + ButtonHeight)
         {
-            SaveMap();
+            int btnW3 = (PanelWidth - Margin * 2 - 8) / 3;
+
+            if (relX >= 0 && relX < btnW3)
+            {
+                SaveMap();
+            }
+            else if (relX >= btnW3 + 4 && relX < btnW3 * 2 + 4)
+            {
+                LoadMap();
+            }
+            else if (relX >= (btnW3 + 4) * 2 && relX < (btnW3 + 4) * 2 + btnW3)
+            {
+                PerformUndo();
+                _statusMessage = $"Undo ({_undoStack.Count} remaining)";
+                _statusTimer = 1.5f;
+            }
+            return;
         }
-        else if (relX >= btnW3 + 4 && relX < btnW3 * 2 + 4)
+
+        // Row 2: full-width "Reload Map" — only request it here; Game1.Update
+        // performs the world rebuild outside this editor's Update stack.
+        int reloadRowY = buttonRowY + ButtonHeight + 2;
+        if (mouse.Y >= reloadRowY && mouse.Y < reloadRowY + ReloadButtonHeight
+            && relX >= 0 && relX < PanelWidth - Margin * 2)
         {
-            LoadMap();
+            PendingMapReload = true;
         }
-        else if (relX >= (btnW3 + 4) * 2 && relX < (btnW3 + 4) * 2 + btnW3)
-        {
-            PerformUndo();
-            _statusMessage = $"Undo ({_undoStack.Count} remaining)";
-            _statusTimer = 1.5f;
-        }
+    }
+
+    /// <summary>Post-"Reload Map" callback from Game1: surface the result in the
+    /// status line and, on success, drop the undo history — its entries reference
+    /// object indices from the pre-reload world (LoadMap clears it for the same
+    /// reason).</summary>
+    public void OnMapReloaded(bool ok, string mapName)
+    {
+        if (ok) _undoStack.Clear();
+        _statusMessage = ok ? $"Reloaded map '{mapName}'" : "Reload failed (see debug log)";
+        _statusTimer = ok ? 3f : 5f;
     }
 
     // ========================================================================
@@ -1239,9 +1278,9 @@ public class MapEditorWindow
         int tabsBottom = panelY + TabRowHeight * 2;
         Scope.Draw(_pixel, new Rectangle(panelX, tabsBottom, PanelWidth, 1), SeparatorColor);
 
-        // Content area (reserve 92px for bottom bar: filename + buttons + shortcuts + status)
+        // Content area (reserve the bottom bar: filename + buttons + shortcuts + status)
         int contentY = tabsBottom + 2;
-        int contentH = panelH - (tabsBottom - panelY) - 2 - 92;
+        int contentH = panelH - (tabsBottom - panelY) - 2 - (BottomBarHeight + 2);
 
         // Scissor-clip the tab content panel so partially-scrolled list items
         // can't spill above the section header or below the bottom bar. Each
@@ -1295,7 +1334,7 @@ public class MapEditorWindow
             DrawZoneLeftPanel(screenW, screenH);
 
         // Bottom bar: map filename, Save/Load buttons, undo info, status message
-        int bottomH = 90; // height of the bottom section
+        int bottomH = BottomBarHeight;
         int bottomY = panelY + panelH - bottomH;
         Scope.Draw(_pixel, new Rectangle(panelX, bottomY, PanelWidth, 1), SeparatorColor);
         bottomY += 2;
@@ -1322,6 +1361,12 @@ public class MapEditorWindow
             _undoStack.Count > 0 ? AccentColor : ButtonBg);
         bottomY += ButtonHeight + 2;
 
+        // Full-width "Reload Map": rebuild the world from disk as a fresh
+        // StartGame (player carried across like a save/load; camera + editor
+        // state untouched). Click handling lives in UpdateBottomBarClicks.
+        DrawButtonRect("Reload Map", panelX + Margin, bottomY, PanelWidth - Margin * 2, ReloadButtonHeight, ButtonBg);
+        bottomY += ReloadButtonHeight + 2;
+
         // Keyboard shortcuts hint
         DrawSmallText("Ctrl+S Save | Ctrl+L Load | Ctrl+Z Undo", panelX + Margin, bottomY + 2, TextDim);
         bottomY += LineHeight;
@@ -1329,7 +1374,8 @@ public class MapEditorWindow
         // INF14: Status message with alpha fade
         if (_statusTimer > 0 && !string.IsNullOrEmpty(_statusMessage))
         {
-            bool isSuccess = _statusMessage.StartsWith("Saved") || _statusMessage.StartsWith("Loaded") || _statusMessage.StartsWith("Undo");
+            bool isSuccess = _statusMessage.StartsWith("Saved") || _statusMessage.StartsWith("Loaded")
+                || _statusMessage.StartsWith("Undo") || _statusMessage.StartsWith("Reloaded");
             Color baseColor = isSuccess ? SuccessColor : DangerColor;
             Color fadedColor = EditorBase.FadeStatusColor(baseColor, _statusTimer);
             DrawSmallText(_statusMessage, panelX + Margin, bottomY + 2, fadedColor);

@@ -898,6 +898,19 @@ public partial class Game1 {
                break;
             }
 
+            // Press the map editor's "Reload Map" button: sets the same pending
+            // flag the button click does; Game1.Update performs the world reload
+            // next frame (requires the map editor to be open).
+            case "reload_map": {
+               if (_menuState != MenuState.MapEditor) {
+                  c.Complete(Necroking.Dev.DevServer.Error("reload_map: map editor not open"));
+                  break;
+               }
+               _mapEditor.PendingMapReload = true;
+               c.Complete(Necroking.Dev.DevServer.Ok($"reload of '{_currentMapName}' requested"));
+               break;
+            }
+
             // Assign a unit to a grave (nearest unoccupied empty_grave if idx omitted):
             // window.dev('assign_worker',[unitId]) or window.dev('assign_worker',[unitId, graveObjIdx])
             case "assign_worker": {
@@ -2369,6 +2382,7 @@ public partial class Game1 {
                   "reanim_into <zombieDefId> [x] [y]", "learn_skill <skillId>",
                   "set_spell_slot <slot 0-9> <spellID|->", "give_item <itemID> [qty]",
                   "save_game <name>", "load_game <name>",
+                  "save_map [name]", "reload_map  (map editor's Reload Map button)",
                   // headless input (clicks / mouse / hover)
                   "click <x> <y> [right]", "mousepos <x> <y>|clear", "pile_click <x> <y>",
                   "hover <selector>|clear", "hover_obj <index>|clear",

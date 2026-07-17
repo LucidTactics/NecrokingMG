@@ -3004,6 +3004,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             LoadSaveGame(pendingLoad);
         }
 
+        // --- Map editor "Reload Map" click: same deferral as the load window
+        // above — the click lands inside _mapEditor.Update, where rebuilding the
+        // world isn't safe (StartGame re-enters _mapEditor.Init). Runs here,
+        // before this frame's editor update. Consume the flag even when the
+        // editor was closed in the meantime so it can't fire on a later reopen.
+        if (_mapEditor.PendingMapReload)
+        {
+            _mapEditor.PendingMapReload = false;
+            if (_menuState == MenuState.MapEditor && _gameWorldLoaded)
+                ReloadMapInEditor();
+        }
+
         // --- ESC: gameplay → pause menu only ---
         // (The "ESC with nothing open → pause menu" fallback now lives AFTER
         // the router dispatch below, since panels/editors/popups consume ESC
