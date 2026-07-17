@@ -489,9 +489,25 @@ its recolor.
 to/from that JSON. When adding a field to a `*Def`, it must also be handled in the runtime
 model and both save + clone paths.
 
+### Reference fields (id-refs to other defs) — where they're rendered/clicked
+All cross-def reference fields in the widget editor are **`EditorBase.DrawCombo` calls in
+`UIEditorWindow.cs`** (eager press→drag→release dropdowns; `DrawCombo` itself is in
+`Editor/EditorBase.cs`). Census by combo field-id:
+- Element → nine-slice: `"el_ns"` in `DrawElementDetail`.
+- Widget → frame/background/stencil nine-slice: `"wd_frame"` / `"wd_bg"` / `"wd_stencil"`
+  in `DrawWidgetDetail`.
+- Child → element / child-widget: `"ch_elem"` / `"ch_widget"` in `DrawChildProperties`.
+- Add-child pickers: `"addchild_elem"` / `"addchild_wgt"` (widget detail, child list foot).
+There is **no "jump to referenced def" affordance** — selecting a value just rewrites the
+string ref. A double-click-to-navigate feature would have to coexist with the combo's
+open-on-press gesture (no double-click detection exists anywhere; `Core/InputState.cs` has
+only single-frame `LeftPressed`/`LeftReleased` edges + `PressStartPos`).
+
 ### Look / edit here when…
 - **"copy/duplicate/paste a widget or child drops properties"** → `CloneWidget` / `CloneChild`
   in `UIEditorWindow.cs`. Add the missing field assignment there.
+- **Reference fields (nine-slice/element/child-widget id-refs), jump-to-referenced-def** →
+  the DrawCombo census above.
 - **Widget/element/child field list** → the model classes at the top of `UIEditorWindow.cs`.
 - **Adding a new widget property** → add to the `*Def` class, the JSON save/load, `CloneWidget`
   or `CloneChild`, and the runtime `UI/RuntimeWidgetRenderer.cs` / `WidgetLayoutUtils.cs`.
