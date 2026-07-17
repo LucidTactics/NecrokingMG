@@ -53,9 +53,16 @@ public partial class HUDRenderer
     private const int TcBtnW = 32;
     private const int TcBtnH = 22;
     private const int TcGap = 2;
-    private const int TcCount = 6;
+    private const int TcCount = 6;             // speed-preset buttons
+    private const int TcBtnCount = TcCount + 1; // + the pause button (index 0)
     private const int TcSpeedTextReserve = 56; // room on the right for the "Paused"/"1.5x" readout
     private const int TcRightMargin = 8;
+
+    // Time-control buttons, laid out ONCE by LayoutTimeControls and read by both
+    // DrawTimeControls and HitTestTimeControls so they can never desync — same
+    // marks-the-buttons pattern as _menuBtnRects / LayoutButtonRow. Index 0 = the
+    // pause button, indices 1..TcCount = speed presets 0..(TcCount-1).
+    private readonly Rectangle[] _timeCtrlRects = new Rectangle[TcBtnCount];
 
     // ── Top-right core-menu buttons ──
     // Button index contract, shared with Game1 (mask bit i = menu i open, and
@@ -82,15 +89,26 @@ public partial class HUDRenderer
     private const int EditorBtnTop = MenuBtnTop + MenuBtnH + 4;
     private readonly Rectangle[] _editorBtnRects = new Rectangle[EditorBtnCount];
 
-    /// <summary>Time-control button block layout, shared by DrawTimeControls and
-    /// HitTestTimeControls so they never desync. The block is right-aligned with
+    /// <summary>Lay out the time-control buttons into <paramref name="rects"/> —
+    /// the single source of truth shared by DrawTimeControls, HitTestTimeControls,
+    /// and AppendHitRects, so button positions live in ONE place instead of being
+    /// recomputed per-call. Index 0 is the pause button, indices 1..TcCount are the
+    /// speed presets, laid out as one uniform row. The block is right-aligned with
     /// room reserved for the speed-text readout (so it can't crop off-screen), and
     /// bottom-aligned like the spell bar (~2px gap).</summary>
-    private static void TimeControlLayout(int screenW, int screenH, out int baseX, out int baseY)
+    private static void LayoutTimeControls(int screenW, int screenH, Rectangle[] rects)
     {
-        int buttonsW = TcBtnW + TcGap + TcCount * TcBtnW + (TcCount - 1) * TcGap;
-        baseX = screenW - (buttonsW + TcSpeedTextReserve + TcRightMargin);
-        baseY = screenH - TcBtnH - 2;
+        int buttonsW = TcBtnCount * TcBtnW + (TcBtnCount - 1) * TcGap;
+        int baseX = screenW - (buttonsW + TcSpeedTextReserve + TcRightMargin);
+        // While the map editor is up, its right-side panel covers the bottom-right
+        // corner. Slide the whole time-control block left of that panel so it stays
+        // visible AND clickable. Every reader goes through this one function, so they
+        // shift in lockstep.
+        if (Game1.Instance is { } g && g._menuState == MenuState.MapEditor)
+            baseX -= Necroking.Editor.MapEditorWindow.PanelWidth + 12;
+        int baseY = screenH - TcBtnH - 2;
+        for (int i = 0; i < TcBtnCount; i++)
+            rects[i] = new Rectangle(baseX + i * (TcBtnW + TcGap), baseY, TcBtnW, TcBtnH);
     }
 
     // Colors
@@ -161,6 +179,13 @@ public partial class HUDRenderer
     /// <summary>Set the input state reference for hover detection in draw calls.</summary>
     public void SetInput(InputState input) => _input = input;
 
+    public void DrawSpellbar_Public(int screenW, int screenH, Game1 _g)
+    {
+        int necroIdx = FindNecromancer(_g._sim);
+        DrawSpellBar(screenW, screenH,
+            SpellBarBindings.SlotLabels, _g._spellBarState, _g._sim, _g._gameData, _g._inventory, necroIdx, _g._slotFlash);
+    }
+
     /// <summary>Draw the HUD. <paramref name="drawTopRows"/> excludes the
     /// top-right core-menu/editor-launcher rows — those are drawn by their own
     /// router layers (HudTop band, ABOVE panels and blocking overlays), so
@@ -169,7 +194,7 @@ public partial class HUDRenderer
         Inventory inventory, bool inventoryVisible,
         SpellBarState bar,
         float timeScale,
-        Action<string, int, int> drawSpellCategoryIcon, int menuOpenMask = 0, bool paused = false,
+        int menuOpenMask = 0, bool paused = false,
         float[]? slotFlash = null,
         int editorOpenMask = 0, bool drawTopRows = true)
     {
@@ -184,9 +209,6 @@ public partial class HUDRenderer
         // The tooltip itself draws later via DrawCursorTooltips (Tooltip band, topmost).
         _hoverSlotSpell = null;
         _hoverSlotMelee = false;
-
-        DrawSpellBar(screenW, screenH,
-            SpellBarBindings.SlotLabels, bar, sim, gameData, inventory, drawSpellCategoryIcon, necroIdx, slotFlash);
 
         // Controls hint intentionally omitted — overlapped the FPS/zoom bottom-
         // left readout. Re-enable if we add a menu page for it.
@@ -479,7 +501,7 @@ public partial class HUDRenderer
 
     private void DrawSpellBar(int screenW, int screenH,
         string[] keys, SpellBarState bar, Simulation sim, GameData gameData,
-        Inventory inventory, Action<string, int, int> drawCategoryIcon, int necroIdx, float[]? flash = null)
+        Inventory inventory, int necroIdx, float[]? flash = null)
     {
         // Same caster-level resolution as the cast gate (TryStartSpellCast), so
         // the castability cues below can't drift from what a cast would actually
@@ -661,26 +683,15 @@ public partial class HUDRenderer
     /// <summary>
     /// Hit-test time control buttons. Returns:
     /// -1 = not hit, -2 = pause button, 0-5 = speed preset index.
-    /// Uses the same layout constants as DrawTimeControls.
+    /// Reads the same laid-out rects as DrawTimeControls.
     /// </summary>
     public int HitTestTimeControls(int screenW, int screenH, int mouseX, int mouseY)
     {
-        TimeControlLayout(screenW, screenH, out int tcBaseX, out int tcBaseY);
+        LayoutTimeControls(screenW, screenH, _timeCtrlRects);
 
-        if (mouseY < tcBaseY || mouseY >= tcBaseY + TcBtnH) return -1;
-
-        // Pause button (leftmost)
-        if (mouseX >= tcBaseX && mouseX < tcBaseX + TcBtnW)
-            return -2;
-
-        // Speed buttons (right of pause)
-        int speedBaseX = tcBaseX + TcBtnW + TcGap;
+        if (_timeCtrlRects[0].Contains(mouseX, mouseY)) return -2; // pause (index 0)
         for (int s = 0; s < TcCount; s++)
-        {
-            int bx = speedBaseX + s * (TcBtnW + TcGap);
-            if (mouseX >= bx && mouseX < bx + TcBtnW)
-                return s;
-        }
+            if (_timeCtrlRects[1 + s].Contains(mouseX, mouseY)) return s;
         return -1;
     }
 
@@ -699,9 +710,12 @@ public partial class HUDRenderer
 
         if (showTimeControls)
         {
-            TimeControlLayout(screenW, screenH, out int tcBaseX, out int tcBaseY);
-            int tcW = TcBtnW + TcGap + TcCount * TcBtnW + (TcCount - 1) * TcGap;
-            reg.Add("hud.time_controls", new Rectangle(tcBaseX, tcBaseY, tcW, TcBtnH));
+            LayoutTimeControls(screenW, screenH, _timeCtrlRects);
+            // Whole strip as one hit rect: from the pause button's left edge to the
+            // last speed button's right edge.
+            var first = _timeCtrlRects[0];
+            var last = _timeCtrlRects[TcBtnCount - 1];
+            reg.Add("hud.time_controls", new Rectangle(first.X, first.Y, last.Right - first.X, TcBtnH));
         }
 
         if (LayoutButtonRow(MenuButtonLabels, MenuBtnTop, screenW, _menuBtnRects))
@@ -924,46 +938,49 @@ public partial class HUDRenderer
         if (!gameData.Settings.General.ShowTimeControls || _smallFont == null) return;
 
         ReadOnlySpan<float> speeds = stackalloc float[] { 0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f };
-        string[] labels = { "<<<", "<<", "<", "=", ">", ">>" };
-        int pauseW = TcBtnW;
-        TimeControlLayout(screenW, screenH, out int baseX, out int baseY);
+        // Slow presets read as their multiplier (a "<" arrow would imply rewind);
+        // normal-and-faster read as play/fast-forward triangles (> = 1x, >>> = 2x).
+        string[] labels = { ".1", ".25", ".5", ">", ">>", ">>>" };
+        LayoutTimeControls(screenW, screenH, _timeCtrlRects);
 
         int mx = (int)_input.MousePos.X, my = (int)_input.MousePos.Y;
 
-        // Pause button (left of speed buttons)
+        // Pause button (index 0).
         {
-            bool hover = mx >= baseX && mx < baseX + pauseW
-                      && my >= baseY && my < baseY + TcBtnH;
+            var r = _timeCtrlRects[0];
+            bool hover = r.Contains(mx, my);
             Color bg = paused ? new Color(160, 70, 70, 220)
                      : hover  ? new Color(50, 60, 80, 180)
                               : new Color(20, 20, 30, 140);
-            Scope.Draw(_pixel, new Rectangle(baseX, baseY, pauseW, TcBtnH), bg);
-            string pauseLabel = paused ? ">" : "||";
+            Scope.Draw(_pixel, r, bg);
+            // "=" (twin bars) reads as pause; flips to ">" (play) once paused.
+            string pauseLabel = "=";
             var labelSize = _smallFont.MeasureString(pauseLabel);
             Text(_smallFont, pauseLabel,
-                new Vector2(baseX + pauseW / 2f - labelSize.X / 2f, baseY + TcBtnH / 2f - labelSize.Y / 2f),
+                new Vector2(r.X + r.Width / 2f - labelSize.X / 2f, r.Y + r.Height / 2f - labelSize.Y / 2f),
                 Color.White);
         }
 
-        int speedBaseX = baseX + pauseW + TcGap;
+        // Speed presets (indices 1..TcCount).
         for (int s = 0; s < TcCount; s++)
         {
-            int bx = speedBaseX + s * (TcBtnW + TcGap);
-            bool hover = mx >= bx && mx < bx + TcBtnW
-                      && my >= baseY && my < baseY + TcBtnH;
+            var r = _timeCtrlRects[1 + s];
+            bool hover = r.Contains(mx, my);
             bool active = !paused && MathF.Abs(timeScale - speeds[s]) < 0.001f;
             Color bg = active ? new Color(70, 100, 160, 220)
                      : hover  ? new Color(50, 60, 80, 180)
                               : new Color(20, 20, 30, 140);
-            Scope.Draw(_pixel, new Rectangle(bx, baseY, TcBtnW, TcBtnH), bg);
+            Scope.Draw(_pixel, r, bg);
             var labelSize = _smallFont.MeasureString(labels[s]);
             Text(_smallFont, labels[s],
-                new Vector2(bx + TcBtnW / 2f - labelSize.X / 2f, baseY + TcBtnH / 2f - labelSize.Y / 2f),
+                new Vector2(r.X + r.Width / 2f - labelSize.X / 2f, r.Y + r.Height / 2f - labelSize.Y / 2f),
                 Color.White);
         }
 
+        // Speed-text readout, just right of the last button.
+        var lastBtn = _timeCtrlRects[TcBtnCount - 1];
         string speedText = paused ? "Paused" : $"{timeScale:G2}x";
-        Text(_smallFont, speedText, new Vector2(speedBaseX + TcCount * TcBtnW + (TcCount - 1) * TcGap + 6, baseY + 5),
+        Text(_smallFont, speedText, new Vector2(lastBtn.Right + 6, lastBtn.Y + 5),
             paused ? new Color(200, 100, 100, 220) : new Color(180, 180, 200, 200));
     }
 

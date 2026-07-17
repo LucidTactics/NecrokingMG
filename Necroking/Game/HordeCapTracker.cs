@@ -33,6 +33,9 @@ public static class HordeCapTracker
             if (!units[i].Alive) continue;
             if (units[i].Faction != Faction.Undead) continue;
             if (units[i].AI == AIBehavior.PlayerControlled) continue;
+            // Wild undead aren't the player's minions (yet) — they must not eat
+            // the summon cap while standing around unrecruited.
+            if (units[i].Archetype == AI.ArchetypeRegistry.WildUndead) continue;
             var def = gameData.Units.Get(units[i].UnitDefID);
             if (def == null) continue;
             if (def.UndeadCategory != cat) continue;

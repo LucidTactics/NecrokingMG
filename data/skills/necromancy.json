@@ -29,6 +29,23 @@
       ],
       "effect": "compound",
       "effectArg": "cap_buff=human:1|unlock_summon=group_0"
+    },
+    {
+      "id": "brothers_keeper_2",
+      "name": "Brothers Keeper 2",
+      "description": "Human Limit \u002B1.\nUnlock Basic Humanoid Zombies.\nKill a human.",
+      "x": 480,
+      "y": 160,
+      "parents": [],
+      "costs": [
+        {
+          "type": "event",
+          "id": "human_kill",
+          "amount": 1
+        }
+      ],
+      "effect": "compound",
+      "effectArg": "cap_buff=human:100"
     }
   ]
 }

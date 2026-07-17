@@ -80,6 +80,48 @@ Look/edit here when: a click made while the window is unfocused registers in-gam
 the window is also processed as a game click (first-frame click-through)**; you need to gate input on
 window focus; "run when unfocused" behaviour; where click pressed-this-frame edges come from.
 
+#### Startup flow — what blocks before the first frame (Initialize → LoadContent)
+MonoGame lifecycle: `Program.Main` → `Game1` ctor (light — systems + screens constructed, e.g.
+`_mainMenu = new UI.MainMenuScreen(this)`) → `Initialize()` → `base.Initialize()` (its last
+statement) → `LoadContent()` → only then does the Update/Draw loop start presenting. **Everything
+in Initialize + LoadContent blocks the first frame** — the window shows several seconds after
+launch (real numbers: `Game1.LogTiming(step)` → `log/startup.log`, see logging-diagnostics.md).
+`Initialize()` heavy steps, in dependency order: AI archetype registration (fast) →
+`_gameData.Load()` (~0.2s, all `data/*.json` registries) → window-mode restore (reads
+`Settings.Display`, so it needs GameData) → `SkillBookDefs.Load` → `_renderer.Init` → the **atlas
+pipeline**: `AtlasDefs.ScanSpritesDirectory` + a flat `Parallel.For` PNG/pcache decode (~0.5s on
+cache hit, CPU-only, already parallel) → animationmeta load via `AnimMetaLoader` (~0.25s; must
+precede upload — stride calibration reads it) → the **sequential per-atlas GPU upload + stride
+calibration loop (~5s, the dominant startup cost**: `TextureUtil.CreateTextureFromPixels` +
+`StrideCalibration.CalibrateAtlas` per atlas, decoded pixels freed after each) → UnitDef→SpriteData
+wiring (needs registries + atlases) → corpse pivot overrides → `ListSaveGames()`.
+`LoadContent()` steps: `_spriteBatch`/`_pixel`/glow tex, GPU-preference check, menu background
+(`assets/UI/Background/VampireBackground.png`), the three `Content.Load<SpriteFont>` fonts
+(~60ms; `DefaultCharacter='?'` crash guard) + FontStash TTFs, bloom, all `.fx`
+`Content.Load<Effect>` (fast), renderer inits, audio, dev-server start, then **editor-window
+construction ~1.1s** (`UnitEditorWindow`/`SpellEditorWindow`/… — needs `_atlases` + `_animMeta`).
+Already-deferred precedents: `EnsureUIEditorInitialized` / `EnsureInventoryUIsInitialized`
+(lazy-init on first open, zero startup cost).
+The **map is NOT loaded at startup** — `StartGame(mapName)` runs on the Play click (or the
+`--autostart` block in Update's MainMenu section) and costs another ~7-9s (flipbooks, 55MB map
+JSON parse, ground/env textures, collision bake, placed units).
+Minimum to draw a centered-text loading screen: `_spriteBatch`, `_pixel`, one SpriteFont, and
+`Materials.Hud` (a static blend/sampler `Material` with a null effect — no init needed). The
+pre-menu state-dispatch template = the MainMenu/ScenarioList early-out PAIRS: an
+`if (_menuState == …) { screen.Update(); return; }` block in `Game1.Update` + the matching
+`Clear → Materials.Hud.Begin → screen.Draw → End → BaseDraw` early-out at the top of
+`GameRenderer.Draw` (`GameRenderer.Draw.cs`). `_menuState` (+ `_prevMenuState`,
+`_backMenuState`) initialize to `MenuState.MainMenu` at their field declarations.
+Gotchas for incremental loading: GPU texture creation must stay on the MAIN thread (GL context)
+— chunk uploads across frames, don't background-thread them (CPU decode is already parallel);
+the unfocused early-return near the top of `Update` runs BEFORE the menu-state blocks, so a
+loading pump driven from Update stalls if the game launches unfocused (pump before that gate,
+like `_devServer?.Drain`, or exempt the loading state); `--autostart`/`--scenario` blocks only
+fire when `_menuState == MenuState.MainMenu`, so they wait for a loading state naturally.
+Look/edit here when: making startup async/incremental, adding a loading screen or pre-menu
+state, deciding what loads at launch vs. at StartGame, startup feels slow (check
+`log/startup.log` step deltas first).
+
 #### GameClock — time & pause authority (`Necroking/Core/GameClock.cs`)
 **The single place that answers "what time is flowing, how fast, and what is paused".** `Game1` owns
 `_clock` and drives it two-phase from `Update`: `BeginFrame(rawDt)` at the top-of-frame dt derivation

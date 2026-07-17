@@ -250,6 +250,12 @@ public class MapEditorWindow
     private const float CamAcceleration = 100f;
     private const float CamFriction = 8f;
     private const float CamBaseSpeed = 30f;
+    // RM38: WASD pan speed scales inversely with zoom, referenced to the default
+    // game zoom (StartGame sets 24 for the normal map). At CamRefZoom the accel is
+    // exactly CamAcceleration (unchanged feel); zoomed in (higher Zoom) the camera
+    // moves slower in world units, zoomed out (lower Zoom) faster — so on-screen pan
+    // speed stays roughly constant across zoom levels.
+    private const float CamRefZoom = 24f;
 
     // RM17: Waypoint dragging
     private int _draggingWaypoint = -1;
@@ -292,6 +298,12 @@ public class MapEditorWindow
     private string _statusMessage = "";
     private float _statusTimer;
 
+    /// <summary>Set by the bottom-bar "Reload Map" button. Game1.Update performs
+    /// the actual world reload next frame — StartGame re-enters _mapEditor.Init /
+    /// SetPlacedUnits, so it must run outside this editor's own Update stack
+    /// (same deferral as LoadGameWindow.PendingLoad).</summary>
+    public bool PendingMapReload { get; set; }
+
     // Panel dimensions
     public const int PanelWidth = 320;
     private const int TabRowHeight = 26;
@@ -300,6 +312,12 @@ public class MapEditorWindow
     private const int ButtonHeight = 22;
     private const int Margin = 6;
     private const int FieldHeight = 22;
+    private const int ReloadButtonHeight = 26;
+    // Total bottom-bar height: 2 + filename field + 2 + Save/Load/Undo row + 2
+    // + Reload Map row + 2 + shortcuts hint + status line. The Draw layout, the
+    // UpdateBottomBarClicks hit-tests, the tab-content reserve, and Update's
+    // click-ownership guard all derive from this one constant so they can't drift.
+    private const int BottomBarHeight = 2 + FieldHeight + 2 + ButtonHeight + 2 + ReloadButtonHeight + 2 + LineHeight + 20;
 
     // Colors
     private static readonly Color BgColor = new(25, 25, 40, 235);
@@ -598,6 +616,11 @@ public class MapEditorWindow
         _wallEditor?.SetMapFilename(name);
     }
 
+    /// <summary>The editor's current Save target (no ".json"), as typed in the
+    /// bottom-bar field. Game1 reads it around Reload Map so a typed-but-unsaved
+    /// name survives StartGame's SetMapFilename reset.</summary>
+    public string MapFilename => _mapFilename;
+
     /// <summary>Dev-command hook (`save_map [name]`): trigger the same save as the
     /// editor's Save Map button, optionally to a different filename (the editor's
     /// save target is left unchanged). Returns the map filename that was written.</summary>
@@ -885,7 +908,10 @@ public class MapEditorWindow
             // (object editor) is focused, WASD navigates its list instead.
             if (CameraInputEnabled)
             {
-                float cam_accel = CamAcceleration;
+                // RM38: scale accel ∝ 1/Zoom relative to the default game zoom, so
+                // world-space pan speed is slower when zoomed in and faster when
+                // zoomed out (constant on-screen speed). At CamRefZoom this is a no-op.
+                float cam_accel = CamAcceleration * (CamRefZoom / _camera.Zoom);
                 if (kb.IsKeyDown(Keys.LeftShift) || kb.IsKeyDown(Keys.RightShift)) cam_accel *= 5;
                 if (kb.IsKeyDown(Keys.W)) _camVelY -= cam_accel * dt;
                 if (kb.IsKeyDown(Keys.S) && !kb.IsKeyDown(Keys.LeftControl)) _camVelY += cam_accel * dt;
@@ -1003,7 +1029,7 @@ public class MapEditorWindow
         bool rawLeftClick = leftClick;
         {
             int contentTopY = panelY + TabRowHeight * 2 + 2;
-            int bottomBarTop = panelY + (screenH - 20) - 92;
+            int bottomBarTop = panelY + (screenH - 20) - (BottomBarHeight + 2);
             if (overPanel && (mouse.Y < contentTopY || mouse.Y >= bottomBarTop))
                 leftClick = false;
         }
@@ -1109,28 +1135,50 @@ public class MapEditorWindow
         if (!leftClick) return;
 
         int panelH = screenH - 20;
-        int bottomH = 90;
-        int buttonRowY = panelY + panelH - bottomH + 2 + FieldHeight + 2;
-
-        if (mouse.Y < buttonRowY || mouse.Y >= buttonRowY + ButtonHeight) return;
-
-        int btnW3 = (PanelWidth - Margin * 2 - 8) / 3;
+        int buttonRowY = panelY + panelH - BottomBarHeight + 2 + FieldHeight + 2;
         int relX = mouse.X - (panelX + Margin);
 
-        if (relX >= 0 && relX < btnW3)
+        // Row 1: Save / Load / Undo thirds.
+        if (mouse.Y >= buttonRowY && mouse.Y < buttonRowY + ButtonHeight)
         {
-            SaveMap();
+            int btnW3 = (PanelWidth - Margin * 2 - 8) / 3;
+
+            if (relX >= 0 && relX < btnW3)
+            {
+                SaveMap();
+            }
+            else if (relX >= btnW3 + 4 && relX < btnW3 * 2 + 4)
+            {
+                LoadMap();
+            }
+            else if (relX >= (btnW3 + 4) * 2 && relX < (btnW3 + 4) * 2 + btnW3)
+            {
+                PerformUndo();
+                _statusMessage = $"Undo ({_undoStack.Count} remaining)";
+                _statusTimer = 1.5f;
+            }
+            return;
         }
-        else if (relX >= btnW3 + 4 && relX < btnW3 * 2 + 4)
+
+        // Row 2: full-width "Reload Map" — only request it here; Game1.Update
+        // performs the world rebuild outside this editor's Update stack.
+        int reloadRowY = buttonRowY + ButtonHeight + 2;
+        if (mouse.Y >= reloadRowY && mouse.Y < reloadRowY + ReloadButtonHeight
+            && relX >= 0 && relX < PanelWidth - Margin * 2)
         {
-            LoadMap();
+            PendingMapReload = true;
         }
-        else if (relX >= (btnW3 + 4) * 2 && relX < (btnW3 + 4) * 2 + btnW3)
-        {
-            PerformUndo();
-            _statusMessage = $"Undo ({_undoStack.Count} remaining)";
-            _statusTimer = 1.5f;
-        }
+    }
+
+    /// <summary>Post-"Reload Map" callback from Game1: surface the result in the
+    /// status line and, on success, drop the undo history — its entries reference
+    /// object indices from the pre-reload world (LoadMap clears it for the same
+    /// reason).</summary>
+    public void OnMapReloaded(bool ok, string mapName)
+    {
+        if (ok) _undoStack.Clear();
+        _statusMessage = ok ? $"Reloaded map '{mapName}'" : "Reload failed (see debug log)";
+        _statusTimer = ok ? 3f : 5f;
     }
 
     // ========================================================================
@@ -1238,9 +1286,9 @@ public class MapEditorWindow
         int tabsBottom = panelY + TabRowHeight * 2;
         Scope.Draw(_pixel, new Rectangle(panelX, tabsBottom, PanelWidth, 1), SeparatorColor);
 
-        // Content area (reserve 92px for bottom bar: filename + buttons + shortcuts + status)
+        // Content area (reserve the bottom bar: filename + buttons + shortcuts + status)
         int contentY = tabsBottom + 2;
-        int contentH = panelH - (tabsBottom - panelY) - 2 - 92;
+        int contentH = panelH - (tabsBottom - panelY) - 2 - (BottomBarHeight + 2);
 
         // Scissor-clip the tab content panel so partially-scrolled list items
         // can't spill above the section header or below the bottom bar. Each
@@ -1294,7 +1342,7 @@ public class MapEditorWindow
             DrawZoneLeftPanel(screenW, screenH);
 
         // Bottom bar: map filename, Save/Load buttons, undo info, status message
-        int bottomH = 90; // height of the bottom section
+        int bottomH = BottomBarHeight;
         int bottomY = panelY + panelH - bottomH;
         Scope.Draw(_pixel, new Rectangle(panelX, bottomY, PanelWidth, 1), SeparatorColor);
         bottomY += 2;
@@ -1321,6 +1369,13 @@ public class MapEditorWindow
             _undoStack.Count > 0 ? AccentColor : ButtonBg);
         bottomY += ButtonHeight + 2;
 
+        // Full-width "Reload Map": rebuild the world as a fresh StartGame from
+        // the LIVE map state — unsaved editor changes included, nothing written
+        // to disk (player carried across like a save/load; camera + editor
+        // state untouched). Click handling lives in UpdateBottomBarClicks.
+        DrawButtonRect("Reload Map", panelX + Margin, bottomY, PanelWidth - Margin * 2, ReloadButtonHeight, ButtonBg);
+        bottomY += ReloadButtonHeight + 2;
+
         // Keyboard shortcuts hint
         DrawSmallText("Ctrl+S Save | Ctrl+L Load | Ctrl+Z Undo", panelX + Margin, bottomY + 2, TextDim);
         bottomY += LineHeight;
@@ -1328,7 +1383,8 @@ public class MapEditorWindow
         // INF14: Status message with alpha fade
         if (_statusTimer > 0 && !string.IsNullOrEmpty(_statusMessage))
         {
-            bool isSuccess = _statusMessage.StartsWith("Saved") || _statusMessage.StartsWith("Loaded") || _statusMessage.StartsWith("Undo");
+            bool isSuccess = _statusMessage.StartsWith("Saved") || _statusMessage.StartsWith("Loaded")
+                || _statusMessage.StartsWith("Undo") || _statusMessage.StartsWith("Reloaded");
             Color baseColor = isSuccess ? SuccessColor : DangerColor;
             Color fadedColor = EditorBase.FadeStatusColor(baseColor, _statusTimer);
             DrawSmallText(_statusMessage, panelX + Margin, bottomY + 2, fadedColor);
@@ -5766,12 +5822,15 @@ public class MapEditorWindow
         {
             var sp = _camera.WorldToScreen(new Vec2(pu.X, pu.Y), 0f, screenW, screenH);
             float r = 6f;
-            Color markerColor = pu.Faction switch
-            {
-                "Human" => new Color(100, 150, 255, 200),
-                "Animal" => new Color(100, 200, 100, 200),
-                _ => new Color(200, 100, 255, 200) // Undead = purple
-            };
+            // Faction color matches the minimap (undead grey / human gold / animal
+            // green). A placed unit's Faction override is "" when it inherits the
+            // def default, so resolve that to the def's faction string first —
+            // otherwise a human/animal placed without an explicit override reads
+            // as undead.
+            string factionStr = string.IsNullOrEmpty(pu.Faction)
+                ? (_gameData.Units.Get(pu.UnitDefId)?.Faction ?? "Undead")
+                : pu.Faction;
+            Color markerColor = FactionColors.For(factionStr);
 
             // Text stays readable (the marker shape, not the text, carries the
             // faction/corpse coding). Dimming the label made corpse names unreadable.
@@ -6216,164 +6275,20 @@ public class MapEditorWindow
 
             // Atomic: stream to .tmp, rename over the map on Commit — a crash
             // mid-save must not destroy the 55 MB default.json.
-            using var stream = Core.AtomicFile.CreateStream(path);
-            using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-
-            writer.WriteStartObject();
-
-            // Ground types
-            writer.WriteStartArray("groundTypes");
-            for (int i = 0; i < _groundSystem.TypeCount; i++)
+            using (var stream = Core.AtomicFile.CreateStream(path))
             {
-                var gt = _groundSystem.GetTypeDef(i);
-                writer.WriteStartObject();
-                writer.WriteString("id", gt.Id);
-                writer.WriteString("name", gt.Name);
-                writer.WriteString("texturePath", gt.TexturePath);
-                if (!string.IsNullOrEmpty(gt.CorruptedTypeId))
-                    writer.WriteString("corruptedTypeId", gt.CorruptedTypeId);
-                if (gt.MovementTerrain != Necroking.World.TerrainType.Open)
-                    writer.WriteString("movementTerrain", gt.MovementTerrain.ToString());
-                // Save tintColor when it diverges from white so PNGs stay the
-                // authoritative palette source for un-tinted types.
-                if (gt.TintColor != Microsoft.Xna.Framework.Color.White)
-                {
-                    writer.WriteStartObject("tintColor");
-                    writer.WriteNumber("r", gt.TintColor.R);
-                    writer.WriteNumber("g", gt.TintColor.G);
-                    writer.WriteNumber("b", gt.TintColor.B);
-                    if (gt.TintColor.A != 255) writer.WriteNumber("a", gt.TintColor.A);
-                    writer.WriteEndObject();
-                }
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-
-            // Ground vertex map (revert runtime corruption so dev paint is preserved on save)
-            writer.WriteStartObject("groundMap");
-            writer.WriteNumber("width", _groundSystem.VertexW);
-            writer.WriteNumber("height", _groundSystem.VertexH);
-            writer.WriteString("tilesBase64", Convert.ToBase64String(_groundSystem.GetVertexMapForSave()));
-            writer.WriteEndObject();
-
-            // Grass types
-            writer.WriteStartArray("grassTypes");
-            foreach (var gt in _grassTypes)
-            {
-                writer.WriteStartObject();
-                writer.WriteString("id", gt.Id);
-                writer.WriteString("name", gt.Name);
-
-                writer.WriteStartObject("defaultTint");
-                writer.WriteNumber("r", gt.DefaultTint.R);
-                writer.WriteNumber("g", gt.DefaultTint.G);
-                writer.WriteNumber("b", gt.DefaultTint.B);
-                writer.WriteNumber("a", gt.DefaultTint.A);
-                writer.WriteEndObject();
-
-                writer.WriteStartObject("corruptedTint");
-                writer.WriteNumber("r", gt.CorruptedTint.R);
-                writer.WriteNumber("g", gt.CorruptedTint.G);
-                writer.WriteNumber("b", gt.CorruptedTint.B);
-                writer.WriteNumber("a", gt.CorruptedTint.A);
-                writer.WriteEndObject();
-
-                writer.WriteStartArray("spritePaths");
-                foreach (var p in gt.SpritePaths)
-                    if (!string.IsNullOrEmpty(p)) writer.WriteStringValue(p);
-                writer.WriteEndArray();
-
-                writer.WriteNumber("scale", gt.Scale);
-                writer.WriteNumber("density", gt.Density);
-
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-
-            // Grass map
-            if (_grassMap.Length > 0)
-            {
-                writer.WriteStartObject("grassMap");
-                writer.WriteNumber("width", _grassW);
-                writer.WriteNumber("height", _grassH);
-                writer.WriteString("cellsBase64", Convert.ToBase64String(_grassMap));
-                writer.WriteEndObject();
+                WriteMapJson(stream);
+                stream.Commit(); // payload complete — dispose will swap it in atomically
             }
 
-            // Env defs are now saved separately to data/env_defs.json
-            // Save them alongside the map save for convenience
+            // Env defs are saved separately to data/env_defs.json — written
+            // alongside the map save for convenience.
             MapData.SaveEnvDefs(GamePaths.Resolve("data/env_defs.json"), _envSystem);
 
             // ProcGen styles are a global authoring registry like env defs. Load
             // first if the tab was never opened so an untouched registry survives.
             EnsureProcGenStylesLoaded();
             ProcGenStyle.SaveAll(GamePaths.Resolve("data/procgen_styles.json"), _procGenStyles);
-
-            // Placed objects. Only persistent ones (editor-placed / map-loaded /
-            // player-built) — gameplay spawns (zone foragables, village stamps,
-            // creature drops) would otherwise accumulate in the map JSON forever.
-            writer.WriteStartArray("placedObjects");
-            for (int i = 0; i < _envSystem.ObjectCount; i++)
-            {
-                var obj = _envSystem.GetObject(i);
-                if (!obj.Persistent) continue;
-                var def = _envSystem.GetDef(obj.DefIndex);
-                writer.WriteStartObject();
-                writer.WriteString("defId", def.Id);
-                writer.WriteNumber("x", obj.X);
-                writer.WriteNumber("y", obj.Y);
-                writer.WriteNumber("scale", obj.Scale);
-                writer.WriteNumber("seed", obj.Seed);
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-
-            // Wall defs
-            writer.WriteStartArray("walls");
-            foreach (var wd in _wallSystem.Defs)
-            {
-                writer.WriteStartObject();
-                writer.WriteString("name", wd.Name);
-                writer.WriteNumber("maxHP", wd.MaxHP);
-                writer.WriteNumber("protection", wd.Protection);
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-
-            // Road texture defs
-            writer.WriteStartArray("roadTextures");
-            for (int i = 0; i < _roadSystem.TextureDefCount; i++)
-            {
-                var td = _roadSystem.GetTextureDef(i);
-                writer.WriteStartObject();
-                writer.WriteString("id", td.Id);
-                writer.WriteString("name", td.Name);
-                writer.WriteString("texturePath", td.TexturePath);
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-
-            // --- Placed units ---
-            writer.WriteStartArray("placedUnits");
-            foreach (var pu in _placedUnits)
-            {
-                writer.WriteStartObject();
-                writer.WriteString("unitDefId", pu.UnitDefId);
-                writer.WriteNumber("x", pu.X);
-                writer.WriteNumber("y", pu.Y);
-                if (!string.IsNullOrEmpty(pu.Faction))
-                    writer.WriteString("faction", pu.Faction);
-                if (!string.IsNullOrEmpty(pu.PatrolRouteId))
-                    writer.WriteString("patrolRouteId", pu.PatrolRouteId);
-                if (pu.IsCorpse)
-                    writer.WriteBoolean("isCorpse", true);
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-
-            writer.WriteEndObject();
-            writer.Flush();
-            stream.Commit(); // payload complete — dispose will swap it in atomically
 
             // Sidecars (triggers / roads / zones) — one reader+writer in MapSidecars
             MapSidecars.SaveTriggers(Path.Combine(mapsDir, _mapFilename + "_triggers.json"), _triggerSystem);
@@ -6392,6 +6307,180 @@ public class MapEditorWindow
             _statusTimer = 5f;
             DebugLog.Log("editor", $"Map save error: {ex.Message}");
         }
+    }
+
+    /// <summary>The full map file-set captured from the LIVE editor/world state as
+    /// in-memory JSON — exactly what SaveMap would write under assets/maps/, without
+    /// touching disk (env_defs/procgen registry side-writes included as strings /
+    /// skipped respectively). Game1 feeds it back through StartGame for the Reload
+    /// Map button, so unsaved editor changes survive the world reset.</summary>
+    public MapData.MapJsonBundle CaptureMapToMemory()
+    {
+        using var ms = new MemoryStream();
+        WriteMapJson(ms);
+        return new MapData.MapJsonBundle
+        {
+            MapJson = System.Text.Encoding.UTF8.GetString(ms.ToArray()),
+            EnvDefsJson = MapData.CaptureEnvDefsJson(_envSystem),
+            TriggersJson = MapSidecars.CaptureTriggersJson(_triggerSystem),
+            RoadsJson = MapSidecars.CaptureRoadsJson(_roadSystem),
+            ZonesJson = MapSidecars.CaptureZonesJson(_zoneSystem),
+        };
+    }
+
+    /// <summary>Serialize the live map state (ground, grass, placed objects, wall
+    /// defs, road textures, placed units) as the map JSON onto <paramref name="stream"/> —
+    /// the shared core of SaveMap (atomic file stream) and CaptureMapToMemory
+    /// (MemoryStream for Reload Map).</summary>
+    private void WriteMapJson(Stream stream)
+    {
+        using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
+
+        writer.WriteStartObject();
+
+        // Ground types
+        writer.WriteStartArray("groundTypes");
+        for (int i = 0; i < _groundSystem.TypeCount; i++)
+        {
+            var gt = _groundSystem.GetTypeDef(i);
+            writer.WriteStartObject();
+            writer.WriteString("id", gt.Id);
+            writer.WriteString("name", gt.Name);
+            writer.WriteString("texturePath", gt.TexturePath);
+            if (!string.IsNullOrEmpty(gt.CorruptedTypeId))
+                writer.WriteString("corruptedTypeId", gt.CorruptedTypeId);
+            if (gt.MovementTerrain != Necroking.World.TerrainType.Open)
+                writer.WriteString("movementTerrain", gt.MovementTerrain.ToString());
+            // Save tintColor when it diverges from white so PNGs stay the
+            // authoritative palette source for un-tinted types.
+            if (gt.TintColor != Microsoft.Xna.Framework.Color.White)
+            {
+                writer.WriteStartObject("tintColor");
+                writer.WriteNumber("r", gt.TintColor.R);
+                writer.WriteNumber("g", gt.TintColor.G);
+                writer.WriteNumber("b", gt.TintColor.B);
+                if (gt.TintColor.A != 255) writer.WriteNumber("a", gt.TintColor.A);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        // Ground vertex map (revert runtime corruption so dev paint is preserved on save)
+        writer.WriteStartObject("groundMap");
+        writer.WriteNumber("width", _groundSystem.VertexW);
+        writer.WriteNumber("height", _groundSystem.VertexH);
+        writer.WriteString("tilesBase64", Convert.ToBase64String(_groundSystem.GetVertexMapForSave()));
+        writer.WriteEndObject();
+
+        // Grass types
+        writer.WriteStartArray("grassTypes");
+        foreach (var gt in _grassTypes)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("id", gt.Id);
+            writer.WriteString("name", gt.Name);
+
+            writer.WriteStartObject("defaultTint");
+            writer.WriteNumber("r", gt.DefaultTint.R);
+            writer.WriteNumber("g", gt.DefaultTint.G);
+            writer.WriteNumber("b", gt.DefaultTint.B);
+            writer.WriteNumber("a", gt.DefaultTint.A);
+            writer.WriteEndObject();
+
+            writer.WriteStartObject("corruptedTint");
+            writer.WriteNumber("r", gt.CorruptedTint.R);
+            writer.WriteNumber("g", gt.CorruptedTint.G);
+            writer.WriteNumber("b", gt.CorruptedTint.B);
+            writer.WriteNumber("a", gt.CorruptedTint.A);
+            writer.WriteEndObject();
+
+            writer.WriteStartArray("spritePaths");
+            foreach (var p in gt.SpritePaths)
+                if (!string.IsNullOrEmpty(p)) writer.WriteStringValue(p);
+            writer.WriteEndArray();
+
+            writer.WriteNumber("scale", gt.Scale);
+            writer.WriteNumber("density", gt.Density);
+
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        // Grass map
+        if (_grassMap.Length > 0)
+        {
+            writer.WriteStartObject("grassMap");
+            writer.WriteNumber("width", _grassW);
+            writer.WriteNumber("height", _grassH);
+            writer.WriteString("cellsBase64", Convert.ToBase64String(_grassMap));
+            writer.WriteEndObject();
+        }
+
+        // Placed objects. Only persistent ones (editor-placed / map-loaded /
+        // player-built) — gameplay spawns (zone foragables, village stamps,
+        // creature drops) would otherwise accumulate in the map JSON forever.
+        writer.WriteStartArray("placedObjects");
+        for (int i = 0; i < _envSystem.ObjectCount; i++)
+        {
+            var obj = _envSystem.GetObject(i);
+            if (!obj.Persistent) continue;
+            var def = _envSystem.GetDef(obj.DefIndex);
+            writer.WriteStartObject();
+            writer.WriteString("defId", def.Id);
+            writer.WriteNumber("x", obj.X);
+            writer.WriteNumber("y", obj.Y);
+            writer.WriteNumber("scale", obj.Scale);
+            writer.WriteNumber("seed", obj.Seed);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        // Wall defs
+        writer.WriteStartArray("walls");
+        foreach (var wd in _wallSystem.Defs)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("name", wd.Name);
+            writer.WriteNumber("maxHP", wd.MaxHP);
+            writer.WriteNumber("protection", wd.Protection);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        // Road texture defs
+        writer.WriteStartArray("roadTextures");
+        for (int i = 0; i < _roadSystem.TextureDefCount; i++)
+        {
+            var td = _roadSystem.GetTextureDef(i);
+            writer.WriteStartObject();
+            writer.WriteString("id", td.Id);
+            writer.WriteString("name", td.Name);
+            writer.WriteString("texturePath", td.TexturePath);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        // --- Placed units ---
+        writer.WriteStartArray("placedUnits");
+        foreach (var pu in _placedUnits)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("unitDefId", pu.UnitDefId);
+            writer.WriteNumber("x", pu.X);
+            writer.WriteNumber("y", pu.Y);
+            if (!string.IsNullOrEmpty(pu.Faction))
+                writer.WriteString("faction", pu.Faction);
+            if (!string.IsNullOrEmpty(pu.PatrolRouteId))
+                writer.WriteString("patrolRouteId", pu.PatrolRouteId);
+            if (pu.IsCorpse)
+                writer.WriteBoolean("isCorpse", true);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        writer.WriteEndObject();
+        writer.Flush();
     }
 
     private void LoadMap()

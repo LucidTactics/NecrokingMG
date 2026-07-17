@@ -22,9 +22,10 @@ using Necroking.UI;
 
 namespace Necroking;
 
-// Game1 partial: HUD, skill toasts, debug overlays and the save-preview
-// widgets. (The full-screen menus — main/pause/load/scenario — live in
-// UI/*Screen.cs; their shared button style is UI/MenuCommon.cs MenuDraw.)
+// Game1 partial: HUD, debug overlays and the save-preview widgets.
+// (The full-screen menus — main/pause/load/scenario — live in UI/*Screen.cs;
+// their shared button style is UI/MenuCommon.cs MenuDraw. Corner toasts live
+// in UI/ToastSystem.cs.)
 partial class GameRenderer
 {
     // Draws a texture but keep aspect ratio.
@@ -50,140 +51,8 @@ partial class GameRenderer
         _g.Scope.Draw(texture, rect, color);
     }
 
-    /// <summary>Geometry helper — same layout numbers used in DrawSkillLearnToasts.
-    /// Called from the input pass so clicks land on what was just rendered.</summary>
-    private Rectangle GetSkillLearnToastRect(int sw, int sh, int stackIndex)
-    {
-        const int toastW = 280, toastH = 56, padR = 16, padB = 16, gap = 6;
-        int yCursor = sh - padB - toastH - stackIndex * (toastH + gap);
-        return new Rectangle(sw - padR - toastW, yCursor, toastW, toastH);
-    }
-
-    /// <summary>Catalogue the visible corner toasts into the central UI hit
-    /// registry (hover-blocking is derived from it; click routing lives in
-    /// SkillToastLayer via <see cref="SkillToastIndexAt"/>/<see cref="ActivateSkillToast"/>).</summary>
-    internal void AppendSkillToastHitRects(Necroking.UI.UIHitRegistry reg, int sw, int sh)
-    {
-        for (int i = 0; i < _g._skillLearnToasts.Count; i++)
-            reg.Add($"toast.skill_learn.{i}", GetSkillLearnToastRect(sw, sh, i));
-    }
-
-    /// <summary>List index of the corner toast under the cursor, or -1. Toasts
-    /// are drawn from the most recent (last-added) up the stack: slot 0 = newest
-    /// = bottom rect. Hit-test half of the SkillToastLayer routing.</summary>
-    internal int SkillToastIndexAt(int sw, int sh, int mx, int my)
-    {
-        for (int i = 0; i < _g._skillLearnToasts.Count; i++)
-        {
-            int stackSlot = _g._skillLearnToasts.Count - 1 - i;
-            if (GetSkillLearnToastRect(sw, sh, stackSlot).Contains(mx, my))
-                return i;
-        }
-        return -1;
-    }
-
-    /// <summary>Clicked toast action: open the skill book on the toast's tab and
-    /// dismiss the toast. Action half of the SkillToastLayer routing.</summary>
-    internal void ActivateSkillToast(int listIdx)
-    {
-        if (listIdx < 0 || listIdx >= _g._skillLearnToasts.Count) return;
-        var t = _g._skillLearnToasts[listIdx];
-        int tabIdx = SkillBookDefs.FindTabIndexFor(t.SkillId);
-        _g._skillBookOverlay.Open();
-        if (tabIdx >= 0) _g._skillBookOverlay.SetActiveTab(tabIdx);
-        _g._skillLearnToasts.RemoveAt(listIdx);
-    }
-
-    internal void UpdateSkillLearnToasts(float dt)
-    {
-        for (int i = _g._skillLearnToasts.Count - 1; i >= 0; i--)
-        {
-            var t = _g._skillLearnToasts[i];
-            t.Timer += dt;
-            if (t.Timer >= t.Duration) _g._skillLearnToasts.RemoveAt(i);
-            else _g._skillLearnToasts[i] = t;
-        }
-    }
-
-    /// <summary>Bottom-right stack of "Recipe Learned" / "Skill Unlocked" toasts.
-    /// Each toast slides in (first 0.25s), holds, then fades out (last 0.6s).</summary>
-    internal void DrawSkillLearnToasts(int sw, int sh)
-    {
-        if (_g._skillLearnToasts.Count == 0 || _g._font == null) return;
-        var f = _g._font!;
-        var sf = _g._smallFont ?? f;
-
-        const int toastW = 280, toastH = 56, padR = 16, padB = 16, gap = 6;
-        int yCursor = sh - padB - toastH;
-
-        // Palette matches the SkillBookPanel's grimoire chrome.
-        var leatherDark = new Color(26, 13, 8);
-        var leatherMid  = new Color(42, 26, 18);
-        var gold        = new Color(218, 184,  96);
-        var goldDim     = new Color(108,  84,  40);
-        var parchment   = new Color(196, 174, 128);
-
-        for (int i = _g._skillLearnToasts.Count - 1; i >= 0; i--)
-        {
-            var t = _g._skillLearnToasts[i];
-            float life = t.Timer / t.Duration;
-            float alpha = 1f;
-            if (life < 0.1f) alpha = life / 0.1f;          // slide in
-            else if (life > 0.85f) alpha = (1f - life) / 0.15f; // fade out
-            alpha = MathHelper.Clamp(alpha, 0f, 1f);
-            int slideX = (int)((1f - alpha) * 30); // also slides slightly from the right
-
-            int x = sw - padR - toastW + slideX;
-            int y = yCursor;
-            byte a = (byte)(255 * alpha);
-
-            var rect = new Rectangle(x, y, toastW, toastH);
-            // Drop shadow
-            _g.Scope.Draw(_g._pixel, new Rectangle(rect.X + 3, rect.Y + 3, rect.Width, rect.Height),
-                new Color((byte)0, (byte)0, (byte)0, (byte)(160 * alpha)));
-            _g.Scope.Draw(_g._pixel, rect, new Color(leatherMid, alpha));
-            // Top gold accent band
-            _g.Scope.Draw(_g._pixel, new Rectangle(rect.X, rect.Y, rect.Width, 2),
-                new Color(gold, alpha));
-            // Border
-            DrawToastBorder(rect, new Color(goldDim, alpha));
-
-            // Text — header + skill name
-            string header = t.Header;
-            string body = t.SkillName;
-            // Sanitize for the embedded ASCII-only SpriteFont.
-            header = SanitizeAscii(header);
-            body = SanitizeAscii(body);
-            DrawTextRounded(sf, header,
-                new Vector2(rect.X + 14, rect.Y + 8),
-                new Color(gold, alpha));
-            DrawTextRounded(f, body,
-                new Vector2(rect.X + 14, rect.Y + 24),
-                new Color(parchment, alpha));
-
-            yCursor -= toastH + gap;
-        }
-    }
-
-    private void DrawToastBorder(Rectangle r, Color c)
-    {
-        Necroking.Render.DrawUtils.DrawRectBorder(_batch, _g._pixel, r, c);
-    }
-
-    private void DrawTextRounded(SpriteFont f, string text, Vector2 pos, Color color)
-        => _g.Scope.DrawString(f, text, new Vector2((int)pos.X, (int)pos.Y), color);
-
-    private static string SanitizeAscii(string text)
-    {
-        if (string.IsNullOrEmpty(text)) return text;
-        bool needs = false;
-        for (int i = 0; i < text.Length; i++)
-            if (text[i] > 126 || (text[i] < 32 && text[i] != '\n')) { needs = true; break; }
-        if (!needs) return text;
-        var sb = new System.Text.StringBuilder(text.Length);
-        foreach (var ch in text) sb.Append(ch >= 32 && ch <= 126 ? ch : '?');
-        return sb.ToString();
-    }
+    // Corner toasts moved to UI/ToastSystem.cs (queue, layout, hit-testing, draw);
+    // ToastLayer in UI/Layers/HudLayers.cs is its router seat.
 
     /// <summary>
     /// Scenario debug overlay: draw a green dot at each unit's resolved weapon
@@ -587,7 +456,7 @@ partial class GameRenderer
 
         float maxW = 0f;
         foreach (var (text, _) in lines)
-            maxW = MathF.Max(maxW, f.MeasureString(SanitizeAscii(text)).X);
+            maxW = MathF.Max(maxW, f.MeasureString(DrawUtils.SanitizeAscii(text)).X);
 
         int blockH = lines.Count * lineH + (lines.Count - 1) * gap;
         int boxW = (int)MathF.Ceiling(maxW) + pad * 2;
@@ -602,7 +471,7 @@ partial class GameRenderer
         int ty = boxY + pad;
         foreach (var (text, color) in lines)
         {
-            _g.Scope.DrawString(f, SanitizeAscii(text),
+            _g.Scope.DrawString(f, DrawUtils.SanitizeAscii(text),
                 new Vector2(boxX + pad, ty), color);
             ty += lineH + gap;
         }
@@ -614,7 +483,7 @@ partial class GameRenderer
             _g._inventory, _g._inventoryUI.IsVisible,
             _g._spellBarState,
             _g._timeScale,
-            DrawSpellCategoryIcon, BuildMenuOpenMask(), _g._paused,
+            BuildMenuOpenMask(), _g._paused,
             _g._slotFlash, BuildEditorOpenMask(),
             // Top-right button rows are drawn by their own HudTop-band router
             // layers so they sit ABOVE panels/overlays, matching where they

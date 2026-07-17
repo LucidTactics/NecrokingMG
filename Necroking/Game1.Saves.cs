@@ -159,21 +159,22 @@ public partial class Game1
         }
     }
 
+    /// <summary>In-memory "save game": end any spirit walk (so the BODY is what
+    /// gets snapshotted, not the spirit NecromancerIndex points at), then capture
+    /// the session into a SaveGameData. Null (logged) when there is no live
+    /// player. The file-free half of WriteSaveGame — pair with ApplySaveData for
+    /// a save/load round-trip that never touches disk.</summary>
+    internal SaveGameData CaptureSaveData()
+    {
+        GameSystems.SpiritWalkSystem.End(this);
+        return GetSaveDataJson();
+    }
+
     /// <summary>Snapshot the current session into saves/{name}.json. Returns
     /// false (logged) when there is no live player to save.</summary>
     internal bool WriteSaveGame(string name)
     {
-        // A save taken mid spirit-walk would persist the SPIRIT as the player
-        // (NecromancerIndex points at it) — snap back to the body first.
-        GameSystems.SpiritWalkSystem.End(this);
-
-        int idx = _sim.NecromancerIndex;
-        if (idx < 0)
-        {
-            DebugLog.Log("saves", "WriteSaveGame failed: no live necromancer");
-            return false;
-        }
-        var data = GetSaveDataJson();
+        var data = CaptureSaveData();
         if (data == null) return false;
         Directory.CreateDirectory(GamePaths.Resolve(GamePaths.SavesDir));
         bool ok = JsonFile.Save(SaveFilePath(name), data, JsonDefaults.Indented);
@@ -196,6 +197,28 @@ public partial class Game1
         return result;
     }
 
+    /// <summary>In-memory "load game": rebuild the world from a SaveGameData —
+    /// start its map through the normal StartGame flow, then apply the saved
+    /// player state on top. The file-free half of LoadSaveGame. Returns false
+    /// (logged, world untouched) when the save's map doesn't exist. With
+    /// <paramref name="mapMemory"/> the map itself also comes from memory
+    /// (captured editor state) instead of assets/maps/.</summary>
+    internal bool ApplySaveData(SaveGameData save, Data.MapData.MapJsonBundle? mapMemory = null)
+    {
+        // "empty_test" is synthesized in code; every other map needs its JSON —
+        // unless the map is supplied in memory, which needs no file at all.
+        if (mapMemory == null
+            && save.MapName != "empty_test"
+            && !File.Exists(GamePaths.Resolve($"{GamePaths.MapsDir}/{save.MapName}.json")))
+        {
+            DebugLog.Log("saves", $"ApplySaveData failed: map '{save.MapName}' not found");
+            return false;
+        }
+        StartGame(save.MapName, mapMemory);
+        ApplySaveToWorld(save);
+        return true;
+    }
+
     /// <summary>Load saves/{name}.json: start its map through the normal flow,
     /// then apply the saved player state on top. On any validation failure the
     /// menu state is left untouched (caller stays where it is).</summary>
@@ -206,17 +229,97 @@ public partial class Game1
             DebugLog.Log("saves", $"LoadSaveGame failed: cannot read '{name}'");
             return false;
         }
-        // "empty_test" is synthesized in code; every other map needs its JSON.
-        if (save.MapName != "empty_test"
-            && !File.Exists(GamePaths.Resolve($"{GamePaths.MapsDir}/{save.MapName}.json")))
-        {
-            DebugLog.Log("saves", $"LoadSaveGame failed: map '{save.MapName}' not found");
-            return false;
-        }
-        StartGame(save.MapName);
-        ApplySaveToWorld(save);
+        if (!ApplySaveData(save)) return false;
         DebugLog.Log("saves", $"Loaded game '{name}' (map {save.MapName})");
         return true;
+    }
+
+    /// <summary>Minimal snapshot of the player-facing UI/session context — the
+    /// things a world rebuild stomps but the player perceives as "where I am":
+    /// camera, time settings, menu state, the editor's Save target. Deliberately
+    /// bottom-up and small: no panel internals (those hold references into the
+    /// world being torn down — better to save and load too little than too much).
+    /// Captured with <see cref="SaveCurrentUIState"/>, restored with
+    /// <see cref="ApplyUIState"/>. Also handy for tests.</summary>
+    internal sealed class UIStateSnapshot
+    {
+        public Vec2 CameraPosition;
+        public float CameraZoom;
+        public MenuState MenuState;
+        public Core.GameClock.PauseSource PauseSources;
+        public float TimeScale;
+        public string EditorMapFilename = "";
+    }
+
+    internal UIStateSnapshot SaveCurrentUIState() => new()
+    {
+        CameraPosition = _camera.Position,
+        CameraZoom = _camera.Zoom,
+        MenuState = _menuState,
+        PauseSources = _clock.PauseSources,
+        TimeScale = _clock.TimeScale,
+        EditorMapFilename = _mapEditor.MapFilename,
+    };
+
+    internal void ApplyUIState(UIStateSnapshot ui)
+    {
+        _camera.Position = ui.CameraPosition;
+        _camera.Zoom = ui.CameraZoom;
+        _menuState = ui.MenuState;
+        _clock.ClearAllPauses();
+        if (ui.PauseSources != Core.GameClock.PauseSource.None)
+            _clock.Pause(ui.PauseSources); // Pause() ORs flags, so one call restores the whole set
+        _clock.SetTimeScale(ui.TimeScale);
+        _mapEditor.SetMapFilename(ui.EditorMapFilename);
+    }
+
+    /// <summary>The map editor's "Reload Map" button: a save/load round-trip that
+    /// never touches disk — CaptureSaveData + CaptureMapToMemory + ApplySaveData —
+    /// so the world resets exactly like saving the map, saving the game, and
+    /// loading both back (units/objects/villages/triggers rebuilt, player carried
+    /// across and teleported like a load), with the map taken from the LIVE editor
+    /// state: unsaved editor changes survive, and nothing is written to
+    /// assets/maps/. Unlike a real load it preserves the editing context: camera
+    /// position/zoom, the current menu state (the editor stays open — StartGame's
+    /// None and ApplySaveToWorld's camera snap are undone within the same frame,
+    /// so neither is ever visible), and the editor's typed Save target. Editor UI
+    /// state survives because nothing here resets it (deliberately no
+    /// _editorUi.ResetAllState, unlike the load-window path).</summary>
+    internal void ReloadMapInEditor()
+    {
+        var save = CaptureSaveData();
+        if (save == null)
+        {
+            _mapEditor.OnMapReloaded(false, _currentMapName);
+            return;
+        }
+        // Capture the live map BEFORE StartGame's ResetWorldState wipes it.
+        Data.MapData.MapJsonBundle mapMemory;
+        try
+        {
+            mapMemory = _mapEditor.CaptureMapToMemory();
+        }
+        catch (Exception e)
+        {
+            DebugLog.Log("saves", $"Reload map: live-map capture failed: {e.Message}");
+            _mapEditor.OnMapReloaded(false, _currentMapName);
+            return;
+        }
+        var ui = SaveCurrentUIState();
+        if (!ApplySaveData(save, mapMemory))
+        {
+            _mapEditor.OnMapReloaded(false, save.MapName);
+            return;
+        }
+        ApplyUIState(ui);
+        // Come back paused regardless of the restored pause state: StartGame's
+        // OnWorldStart cleared every holder and the editor-entry default-pause
+        // transition doesn't re-fire (we never observably left MapEditor). Same
+        // User source as editor entry / the time controls, so the pause button
+        // reflects it and unpausing works normally.
+        _clock.Pause(GameClock.PauseSource.User);
+        DebugLog.Log("saves", $"Editor-reloaded map '{save.MapName}' in place (from live editor state)");
+        _mapEditor.OnMapReloaded(true, save.MapName);
     }
 
     private void ApplySaveToWorld(SaveGameData save)

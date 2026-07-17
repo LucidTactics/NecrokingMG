@@ -491,6 +491,48 @@ e.g. `LoadGame`/`Quit`/`Settings` exist once), `MenuButton` struct, static `Menu
 25px group gaps starting at `screenH/2 - 75`; the comment warns the stack must fit at 720p and
 it is already tight — adding a button means shrinking heights/gaps or raising the start Y.
 
+## Corner toasts — the bottom-right skill-learn toast stack
+
+The only toast/notification system in the game is currently **skill-specific**, split
+across three files (a generalization would consolidate the model into its own `UI/` class,
+mirroring the `TooltipSystem`/`Game1.Tooltips` "Game1-owned queue + dedicated layer" shape
+— but note tooltips are frame-scoped, toasts persist across frames):
+
+- **Model + queue — `Necroking/Game1.cs`**: struct `SkillLearnToast { Header, SkillName,
+  SkillId, Timer, Duration }` + `internal readonly List<SkillLearnToast> _skillLearnToasts`
+  (fields near the top of the class). Cleared in the StartGame per-game reset block
+  (next to `_skillBookState.InitFromDefs()`).
+- **Who pushes**: `Game1.TryAutoLearn(skillId, header)` (adds a toast when `LearnFree`
+  succeeds; callers = `Game1.Crafting.cs` "Recipe Learned" + dev verb `learn_skill` in
+  `Game1.Dev.cs`) and `Game1.TryConsumeInventoryItem` ("Skill Points" toast with **empty
+  SkillId** — click then just opens the book). Manual learns via the skill-book UI
+  (`SkillBookState.TryLearn`) deliberately do NOT toast.
+- **Logic/draw — `Necroking/GameRenderer.Hud.cs`** (all on `GameRenderer`):
+  `GetSkillLearnToastRect(sw,sh,stackIndex)` = the ONE geometry source (280x56, padR/padB
+  16, gap 6, stacked up from bottom-right) shared by draw, hit-test, and registry;
+  `AppendSkillToastHitRects` (ids `toast.skill_learn.{i}`, called from
+  `Game1.RebuildUIHitRects` under `if (HudVisible)` — this is what makes `MouseOverUI`
+  true over a toast); `SkillToastIndexAt` (click hit-test; list is drawn newest-last-added
+  at the BOTTOM rect, so list idx i ↔ stack slot `Count-1-i`); `ActivateSkillToast`
+  (click action: `SkillBookDefs.FindTabIndexFor(SkillId)` → `_skillBookOverlay.Open()` +
+  `SetActiveTab`, then remove); `UpdateSkillLearnToasts(dt)` (expiry — ticked from
+  `Game1.Animation.cs` `UpdateAnimations` on **`_clock.WorldDt`**, so toasts FREEZE while
+  paused / in editors); `DrawSkillLearnToasts` (slide-in first 10% of life, fade-out last
+  15%, grimoire leather/gold palette, `DrawTextRounded` int-rounds positions,
+  `SanitizeAscii` for the ASCII-only SpriteFont).
+- **Router seat — `SkillToastLayer` in `Necroking/UI/Layers/HudLayers.cs`**: `Band =
+  UIBand.Toast` (500, above HudTop 450 so a toast overlapping the button rows wins the
+  click); registered in the `Game1` ctor right after `MinimapLayer`. Input gate `Visible =
+  HudVisible && _menuState == None && count > 0`; draw gate `VisibleForDraw =
+  ShowUIForDraw` (draw self-guards on count) — input and draw gates differ. Its own
+  `AppendHitRects` is deliberately EMPTY (rects catalogued centrally in
+  `RebuildUIHitRects`); `ContainsMouse`/`OnPointer`/`Draw` all delegate to the
+  `GameRenderer` methods above.
+
+**Look/edit here when:** changing toast look/duration/stacking, adding a new toast
+trigger, or generalizing into a game-wide notification system (keep: one geometry
+function, the hit-registry append, the per-game clear, the Toast band seat).
+
 ## The minimap (top-right, fog-of-war aware, editor-interactive)
 
 **`Necroking/UI/MinimapHUD.cs`** — class `MinimapHUD` (`Game1._minimap`, init'd in
@@ -522,6 +564,11 @@ map editor; clamped to the map. The baked window is `_winX/_winY/_winW/_winH` (p
   convention at the top of this file); the `FogUnexplored`/`FogExplored` constants are
   **`SetData` TEXEL data** and stay premult-encoded by convention, same as loaded PNGs
   — don't "fix" them to straight alpha.
+- **Per-faction marker colors** — the canonical palette is **`Render/FactionColors.cs`**
+  (shared single source with the map editor's placed-unit labels); `MinimapHUD.cs` keeps
+  private `UndeadColor`/`HumanColor`/`AnimalColor`/`PlayerColor` aliases of it for terse
+  call sites. `DrawUnitMarkers` switches on the `Unit.Faction` **enum** (`Data/Enums.cs`);
+  `DrawBuildingMarkers` reuses Undead/Human. Change a color in FactionColors, not here.
 - **Screen→world**: public `TryScreenToWorld(mx,my,screenW,out world)` (bounds-checked)
   and `TryScreenToWorldNoBoundsCheck` — the inverse marker mapping against the baked
   window; both used by `MinimapLayer` drags.

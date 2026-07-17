@@ -359,6 +359,42 @@
       }
     },
     {
+      "name": "Raise Skeleton",
+      "id": "raise_skeleton",
+      "category": "Summon",
+      "school": "Conjuration",
+      "tileTemplate": "summon",
+      "icon": "assets/UI/Icons/Spells/summon_skeleton.png",
+      "primaryPath": "death",
+      "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
+      "cooldown": 0.5,
+      "summonTargetReq": "Corpse",
+      "summonUnitID": "skeleton",
+      "spawnLocation": "NearestTargetToMouse",
+      "summonFlipbook": {
+        "flipbookID": "fire_loop",
+        "fps": 0,
+        "scale": 0.5,
+        "color": {
+          "r": 60,
+          "g": 80,
+          "b": 50,
+          "a": 128,
+          "intensity": 1
+        },
+        "rotation": 0,
+        "blendMode": "Alpha",
+        "alignment": "Ground",
+        "duration": 1
+      }
+    },
+    {
       "name": "Summon Skeleton",
       "id": "summon_skeleton",
       "category": "Summon",
@@ -374,7 +410,6 @@
         "+4: fatigue -85%"
       ],
       "cooldown": 0.5,
-      "summonTargetReq": "Corpse",
       "summonUnitID": "skeleton",
       "spawnLocation": "NearestTargetToMouse",
       "summonFlipbook": {

@@ -808,6 +808,29 @@ public partial class Game1 {
                break;
             }
 
+            // Spawn an undead def as a WILD undead (WildUndead archetype, not in the
+            // horde) — same conversion the map-placed-unit loader applies, for testing
+            // the wild→join flow without editing a map: spawn_wild <unitID> <x> <y>
+            case "spawn_wild": {
+               if (c.Args.Length < 3) {
+                  c.Complete(Necroking.Dev.DevServer.Error("spawn_wild needs: <unitID> <x> <y>"));
+                  break;
+               }
+               if (_gameData.Units.Get(c.Args[0]) == null) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"unknown unit def: {c.Args[0]}"));
+                  break;
+               }
+               int wIdx = SpawnUnit(c.Args[0], new Vec2(DevFloat(c.Args[1]), DevFloat(c.Args[2])));
+               if (wIdx < 0 || _sim.Units[wIdx].Faction != Faction.Undead) {
+                  c.Complete(Necroking.Dev.DevServer.Error("spawn failed or def is not undead"));
+                  break;
+               }
+               MakeUnitWild(wIdx);
+               c.Complete(Necroking.Dev.DevServer.OkRaw(
+                  $"{{\"def\":{System.Text.Json.JsonSerializer.Serialize(c.Args[0])},\"index\":{wIdx},\"id\":{_sim.Units[wIdx].Id}}}"));
+               break;
+            }
+
             // Add a runtime map zone with one spawn-table entry, for driving the periodic
             // zone spawn system without editor mouse work:
             // zone_add <kind> <x> <y> <halfW> <halfH> [defId] [perMinute] [maxAlive]
@@ -849,7 +872,9 @@ public partial class Game1 {
                if (defIdx < 0) { c.Complete(Necroking.Dev.DevServer.Error($"unknown env def: {c.Args[0]}")); break; }
                float ox = DevFloat(c.Args[1]), oy = DevFloat(c.Args[2]);
                float oscale = c.Args.Length >= 4 ? DevFloat(c.Args[3]) : 1f;
-               int oi = _envSystem.AddObject((ushort)defIdx, ox, oy, oscale);
+               // persistent: like an editor placement — Save Map / Reload Map keep it
+               // (gameplay spawns pass false and are dropped by both, by design).
+               int oi = _envSystem.AddObject((ushort)defIdx, ox, oy, oscale, persistent: true);
                c.Complete(Necroking.Dev.DevServer.OkRaw($"{{\"objIdx\":{oi},\"def\":{System.Text.Json.JsonSerializer.Serialize(c.Args[0])}}}"));
                break;
             }
@@ -872,6 +897,19 @@ public partial class Game1 {
             case "save_map": {
                string? saveName = c.Args.Length > 0 ? c.Args[0] : null;
                c.Complete(Necroking.Dev.DevServer.Ok($"saved map '{_mapEditor.DevSaveMap(saveName)}'"));
+               break;
+            }
+
+            // Press the map editor's "Reload Map" button: sets the same pending
+            // flag the button click does; Game1.Update performs the world reload
+            // next frame (requires the map editor to be open).
+            case "reload_map": {
+               if (_menuState != MenuState.MapEditor) {
+                  c.Complete(Necroking.Dev.DevServer.Error("reload_map: map editor not open"));
+                  break;
+               }
+               _mapEditor.PendingMapReload = true;
+               c.Complete(Necroking.Dev.DevServer.Ok($"reload of '{_currentMapName}' requested"));
                break;
             }
 
@@ -2329,6 +2367,7 @@ public partial class Game1 {
                   // spawning & world objects
                   "spawn <type> <x> <y>", "spawn_def <unitID> <x> <y> [count]",
                   "spawn_horde <unitID> <x> <y> [count]",
+                  "spawn_wild <unitID> <x> <y>",
                   "place_obj <defId> <x> <y> [scale]",
                   "procgen_paint <styleName> <x> <y> [seconds]",
                   // unit manipulation
@@ -2345,6 +2384,7 @@ public partial class Game1 {
                   "reanim_into <zombieDefId> [x] [y]", "learn_skill <skillId>",
                   "set_spell_slot <slot 0-9> <spellID|->", "give_item <itemID> [qty]",
                   "save_game <name>", "load_game <name>",
+                  "save_map [name]", "reload_map  (map editor's Reload Map button)",
                   // headless input (clicks / mouse / hover)
                   "click <x> <y> [right]", "mousepos <x> <y>|clear", "pile_click <x> <y>",
                   "hover <selector>|clear", "hover_obj <index>|clear",

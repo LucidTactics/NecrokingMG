@@ -408,6 +408,48 @@ see "Shared transition logic" above. Current external writers:
   (WorkerHandler uses its own `WorkerPhase` byte, not Routine).
 - `Simulation` — `Interrupt(…, "wolf-hunt-recast")` on wolf-hunt release.
 
+## Horde membership — who enrolls units in the player's horde (cross-area)
+
+Membership = an entry in `GameSystems.HordeSystem` (`Necroking/Game/HordeSystem.cs`):
+`AddUnit(id)` allocates a formation slot (Vogel-spiral), `RemoveUnit(id)` frees it,
+`IsInHorde(id)` queries; `Simulation.RemoveUnitTracked` calls `RemoveUnit` on death.
+Formation center `CircleCenter` follows the necromancer via
+`_horde.Tick(dt, _units, _necromancerIdx)` in `Simulation.Update` (seeded on load by
+`Game1.cs` StartGame and `Game1.Saves.cs`). Enrollment happens at THREE spawn-time points
+— there is no per-frame/proximity enrollment anywhere:
+
+1. **`Game1.SpawnUnit`** (`Necroking/Game1.cs`) — auto-enrolls `Archetype == 0` +
+   `Faction.Undead` + non-PlayerControlled units ("skip if archetype handles it").
+   Map-placed units flow through here (the StartGame placed-unit loop), so
+   **archetype-less undead placed in the map editor join the horde at map load**.
+2. **`HordeMinionHandler.OnSpawn`** — `ctx.Horde?.AddUnit(ctx.MyId)`: ANY def with
+   `archetype:"HordeMinion"` enrolls on spawn regardless of spawn path (the partial
+   OnSpawn ctx built by `ApplyDefRuntimeFields` DOES include `Horde`).
+3. **`Simulation.SpawnZombieMinion`** — the reanimate path: Faction=Undead, def archetype
+   (fallback HordeMinion), `Routine = RoutineFollowing`, UndeadCategory cap warning,
+   `_horde.AddUnit`. **The canonical "make this unit a horde member" sequence to mirror
+   for any runtime conversion.**
+
+Un-enroll precedent: `Game1.Net.cs` `SpawnNetGhost` — spawn via SpawnUnit, then
+`Archetype = 0`, `AI = IdleAtPoint`, `Horde.RemoveUnit(id)` to undo the auto-enroll.
+
+Gotchas:
+- The placed-unit loop applies `pu.Faction` (from `Data/PlacedUnit.cs` map JSON) AFTER
+  `SpawnUnit` already auto-enrolled — an undead-def unit re-factioned to Human stays in
+  the horde list.
+- `HordeCapTracker.CountUsed` (`Game/HordeCapTracker.cs`) counts ALL alive
+  `Faction.Undead` units with a def UndeadCategory — horde membership is NOT part of the
+  filter, so unaligned/wild undead would consume the player's summon cap.
+- `Render/FogOfWarSystem.Update` similarly stamps sight for every living `Faction.Undead`
+  unit, not just horde members.
+- Faction is 3-valued (`Data/Enums.cs` `Faction { Undead, Human, Animal }` + `FactionMask`)
+  — there is no "neutral/wild" faction; "wild" must be expressed via archetype or a flag,
+  not a new Faction value (faction masks are baked into WorldQuery/targeting).
+- A "wild/unaligned undead" concept therefore needs: a new archetype (skips enroll paths
+  1+2; `CombatUnitHandler`'s non-patrol/non-guard branch `UpdateIdleRoam` gives
+  wander-near-spawn sentry AI for free) + a sweep-style proximity converter (needs
+  `sim.NecromancerIndex`, unreachable from `AIContext` — see "Second AI style").
+
 ## Pitfalls / gotchas
 
 - **Archetype = string in the def, resolved by `FromName`.** Forgetting the `FromName`

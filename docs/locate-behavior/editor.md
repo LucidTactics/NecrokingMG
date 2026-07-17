@@ -139,6 +139,26 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
   block in `Update()` right after `bool ctrlDown = …`, each gated on `!textEditing`
   (`textEditing = _eb.IsKeyboardCaptured`). New global/per-tab chords go here — key edges
   via `kb.IsKeyDown(K) && _prevKb.IsKeyUp(K)`.
+- **Bottom bar (panel footer: filename field + Save/Load/Undo buttons + shortcuts hint +
+  status line).** Draw lives at the end of `Draw(screenW, screenH)` ("Bottom bar:" comment):
+  `bottomH = 90`, `bottomY = panelY + panelH - bottomH`, then a `DrawTextField("map_filename",…)`
+  row, a 3-button row via `DrawButtonRect` (draw-only, no hit-test), a `DrawSmallText`
+  shortcuts hint, and the fading `_statusMessage`. **Clicks are NOT handled in Draw** —
+  `UpdateBottomBarClicks(leftClick, mouse, panelX, panelY, screenH)` (called from `Update`)
+  edge-detects the button row by recomputing `buttonRowY = panelY + panelH - bottomH + 2 +
+  FieldHeight + 2` and splitting X into three `btnW3` bands → `SaveMap()` / `LoadMap()` /
+  `PerformUndo()`. **The bar height constant lives in FOUR places that must change together
+  when the bar grows:** the content-area reserve `contentH = … - 92` in `Draw`, `bottomH = 90`
+  in `Draw`, `bottomH = 90` in `UpdateBottomBarClicks`, and the click-ownership guard
+  `bottomBarTop = panelY + (screenH - 20) - 92` in `Update` (the block that zeroes `leftClick`
+  for clicks on the tab rows / bottom bar so scrolled tab content underneath never sees them).
+  Ctrl+S / Ctrl+L in the `Update` shortcut block call the same `SaveMap`/`LoadMap`.
+- **`LoadMap()` is a data-only editor reload, NOT a game restart:** it clears + re-reads
+  ground types, env defs/objects, walls, grass, triggers, roads, zones and `_placedUnits`
+  from `assets/maps/<_mapFilename>.json` (+ sidecars) and clears `_undoStack` — but never
+  touches `_sim` (no unit respawn, no player move, no `StartGame`). A "reload the world as a
+  new game" action must go through `Game1.StartGame` + the save/load state pipeline instead
+  (see [save-load.md](save-load.md) "In-memory split & the load-time side-effect census").
 - **Save**: `SaveMap()` writes `assets/maps/<map>.json` with `Utf8JsonWriter` — env objects
   go in the `placedObjects` array (`defId, x, y, scale, seed`) straight from
   `_envSystem.Objects`, so anything placed via `AddObject` is persisted automatically —

@@ -67,23 +67,57 @@ Look/edit here when: the save dialog's list/name-field/confirm-button behaves wr
 or adding save-row actions (delete/rename).
 
 ### Related
-- `Necroking/UI/LoadMenuScreen.cs` — the full-screen load menu (`MenuState.LoadMenu`
-  family entry): private `View` struct built by `BuildLayout(screenW, screenH, saveCount,
-  scrollPx)` — one rect per row (scroll applied) + `BackRect` — consumed by BOTH `Draw`
-  and `Update`'s hit-test so they can't drift; scrolls via the shared `VScrollbar`
-  pattern (see [editor.md](editor.md)). `Open()` refreshes `Game1._loadMenuSaves`, resets
-  `_loadMenuScrollPx` and records `_backMenuState` (main menu vs pause menu return).
+- `Necroking/UI/LoadGameWindow.cs` — the Load Game window (`MenuState.LoadMenu`,
+  reachable from main AND pause menu; hosted by `MenuHostLayer`, `_backMenuState` decides
+  where Back/ESC returns). An EditorBase-drawn `WantsClose` window like SaveGameWindow —
+  NOT a screen class. **Deferred-load pattern:** a row click only sets `PendingLoad`
+  (clicks land during the Hud render pass where rebuilding the world isn't safe);
+  `Game1.Update` (the `MenuState.LoadMenu` block, ~line 3000 in `Game1.cs`) picks it up
+  next frame and runs the actual `LoadSaveGame`. `Open()` refreshes its own save list and
+  sets `_menuState = MenuState.LoadMenu`.
 - `Necroking/GameRenderer.Hud.cs` — the save-preview widgets both save UIs share:
   `DrawSavePreviewCard` + `DrawSaveGameText` (form portrait + spell/inventory icons from
-  `SaveGameInfo`), called by `LoadMenuScreen.Draw` and `UI/SaveGameWindow.cs`.
+  `SaveGameInfo`), called by `LoadGameWindow.Draw` and `UI/SaveGameWindow.cs`.
 - `Necroking/Game1.cs` — StartGame owns the per-game reset (see `GameSession` +
   StartGame/StartScenario asymmetry in [game1-partials.md](game1-partials.md)).
 
+## In-memory split & the load-time side-effect census (mode / camera)
+
+The pipeline is already almost file-free — the file I/O is confined to two lines:
+
+- **Save-to-state:** `Game1.Saves.cs` `GetSaveDataJson()` builds the complete in-memory
+  `SaveGameData` from the live world (returns null when no necromancer).
+  `WriteSaveGame(name)` = `SpiritWalkSystem.End(this)` (snap spirit back to body first) +
+  `GetSaveDataJson()` + `JsonFile.Save`. Reuse `GetSaveDataJson` for any in-memory
+  snapshot; remember the spirit-walk End if the snapshot can happen mid-walk.
+- **Load-from-state:** `LoadSaveGame(name)` = `JsonFile.Load` + map-exists validation +
+  `StartGame(save.MapName)` + `ApplySaveToWorld(save)`. The last two calls ARE the
+  file-free "apply state" path — an in-memory round-trip (e.g. the map-editor Reload
+  button) is just `StartGame(state.MapName); ApplySaveToWorld(state);`.
+
+**Side effects to know when reloading without leaving the current UI mode** (verified 2026-07):
+- `StartGame` (`Game1.cs`): `_camera.Position = necro pos` + `_sim.Horde.CircleCenter`
+  (right after the necromancer fallback spawn), `_camera.Zoom = 24f` (48f on empty_test),
+  and at the very end `_menuState = MenuState.None` + `_gameWorldLoaded = true`. It also
+  re-feeds the (app-lifetime) map editor: `_mapEditor.Init(...)` (recreates the
+  EnvObjectEditor/WallEditor sub-windows — their state is lost), `RestoreTabFromSettings()`
+  (no-op in practice: `Settings.General.MapEditorLastTab` is rewritten on every tab click),
+  `SetMapFilename(mapName)`, `SetPlacedUnits(...)`, `SetGrassData(...)`. All other map-editor
+  UI state (tab scrolls, selections, brush settings, undo stack) survives untouched.
+- `ApplySaveToWorld`: `_camera.Position = saved pos` (+ `Horde.CircleCenter`, which is
+  world state, not camera).
+- To keep the camera / stay in an editor: capture `_camera.Position`/`_camera.Zoom` before
+  and restore after, and re-set `_menuState` — the MapEditor-exit pathfinder-rebuild hook in
+  `Game1.Update` (`_prevMenuState == MapEditor && _menuState != MapEditor`, ~line 2682)
+  compares at frame granularity, so a within-frame None→MapEditor flip never fires it
+  (harmless anyway — StartGame does a full `RebuildPathfinder`).
+- Precedent for a reload-consistency test: `Scenario/Scenarios/MapReloadConsistencyScenario.cs`
+  calls `StartGame` twice and diffs the world.
+
 ### Menu list scrolling
-- **Load menu** (`UI/LoadMenuScreen.cs`): scrolls — the scenario-menu draggable-scrollbar
-  pattern (`_loadMenuScrollPx` on Game1, drag state on the screen, `MenuDraw.Scrollbar` +
-  scissor-clipped rows on the shared `Necroking/UI/VScrollbar.cs` geometry) — see
-  [editor.md](editor.md) "Map-editor scrolling & scrollbars".
+- **Load menu** (`UI/LoadGameWindow.cs`): EditorBase-drawn (scroll offset id
+  `"load_list"` via `_ui.SetScrollOffset`) — see [editor.md](editor.md)
+  "Map-editor scrolling & scrollbars" for the shared scroll machinery.
 - **Save menu** (`UI/SaveGameWindow.cs`): shows `MaxVisibleSaves = 6`, prints
   `(+N older saves)`. It draws through `EditorBase`, so use
   `EditorBase.BeginScrollPanel`/`ScrollPanel.End` (or the interactive

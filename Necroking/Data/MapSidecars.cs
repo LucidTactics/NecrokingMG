@@ -83,11 +83,16 @@ public static class MapSidecars
     //  Triggers
     // ------------------------------------------------------------------
 
-    /// <summary>Load the triggers sidecar into <paramref name="triggers"/>.
-    /// Missing file is a silent no-op returning false (sidecars are optional).</summary>
-    public static bool LoadTriggers(string path, TriggerSystem triggers)
+    private static TriggersFile SnapshotTriggers(TriggerSystem triggers) => new()
     {
-        if (!JsonFile.Load<TriggersFile>(path, Options, out var f) || f == null) return false;
+        Regions = new List<TriggerRegion>(triggers.Regions),
+        PatrolRoutes = new List<PatrolRoute>(triggers.PatrolRoutes),
+        Triggers = new List<TriggerDef>(triggers.Triggers),
+        Instances = new List<TriggerInstance>(triggers.Instances),
+    };
+
+    private static void ApplyTriggers(TriggersFile f, TriggerSystem triggers)
+    {
         // The effect converter returns null for unknown types; the serializer
         // stores that null in the list, so scrub before handing to the system.
         foreach (var def in f.Triggers)
@@ -97,17 +102,35 @@ public static class MapSidecars
         triggers.SetTriggers(f.Triggers);
         triggers.SetInstances(f.Instances);
         DebugLog.Log("startup", $"  Triggers: {f.Regions.Count} regions, {f.PatrolRoutes.Count} routes, {f.Triggers.Count} defs, {f.Instances.Count} instances");
+    }
+
+    /// <summary>Load the triggers sidecar into <paramref name="triggers"/>.
+    /// Missing file is a silent no-op returning false (sidecars are optional).</summary>
+    public static bool LoadTriggers(string path, TriggerSystem triggers)
+    {
+        if (!JsonFile.Load<TriggersFile>(path, Options, out var f) || f == null) return false;
+        ApplyTriggers(f, triggers);
         return true;
     }
 
     public static bool SaveTriggers(string path, TriggerSystem triggers)
-        => JsonFile.SaveIfChanged(path, new TriggersFile
-        {
-            Regions = new List<TriggerRegion>(triggers.Regions),
-            PatrolRoutes = new List<PatrolRoute>(triggers.PatrolRoutes),
-            Triggers = new List<TriggerDef>(triggers.Triggers),
-            Instances = new List<TriggerInstance>(triggers.Instances),
-        }, Options);
+        => JsonFile.SaveIfChanged(path, SnapshotTriggers(triggers), Options);
+
+    // ------------------------------------------------------------------
+    //  In-memory round-trip (map editor Reload Map)
+    //
+    //  Capture*Json serializes the live system with the SAME options as the
+    //  file savers; Load*Json is the matching reader. Round-tripping through
+    //  JSON (instead of handing object references across the world reset)
+    //  keeps reload behavior identical to a real save + load — runtime-only
+    //  state drops off exactly as it would through the file.
+    // ------------------------------------------------------------------
+
+    public static string CaptureTriggersJson(TriggerSystem triggers)
+        => JsonSerializer.Serialize(SnapshotTriggers(triggers), Options);
+
+    public static bool LoadTriggersJson(string? json, TriggerSystem triggers)
+        => LoadJson<TriggersFile>(json, "triggers", f => ApplyTriggers(f, triggers));
 
     // ------------------------------------------------------------------
     //  Zones
@@ -115,22 +138,35 @@ public static class MapSidecars
 
     /// <summary>Load the zones sidecar into <paramref name="zones"/>. Missing file
     /// is a silent no-op returning false — callers clear stale zones themselves.</summary>
-    public static bool LoadZones(string path, ZoneSystem zones)
+    private static ZonesFile SnapshotZones(ZoneSystem zones) => new()
     {
-        if (!JsonFile.Load<ZonesFile>(path, Options, out var f) || f == null) return false;
+        Zones = new List<MapZone>(zones.Zones),
+    };
+
+    private static void ApplyZones(ZonesFile f, ZoneSystem zones)
+    {
         int dropped = f.Zones.RemoveAll(z => !Enum.IsDefined(typeof(ZoneKind), z.Kind));
         if (dropped > 0)
             DebugLog.Log("startup", $"  {dropped} zone(s) with unknown kind skipped");
         zones.SetZones(f.Zones);
         DebugLog.Log("startup", $"  Zones: {f.Zones.Count}");
+    }
+
+    public static bool LoadZones(string path, ZoneSystem zones)
+    {
+        if (!JsonFile.Load<ZonesFile>(path, Options, out var f) || f == null) return false;
+        ApplyZones(f, zones);
         return true;
     }
 
     public static bool SaveZones(string path, ZoneSystem zones)
-        => JsonFile.SaveIfChanged(path, new ZonesFile
-        {
-            Zones = new List<MapZone>(zones.Zones),
-        }, Options);
+        => JsonFile.SaveIfChanged(path, SnapshotZones(zones), Options);
+
+    public static string CaptureZonesJson(ZoneSystem zones)
+        => JsonSerializer.Serialize(SnapshotZones(zones), Options);
+
+    public static bool LoadZonesJson(string? json, ZoneSystem zones)
+        => LoadJson<ZonesFile>(json, "zones", f => ApplyZones(f, zones));
 
     // ------------------------------------------------------------------
     //  Roads
@@ -138,21 +174,55 @@ public static class MapSidecars
 
     /// <summary>Load the roads sidecar into <paramref name="roads"/>.
     /// Missing file is a silent no-op returning false.</summary>
-    public static bool LoadRoads(string path, RoadSystem roads)
+    private static RoadsFile SnapshotRoads(RoadSystem roads) => new()
     {
-        if (!JsonFile.Load<RoadsFile>(path, Options, out var f) || f == null) return false;
+        Roads = new List<RoadInstance>(roads.Roads),
+        Junctions = new List<RoadJunction>(roads.Junctions),
+    };
+
+    private static void ApplyRoads(RoadsFile f, RoadSystem roads)
+    {
         roads.SetRoads(f.Roads);
         roads.SetJunctions(f.Junctions);
         DebugLog.Log("startup", $"  Roads: {roads.RoadCount} roads, {roads.JunctionCount} junctions");
+    }
+
+    public static bool LoadRoads(string path, RoadSystem roads)
+    {
+        if (!JsonFile.Load<RoadsFile>(path, Options, out var f) || f == null) return false;
+        ApplyRoads(f, roads);
         return true;
     }
 
     public static bool SaveRoads(string path, RoadSystem roads)
-        => JsonFile.SaveIfChanged(path, new RoadsFile
+        => JsonFile.SaveIfChanged(path, SnapshotRoads(roads), Options);
+
+    public static string CaptureRoadsJson(RoadSystem roads)
+        => JsonSerializer.Serialize(SnapshotRoads(roads), Options);
+
+    public static bool LoadRoadsJson(string? json, RoadSystem roads)
+        => LoadJson<RoadsFile>(json, "roads", f => ApplyRoads(f, roads));
+
+    /// <summary>Deserialize an in-memory sidecar JSON string (same Options as the
+    /// files) and hand the result to <paramref name="apply"/>. Null/empty input is
+    /// the missing-file no-op; a parse failure is logged and skipped the same way
+    /// JsonFile.Load treats a corrupt sidecar.</summary>
+    private static bool LoadJson<T>(string? json, string label, Action<T> apply) where T : class
+    {
+        if (string.IsNullOrEmpty(json)) return false;
+        try
         {
-            Roads = new List<RoadInstance>(roads.Roads),
-            Junctions = new List<RoadJunction>(roads.Junctions),
-        }, Options);
+            var f = JsonSerializer.Deserialize<T>(json, Options);
+            if (f == null) return false;
+            apply(f);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Log("startup", $"  In-memory {label} load error: {ex.Message}");
+            return false;
+        }
+    }
 
     // ------------------------------------------------------------------
     //  Converters
