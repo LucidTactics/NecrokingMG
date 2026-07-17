@@ -1,5 +1,18 @@
 # UI/ — overlays, panels & the selected-unit sheet
 
+**Draw-surface convention (SpriteScope lockdown, 2026-07-17):** ALL UI draw code goes
+through a `SpriteScope` (`private SpriteScope Scope => Game1.Instance.Scope;` — a
+PROPERTY, never a cached field, and never a stored/Init-passed `SpriteBatch`) and
+authors **STRAIGHT-alpha colors** — a raw `SpriteBatch.Draw` would send colors to the
+premultiplied `AlphaBlend` state unconverted (silently fine while opaque, wrong at the
+first translucent color). The raw batch is reachable only via `Scope.Batch` +
+`Scope.EncodeTint(color)` for FontStashSharp `DrawString` extensions (precedent:
+`WidgetLayoutUtils.DrawTextBlock`, `RuntimeWidgetRenderer.DrawText`) and sanctioned
+Begin/End cycles (`EditorBase.BeginClip/EndClip`). `Game1._spriteBatch` is private and
+`tools/check_spritebatch_scope.py` enforces zero raw-`SpriteBatch` mentions outside
+render plumbing — run it after touching draw code. Full premult map:
+[render.md](render.md) "Premultiplied alpha".
+
 Player-facing overlays and info panels. Most panels are built on the **runtime widget
 renderer** (`UI/RuntimeWidgetRenderer.cs`, driven by JSON widget defs) and sit in the
 **UIRouter** (below). Each panel owns its own show/hide and hit-test; there is **no
@@ -547,14 +560,15 @@ map editor; clamped to the map. The baked window is `_winX/_winY/_winW/_winH` (p
   `DrawCameraViewport` (outline of the camera's world rect). Fog is editor-aware:
   `fogOn = fog.Mode != Off && _menuState != MenuState.MapEditor` (mirrors the world
   pass skip — the old "fogs in the editor" gotcha is fixed).
-- **Per-faction marker colors** = private static `Color` fields in `MinimapHUD.cs`:
-  `UndeadColor`(180,180,190 grey) / `HumanColor`(255,215,60 gold) / `AnimalColor`(90,240,70
-  green) + `PlayerColor`(white, necromancer). `DrawUnitMarkers` switches on the `Unit.Faction`
-  **enum** (`Data/Enums.cs`); `DrawBuildingMarkers` reuses Undead/Human. **There is no shared
-  `Faction→Color` helper** — the map editor's `Editor/MapEditorWindow.cs` `DrawPlacedUnitMarkers`
-  hardcodes a **different** palette keyed on `PlacedUnit.Faction` (a *string*, ""=def default):
-  Undead purple / Human blue / Animal green (+ bone-grey corpse override). Unifying these is a
-  clean single-source-of-truth extraction (e.g. `Render/FactionColors.cs`).
+  All draws go through `Scope` (straight-alpha TINT constants — see the draw-surface
+  convention at the top of this file); the `FogUnexplored`/`FogExplored` constants are
+  **`SetData` TEXEL data** and stay premult-encoded by convention, same as loaded PNGs
+  — don't "fix" them to straight alpha.
+- **Per-faction marker colors** — the canonical palette is **`Render/FactionColors.cs`**
+  (shared single source with the map editor's placed-unit labels); `MinimapHUD.cs` keeps
+  private `UndeadColor`/`HumanColor`/`AnimalColor`/`PlayerColor` aliases of it for terse
+  call sites. `DrawUnitMarkers` switches on the `Unit.Faction` **enum** (`Data/Enums.cs`);
+  `DrawBuildingMarkers` reuses Undead/Human. Change a color in FactionColors, not here.
 - **Screen→world**: public `TryScreenToWorld(mx,my,screenW,out world)` (bounds-checked)
   and `TryScreenToWorldNoBoundsCheck` — the inverse marker mapping against the baked
   window; both used by `MinimapLayer` drags.

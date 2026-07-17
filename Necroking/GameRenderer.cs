@@ -18,7 +18,13 @@ namespace Necroking;
 internal sealed partial class GameRenderer
 {
     private readonly Game1 _g;
+    // Render plumbing keeps its own reference to the shared batch (handed over
+    // in Game1.LoadContent) — Game1._spriteBatch itself is private so non-render
+    // code can only draw through Game1.Scope.
+    private SpriteBatch _batch = null!;
     public GameRenderer(Game1 g) { _g = g; }
+
+    internal void SetBatch(SpriteBatch batch) => _batch = batch;
 
     // --- Render-only constants/statics, moved here out of Game1 ---
 

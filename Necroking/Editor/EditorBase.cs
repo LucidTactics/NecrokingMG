@@ -69,12 +69,11 @@ public class EditorBase
     public static readonly Color SuccessColor = new(80, 200, 100);
 
     // State
-    internal SpriteBatch _sb = null!;
-    public SpriteBatch SpriteBatch => _sb;
-
-    /// <summary>Draw surface over the editor batch — colors are straight alpha,
-    /// encoded by the open material. Prefer this over raw <c>_sb</c> draws.</summary>
-    public SpriteScope Scope => new(_sb, Materials.Open ?? Materials.Hud);
+    /// <summary>Draw surface over the shared batch — colors are straight alpha,
+    /// encoded by the open material. THE way editor code draws; the raw batch is
+    /// only reachable via <c>Scope.Batch</c> for the sanctioned Begin/End sites
+    /// below (scissor clip, dropper capture).</summary>
+    public SpriteScope Scope => Necroking.Game1.Instance.Scope;
     internal Texture2D _pixel = null!;
     /// <summary>1×1 white pixel texture, exposed for editor consumers
     /// that draw their own primitives (e.g. tilted lines via rotated
@@ -409,15 +408,14 @@ public class EditorBase
     // Color picker popup (shared instance)
     private readonly ColorPickerPopup _colorPicker = new();
 
-    public void SetContext(SpriteBatch sb, Texture2D pixel, SpriteFont? font, SpriteFont? smallFont, SpriteFont? largeFont)
+    public void SetContext(Texture2D pixel, SpriteFont? font, SpriteFont? smallFont, SpriteFont? largeFont)
     {
-        _sb = sb;
         _pixel = pixel;
         _font = font;
         _smallFont = smallFont;
         _largeFont = largeFont;
-        _gd = sb.GraphicsDevice;
-        _colorPicker.SetContext(sb, pixel, font, smallFont);
+        _gd = Necroking.Game1.Instance.GraphicsDevice;
+        _colorPicker.SetContext(pixel, font, smallFont);
     }
 
     public void UpdateInput(MouseState mouse, MouseState prevMouse, KeyboardState kb, KeyboardState prevKb,
@@ -557,7 +555,7 @@ public class EditorBase
 
     public void DrawBorder(Rectangle rect, Color color, int thickness = 1)
     {
-        Necroking.Render.DrawUtils.DrawRectBorder(_sb, _pixel, rect, color, thickness);
+        Necroking.Render.DrawUtils.DrawRectBorder(Scope, _pixel, rect, color, thickness);
     }
 
     public void DrawText(string text, Vector2 pos, Color color, SpriteFont? font = null)
@@ -666,8 +664,10 @@ public class EditorBase
     /// </summary>
     public void BeginClip(Rectangle clipRect)
     {
-        // End the current SpriteBatch pass
-        _sb.End();
+        // End the current SpriteBatch pass. Raw-batch cycle via the Scope.Batch
+        // hatch: the scissor stack needs a conditional resume material, which
+        // Push/PopMaterial's fixed pairing can't express.
+        Scope.Batch.End();
 
         // Push the current scissor rect onto the stack (for nesting)
         _scissorStack.Push(_gd.ScissorRectangle);
@@ -683,7 +683,7 @@ public class EditorBase
 
         // Begin a new SpriteBatch with scissor test enabled (via Materials so
         // Materials.Open stays accurate for color encoding)
-        Materials.HudScissor.Begin(_sb);
+        Materials.HudScissor.Begin(Scope.Batch);
     }
 
     /// <summary>
@@ -692,7 +692,7 @@ public class EditorBase
     public void EndClip()
     {
         // End the scissor-enabled SpriteBatch pass
-        _sb.End();
+        Scope.Batch.End();
 
         // Restore the previous scissor rectangle
         if (_scissorStack.Count > 0)
@@ -703,12 +703,12 @@ public class EditorBase
         if (_scissorStack.Count > 0)
         {
             // Still nested - re-enable scissor with the parent clip rect
-            Materials.HudScissor.Begin(_sb);
+            Materials.HudScissor.Begin(Scope.Batch);
         }
         else
         {
             // Back to normal - no scissor test
-            Materials.Hud.Begin(_sb);
+            Materials.Hud.Begin(Scope.Batch);
         }
     }
 
@@ -1323,7 +1323,7 @@ public class EditorBase
         bool hovered = IsHovered(hitRect);
         bool clicked = hovered && _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
 
-        DrawUtils.DrawCheckbox(_sb, _pixel, boxRect, value, hovered,
+        DrawUtils.DrawCheckbox(Scope, _pixel, boxRect, value, hovered,
             InputBg, InputBorder, InputActive, AccentColor);
         DrawText(label, new Vector2(x + boxSize + 6, y + 2), TextColor);
 
@@ -1890,7 +1890,7 @@ public class EditorBase
             // Left gutter: a checkmark flags the currently selected option so
             // it reads at a glance; all items indent past it to stay aligned.
             if (isSelected)
-                DrawUtils.DrawCheckmark(_sb, _pixel,
+                DrawUtils.DrawCheckmark(Scope, _pixel,
                     new Rectangle(optRect.X + 4, optRect.Y + 5, 10, 10), AccentColor);
 
             Color textCol = isSelected ? TextBright : (isHighlighted ? TextBright : TextColor);
@@ -1988,9 +1988,12 @@ public class EditorBase
         // world behind the editor panels instead of what's on screen.
         if (_colorPicker.IsDropperActive)
         {
-            _sb.End();
+            // Same captured scope for the whole Suspend/Resume cycle — a re-read
+            // mid-cycle would compute the wrong resume material.
+            var scope = Scope;
+            scope.Suspend();
             _colorPicker.CaptureBackBuffer(_gd);
-            Materials.Hud.Begin(_sb);
+            scope.Resume();
         }
         _colorPicker.Draw();
     }

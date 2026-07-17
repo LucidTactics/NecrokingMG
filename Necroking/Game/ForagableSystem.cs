@@ -56,7 +56,7 @@ public class ForagableSystem
     private EnvironmentSystem _env => _game._envSystem;
     private Render.Camera25D _camera = null!;
     private Render.Renderer _renderer = null!;
-    private SpriteBatch _spriteBatch = null!;
+    private Render.SpriteScope Scope => _game.Scope;  // straight-alpha draw surface
     private Inventory _inventory = null!;
     private EffectManager _effects = null!;
     private SoundEffect? _pickupSound;
@@ -69,12 +69,12 @@ public class ForagableSystem
 
     public void Bind(
         Game1 game,
-        Render.Camera25D camera, Render.Renderer renderer, SpriteBatch spriteBatch,
+        Render.Camera25D camera, Render.Renderer renderer,
         Inventory inventory, EffectManager effects, SoundEffect? pickupSound,
         Action<Vec2, string>? onPickup, Action<string>? onLearnTrigger)
     {
         _game = game;
-        _camera = camera; _renderer = renderer; _spriteBatch = spriteBatch;
+        _camera = camera; _renderer = renderer;
         _inventory = inventory; _effects = effects; _pickupSound = pickupSound;
         _onPickup = onPickup;
         _onLearnTrigger = onLearnTrigger;
@@ -201,7 +201,7 @@ public class ForagableSystem
 
             var sp = _renderer.WorldToScreen(pos, arcHeight, _camera);
             var origin = new Vector2(cf.PivotX * cf.Texture.Width, cf.PivotY * cf.Texture.Height);
-            _spriteBatch.Draw(cf.Texture, sp, null, Color.White, rotation, origin, scale, SpriteEffects.None, 0f);
+            Scope.Draw(cf.Texture, sp, null, Color.White, rotation, origin, scale, SpriteEffects.None, 0f);
         }
     }
 }

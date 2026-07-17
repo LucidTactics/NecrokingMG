@@ -126,7 +126,7 @@ public sealed class ToastSystem
             g.Scope.Draw(g._pixel, new Rectangle(rect.X, rect.Y, rect.Width, 2),
                 new Color(gold, alpha));
             // Border
-            DrawUtils.DrawRectBorder(g._spriteBatch, g._pixel, rect, new Color(goldDim, alpha));
+            DrawUtils.DrawRectBorder(g.Scope, g._pixel, rect, new Color(goldDim, alpha));
 
             // Text — header + body, sanitized for the embedded ASCII-only SpriteFont.
             string header = DrawUtils.SanitizeAscii(t.Header);

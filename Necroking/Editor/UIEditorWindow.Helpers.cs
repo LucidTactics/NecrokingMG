@@ -38,7 +38,7 @@ public partial class UIEditorWindow
                 int bi = def.BackgroundInset;
                 var bgRect = new Rectangle(drawX + bi, drawY + bi, drawW - bi * 2, drawH - bi * 2);
                 var bgColor = def.BackgroundTint != null ? ByteColor(def.BackgroundTint) : Color.White;
-                bgNs.Draw(_sb, bgRect, bgColor, def.BackgroundScale);
+                bgNs.Draw(Scope, bgRect, bgColor, def.BackgroundScale);
             }
         }
         else if (!string.IsNullOrEmpty(def.BackgroundImagePath))
@@ -67,7 +67,7 @@ public partial class UIEditorWindow
             else if (!string.IsNullOrEmpty(def.Stencil))
             {
                 var stNs = GetNineSlice(def.Stencil, "st:" + def.Id);
-                if (stNs != null) stNs.Draw(_sb, stRect, stColor);
+                if (stNs != null) stNs.Draw(Scope, stRect, stColor);
             }
         }
 
@@ -144,7 +144,7 @@ public partial class UIEditorWindow
             {
                 var frColor = def.FrameTint != null ? ByteColor(def.FrameTint) : Color.White;
                 int fi = def.FrameInset;
-                frNs.Draw(_sb, new Rectangle(drawX + fi, drawY + fi, drawW - fi * 2 - def.FrameInsetR, drawH - fi * 2),
+                frNs.Draw(Scope, new Rectangle(drawX + fi, drawY + fi, drawW - fi * 2 - def.FrameInsetR, drawH - fi * 2),
                     frColor, def.FrameScale);
             }
         }

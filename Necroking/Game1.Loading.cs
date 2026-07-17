@@ -442,7 +442,7 @@ public partial class Game1
             // Wire the foragable subsystem now that all its dependencies exist
             // (inventory from the game-data step, pickup sound just above).
             // Callbacks bridge back to Game1-private state (damage numbers, skill book).
-            _foragables.Bind(this, _camera, _renderer, _spriteBatch,
+            _foragables.Bind(this, _camera, _renderer,
                 _inventory, _effectManager, _pickupSound,
                 onPickup: OnForagablePickedUp,
                 onLearnTrigger: OnForagableLearnTrigger);
@@ -462,7 +462,7 @@ public partial class Game1
         Step("Building editors", () =>
         {
             // Init property editor infrastructure
-            _editorUi.SetContext(_spriteBatch, _pixel, _font, _smallFont, _largeFont);
+            _editorUi.SetContext(_pixel, _font, _smallFont, _largeFont);
             _unitEditor = new UnitEditorWindow(_editorUi);
             _unitEditor.SetGameData(_gameData);
             _unitEditor.SetAtlases(_atlases, GraphicsDevice);

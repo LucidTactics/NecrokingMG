@@ -62,7 +62,7 @@ partial class GameRenderer
         }
 
         // Fallback: per-tile texture rendering
-        Render.EffectBatch.BeginScenePass(_g._spriteBatch);
+        Render.EffectBatch.BeginScenePass(_batch);
         float viewLeft = _g._camera.Position.X - _g._renderer.ScreenW / (2f * _g._camera.Zoom) - 1;
         float viewRight = _g._camera.Position.X + _g._renderer.ScreenW / (2f * _g._camera.Zoom) + 1;
         float viewTop = _g._camera.Position.Y - _g._renderer.ScreenH / (_g._camera.Zoom * _g._camera.YRatio) - 1;
@@ -114,7 +114,7 @@ partial class GameRenderer
             }
         }
 
-        _g._spriteBatch.End();
+        _batch.End();
     }
 
     // Matches the shader's array length (16 in GroundShader.fx).
@@ -177,14 +177,14 @@ partial class GameRenderer
 
         // Self-contained batch (the ground pass runs outside any open batch):
         // one fullscreen quad through the ground shader, Opaque + PointClamp.
-        _g._spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.Opaque, SamplerState.PointClamp,
+        _batch.Begin(SpriteSortMode.Deferred, BlendState.Opaque, SamplerState.PointClamp,
             null, null, _g._groundEffect);
         Materials.NoteAdHocBatch(); // opaque ground-shader quad, draws White only
 
         // SpriteBatch.Draw binds _g._groundVertexMapTex to slot 0 (= TilemapSampler)
         _g.Scope.Draw(_g._groundVertexMapTex!, new Rectangle(0, 0, _g._renderer.ScreenW, _g._renderer.ScreenH), Color.White);
 
-        _g._spriteBatch.End();
+        _batch.End();
 
         _g._groundDrawStopwatch.Stop();
         double groundDrawMs = _g._groundDrawStopwatch.Elapsed.TotalMilliseconds;
@@ -461,7 +461,7 @@ partial class GameRenderer
                 float tt = s / (float)segments;
                 float u = 1f - tt;
                 var p = u * u * a + 2f * u * tt * mid + tt * tt * b;
-                DrawUtils.DrawLine(_g._spriteBatch, _g._pixel, prev, p,
+                DrawUtils.DrawLine(_batch, _g._pixel, prev, p,
                     (s % 2 == 0) ? ropeBright : ropeDim,
                     MathF.Max(1f, 2f * _g._camera.Zoom / 32f));
                 prev = p;

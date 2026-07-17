@@ -53,7 +53,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal const int WorldSize = 64; // start small, load map for real size
 
     private GraphicsDeviceManager _graphics;
-    internal SpriteBatch _spriteBatch = null!;
+    // PRIVATE by design (SpriteScope lockdown): non-render code draws through
+    // Scope below; render plumbing (GameRenderer, RenderPipeline ctx) holds its
+    // own reference, handed over in LoadContent.
+    private SpriteBatch _spriteBatch = null!;
 
     // Latched true the first time the focused window counts as a real user
     // interaction (not headless, no scenario); never reset. Forces ground
@@ -383,10 +386,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Initialize the widget renderer first (its definitions get loaded from
         // the UI defs dir captured at startup). Without this, the four UIs below
         // would crash on their first LayoutWidget call.
-        _widgetRenderer.Init(GraphicsDevice, _spriteBatch, _fontManager);
+        _widgetRenderer.Init(GraphicsDevice, _fontManager);
         if (_widgetRendererUiDefPath != null && Directory.Exists(_widgetRendererUiDefPath))
             _widgetRenderer.LoadDefinitions(_widgetRendererUiDefPath);
-        _inventoryUI.Init(_widgetRenderer, _inventory, _gameData.Items, _spriteBatch, _pixel);
+        _inventoryUI.Init(_widgetRenderer, _inventory, _gameData.Items, _pixel);
         // Slot click: deposit into an open crafting table, else use a consumable
         // (e.g. Skillpoint Potion). Handled via the layer callback because the
         // inventory is a modal layer — PopupManager consumes inside-panel clicks
@@ -401,18 +404,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 _inventory.RemoveItem(s.ItemId, 1);
         };
         _buildingMenuUI.Init(_widgetRenderer, _inventory, _gameData.Items,
-            _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel, _gameData.Spells);
+            _graphics.PreferredBackBufferHeight, _pixel, _gameData.Spells);
         _craftingMenu.Init(_widgetRenderer, _inventory, _gameData.Items, _gameData,
-            _graphics.PreferredBackBufferHeight, _spriteBatch, _pixel);
+            _graphics.PreferredBackBufferHeight, _pixel);
         _craftingMenu.SetSkillBook(_skillBookState);
         _tableMenuUI.Init(_widgetRenderer, _inventory, _gameData.Items,
-            _spriteBatch, _pixel, _font);
+            _pixel, _font);
         _tableMenuUI.SetSkillBook(_skillBookState);
         _tableMenuUI.StartCraftCallback = (envIdx) => StartTableCraft(envIdx);
         _tableMenuUI.DrawUnitIconCallback = (defId, rect) => _gameRenderer.DrawUnitIdleSprite(defId, rect);
-        _graveRosterUI.Init(_spriteBatch, _pixel, _widgetRenderer, _workerSystem);
-        _jobBoardUI.Init(_spriteBatch, _pixel, _widgetRenderer, _workerSystem);
-        _logPanel.Init(_spriteBatch, _pixel, _widgetRenderer, this);
+        _graveRosterUI.Init(_pixel, _widgetRenderer, _workerSystem);
+        _jobBoardUI.Init(_pixel, _widgetRenderer, _workerSystem);
+        _logPanel.Init(_pixel, _widgetRenderer, this);
         _debugPanel.Init(this);
         _unitInfoPanel.Init(_widgetRenderer, _gameData);
         _grimoireOverlay.Init(_widgetRenderer, _gameData,
@@ -488,7 +491,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     {
         if (_uiEditorInitialized) return;
         _uiEditorInitialized = true;
-        _uiEditor.Init(_spriteBatch, _pixel, _font, _smallFont);
+        _uiEditor.Init(_pixel, _font, _smallFont);
         _uiEditor.SetFontManager(_fontManager);
         string uiDefPath = GamePaths.Resolve(GamePaths.UIDefsDir);
         if (Directory.Exists(uiDefPath))
@@ -1058,7 +1061,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 {
                     Vec2 mw = _camera.ScreenToWorld(_input.MousePos, c.ScreenW, c.ScreenH);
                     var sp = _renderer.WorldToScreen(mw, 0f, _camera);
-                    _buildingMenuUI.DrawGhostPreview(_spriteBatch, _pixel, mw, sp, _camera);
+                    _buildingMenuUI.DrawGhostPreview(Scope, _pixel, mw, sp, _camera);
                 }
             }, () => ShowUIForDraw && _buildingMenuUI.IsVisible));
         _uiRouter.Register(new Necroking.UI.PanelLayer(_uiRouter, _craftingMenu,
@@ -2350,6 +2353,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     protected override void LoadContent()
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
+        _gameRenderer.SetBatch(_spriteBatch);
         _pixel = TextureUtil.GetWhitePixel(GraphicsDevice);
         _buffVisuals.SetPixel(_pixel);
 
@@ -2387,13 +2391,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _smallFont.DefaultCharacter = '?';
         _largeFont.DefaultCharacter = '?';
         _debugDraw.SetFont(_smallFont);
-        _hudRenderer.Init(_spriteBatch, _pixel, _font, _smallFont, _widgetRenderer);
+        _hudRenderer.Init(_pixel, _font, _smallFont, _widgetRenderer);
         _hudRenderer.SetInput(_input);
-        _minimap.Init(GraphicsDevice, _spriteBatch, _pixel);
-        _characterStatsUI.Init(_spriteBatch, _pixel, _font, _smallFont);
+        _minimap.Init(GraphicsDevice, _pixel);
+        _characterStatsUI.Init(_pixel, _font, _smallFont);
         // Note: _uiShaders is initialized later after Content.Load path -- we
         // set it on the panel below after Load completes.
-        _skillBookOverlay.Init(_widgetRenderer, _spriteBatch, _pixel);
+        _skillBookOverlay.Init(_widgetRenderer, _pixel);
         // (The overlay's Bind runs in the "Loading game data" step — it needs the
         // inventory that step creates.)
 

@@ -17,8 +17,7 @@ namespace Necroking.UI;
 /// </summary>
 public class LogPanel : IModalLayer
 {
-    private SpriteBatch _batch = null!;
-    private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
+    private Render.SpriteScope Scope => Game1.Instance.Scope;  // straight-alpha draw surface
     private Texture2D _pixel = null!;
     private RuntimeWidgetRenderer _r = null!;
     private Game1 _g = null!;
@@ -64,9 +63,9 @@ public class LogPanel : IModalLayer
     public bool IsVisible => _visible;
     public bool IsDragging => _dragThumb;
 
-    public void Init(SpriteBatch batch, Texture2D pixel, RuntimeWidgetRenderer renderer, Game1 g)
+    public void Init(Texture2D pixel, RuntimeWidgetRenderer renderer, Game1 g)
     {
-        _batch = batch; _pixel = pixel; _r = renderer; _g = g;
+        _pixel = pixel; _r = renderer; _g = g;
     }
 
     public void Toggle(int screenW, int screenH)
@@ -292,7 +291,7 @@ public class LogPanel : IModalLayer
     private void DrawButton(Rectangle r, string label, Color fill)
     {
         Scope.Draw(_pixel, r, fill);
-        Render.DrawUtils.DrawRectBorder(_batch, _pixel, r, new Color(206, 206, 214, 200), 1);
+        Render.DrawUtils.DrawRectBorder(Scope, _pixel, r, new Color(206, 206, 214, 200), 1);
         var sz = _r.MeasureText(label, FsTab);
         _r.DrawText(label, (int)(r.X + (r.Width - sz.X) / 2f), (int)(r.Y + (r.Height - sz.Y) / 2f),
             FsTab, new Color(232, 232, 236));

@@ -351,10 +351,10 @@ public partial class UIEditorWindow : EditorBase
     // ═══════════════════════════════════════
 
     /// <summary>Old-style init compatible with existing Game1 code.</summary>
-    public void Init(SpriteBatch spriteBatch, Texture2D pixel, SpriteFont? font, SpriteFont? smallFont)
+    public void Init(Texture2D pixel, SpriteFont? font, SpriteFont? smallFont)
     {
-        SetContext(spriteBatch, pixel, font, smallFont, null);
-        _device = spriteBatch.GraphicsDevice;
+        SetContext(pixel, font, smallFont, null);
+        _device = Necroking.Game1.Instance.GraphicsDevice;
         _textureBrowser.SetGraphicsDevice(_device);
     }
 
@@ -1143,7 +1143,7 @@ public partial class UIEditorWindow : EditorBase
 
             // Checkerboard background
             DrawRect(new Rectangle(curX, y, pw, ph), new Color(30, 30, 30, 255));
-            ns.Draw(_sb, new Rectangle(curX, y, pw, ph));
+            ns.Draw(Scope, new Rectangle(curX, y, pw, ph));
             DrawBorder(new Rectangle(curX, y, pw, ph), new Color(80, 80, 100, 100));
 
             // Size label
@@ -1474,7 +1474,7 @@ public partial class UIEditorWindow : EditorBase
             var ns = GetNineSlice(def.NineSlice, "el:" + def.Id);
             if (ns != null)
             {
-                ns.Draw(_sb, elRect, ByteColor(def.TintColor ?? new byte[] { 255, 255, 255, 255 }), def.NineSliceScale);
+                ns.Draw(Scope, elRect, ByteColor(def.TintColor ?? new byte[] { 255, 255, 255, 255 }), def.NineSliceScale);
             }
             else
             {
@@ -2615,7 +2615,7 @@ public partial class UIEditorWindow : EditorBase
                 int bi = def.BackgroundInset;
                 var bgRect = new Rectangle(wdX + bi, wdY + bi, def.Width - bi * 2, defH - bi * 2);
                 var bgColor = def.BackgroundTint != null ? ByteColor(def.BackgroundTint) : Color.White;
-                bgNs.Draw(_sb, bgRect, bgColor, def.BackgroundScale);
+                bgNs.Draw(Scope, bgRect, bgColor, def.BackgroundScale);
             }
         }
         else if (!string.IsNullOrEmpty(def.BackgroundImagePath))
@@ -2649,7 +2649,7 @@ public partial class UIEditorWindow : EditorBase
             {
                 var stNs = GetNineSlice(def.Stencil, "st:" + def.Id);
                 if (stNs != null)
-                    stNs.Draw(_sb, stRect, stColor);
+                    stNs.Draw(Scope, stRect, stColor);
             }
         }
 
@@ -2898,7 +2898,7 @@ public partial class UIEditorWindow : EditorBase
                             float boldStrength = txo?.BoldStrength ?? tr?.BoldStrength ?? 1f;
                             int outlineOffX = txo?.OutlineOffsetX ?? tr?.OutlineOffsetX ?? 0;
                             int outlineOffY = txo?.OutlineOffsetY ?? tr?.OutlineOffsetY ?? 0;
-                            UI.WidgetLayoutUtils.DrawTextBlock(_sb, dynFont, text, rect, fontColor, align, valign,
+                            UI.WidgetLayoutUtils.DrawTextBlock(Scope, dynFont, text, rect, fontColor, align, valign,
                                 lineSpacing, charSpacing, bold, outlineW, outlineColor, boldStrength,
                                 outlineOffX, outlineOffY);
                         }
@@ -2929,7 +2929,7 @@ public partial class UIEditorWindow : EditorBase
                 else if (!string.IsNullOrEmpty(elemDef.NineSlice))
                 {
                     var childNs = GetNineSlice(elemDef.NineSlice, "el:" + elemDef.Id);
-                    if (childNs != null) { childNs.Draw(_sb, rect, tint, elemDef.NineSliceScale * child.NineSliceScale); drawn = true; }
+                    if (childNs != null) { childNs.Draw(Scope, rect, tint, elemDef.NineSliceScale * child.NineSliceScale); drawn = true; }
                 }
 
                 // Stroke/outline

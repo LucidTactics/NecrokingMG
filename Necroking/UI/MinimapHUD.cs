@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Necroking.Core;
 using Necroking.Data;
 using Necroking.Data.Registries;
 using Necroking.Lib;
@@ -60,11 +61,15 @@ public class MinimapHUD
     private const int RebakeFrames = 150;
     private const float ObstacleDarken = 0.75f;
 
-    private static readonly Color BorderColor = new(20, 20, 30, 220);
+    // Draw tints are STRAIGHT alpha (Scope encodes them for the open material).
+    private static readonly Color BorderColor = new(24, 24, 35, 220);
     private static readonly Color MarkerOutline = new(10, 10, 12);
-    private static readonly Color ViewportColor = Color.White * 0.5f; // premultiplied 50% white
-    // Fog overlay (premultiplied). Unexplored is opaque — nothing shows through —
-    // but deliberately dark gray, not pure black (too stark next to the terrain).
+    private static readonly Color BorderGlow = new(255, 255, 224, 80); // faint warm halo behind the border
+    private static readonly Color ViewportColor = ColorUtils.Fade(Color.White, 0.5f);
+    // Fog overlay TEXEL data (SetData buffer) — premult-encoded by convention, same
+    // as loaded PNGs; do NOT author these as straight-alpha draw tints. Unexplored
+    // is opaque — nothing shows through — but deliberately dark gray, not pure
+    // black (too stark next to the terrain).
     private static readonly Color FogUnexplored = new(26, 26, 32, 255);
     private static readonly Color FogExplored = new Color(0, 0, 0, 90); // ~35% dim: terrain readable, clearly fogged
     // Canonical faction palette lives in Render.FactionColors (shared with the
@@ -76,8 +81,11 @@ public class MinimapHUD
     private static readonly Color UndeadColor = FactionColors.Undead;
 
     private GraphicsDevice _device = null!;
-    private SpriteBatch _batch = null!;
     private Texture2D _pixel = null!;
+
+    /// <summary>Draw surface (straight-alpha colors). Property, not a cached
+    /// field — the resume material is computed at access time.</summary>
+    private SpriteScope Scope => Game1.Instance.Scope;
 
     // Fog overlay refreshes much faster than the terrain bake (the bright circle
     // follows moving units) but not every frame — the CPU fog grid itself only
@@ -100,10 +108,9 @@ public class MinimapHUD
     // mode switch mid-frame-cycle; the fog overlay must match the bake).
     private int _texSize = BaseSize;
 
-    public void Init(GraphicsDevice device, SpriteBatch batch, Texture2D pixel)
+    public void Init(GraphicsDevice device, Texture2D pixel)
     {
         _device = device;
-        _batch = batch;
         _pixel = pixel;
     }
 
@@ -138,10 +145,9 @@ public class MinimapHUD
         if (_terrainTex == null) return;
 
         var rect = Bounds(screenW);
-        // This is premultiplied for some reason!!
-        FillRect(new Rectangle(rect.X - 2, rect.Y - 2, rect.Width + 4, rect.Height + 4), new(80, 80, 70, 80));
+        FillRect(new Rectangle(rect.X - 2, rect.Y - 2, rect.Width + 4, rect.Height + 4), BorderGlow);
         FillRect(new Rectangle(rect.X - 1, rect.Y - 1, rect.Width + 2, rect.Height + 2), BorderColor);
-        _batch.Draw(_terrainTex, rect, Color.White);
+        Scope.Draw(_terrainTex, rect, Color.White);
 
         // Fog over terrain, markers over fog: buildings stay full-bright inside
         // the dimmed explored band, and gating (below) keeps markers out of the
@@ -152,7 +158,7 @@ public class MinimapHUD
         if (fogOn)
         {
             if (++_framesSinceFog >= FogRefreshFrames) RefreshFogTexture(fog);
-            if (_fogTex != null) _batch.Draw(_fogTex, rect, Color.White);
+            if (_fogTex != null) Scope.Draw(_fogTex, rect, Color.White);
         }
 
         float sx = rect.Width / _winW;
@@ -441,7 +447,7 @@ public class MinimapHUD
     //  Pixel-primitive helpers (clipped to the map rect)
     // ═══════════════════════════════════════
 
-    private void FillRect(Rectangle r, Color c) => _batch.Draw(_pixel, r, c);
+    private void FillRect(Rectangle r, Color c) => Scope.Draw(_pixel, r, c);
 
     private void ClippedRect(int x, int y, int w, int h, Color c, Rectangle clip)
     {

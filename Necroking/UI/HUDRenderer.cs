@@ -145,13 +145,12 @@ public partial class HUDRenderer
     private static readonly Color SlotFlashEdge = new(255, 240, 180, 230);
 
     // Dependencies (set via Init)
-    private SpriteBatch _batch = null!;
-    private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
+    private Render.SpriteScope Scope => Game1.Instance.Scope;  // straight-alpha draw surface
     private Texture2D _pixel = null!;
     private SpriteFont _font;
     private SpriteFont _smallFont;
-    // Shares Game1's SpriteBatch, so its element/icon draws land in the same
-    // pass. Used to reuse the grimoire's frame + parchment backing for slots.
+    // Draws in the same shared pass as everything else (Game1.Scope). Used to
+    // reuse the grimoire's frame + parchment backing for slots.
     private UI.RuntimeWidgetRenderer? _widgets;
     private InputState _input = new();
 
@@ -168,10 +167,9 @@ public partial class HUDRenderer
     /// (see Game1's Ghost-mode toggle). Runtime-only, not persisted.</summary>
     public bool ShowDebugPanel;
 
-    public void Init(SpriteBatch batch, Texture2D pixel, SpriteFont font, SpriteFont smallFont,
+    public void Init(Texture2D pixel, SpriteFont font, SpriteFont smallFont,
         UI.RuntimeWidgetRenderer? widgets = null)
     {
-        _batch = batch;
         _pixel = pixel;
         _font = font;
         _smallFont = smallFont;

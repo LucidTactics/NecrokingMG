@@ -74,8 +74,7 @@ public class TableCraftMenuUI : IModalLayer
     private PlayerResources _resources => Game1.Instance._sim.PlayerResources;
     private Inventory _inventory = null!;
     private ItemRegistry _items = null!;
-    private SpriteBatch _batch = null!;
-    private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
+    private Render.SpriteScope Scope => Game1.Instance.Scope;  // straight-alpha draw surface
     private Texture2D _pixel = null!;
     private SpriteFont? _font;
 
@@ -128,12 +127,11 @@ public class TableCraftMenuUI : IModalLayer
 
     public void Init(RuntimeWidgetRenderer renderer,
         Inventory inventory, ItemRegistry items,
-        SpriteBatch batch, Texture2D pixel, SpriteFont? font)
+        Texture2D pixel, SpriteFont? font)
     {
         _renderer = renderer;
         _inventory = inventory;
         _items = items;
-        _batch = batch;
         _pixel = pixel;
         _font = font;
     }
@@ -508,8 +506,8 @@ public class TableCraftMenuUI : IModalLayer
         int thick = Math.Max(1, Scaled(2));
         for (int t = 0; t < thick; t++)
         {
-            DrawUtils.DrawLine(_batch, _pixel, new Vector2(tl.X + t, tl.Y), new Vector2(br.X + t, br.Y), xColor);
-            DrawUtils.DrawLine(_batch, _pixel, new Vector2(tr.X - t, tr.Y), new Vector2(bl.X - t, bl.Y), xColor);
+            DrawUtils.DrawLine(Scope, _pixel, new Vector2(tl.X + t, tl.Y), new Vector2(br.X + t, br.Y), xColor);
+            DrawUtils.DrawLine(Scope, _pixel, new Vector2(tr.X - t, tr.Y), new Vector2(bl.X - t, bl.Y), xColor);
         }
     }
 
@@ -584,7 +582,7 @@ public class TableCraftMenuUI : IModalLayer
     {
         // Borders scale with the panel like every other layout term (1px floor) —
         // fixed 1px read as hairlines on a zoom-128 panel (round-2 zoom sweep).
-        Necroking.Render.DrawUtils.DrawRectBorder(_batch, _pixel, r, c, Math.Max(1, Scaled(t)));
+        Necroking.Render.DrawUtils.DrawRectBorder(Scope, _pixel, r, c, Math.Max(1, Scaled(t)));
     }
 
     /// <summary>Mouse-over-menu test (callers use to suppress world clicks).</summary>
