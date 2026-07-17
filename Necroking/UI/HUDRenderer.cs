@@ -90,6 +90,12 @@ public partial class HUDRenderer
     {
         int buttonsW = TcBtnW + TcGap + TcCount * TcBtnW + (TcCount - 1) * TcGap;
         baseX = screenW - (buttonsW + TcSpeedTextReserve + TcRightMargin);
+        // While the map editor is up, its right-side panel covers the bottom-right
+        // corner. Slide the whole time-control block left of that panel so it stays
+        // visible AND clickable. Draw, hit-test, and the MouseOverUI rect all read
+        // this one formula, so they shift in lockstep.
+        if (Game1.Instance is { } g && g._menuState == MenuState.MapEditor)
+            baseX -= Necroking.Editor.MapEditorWindow.PanelWidth + 12;
         baseY = screenH - TcBtnH - 2;
     }
 

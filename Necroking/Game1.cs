@@ -2690,6 +2690,15 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _envSystem.OnCollisionsDirty?.Invoke();
         }
 
+        // gameplay → MapEditor transition: default the editor to paused. The world
+        // no longer hard-freezes in the map editor (GateWorld above), so without this
+        // it would keep ticking at whatever speed you were playing at. Player can then
+        // unpause via the (now shifted + usable) time controls. Catches all entry
+        // routes — F11, the editor-row button, the pause menu — by reacting to the
+        // state change, not the opening action.
+        if (_prevMenuState != MenuState.MapEditor && _menuState == MenuState.MapEditor)
+            _clock.Pause(GameClock.PauseSource.User);
+
         if (_menuState == MenuState.MainMenu)
         {
             _backMenuState = MenuState.MainMenu;
@@ -3116,7 +3125,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // ticking the never-initialized sim would NRE (matches the dev-script dt
         // prediction at the top of Update).
         bool editorActive = EditorActive;
-        _clock.GateWorld(worldSuspended: editorActive || !_gameWorldLoaded);
+        // The map editor is the one editor that DOESN'T hard-freeze the world: its
+        // time controls stay usable (shifted left of the panel) so you can unpause
+        // and watch the sim tick while editing. It still defaults to paused on entry
+        // (see the MapEditor-enter transition below), so pause/unpause is the only
+        // thing that runs the world here. Every other editor suspends as before.
+        bool worldSuspended = (editorActive && _menuState != MenuState.MapEditor) || !_gameWorldLoaded;
+        _clock.GateWorld(worldSuspended: worldSuspended);
 
         // Map-editor hover-inspect: run ONLY the read-only debug-tooltip picks while
         // editing the map so you can hover things to see what they are. None of the
