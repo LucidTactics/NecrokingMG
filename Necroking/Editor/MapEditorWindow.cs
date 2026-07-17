@@ -251,6 +251,12 @@ public class MapEditorWindow
     private const float CamAcceleration = 100f;
     private const float CamFriction = 8f;
     private const float CamBaseSpeed = 30f;
+    // RM38: WASD pan speed scales inversely with zoom, referenced to the default
+    // game zoom (StartGame sets 24 for the normal map). At CamRefZoom the accel is
+    // exactly CamAcceleration (unchanged feel); zoomed in (higher Zoom) the camera
+    // moves slower in world units, zoomed out (lower Zoom) faster — so on-screen pan
+    // speed stays roughly constant across zoom levels.
+    private const float CamRefZoom = 24f;
 
     // RM17: Waypoint dragging
     private int _draggingWaypoint = -1;
@@ -903,7 +909,10 @@ public class MapEditorWindow
             // (object editor) is focused, WASD navigates its list instead.
             if (CameraInputEnabled)
             {
-                float cam_accel = CamAcceleration;
+                // RM38: scale accel ∝ 1/Zoom relative to the default game zoom, so
+                // world-space pan speed is slower when zoomed in and faster when
+                // zoomed out (constant on-screen speed). At CamRefZoom this is a no-op.
+                float cam_accel = CamAcceleration * (CamRefZoom / _camera.Zoom);
                 if (kb.IsKeyDown(Keys.LeftShift) || kb.IsKeyDown(Keys.RightShift)) cam_accel *= 5;
                 if (kb.IsKeyDown(Keys.W)) _camVelY -= cam_accel * dt;
                 if (kb.IsKeyDown(Keys.S) && !kb.IsKeyDown(Keys.LeftControl)) _camVelY += cam_accel * dt;
