@@ -610,6 +610,12 @@ partial class GameRenderer
     /// <summary>Spawn new effects from projectile impacts (called once per frame, blend-mode independent).</summary>
     private void SpawnImpactEffects()
     {
+        // Impacts is a sim-owned queue cleared at the start of the next sim step.
+        // When the world is frozen (pause / editor) that step never comes, so
+        // consuming here every rendered frame would spawn a duplicate effect per
+        // frame from the same stale impact (they pile up additively into solid
+        // scatter/HDR balls). Only consume on frames where the sim advanced.
+        if (!_g._clock.WorldRunning) return;
         foreach (var impact in _g._sim.Projectiles.Impacts)
         {
             string fbId = impact.HitEffectFlipbookID;
