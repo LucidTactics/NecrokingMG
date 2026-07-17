@@ -216,15 +216,9 @@
       "gravityScale": 2,
       "precisionBonus": -5,
       "projectileDelay": 0.02,
-      "scatterRadius": 1.2,
-      "scatterStrength": 0.35,
-      "scatterColor": {
-        "r": 255,
-        "g": 225,
-        "b": 190,
-        "a": 255,
-        "intensity": 1
-      }
+      "scatterRadius": 0.5,
+      "scatterStrength": 0.5,
+      "scatterAutoColor": false
     },
     {
       "name": "Nether Darts",
