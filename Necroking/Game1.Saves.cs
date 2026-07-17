@@ -200,17 +200,21 @@ public partial class Game1
     /// <summary>In-memory "load game": rebuild the world from a SaveGameData —
     /// start its map through the normal StartGame flow, then apply the saved
     /// player state on top. The file-free half of LoadSaveGame. Returns false
-    /// (logged, world untouched) when the save's map doesn't exist.</summary>
-    internal bool ApplySaveData(SaveGameData save)
+    /// (logged, world untouched) when the save's map doesn't exist. With
+    /// <paramref name="mapMemory"/> the map itself also comes from memory
+    /// (captured editor state) instead of assets/maps/.</summary>
+    internal bool ApplySaveData(SaveGameData save, Data.MapData.MapJsonBundle? mapMemory = null)
     {
-        // "empty_test" is synthesized in code; every other map needs its JSON.
-        if (save.MapName != "empty_test"
+        // "empty_test" is synthesized in code; every other map needs its JSON —
+        // unless the map is supplied in memory, which needs no file at all.
+        if (mapMemory == null
+            && save.MapName != "empty_test"
             && !File.Exists(GamePaths.Resolve($"{GamePaths.MapsDir}/{save.MapName}.json")))
         {
             DebugLog.Log("saves", $"ApplySaveData failed: map '{save.MapName}' not found");
             return false;
         }
-        StartGame(save.MapName);
+        StartGame(save.MapName, mapMemory);
         ApplySaveToWorld(save);
         return true;
     }
@@ -231,15 +235,17 @@ public partial class Game1
     }
 
     /// <summary>The map editor's "Reload Map" button: a save/load round-trip that
-    /// never touches disk for the save — CaptureSaveData + ApplySaveData — so the
-    /// world resets exactly like loading a fresh save of this moment (map re-read
-    /// from disk, units/objects/villages/triggers rebuilt, player carried across
-    /// and teleported like a load). Unlike a real load it preserves the editing
-    /// context: camera position/zoom, the current menu state (the editor stays
-    /// open — StartGame's None and ApplySaveToWorld's camera snap are undone
-    /// within the same frame, so neither is ever visible), and the editor's typed
-    /// Save target. Editor UI state survives because nothing here resets it
-    /// (deliberately no _editorUi.ResetAllState, unlike the load-window path).</summary>
+    /// never touches disk — CaptureSaveData + CaptureMapToMemory + ApplySaveData —
+    /// so the world resets exactly like saving the map, saving the game, and
+    /// loading both back (units/objects/villages/triggers rebuilt, player carried
+    /// across and teleported like a load), with the map taken from the LIVE editor
+    /// state: unsaved editor changes survive, and nothing is written to
+    /// assets/maps/. Unlike a real load it preserves the editing context: camera
+    /// position/zoom, the current menu state (the editor stays open — StartGame's
+    /// None and ApplySaveToWorld's camera snap are undone within the same frame,
+    /// so neither is ever visible), and the editor's typed Save target. Editor UI
+    /// state survives because nothing here resets it (deliberately no
+    /// _editorUi.ResetAllState, unlike the load-window path).</summary>
     internal void ReloadMapInEditor()
     {
         var save = CaptureSaveData();
@@ -248,11 +254,23 @@ public partial class Game1
             _mapEditor.OnMapReloaded(false, _currentMapName);
             return;
         }
+        // Capture the live map BEFORE StartGame's ResetWorldState wipes it.
+        Data.MapData.MapJsonBundle mapMemory;
+        try
+        {
+            mapMemory = _mapEditor.CaptureMapToMemory();
+        }
+        catch (Exception e)
+        {
+            DebugLog.Log("saves", $"Reload map: live-map capture failed: {e.Message}");
+            _mapEditor.OnMapReloaded(false, _currentMapName);
+            return;
+        }
         var camPos = _camera.Position;
         float camZoom = _camera.Zoom;
         var menuState = _menuState;
         string editorFilename = _mapEditor.MapFilename;
-        if (!ApplySaveData(save))
+        if (!ApplySaveData(save, mapMemory))
         {
             _mapEditor.OnMapReloaded(false, save.MapName);
             return;
@@ -261,7 +279,7 @@ public partial class Game1
         _camera.Zoom = camZoom;
         _menuState = menuState;
         _mapEditor.SetMapFilename(editorFilename);
-        DebugLog.Log("saves", $"Editor-reloaded map '{save.MapName}' in place");
+        DebugLog.Log("saves", $"Editor-reloaded map '{save.MapName}' in place (from live editor state)");
         _mapEditor.OnMapReloaded(true, save.MapName);
     }
 

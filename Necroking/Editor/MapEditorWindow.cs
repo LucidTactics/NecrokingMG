@@ -1361,8 +1361,9 @@ public class MapEditorWindow
             _undoStack.Count > 0 ? AccentColor : ButtonBg);
         bottomY += ButtonHeight + 2;
 
-        // Full-width "Reload Map": rebuild the world from disk as a fresh
-        // StartGame (player carried across like a save/load; camera + editor
+        // Full-width "Reload Map": rebuild the world as a fresh StartGame from
+        // the LIVE map state — unsaved editor changes included, nothing written
+        // to disk (player carried across like a save/load; camera + editor
         // state untouched). Click handling lives in UpdateBottomBarClicks.
         DrawButtonRect("Reload Map", panelX + Margin, bottomY, PanelWidth - Margin * 2, ReloadButtonHeight, ButtonBg);
         bottomY += ReloadButtonHeight + 2;
@@ -6266,164 +6267,20 @@ public class MapEditorWindow
 
             // Atomic: stream to .tmp, rename over the map on Commit — a crash
             // mid-save must not destroy the 55 MB default.json.
-            using var stream = Core.AtomicFile.CreateStream(path);
-            using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-
-            writer.WriteStartObject();
-
-            // Ground types
-            writer.WriteStartArray("groundTypes");
-            for (int i = 0; i < _groundSystem.TypeCount; i++)
+            using (var stream = Core.AtomicFile.CreateStream(path))
             {
-                var gt = _groundSystem.GetTypeDef(i);
-                writer.WriteStartObject();
-                writer.WriteString("id", gt.Id);
-                writer.WriteString("name", gt.Name);
-                writer.WriteString("texturePath", gt.TexturePath);
-                if (!string.IsNullOrEmpty(gt.CorruptedTypeId))
-                    writer.WriteString("corruptedTypeId", gt.CorruptedTypeId);
-                if (gt.MovementTerrain != Necroking.World.TerrainType.Open)
-                    writer.WriteString("movementTerrain", gt.MovementTerrain.ToString());
-                // Save tintColor when it diverges from white so PNGs stay the
-                // authoritative palette source for un-tinted types.
-                if (gt.TintColor != Microsoft.Xna.Framework.Color.White)
-                {
-                    writer.WriteStartObject("tintColor");
-                    writer.WriteNumber("r", gt.TintColor.R);
-                    writer.WriteNumber("g", gt.TintColor.G);
-                    writer.WriteNumber("b", gt.TintColor.B);
-                    if (gt.TintColor.A != 255) writer.WriteNumber("a", gt.TintColor.A);
-                    writer.WriteEndObject();
-                }
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-
-            // Ground vertex map (revert runtime corruption so dev paint is preserved on save)
-            writer.WriteStartObject("groundMap");
-            writer.WriteNumber("width", _groundSystem.VertexW);
-            writer.WriteNumber("height", _groundSystem.VertexH);
-            writer.WriteString("tilesBase64", Convert.ToBase64String(_groundSystem.GetVertexMapForSave()));
-            writer.WriteEndObject();
-
-            // Grass types
-            writer.WriteStartArray("grassTypes");
-            foreach (var gt in _grassTypes)
-            {
-                writer.WriteStartObject();
-                writer.WriteString("id", gt.Id);
-                writer.WriteString("name", gt.Name);
-
-                writer.WriteStartObject("defaultTint");
-                writer.WriteNumber("r", gt.DefaultTint.R);
-                writer.WriteNumber("g", gt.DefaultTint.G);
-                writer.WriteNumber("b", gt.DefaultTint.B);
-                writer.WriteNumber("a", gt.DefaultTint.A);
-                writer.WriteEndObject();
-
-                writer.WriteStartObject("corruptedTint");
-                writer.WriteNumber("r", gt.CorruptedTint.R);
-                writer.WriteNumber("g", gt.CorruptedTint.G);
-                writer.WriteNumber("b", gt.CorruptedTint.B);
-                writer.WriteNumber("a", gt.CorruptedTint.A);
-                writer.WriteEndObject();
-
-                writer.WriteStartArray("spritePaths");
-                foreach (var p in gt.SpritePaths)
-                    if (!string.IsNullOrEmpty(p)) writer.WriteStringValue(p);
-                writer.WriteEndArray();
-
-                writer.WriteNumber("scale", gt.Scale);
-                writer.WriteNumber("density", gt.Density);
-
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-
-            // Grass map
-            if (_grassMap.Length > 0)
-            {
-                writer.WriteStartObject("grassMap");
-                writer.WriteNumber("width", _grassW);
-                writer.WriteNumber("height", _grassH);
-                writer.WriteString("cellsBase64", Convert.ToBase64String(_grassMap));
-                writer.WriteEndObject();
+                WriteMapJson(stream);
+                stream.Commit(); // payload complete — dispose will swap it in atomically
             }
 
-            // Env defs are now saved separately to data/env_defs.json
-            // Save them alongside the map save for convenience
+            // Env defs are saved separately to data/env_defs.json — written
+            // alongside the map save for convenience.
             MapData.SaveEnvDefs(GamePaths.Resolve("data/env_defs.json"), _envSystem);
 
             // ProcGen styles are a global authoring registry like env defs. Load
             // first if the tab was never opened so an untouched registry survives.
             EnsureProcGenStylesLoaded();
             ProcGenStyle.SaveAll(GamePaths.Resolve("data/procgen_styles.json"), _procGenStyles);
-
-            // Placed objects. Only persistent ones (editor-placed / map-loaded /
-            // player-built) — gameplay spawns (zone foragables, village stamps,
-            // creature drops) would otherwise accumulate in the map JSON forever.
-            writer.WriteStartArray("placedObjects");
-            for (int i = 0; i < _envSystem.ObjectCount; i++)
-            {
-                var obj = _envSystem.GetObject(i);
-                if (!obj.Persistent) continue;
-                var def = _envSystem.GetDef(obj.DefIndex);
-                writer.WriteStartObject();
-                writer.WriteString("defId", def.Id);
-                writer.WriteNumber("x", obj.X);
-                writer.WriteNumber("y", obj.Y);
-                writer.WriteNumber("scale", obj.Scale);
-                writer.WriteNumber("seed", obj.Seed);
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-
-            // Wall defs
-            writer.WriteStartArray("walls");
-            foreach (var wd in _wallSystem.Defs)
-            {
-                writer.WriteStartObject();
-                writer.WriteString("name", wd.Name);
-                writer.WriteNumber("maxHP", wd.MaxHP);
-                writer.WriteNumber("protection", wd.Protection);
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-
-            // Road texture defs
-            writer.WriteStartArray("roadTextures");
-            for (int i = 0; i < _roadSystem.TextureDefCount; i++)
-            {
-                var td = _roadSystem.GetTextureDef(i);
-                writer.WriteStartObject();
-                writer.WriteString("id", td.Id);
-                writer.WriteString("name", td.Name);
-                writer.WriteString("texturePath", td.TexturePath);
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-
-            // --- Placed units ---
-            writer.WriteStartArray("placedUnits");
-            foreach (var pu in _placedUnits)
-            {
-                writer.WriteStartObject();
-                writer.WriteString("unitDefId", pu.UnitDefId);
-                writer.WriteNumber("x", pu.X);
-                writer.WriteNumber("y", pu.Y);
-                if (!string.IsNullOrEmpty(pu.Faction))
-                    writer.WriteString("faction", pu.Faction);
-                if (!string.IsNullOrEmpty(pu.PatrolRouteId))
-                    writer.WriteString("patrolRouteId", pu.PatrolRouteId);
-                if (pu.IsCorpse)
-                    writer.WriteBoolean("isCorpse", true);
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-
-            writer.WriteEndObject();
-            writer.Flush();
-            stream.Commit(); // payload complete — dispose will swap it in atomically
 
             // Sidecars (triggers / roads / zones) — one reader+writer in MapSidecars
             MapSidecars.SaveTriggers(Path.Combine(mapsDir, _mapFilename + "_triggers.json"), _triggerSystem);
@@ -6442,6 +6299,180 @@ public class MapEditorWindow
             _statusTimer = 5f;
             DebugLog.Log("editor", $"Map save error: {ex.Message}");
         }
+    }
+
+    /// <summary>The full map file-set captured from the LIVE editor/world state as
+    /// in-memory JSON — exactly what SaveMap would write under assets/maps/, without
+    /// touching disk (env_defs/procgen registry side-writes included as strings /
+    /// skipped respectively). Game1 feeds it back through StartGame for the Reload
+    /// Map button, so unsaved editor changes survive the world reset.</summary>
+    public MapData.MapJsonBundle CaptureMapToMemory()
+    {
+        using var ms = new MemoryStream();
+        WriteMapJson(ms);
+        return new MapData.MapJsonBundle
+        {
+            MapJson = System.Text.Encoding.UTF8.GetString(ms.ToArray()),
+            EnvDefsJson = MapData.CaptureEnvDefsJson(_envSystem),
+            TriggersJson = MapSidecars.CaptureTriggersJson(_triggerSystem),
+            RoadsJson = MapSidecars.CaptureRoadsJson(_roadSystem),
+            ZonesJson = MapSidecars.CaptureZonesJson(_zoneSystem),
+        };
+    }
+
+    /// <summary>Serialize the live map state (ground, grass, placed objects, wall
+    /// defs, road textures, placed units) as the map JSON onto <paramref name="stream"/> —
+    /// the shared core of SaveMap (atomic file stream) and CaptureMapToMemory
+    /// (MemoryStream for Reload Map).</summary>
+    private void WriteMapJson(Stream stream)
+    {
+        using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
+
+        writer.WriteStartObject();
+
+        // Ground types
+        writer.WriteStartArray("groundTypes");
+        for (int i = 0; i < _groundSystem.TypeCount; i++)
+        {
+            var gt = _groundSystem.GetTypeDef(i);
+            writer.WriteStartObject();
+            writer.WriteString("id", gt.Id);
+            writer.WriteString("name", gt.Name);
+            writer.WriteString("texturePath", gt.TexturePath);
+            if (!string.IsNullOrEmpty(gt.CorruptedTypeId))
+                writer.WriteString("corruptedTypeId", gt.CorruptedTypeId);
+            if (gt.MovementTerrain != Necroking.World.TerrainType.Open)
+                writer.WriteString("movementTerrain", gt.MovementTerrain.ToString());
+            // Save tintColor when it diverges from white so PNGs stay the
+            // authoritative palette source for un-tinted types.
+            if (gt.TintColor != Microsoft.Xna.Framework.Color.White)
+            {
+                writer.WriteStartObject("tintColor");
+                writer.WriteNumber("r", gt.TintColor.R);
+                writer.WriteNumber("g", gt.TintColor.G);
+                writer.WriteNumber("b", gt.TintColor.B);
+                if (gt.TintColor.A != 255) writer.WriteNumber("a", gt.TintColor.A);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        // Ground vertex map (revert runtime corruption so dev paint is preserved on save)
+        writer.WriteStartObject("groundMap");
+        writer.WriteNumber("width", _groundSystem.VertexW);
+        writer.WriteNumber("height", _groundSystem.VertexH);
+        writer.WriteString("tilesBase64", Convert.ToBase64String(_groundSystem.GetVertexMapForSave()));
+        writer.WriteEndObject();
+
+        // Grass types
+        writer.WriteStartArray("grassTypes");
+        foreach (var gt in _grassTypes)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("id", gt.Id);
+            writer.WriteString("name", gt.Name);
+
+            writer.WriteStartObject("defaultTint");
+            writer.WriteNumber("r", gt.DefaultTint.R);
+            writer.WriteNumber("g", gt.DefaultTint.G);
+            writer.WriteNumber("b", gt.DefaultTint.B);
+            writer.WriteNumber("a", gt.DefaultTint.A);
+            writer.WriteEndObject();
+
+            writer.WriteStartObject("corruptedTint");
+            writer.WriteNumber("r", gt.CorruptedTint.R);
+            writer.WriteNumber("g", gt.CorruptedTint.G);
+            writer.WriteNumber("b", gt.CorruptedTint.B);
+            writer.WriteNumber("a", gt.CorruptedTint.A);
+            writer.WriteEndObject();
+
+            writer.WriteStartArray("spritePaths");
+            foreach (var p in gt.SpritePaths)
+                if (!string.IsNullOrEmpty(p)) writer.WriteStringValue(p);
+            writer.WriteEndArray();
+
+            writer.WriteNumber("scale", gt.Scale);
+            writer.WriteNumber("density", gt.Density);
+
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        // Grass map
+        if (_grassMap.Length > 0)
+        {
+            writer.WriteStartObject("grassMap");
+            writer.WriteNumber("width", _grassW);
+            writer.WriteNumber("height", _grassH);
+            writer.WriteString("cellsBase64", Convert.ToBase64String(_grassMap));
+            writer.WriteEndObject();
+        }
+
+        // Placed objects. Only persistent ones (editor-placed / map-loaded /
+        // player-built) — gameplay spawns (zone foragables, village stamps,
+        // creature drops) would otherwise accumulate in the map JSON forever.
+        writer.WriteStartArray("placedObjects");
+        for (int i = 0; i < _envSystem.ObjectCount; i++)
+        {
+            var obj = _envSystem.GetObject(i);
+            if (!obj.Persistent) continue;
+            var def = _envSystem.GetDef(obj.DefIndex);
+            writer.WriteStartObject();
+            writer.WriteString("defId", def.Id);
+            writer.WriteNumber("x", obj.X);
+            writer.WriteNumber("y", obj.Y);
+            writer.WriteNumber("scale", obj.Scale);
+            writer.WriteNumber("seed", obj.Seed);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        // Wall defs
+        writer.WriteStartArray("walls");
+        foreach (var wd in _wallSystem.Defs)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("name", wd.Name);
+            writer.WriteNumber("maxHP", wd.MaxHP);
+            writer.WriteNumber("protection", wd.Protection);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        // Road texture defs
+        writer.WriteStartArray("roadTextures");
+        for (int i = 0; i < _roadSystem.TextureDefCount; i++)
+        {
+            var td = _roadSystem.GetTextureDef(i);
+            writer.WriteStartObject();
+            writer.WriteString("id", td.Id);
+            writer.WriteString("name", td.Name);
+            writer.WriteString("texturePath", td.TexturePath);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        // --- Placed units ---
+        writer.WriteStartArray("placedUnits");
+        foreach (var pu in _placedUnits)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("unitDefId", pu.UnitDefId);
+            writer.WriteNumber("x", pu.X);
+            writer.WriteNumber("y", pu.Y);
+            if (!string.IsNullOrEmpty(pu.Faction))
+                writer.WriteString("faction", pu.Faction);
+            if (!string.IsNullOrEmpty(pu.PatrolRouteId))
+                writer.WriteString("patrolRouteId", pu.PatrolRouteId);
+            if (pu.IsCorpse)
+                writer.WriteBoolean("isCorpse", true);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        writer.WriteEndObject();
+        writer.Flush();
     }
 
     private void LoadMap()
