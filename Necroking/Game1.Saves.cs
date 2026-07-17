@@ -234,6 +234,45 @@ public partial class Game1
         return true;
     }
 
+    /// <summary>Minimal snapshot of the player-facing UI/session context — the
+    /// things a world rebuild stomps but the player perceives as "where I am":
+    /// camera, time settings, menu state, the editor's Save target. Deliberately
+    /// bottom-up and small: no panel internals (those hold references into the
+    /// world being torn down — better to save and load too little than too much).
+    /// Captured with <see cref="SaveCurrentUIState"/>, restored with
+    /// <see cref="ApplyUIState"/>. Also handy for tests.</summary>
+    internal sealed class UIStateSnapshot
+    {
+        public Vec2 CameraPosition;
+        public float CameraZoom;
+        public MenuState MenuState;
+        public Core.GameClock.PauseSource PauseSources;
+        public float TimeScale;
+        public string EditorMapFilename = "";
+    }
+
+    internal UIStateSnapshot SaveCurrentUIState() => new()
+    {
+        CameraPosition = _camera.Position,
+        CameraZoom = _camera.Zoom,
+        MenuState = _menuState,
+        PauseSources = _clock.PauseSources,
+        TimeScale = _clock.TimeScale,
+        EditorMapFilename = _mapEditor.MapFilename,
+    };
+
+    internal void ApplyUIState(UIStateSnapshot ui)
+    {
+        _camera.Position = ui.CameraPosition;
+        _camera.Zoom = ui.CameraZoom;
+        _menuState = ui.MenuState;
+        _clock.ClearAllPauses();
+        if (ui.PauseSources != Core.GameClock.PauseSource.None)
+            _clock.Pause(ui.PauseSources); // Pause() ORs flags, so one call restores the whole set
+        _clock.SetTimeScale(ui.TimeScale);
+        _mapEditor.SetMapFilename(ui.EditorMapFilename);
+    }
+
     /// <summary>The map editor's "Reload Map" button: a save/load round-trip that
     /// never touches disk — CaptureSaveData + CaptureMapToMemory + ApplySaveData —
     /// so the world resets exactly like saving the map, saving the game, and
@@ -266,24 +305,18 @@ public partial class Game1
             _mapEditor.OnMapReloaded(false, _currentMapName);
             return;
         }
-        var camPos = _camera.Position;
-        float camZoom = _camera.Zoom;
-        var menuState = _menuState;
-        string editorFilename = _mapEditor.MapFilename;
+        var ui = SaveCurrentUIState();
         if (!ApplySaveData(save, mapMemory))
         {
             _mapEditor.OnMapReloaded(false, save.MapName);
             return;
         }
-        _camera.Position = camPos;
-        _camera.Zoom = camZoom;
-        _menuState = menuState;
-        _mapEditor.SetMapFilename(editorFilename);
-        // Come back paused: StartGame's OnWorldStart cleared every pause holder,
-        // and the editor-entry default-pause transition doesn't re-fire (we never
-        // observably left MapEditor) — so without this the fresh world would start
-        // ticking immediately. Same User source as editor entry / the time
-        // controls, so the pause button reflects it and unpausing works normally.
+        ApplyUIState(ui);
+        // Come back paused regardless of the restored pause state: StartGame's
+        // OnWorldStart cleared every holder and the editor-entry default-pause
+        // transition doesn't re-fire (we never observably left MapEditor). Same
+        // User source as editor entry / the time controls, so the pause button
+        // reflects it and unpausing works normally.
         _clock.Pause(GameClock.PauseSource.User);
         DebugLog.Log("saves", $"Editor-reloaded map '{save.MapName}' in place (from live editor state)");
         _mapEditor.OnMapReloaded(true, save.MapName);
