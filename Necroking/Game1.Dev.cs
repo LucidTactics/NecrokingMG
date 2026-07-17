@@ -872,7 +872,9 @@ public partial class Game1 {
                if (defIdx < 0) { c.Complete(Necroking.Dev.DevServer.Error($"unknown env def: {c.Args[0]}")); break; }
                float ox = DevFloat(c.Args[1]), oy = DevFloat(c.Args[2]);
                float oscale = c.Args.Length >= 4 ? DevFloat(c.Args[3]) : 1f;
-               int oi = _envSystem.AddObject((ushort)defIdx, ox, oy, oscale);
+               // persistent: like an editor placement — Save Map / Reload Map keep it
+               // (gameplay spawns pass false and are dropped by both, by design).
+               int oi = _envSystem.AddObject((ushort)defIdx, ox, oy, oscale, persistent: true);
                c.Complete(Necroking.Dev.DevServer.OkRaw($"{{\"objIdx\":{oi},\"def\":{System.Text.Json.JsonSerializer.Serialize(c.Args[0])}}}"));
                break;
             }

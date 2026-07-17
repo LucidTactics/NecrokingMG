@@ -28,11 +28,28 @@ public static class MapData
     {
         grassInfo = null;
         if (!File.Exists(path)) return false;
-
+        DebugLog.Log("startup", $"Loading map: {path}");
         try
         {
-            DebugLog.Log("startup", $"Loading map: {path}");
-            string json = File.ReadAllText(path);
+            return LoadJson(File.ReadAllText(path), ground, env, walls, placedUnits, out grassInfo);
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Log("startup", $"Map load error: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>Same load, from a map-JSON string already in memory — the file-free
+    /// half of <see cref="Load(string, GroundSystem, EnvironmentSystem, WallSystem, List{PlacedUnit}?, out GrassMapInfo?)"/>.
+    /// The map editor's Reload Map feeds the string it captured from the live world
+    /// through here, so unsaved editor changes round-trip without touching disk.</summary>
+    public static bool LoadJson(string json, GroundSystem ground, EnvironmentSystem env, WallSystem walls,
+        List<PlacedUnit>? placedUnits, out GrassMapInfo? grassInfo)
+    {
+        grassInfo = null;
+        try
+        {
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
             grassInfo = LoadGrass(root);
@@ -190,7 +207,22 @@ public static class MapData
         if (!File.Exists(path)) return false;
         try
         {
-            string json = File.ReadAllText(path);
+            return LoadEnvDefsJson(File.ReadAllText(path), env, path);
+        }
+        catch (Exception ex)
+        {
+            DebugLog.Log("startup", $"  env_defs load error: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>Same env-def load, from a JSON string already in memory (the
+    /// file-free half of <see cref="LoadEnvDefs"/>; <paramref name="source"/> only
+    /// labels the log line).</summary>
+    public static bool LoadEnvDefsJson(string json, EnvironmentSystem env, string source = "memory")
+    {
+        try
+        {
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
@@ -209,7 +241,7 @@ public static class MapData
                 if (def != null && !string.IsNullOrEmpty(def.Id))
                     env.AddDef(def);
             }
-            DebugLog.Log("startup", $"  Env defs loaded: {env.DefCount} (from {path})");
+            DebugLog.Log("startup", $"  Env defs loaded: {env.DefCount} (from {source})");
             return true;
         }
         catch (Exception ex)
@@ -219,30 +251,55 @@ public static class MapData
         }
     }
 
+    /// <summary>The env-def registry serialized exactly as env_defs.json would be
+    /// written — the shared core of <see cref="SaveEnvDefs"/> and the map editor's
+    /// in-memory Reload Map capture. NOTE: nulls out no-effect harmonize blocks on
+    /// the live defs (the historical writer behavior).</summary>
+    public static string CaptureEnvDefsJson(EnvironmentSystem env)
+    {
+        var list = new List<EnvironmentObjectDef>(env.DefCount);
+        for (int i = 0; i < env.DefCount; i++)
+        {
+            var def = env.GetDef(i);
+            // Match the historical writer: a harmonize block with no effect is
+            // dropped (the old save omitted it; the next load produced null).
+            if (def.Harmonize is { HasEffect: false }) def.Harmonize = null;
+            if (def.HarmonizeCorrupt is { HasEffect: false }) def.HarmonizeCorrupt = null;
+            list.Add(def);
+        }
+        return JsonSerializer.Serialize(list, EnvDefJson);
+    }
+
     /// <summary>Save env defs to a standalone JSON file (flat array format) —
     /// atomic + if-changed via <see cref="Core.JsonFile.WriteStringIfChanged"/>.</summary>
     public static bool SaveEnvDefs(string path, EnvironmentSystem env)
     {
         try
         {
-            var list = new List<EnvironmentObjectDef>(env.DefCount);
-            for (int i = 0; i < env.DefCount; i++)
-            {
-                var def = env.GetDef(i);
-                // Match the historical writer: a harmonize block with no effect is
-                // dropped (the old save omitted it; the next load produced null).
-                if (def.Harmonize is { HasEffect: false }) def.Harmonize = null;
-                if (def.HarmonizeCorrupt is { HasEffect: false }) def.HarmonizeCorrupt = null;
-                list.Add(def);
-            }
-            string json = JsonSerializer.Serialize(list, EnvDefJson);
-            return Core.JsonFile.WriteStringIfChanged(path, json);
+            return Core.JsonFile.WriteStringIfChanged(path, CaptureEnvDefsJson(env));
         }
         catch (Exception ex)
         {
             DebugLog.Log("error", $"SaveEnvDefs failed for '{path}': {ex.Message}");
             return false;
         }
+    }
+
+    /// <summary>The full map file-set (map JSON + env defs + trigger/road/zone
+    /// sidecars) captured as in-memory JSON strings — exactly what the map editor's
+    /// Save Map would write under assets/maps/, held in memory instead. Produced by
+    /// MapEditorWindow.CaptureMapToMemory from the LIVE editor/world state, consumed
+    /// by Game1.StartGame: the editor's Reload Map resets the world from this so
+    /// unsaved editor changes survive without touching disk. Round-tripping through
+    /// the same JSON writers/readers as the files keeps reload behavior identical
+    /// to a real save + load.</summary>
+    public sealed class MapJsonBundle
+    {
+        public string MapJson = "";
+        public string EnvDefsJson = "";
+        public string? TriggersJson;
+        public string? RoadsJson;
+        public string? ZonesJson;
     }
 
     // Trigger / zone / road sidecar load+save moved to MapSidecars (one

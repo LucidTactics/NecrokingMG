@@ -1452,7 +1452,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _groundVertexMapTex = null;
     }
 
-    internal void StartGame(string mapName = "default")
+    /// <summary>Start (or restart) a game on <paramref name="mapName"/>. When
+    /// <paramref name="mapMemory"/> is provided the map + sidecars are read from
+    /// those captured JSON strings instead of assets/maps/ — the map editor's
+    /// Reload Map path, so unsaved editor changes survive the world reset.</summary>
+    internal void StartGame(string mapName = "default", Data.MapData.MapJsonBundle? mapMemory = null)
     {
         ResetWorldState();
         _currentMapName = mapName;
@@ -1481,7 +1485,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // map's content. See the "start_game" dev command (its no-arg default).
         var placedUnits = new List<Data.PlacedUnit>();
         string mapPath = GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}.json");
-        if (mapName == "empty_test")
+        if (mapMemory == null && mapName == "empty_test")
         {
             DebugLog.Log("startup", "Empty test map: synthesizing grass-only grid + debug necromancer");
             _groundSystem.Init(WorldSize, WorldSize);
@@ -1503,20 +1507,38 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 Y = WorldSize * 0.5f,
             });
         }
-        else if (File.Exists(mapPath))
+        else if (mapMemory != null || File.Exists(mapPath))
         {
-            DebugLog.Log("startup", $"Loading map '{mapName}' from file...");
-            // Load env defs from canonical location (before map, so placed objects can resolve IDs)
-            MapData.LoadEnvDefs(GamePaths.Resolve(GamePaths.EnvDefsJson), _envSystem);
-            // Parse the 55MB map JSON exactly once — Load returns the grass info from
-            // the same JsonDocument it already parsed, avoiding a redundant disk+parse pass.
-            MapData.Load(mapPath, _groundSystem, _envSystem, _wallSystem, placedUnits,
-                out var grassInfo);
-            MapSidecars.LoadTriggers(GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}_triggers.json"), _triggerSystem);
-            MapSidecars.LoadRoads(GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}_roads.json"), _roadSystem);
-            MapSidecars.LoadZones(GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}_zones.json"), _zoneSystem);
+            Data.MapData.GrassMapInfo? grassInfo;
+            if (mapMemory != null)
+            {
+                // In-memory reload: identical pipeline to the file branch below,
+                // fed from the JSON the editor captured off the live world — the
+                // map as it currently IS, unsaved changes included.
+                DebugLog.Log("startup", $"Loading map '{mapName}' from memory (editor reload)...");
+                MapData.LoadEnvDefsJson(mapMemory.EnvDefsJson, _envSystem, "editor reload");
+                MapData.LoadJson(mapMemory.MapJson, _groundSystem, _envSystem, _wallSystem, placedUnits,
+                    out grassInfo);
+                MapSidecars.LoadTriggersJson(mapMemory.TriggersJson, _triggerSystem);
+                MapSidecars.LoadRoadsJson(mapMemory.RoadsJson, _roadSystem);
+                MapSidecars.LoadZonesJson(mapMemory.ZonesJson, _zoneSystem);
+            }
+            else
+            {
+                DebugLog.Log("startup", $"Loading map '{mapName}' from file...");
+                // Load env defs from canonical location (before map, so placed objects can resolve IDs)
+                MapData.LoadEnvDefs(GamePaths.Resolve(GamePaths.EnvDefsJson), _envSystem);
+                // Parse the 55MB map JSON exactly once — Load returns the grass info from
+                // the same JsonDocument it already parsed, avoiding a redundant disk+parse pass.
+                MapData.Load(mapPath, _groundSystem, _envSystem, _wallSystem, placedUnits,
+                    out grassInfo);
+                MapSidecars.LoadTriggers(GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}_triggers.json"), _triggerSystem);
+                MapSidecars.LoadRoads(GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}_roads.json"), _roadSystem);
+                MapSidecars.LoadZones(GamePaths.Resolve($"{GamePaths.MapsDir}/{mapName}_zones.json"), _zoneSystem);
+            }
             // Village structures are placed here (before the collision bake below) so their
             // buildings are stamped into the pathfinding grid alongside the map's own objects.
+            // Villages have no editor/save path, so the reload branch reads the same file.
             LoadVillageStructures(mapName);
             LogTiming($"Map loaded: ground={_groundSystem.WorldW}x{_groundSystem.WorldH}, objects={_envSystem.ObjectCount}, defs={_envSystem.DefCount}");
 
