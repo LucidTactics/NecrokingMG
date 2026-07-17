@@ -126,7 +126,11 @@ public sealed class TimeControlsLayer : UILayer
 
     public override string Id => "hud.time_controls";
     public override void AppendHitRects(UIHitRegistry reg, in UICtx ctx) { } // HUD rects catalogued by HUDRenderer.AppendHitRects (see file header)
-    public override bool Visible => _g.HudVisible && _g._menuState == MenuState.None
+    // Usable in normal play AND while the map editor is up — there the block is
+    // shifted left of the editor panel (HUDRenderer.TimeControlLayout) so you can
+    // unpause and watch the world tick while editing.
+    public override bool Visible => _g.HudVisible
+        && (_g._menuState == MenuState.None || _g._menuState == MenuState.MapEditor)
         && _g._gameData.Settings.General.ShowTimeControls;
 
     public override bool ContainsMouse(int mx, int my, in UICtx ctx)
