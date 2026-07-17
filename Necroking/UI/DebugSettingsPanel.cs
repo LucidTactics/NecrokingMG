@@ -327,7 +327,7 @@ public class DebugSettingsPanel
             Text(f, t.Label, panel.X + Pad, rowY + 4, LabelCol);
             bool hover = box.Contains(mx, my);
             DrawPanel(box, hover ? BoxHover : BoxBg, BoxBorder, 1, bottomAccent: true);
-            DrawUtils.DrawRectBorder(_g._spriteBatch, _g._pixel, box, BoxBorder);
+            DrawUtils.DrawRectBorder(_g.Scope, _g._pixel, box, BoxBorder);
 
             Text(f, t.Options[cur], box.X + 5, box.Y + 2, cur == 0 ? ValOff : ValActive);
             // Caret on the right edge of the box — flips when the list is open.
@@ -358,7 +358,7 @@ public class DebugSettingsPanel
                 Text(f, t.Options[o], r.X + 17, r.Y + 1, sel ? HeaderCol : ValActive);
             }
             var top = OptionRect(_dd.OpenKey, 0);
-            DrawUtils.DrawRectBorder(_g._spriteBatch, _g._pixel,
+            DrawUtils.DrawRectBorder(_g.Scope, _g._pixel,
                 new Rectangle(top.X, top.Y, BoxW, t.Options.Length * OptH), BoxBorder);
         }
     }

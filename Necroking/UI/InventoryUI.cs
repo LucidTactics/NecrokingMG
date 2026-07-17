@@ -31,8 +31,7 @@ public class InventoryUI : IModalLayer
     private RuntimeWidgetRenderer _renderer;
     private Inventory _inventory;
     private ItemRegistry _items;
-    private SpriteBatch? _batch;
-    private Render.SpriteScope Scope => _batch!;  // straight-alpha draw surface (implicit conversion)
+    private Render.SpriteScope Scope => Game1.Instance.Scope;  // straight-alpha draw surface
     private Texture2D? _pixel;
     private InputState? _lastInput;
 
@@ -78,12 +77,11 @@ public class InventoryUI : IModalLayer
     public int[] SlotChildIndices => _slotChildIndices;
 
     public void Init(RuntimeWidgetRenderer renderer, Inventory inventory, ItemRegistry items,
-        SpriteBatch? batch = null, Texture2D? pixel = null)
+        Texture2D? pixel = null)
     {
         _renderer = renderer;
         _inventory = inventory;
         _items = items;
-        _batch = batch;
         _pixel = pixel;
 
         var def = renderer.GetWidgetDef(WidgetId);
@@ -332,7 +330,7 @@ public class InventoryUI : IModalLayer
         _renderer.DrawWidget(WidgetId, _screenX, _screenY, InstanceId);
 
         // Slot hover highlight
-        if (_batch == null || _pixel == null || _lastInput == null) return;
+        if (_pixel == null || _lastInput == null) return;
         var def = _renderer.GetWidgetDef(WidgetId);
         if (def == null) return;
 
@@ -386,7 +384,7 @@ public class InventoryUI : IModalLayer
 
     private void DrawItemTooltip(ItemDef item, int quantity, int mx, int my, int screenW, int screenH)
     {
-        if (_batch == null || _pixel == null) return;
+        if (_pixel == null) return;
 
         const int TipW = 260;
         const int Pad = 8;

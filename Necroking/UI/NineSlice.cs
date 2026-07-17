@@ -51,7 +51,7 @@ public class NineSlice
         TileEdges = tileEdges;
     }
 
-    public void Draw(SpriteScope batch, Rectangle dest, Color? tint = null, float scale = 1f)
+    public void Draw(SpriteScope scope, Rectangle dest, Color? tint = null, float scale = 1f)
     {
         if (Texture == null) return;
         var c = tint ?? Color.White;
@@ -96,10 +96,10 @@ public class NineSlice
         int midH = dest.Height - bt - bb;
 
         // Corners
-        batch.Draw(Texture, new Rectangle(dest.X, dest.Y, bl, bt), srcTL, c);
-        batch.Draw(Texture, new Rectangle(dest.X + dest.Width - br, dest.Y, br, bt), srcTR, c);
-        batch.Draw(Texture, new Rectangle(dest.X, dest.Y + dest.Height - bb, bl, bb), srcBL, c);
-        batch.Draw(Texture, new Rectangle(dest.X + dest.Width - br, dest.Y + dest.Height - bb, br, bb), srcBR, c);
+        scope.Draw(Texture, new Rectangle(dest.X, dest.Y, bl, bt), srcTL, c);
+        scope.Draw(Texture, new Rectangle(dest.X + dest.Width - br, dest.Y, br, bt), srcTR, c);
+        scope.Draw(Texture, new Rectangle(dest.X, dest.Y + dest.Height - bb, bl, bb), srcBL, c);
+        scope.Draw(Texture, new Rectangle(dest.X + dest.Width - br, dest.Y + dest.Height - bb, br, bb), srcBR, c);
 
         // Edges — stretched by default, or repeated at native (scaled) size when
         // TileEdges is set, so a patterned border (e.g. the Greek-key cloth frame)
@@ -109,13 +109,13 @@ public class NineSlice
             if (TileEdges)
             {
                 int unit = Math.Max(1, (int)(srcT.Width * scale));
-                TileH(batch, Texture, dest.X + bl, dest.Y, midW, bt, srcT, unit, c);
-                TileH(batch, Texture, dest.X + bl, dest.Y + dest.Height - bb, midW, bb, srcB, unit, c);
+                TileH(scope, Texture, dest.X + bl, dest.Y, midW, bt, srcT, unit, c);
+                TileH(scope, Texture, dest.X + bl, dest.Y + dest.Height - bb, midW, bb, srcB, unit, c);
             }
             else
             {
-                batch.Draw(Texture, new Rectangle(dest.X + bl, dest.Y, midW, bt), srcT, c);
-                batch.Draw(Texture, new Rectangle(dest.X + bl, dest.Y + dest.Height - bb, midW, bb), srcB, c);
+                scope.Draw(Texture, new Rectangle(dest.X + bl, dest.Y, midW, bt), srcT, c);
+                scope.Draw(Texture, new Rectangle(dest.X + bl, dest.Y + dest.Height - bb, midW, bb), srcB, c);
             }
         }
         if (midH > 0)
@@ -123,19 +123,19 @@ public class NineSlice
             if (TileEdges)
             {
                 int unit = Math.Max(1, (int)(srcL.Height * scale));
-                TileV(batch, Texture, dest.X, dest.Y + bt, bl, midH, srcL, unit, c);
-                TileV(batch, Texture, dest.X + dest.Width - br, dest.Y + bt, br, midH, srcR, unit, c);
+                TileV(scope, Texture, dest.X, dest.Y + bt, bl, midH, srcL, unit, c);
+                TileV(scope, Texture, dest.X + dest.Width - br, dest.Y + bt, br, midH, srcR, unit, c);
             }
             else
             {
-                batch.Draw(Texture, new Rectangle(dest.X, dest.Y + bt, bl, midH), srcL, c);
-                batch.Draw(Texture, new Rectangle(dest.X + dest.Width - br, dest.Y + bt, br, midH), srcR, c);
+                scope.Draw(Texture, new Rectangle(dest.X, dest.Y + bt, bl, midH), srcL, c);
+                scope.Draw(Texture, new Rectangle(dest.X + dest.Width - br, dest.Y + bt, br, midH), srcR, c);
             }
         }
 
         // Center
         if (midW > 0 && midH > 0)
-            batch.Draw(Texture, new Rectangle(dest.X + bl, dest.Y + bt, midW, midH), srcC, c);
+            scope.Draw(Texture, new Rectangle(dest.X + bl, dest.Y + bt, midW, midH), srcC, c);
     }
 
     /// <summary>Repeat an edge source horizontally across [x0, x0+totalW), each

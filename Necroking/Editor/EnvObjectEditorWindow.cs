@@ -26,8 +26,7 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
     private Data.Registries.SpellRegistry? _spellRegistry;
     private GraphicsDevice _device = null!;
     private Texture2D _pixel = null!;
-    private SpriteBatch _sb = null!;
-    private Render.SpriteScope Scope => _sb;  // straight-alpha draw surface (implicit conversion)
+    private Render.SpriteScope Scope => Necroking.Game1.Instance.Scope;  // straight-alpha draw surface
     private SpriteFont? _font;
     private SpriteFont? _smallFont;
     private string[]? _costItemOptions; // cached dropdown options for cost type
@@ -143,14 +142,13 @@ public class EnvObjectEditorWindow : Necroking.UI.IModalLayer
     private static readonly Color RefSlotBg = new(30, 30, 50, 240);
 
     public void Init(EditorBase ui, EnvironmentSystem env, GraphicsDevice device,
-        SpriteBatch sb, Texture2D pixel, SpriteFont? font, SpriteFont? smallFont,
+        Texture2D pixel, SpriteFont? font, SpriteFont? smallFont,
         TriggerSystem? triggerSystem = null)
     {
         _ui = ui;
         _env = env;
         _triggerSystem = triggerSystem;
         _device = device;
-        _sb = sb;
         _pixel = pixel;
         _font = font;
         _smallFont = smallFont;

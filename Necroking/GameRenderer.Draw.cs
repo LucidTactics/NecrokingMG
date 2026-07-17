@@ -41,9 +41,9 @@ partial class GameRenderer
         if (_g._menuState == MenuState.MainMenu)
         {
             _g.GraphicsDevice.Clear(new Color(20, 15, 30));
-            Materials.Hud.Begin(_g._spriteBatch);
+            Materials.Hud.Begin(_batch);
             _g._mainMenu.Draw(screenW, screenH);
-            _g._spriteBatch.End();
+            _batch.End();
             _g.CompletePendingDevScreenshot();
             _g.BaseDraw(gameTime);
             return;
@@ -52,9 +52,9 @@ partial class GameRenderer
         if (_g._menuState == MenuState.ScenarioList)
         {
             _g.GraphicsDevice.Clear(new Color(20, 15, 30));
-            Materials.Hud.Begin(_g._spriteBatch);
+            Materials.Hud.Begin(_batch);
             _g._scenarioList.Draw(screenW, screenH);
-            _g._spriteBatch.End();
+            _batch.End();
             _g.CompletePendingDevScreenshot();
             _g.BaseDraw(gameTime);
             return;
@@ -78,7 +78,7 @@ partial class GameRenderer
             _g.GraphicsDevice.Clear(new Color(20, 15, 30));
         _pipeline ??= BuildPipeline();
         _ctx.Device = _g.GraphicsDevice;
-        _ctx.Batch = _g._spriteBatch;
+        _ctx.Batch = _batch;
         _ctx.GameTime = gameTime;
         _ctx.ScreenW = screenW;
         _ctx.ScreenH = screenH;
@@ -133,8 +133,8 @@ partial class GameRenderer
     /// stress labels. Body moved verbatim out of Draw() (step 0); owns its batch.</summary>
     private void DrawDeathFogDebugOverlay()
     {
-        Materials.Hud.Begin(_g._spriteBatch);
-        _g._deathFog.DrawDebug(_g._spriteBatch, _g._pixel, _g._renderer, _g._camera);
+        Materials.Hud.Begin(_batch);
+        _g._deathFog.DrawDebug(_batch, _g._pixel, _g._renderer, _g._camera);
 
         // Per-corruptable-object stress label: "stress/threshold" when stress > 0,
         // or "DEAD" once corrupted. Skip clean trees to reduce overlay clutter.
@@ -184,14 +184,14 @@ partial class GameRenderer
             }
         }
 
-        _g._spriteBatch.End();
+        _batch.End();
     }
 
     /// <summary>Alt-key name labels: env objects (+ animation debug), corpse names,
     /// unit names. Body moved verbatim out of Draw() (step 0); owns its batch.</summary>
     private void DrawAltNameLabels(int screenW, int screenH)
     {
-        Materials.Hud.Begin(_g._spriteBatch);
+        Materials.Hud.Begin(_batch);
 
         // Draws a centered name label at a world position, boxed for legibility.
         // Returns silently if the position is off-screen or the label is empty.
@@ -246,7 +246,7 @@ partial class GameRenderer
             DrawWorldLabel(u.Position, uname, new Color(200, 255, 210));
         }
 
-        _g._spriteBatch.End();
+        _batch.End();
     }
 
     /// <summary>The HUD/UI block. Runs inside the Hud phase's open batch
@@ -268,7 +268,7 @@ partial class GameRenderer
         // Scenario custom UI hook — for shader-test scenarios that draw raw
         // geometry without a real panel.
         if (_g._activeScenario?.CustomUIDraw != null)
-            _g._activeScenario.CustomUIDraw(_g._spriteBatch, screenW, screenH);
+            _g._activeScenario.CustomUIDraw(_batch, screenW, screenH);
 
         // Draw color picker popup overlay (must be after all editor drawing, on top)
         if (_g._menuState == MenuState.UnitEditor || _g._menuState == MenuState.SpellEditor)
@@ -332,7 +332,7 @@ partial class GameRenderer
         // DrawRectBorder), so screen-edge rects still show a full box.
         if (_g._uiDebugDrawMode == 1)
         {
-            var scope = new SpriteScope(_g._spriteBatch, Materials.Hud);
+            var scope = new SpriteScope(_batch, Materials.Hud);
             foreach (var e in _g._uiHits.Entries)
             {
                 if (e.FullScreen || e.Probe != null) continue; // no concrete rect to outline

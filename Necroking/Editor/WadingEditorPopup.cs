@@ -393,7 +393,11 @@ public class WadingEditorPopup
         float waterlineCenterV, float topWaterlineCenterV, float waterlineSlope)
     {
         if (_wadingEffect == null) return false;
-        var sb = _ui.SpriteBatch;
+        // Same captured scope for the whole Suspend/Resume cycle; the raw batch
+        // (scope.Batch) is needed because the ad-hoc wading-effect Begin below
+        // has no Material.
+        var scope = _ui.Scope;
+        var sb = scope.Batch;
 
         // Atlas U/V range of this frame.
         float atlasW = tex.Width, atlasH = tex.Height;
@@ -414,7 +418,7 @@ public class WadingEditorPopup
         // set once at load (Game1 LoadContent, Wading block) on this shared instance.
 
         // Switch batch state to the wading effect.
-        sb.End();
+        scope.Suspend();
         sb.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
                  null, null, _wadingEffect);
         Render.Materials.NoteAdHocBatch(); // wading-effect batch, draws White only
@@ -427,7 +431,7 @@ public class WadingEditorPopup
         // Restore the canonical HUD/editor batch state. The HUD pass runs
         // PointClamp (see EffectBatch.HudSampler) — restoring LinearClamp here
         // left all editor text drawn after the wading preview blurry.
-        Render.Materials.Hud.Begin(sb);
+        scope.Resume();
         return true;
     }
 

@@ -149,7 +149,7 @@ partial class GameRenderer
         prep.Add(new CustomPass("WeatherContext", ctx =>
         {
             // Set weather renderer context for this frame
-            _g._weatherRenderer.SetContext(_g._spriteBatch, _g._pixel, _g._glowTex, _g._camera, _g._gameTime, _g._gameData, _g.GraphicsDevice);
+            _g._weatherRenderer.SetContext(_batch, _g._pixel, _g._glowTex, _g._camera, _g._gameTime, _g._gameData, _g.GraphicsDevice);
         }));
 
         prep.Add(new CustomPass("FogOfWarUpdate", ctx =>
@@ -158,7 +158,7 @@ partial class GameRenderer
             bool fogActive = (FogOfWarMode)_g._gameData.Settings.FogOfWar.Mode != FogOfWarMode.Off;
             bool editorOpen = _g._menuState != MenuState.None && _g._menuState != MenuState.MainMenu;
             if (fogActive && !editorOpen)
-                _g._fogOfWar.Update(_g._spriteBatch, _g._sim.Units, _g._gameData.Settings.FogOfWar, _g._rawDt);
+                _g._fogOfWar.Update(_batch, _g._sim.Units, _g._gameData.Settings.FogOfWar, _g._rawDt);
             else
                 // Update isn't running this frame, but IsVisible (which culls enemy
                 // sprites/shadows/projectiles) keys off the fog system's cached mode.
@@ -301,7 +301,7 @@ partial class GameRenderer
             if (fogActive && !mapEditorOpen)
             {
                 // Draw fog overlay (RTs already updated before bloom pass)
-                _g._fogOfWar.Draw(_g._spriteBatch, _g._camera, _g._renderer, ctx.ScreenW, ctx.ScreenH, _g._gameData.Settings.FogOfWar);
+                _g._fogOfWar.Draw(_batch, _g._camera, _g._renderer, ctx.ScreenW, ctx.ScreenH, _g._gameData.Settings.FogOfWar);
             }
         }));
 
@@ -309,10 +309,10 @@ partial class GameRenderer
         {
             if (_g._collisionDebugMode != CollisionDebugMode.Off)
             {
-                Materials.Hud.Begin(_g._spriteBatch);
-                _g._debugDraw.DrawCollisionDebug(_g._spriteBatch, _g.GraphicsDevice, _g._sim, _g._camera, _g._renderer,
+                Materials.Hud.Begin(_batch);
+                _g._debugDraw.DrawCollisionDebug(_batch, _g.GraphicsDevice, _g._sim, _g._camera, _g._renderer,
                     _g._collisionDebugMode, _g._envSystem, _g._sim.Pathfinder);
-                _g._spriteBatch.End();
+                _batch.End();
             }
         }));
 
@@ -320,9 +320,9 @@ partial class GameRenderer
         {
             if (_g._activeScenario != null && _g._activeScenario.ShowWeaponAttachDebug)
             {
-                Materials.Hud.Begin(_g._spriteBatch);
+                Materials.Hud.Begin(_batch);
                 DrawWeaponAttachDebug();
-                _g._spriteBatch.End();
+                _batch.End();
             }
         }));
 
@@ -336,12 +336,12 @@ partial class GameRenderer
         {
             if (_g._gameplayDebugMode > 0)
             {
-                Materials.Hud.Begin(_g._spriteBatch);
+                Materials.Hud.Begin(_batch);
                 if (_g._gameplayDebugMode == 1)
                     DrawHordeDebug();
                 else if (_g._gameplayDebugMode == 2)
                     DrawUnitInfoDebug();
-                _g._spriteBatch.End();
+                _batch.End();
             }
         }));
 
@@ -351,15 +351,15 @@ partial class GameRenderer
             {
                 try
                 {
-                    Materials.Hud.Begin(_g._spriteBatch);
+                    Materials.Hud.Begin(_batch);
                     DrawWindDebug(ctx.ScreenW, ctx.ScreenH);
-                    _g._spriteBatch.End();
+                    _batch.End();
                 }
                 catch (Exception ex)
                 {
                     Core.DebugLog.Log("error", $"Wind debug crash: {ex}");
                     _g._windDebug = false;
-                    try { _g._spriteBatch.End(); } catch { }
+                    try { _batch.End(); } catch { }
                 }
             }
         }));
@@ -382,7 +382,7 @@ partial class GameRenderer
             _g._camera.Position = _realCameraPos;
 
             // HUD pass state defined in EffectBatch (HudBlend/HudSampler).
-            Render.EffectBatch.BeginHudPass(_g._spriteBatch);
+            Render.EffectBatch.BeginHudPass(_batch);
         };
 
         // Weather effects (fog/haze/brightness — rain draws in scene pass).
@@ -397,7 +397,7 @@ partial class GameRenderer
 
         hud.Add(new CustomPass("Hud", ctx => DrawHudBlock(ctx.ScreenW, ctx.ScreenH, ctx.GameTime)));
 
-        hud.OnEnd = ctx => _g._spriteBatch.End();
+        hud.OnEnd = ctx => _batch.End();
 
         return p;
     }

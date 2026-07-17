@@ -108,7 +108,7 @@ partial class GameRenderer
         // ShadowRenderer suspends the batch to draw raw quads; the scope owns
         // the resume state.
         _cbShadows ??= (SpriteScope s, int _, int _) =>
-            _g._shadowRenderer.Draw(s, _g.GraphicsDevice, _g._spriteBatch, _g._glowTex, _g._camera, _g._renderer, _g._sim, _g._gameData, _g._unitAnims, _g._atlases, _g._envSystem, _g._fogOfWar, _g._groundSystem, _g._deathFog, _g._corpseAnims, _g._reanimFx);
+            _g._shadowRenderer.Draw(s, _g.GraphicsDevice, _batch, _g._glowTex, _g._camera, _g._renderer, _g._sim, _g._gameData, _g._unitAnims, _g._atlases, _g._envSystem, _g._fogOfWar, _g._groundSystem, _g._deathFog, _g._corpseAnims, _g._reanimFx);
         _cbHoverMarkers ??= (SpriteScope _, int _, int _) =>
         {
             DrawHoverGroundMarkers();
@@ -132,7 +132,7 @@ partial class GameRenderer
         q.SubmitCallback(WorldLayer.Traps, _cbTraps, 0, 0);
         // Glyph renderer context is primed at collect time; its draw runs when
         // the queue executes this frame.
-        _g._glyphRenderer.SetContext(_g._spriteBatch, _g._pixel, _g._glowTex, _g._camera, _g._renderer, _g._flipbooks, _g._gameTime);
+        _g._glyphRenderer.SetContext(_batch, _g._pixel, _g._glowTex, _g._camera, _g._renderer, _g._flipbooks, _g._gameTime);
         q.SubmitCallback(WorldLayer.Glyphs, _cbGlyphs, 0, 0);
         q.SubmitCallback(WorldLayer.Walls, _cbWalls, 0, 0);
         q.SubmitCallback(WorldLayer.Shadows, _cbShadows, 0, 0);
@@ -159,7 +159,7 @@ partial class GameRenderer
         // black-background look scenarios produce.
         _cbGrassTuft ??= (SpriteScope _, int a, int _) =>
         {
-            if (!_g._devShotNoGround) _g._grassRenderer.DrawSingleTuft(_g._spriteBatch, a);
+            if (!_g._devShotNoGround) _g._grassRenderer.DrawSingleTuft(_batch, a);
         };
         _cbDeathFogPuff ??= (SpriteScope _, int a, int _) => _g._deathFogRenderer.DrawSinglePuff(a);
         _cbReanimDust ??= (SpriteScope _, int a, int _) => _g._reanimFx.DrawSingleDust(a);
@@ -238,7 +238,7 @@ partial class GameRenderer
         var items = _g._depthItems;
 
         // Add poison cloud puffs
-        _g._poisonCloudRenderer.SetContext(_g._spriteBatch, _g._glowTex, _g._camera, _g._renderer, _g._flipbooks, _g._gameTime);
+        _g._poisonCloudRenderer.SetContext(_batch, _g._glowTex, _g._camera, _g._renderer, _g._flipbooks, _g._gameTime);
         _g._poisonCloudRenderer.AddPuffsToDepthList(_g._sim.PoisonClouds, items);
 
         // Add grass tufts — Y-sorted with units so a tuft "in front" (higher Y)
@@ -256,15 +256,15 @@ partial class GameRenderer
         {
             // Ground fog: update banks/wisps and submit the back blankets
             // (behind YSort); the depth-tested wisps submit in CollectFxItems.
-            _g._groundFog.SetContext(_g._spriteBatch, _g._camera, _g._renderer, deathFogFb, _g._glowTex, _g._gameTime);
+            _g._groundFog.SetContext(_batch, _g._camera, _g._renderer, deathFogFb, _g._glowTex, _g._gameTime);
             _g._groundFog.Update(_g._frameDt);
             _g._groundFog.CollectBack(queue, _g._ambientColor);
 
-            _g._deathFogRenderer.SetContext(_g._spriteBatch, _g._camera, _g._renderer, deathFogFb, _g._gameTime);
+            _g._deathFogRenderer.SetContext(_batch, _g._camera, _g._renderer, deathFogFb, _g._gameTime);
             _g._deathFogRenderer.AddPuffsToDepthList(_g._deathFog, _g._renderer.ScreenW, _g._renderer.ScreenH, items);
             // Reanimation dust puffs — Y-sorted with units (reuses the cloud03 sheet).
             // SetContext here also primes the additive light/cloud pass (DrawReanimAdditive).
-            _g._reanimFx.SetContext(_g._spriteBatch, _g._camera, _g._renderer, deathFogFb, _g._glowTex);
+            _g._reanimFx.SetContext(_batch, _g._camera, _g._renderer, deathFogFb, _g._glowTex);
             // When depth-sorted fog is ON the dust is drawn interleaved with the clouds in the combined
             // sorted pass (DrawSortedParticles) instead — so keep it out of the unit Y-sort list here.
             if (!_g._gameData.Settings.Performance.DepthSortedFog)
@@ -472,7 +472,7 @@ partial class GameRenderer
 
         // Buff visuals: phase 0 (behind sprite)
         _g._buffVisuals.DrawUnit(i, renderPos, 0, _g._gameTime,
-            _g._spriteBatch, _g._camera, _g._renderer, _g._flipbooks, _g._gameData.Buffs, _g._sim.Units,
+            _batch, _g._camera, _g._renderer, _g._flipbooks, _g._gameData.Buffs, _g._sim.Units,
             atlas, fr.Frame.Value, scale, fr.FlipX,
             _g._sim.Units[i].EffectSpawnPos2D, _g._sim.Units[i].EffectSpawnHeight);
 
@@ -611,7 +611,7 @@ partial class GameRenderer
                 _g._sim.Units[i].RenderPos, _g._sim.Units[i].Velocity,
                 _g._sim.Units[i].FacingAngle, bodyLen,
                 wakeLiftWorldH, true,
-                _g._spriteBatch, _g._pixel, _g._renderer, _g._camera);
+                _batch, _g._pixel, _g._renderer, _g._camera);
 
             // Sprite with waterline fade. Top cut V = -1 sentinel disables the
             // top cut in the shader (used for 3/4 facings where the back-cut
@@ -626,7 +626,7 @@ partial class GameRenderer
             // unit" position projects to the same screen Y range as the
             // visible body; drawing front-class particles after the sprite
             // keeps the front foam crescent visible.
-            _g._wakeSystem.DrawFront(_g._sim.Units[i].Id, _g._spriteBatch, _g._renderer, _g._camera);
+            _g._wakeSystem.DrawFront(_g._sim.Units[i].Id, _batch, _g._renderer, _g._camera);
         }
         else
         {
@@ -641,13 +641,13 @@ partial class GameRenderer
                 _g._sim.Units[i].RenderPos, _g._sim.Units[i].Velocity,
                 _g._sim.Units[i].FacingAngle, bodyLen,
                 0f, false,
-                _g._spriteBatch, _g._pixel, _g._renderer, _g._camera);
+                _batch, _g._pixel, _g._renderer, _g._camera);
 
             DrawSpriteFrame(atlas, fr.Frame.Value, sp, scale, fr.FlipX, tint);
 
             // Any lingering front-class particles (a bow wave fading out
             // as the unit steps onto land) also need the after-sprite pass.
-            _g._wakeSystem.DrawFront(_g._sim.Units[i].Id, _g._spriteBatch, _g._renderer, _g._camera);
+            _g._wakeSystem.DrawFront(_g._sim.Units[i].Id, _batch, _g._renderer, _g._camera);
         }
 
         // F2 water debug overlay — render after the sprite so it's not occluded.
@@ -663,7 +663,7 @@ partial class GameRenderer
 
         // Buff visuals: phase 1 (in front of sprite)
         _g._buffVisuals.DrawUnit(i, renderPos, 1, _g._gameTime,
-            _g._spriteBatch, _g._camera, _g._renderer, _g._flipbooks, _g._gameData.Buffs, _g._sim.Units,
+            _batch, _g._camera, _g._renderer, _g._flipbooks, _g._gameData.Buffs, _g._sim.Units,
             atlas, fr.Frame.Value, scale, fr.FlipX,
             _g._sim.Units[i].EffectSpawnPos2D, _g._sim.Units[i].EffectSpawnHeight);
 
@@ -1081,7 +1081,7 @@ partial class GameRenderer
     {
         if (Materials.DepthStamp == null) return;
 
-        Materials.DepthStamp.Begin(_g._spriteBatch);
+        Materials.DepthStamp.Begin(_batch);
 
         for (int i = 0; i < _g._sim.Units.Count; i++)
         {
@@ -1114,7 +1114,7 @@ partial class GameRenderer
                 FogDepthForY(u.RenderPos.Y, _g._camera.Position.Y));
         }
 
-        _g._spriteBatch.End();
+        _batch.End();
     }
 
     /// <summary>Draw a unit sprite with the wading shader applied — fades alpha
@@ -1185,7 +1185,7 @@ partial class GameRenderer
     /// <summary>Draw a 1px outline rectangle.</summary>
     private void DrawRectOutline(Rectangle r, Color c)
     {
-        Necroking.Render.DrawUtils.DrawRectBorder(_g._spriteBatch, _g._pixel, r, c);
+        Necroking.Render.DrawUtils.DrawRectBorder(_batch, _g._pixel, r, c);
     }
 
     /// <summary>Screen-space AABB of a sprite frame drawn at <paramref name="sp"/>

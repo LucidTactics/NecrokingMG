@@ -20,8 +20,7 @@ namespace Necroking.UI;
 /// </summary>
 public class JobBoardUI : IModalLayer
 {
-    private SpriteBatch _batch = null!;
-    private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
+    private Render.SpriteScope Scope => Game1.Instance.Scope;  // straight-alpha draw surface
     private Texture2D _pixel = null!;
     private RuntimeWidgetRenderer _r = null!;
     private WorkerSystem _ws = null!;
@@ -47,8 +46,8 @@ public class JobBoardUI : IModalLayer
     /// <summary>Job-row drag in progress — the router captures the mouse for us.</summary>
     public bool IsDragging => _dragging;
 
-    public void Init(SpriteBatch batch, Texture2D pixel, RuntimeWidgetRenderer renderer, WorkerSystem ws)
-    { _batch = batch; _pixel = pixel; _r = renderer; _ws = ws; }
+    public void Init(Texture2D pixel, RuntimeWidgetRenderer renderer, WorkerSystem ws)
+    { _pixel = pixel; _r = renderer; _ws = ws; }
 
     public void Toggle(int screenW, int screenH)
     {
@@ -340,7 +339,7 @@ public class JobBoardUI : IModalLayer
     public bool LightDismiss => false;
     public bool IsBlocking => false;
 
-    private void Border(Rectangle r, Color c, int t) => Render.DrawUtils.DrawRectBorder(_batch, _pixel, r, c, t);
+    private void Border(Rectangle r, Color c, int t) => Render.DrawUtils.DrawRectBorder(Scope, _pixel, r, c, t);
     private void Text(string s, int x, int y, int size, Color c) => _r.DrawText(s, x, y, size, c);
 
     private void DrawButton(Rectangle r, string label, Color fill)

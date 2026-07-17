@@ -13,8 +13,7 @@ namespace Necroking.UI;
 /// </summary>
 public class GraveRosterUI : IModalLayer
 {
-    private SpriteBatch _batch = null!;
-    private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
+    private Render.SpriteScope Scope => Game1.Instance.Scope;  // straight-alpha draw surface
     private Texture2D _pixel = null!;
     private RuntimeWidgetRenderer _r = null!;
     private WorkerSystem _ws = null!;
@@ -32,9 +31,9 @@ public class GraveRosterUI : IModalLayer
 
     public bool IsVisible => _visible;
 
-    public void Init(SpriteBatch batch, Texture2D pixel, RuntimeWidgetRenderer renderer, WorkerSystem ws)
+    public void Init(Texture2D pixel, RuntimeWidgetRenderer renderer, WorkerSystem ws)
     {
-        _batch = batch; _pixel = pixel; _r = renderer; _ws = ws;
+        _pixel = pixel; _r = renderer; _ws = ws;
     }
 
     public void OpenForGrave(int graveObjIdx, int screenW, int screenH)
@@ -148,7 +147,7 @@ public class GraveRosterUI : IModalLayer
     public bool IsBlocking => false;
 
     // helpers
-    private void Border(Rectangle r, Color c, int t) => Render.DrawUtils.DrawRectBorder(_batch, _pixel, r, c, t);
+    private void Border(Rectangle r, Color c, int t) => Render.DrawUtils.DrawRectBorder(Scope, _pixel, r, c, t);
 
     private void DrawButton(Rectangle r, string label, Color fill)
     {

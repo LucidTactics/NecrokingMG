@@ -37,8 +37,7 @@ public class SkillBookOverlay : IModalLayer
     // hide the rest, sizing each visible tab to fill the bar.
 
     private RuntimeWidgetRenderer _renderer = null!;
-    private SpriteBatch _batch = null!;
-    private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
+    private Render.SpriteScope Scope => Game1.Instance.Scope;  // straight-alpha draw surface
     private Texture2D _pixel = null!;
 
     private SkillBookState _state = null!;
@@ -80,10 +79,9 @@ public class SkillBookOverlay : IModalLayer
     /// <summary>Layout-editor tile drag in progress — the router captures the mouse for us.</summary>
     public bool IsDragging => _dragId != null;
 
-    public void Init(RuntimeWidgetRenderer renderer, SpriteBatch batch, Texture2D pixel)
+    public void Init(RuntimeWidgetRenderer renderer, Texture2D pixel)
     {
         _renderer = renderer;
-        _batch = batch;
         _pixel = pixel;
     }
 
@@ -329,7 +327,7 @@ public class SkillBookOverlay : IModalLayer
 
     private void DrawOutline(Rectangle r, Color c)
     {
-        Necroking.Render.DrawUtils.DrawRectBorder(_batch, _pixel, r, c);
+        Necroking.Render.DrawUtils.DrawRectBorder(Scope, _pixel, r, c);
     }
 
     /// <summary>Index of the TabBar child inside SkillBookWindow (cached). The tab

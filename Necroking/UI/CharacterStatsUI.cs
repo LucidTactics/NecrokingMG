@@ -115,17 +115,15 @@ public class CharacterStatsUI : IModalLayer
     private static readonly Color BaseDimColor = new(140, 140, 155);
     private static readonly Color BuffNameColor = new(220, 200, 160);
 
-    private SpriteBatch _batch = null!;
-    private Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
+    private Render.SpriteScope Scope => Game1.Instance.Scope;  // straight-alpha draw surface
     private Texture2D _pixel = null!;
     private SpriteFont? _font;
     private SpriteFont? _smallFont;
 
     public bool IsVisible { get; private set; }
 
-    public void Init(SpriteBatch batch, Texture2D pixel, SpriteFont? font, SpriteFont? smallFont)
+    public void Init(Texture2D pixel, SpriteFont? font, SpriteFont? smallFont)
     {
-        _batch = batch;
         _pixel = pixel;
         _font = font;
         _smallFont = smallFont;
@@ -671,7 +669,7 @@ public class CharacterStatsUI : IModalLayer
 
     private void DrawBorder(int x, int y, int w, int h, Color c)
     {
-        Necroking.Render.DrawUtils.DrawRectBorder(_batch, _pixel, new Rectangle(x, y, w, h), c, 2);
+        Necroking.Render.DrawUtils.DrawRectBorder(Scope, _pixel, new Rectangle(x, y, w, h), c, 2);
     }
 
     private void DrawLearnPanel(int px, int py, SpriteFont rowFont, InputState input,

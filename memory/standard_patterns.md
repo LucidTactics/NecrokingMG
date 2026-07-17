@@ -11,11 +11,18 @@ CLAUDE.md → "Standard Patterns Reference".)
   `Color.FromNonPremultiplied`, `ColorUtils.Premultiply`, or hand-scale RGB by A
   for a draw tint (that now double-converts → dimmer).
 - **Draw through a `SpriteScope`**: queue callbacks get one; immediate-mode code
-  uses `Game1.Scope`, `EditorBase.Scope`, or a per-class `Scope => _batch;`
-  accessor (implicit `SpriteBatch → SpriteScope` conversion exists and is always
-  color-correct). Raw `scope.Batch` is the escape hatch for native encodings
-  (HDR vertex pack, additive-via-A=0 trick) and third-party extension draws
-  (FontStashSharp text: `scope.Batch.DrawString(..., scope.EncodeTint(color))`).
+  uses `Game1.Scope`, `EditorBase.Scope`, or the canonical per-class accessor
+  `private SpriteScope Scope => Game1.Instance.Scope;` (or `_g.Scope`) — ALWAYS
+  a property, NEVER a cached field (the resume material is computed from
+  `Materials.Open` at access time), and NEVER a stored/Init-passed `SpriteBatch`
+  (lockdown 2026-07-17: `Game1._spriteBatch` is private;
+  `tools/check_spritebatch_scope.py` gates any raw `SpriteBatch` mention outside
+  render plumbing). For a `PushMaterial/PopMaterial` or `Suspend/Resume` cycle,
+  capture ONE scope in a local for the whole cycle — re-reading the property
+  mid-cycle computes the wrong resume material. Raw `scope.Batch` is the escape
+  hatch for native encodings (HDR vertex pack, additive-via-A=0 trick) and
+  third-party extension draws (FontStashSharp text:
+  `scope.Batch.DrawString(..., scope.EncodeTint(color))`).
 - **Fades scale A only**: `ColorUtils.Fade(c, t)` — never `color * t` on a color
   headed into a converting draw.
 - **All batch opens go through `Material.Begin`** (it stamps `Materials.Open`,

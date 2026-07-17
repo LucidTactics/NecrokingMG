@@ -154,7 +154,21 @@ converts (once) per material:
   colors already in native encoding (HDR vertex pack, additive-via-A=0 trick) and
   for third-party extension draws (FontStashSharp text → `scope.Batch.DrawString`
   with `scope.EncodeTint(color)`). Immediate-mode surfaces: `Game1.Scope`,
-  `EditorBase.Scope`, per-class `Scope => _batch;` accessors.
+  `EditorBase.Scope`, per-class `private SpriteScope Scope => Game1.Instance.Scope;`
+  properties (ALWAYS a property, never a cached field — the resume material is
+  computed from `Materials.Open` at access time; and for a Push/Pop or
+  Suspend/Resume cycle, capture ONE scope in a local for the whole cycle).
+- **Lockdown (2026-07-17): the raw batch no longer circulates.** `Game1._spriteBatch`
+  is `private`; no UI/editor/game class stores or receives a `SpriteBatch` (the old
+  `Init(GraphicsDevice, SpriteBatch, Texture2D)` template is gone — it's how
+  MinimapHUD re-derived the premult bug 12 days after the migration). Render plumbing
+  holds its own references (`GameRenderer._batch` via `SetBatch` in `LoadContent`,
+  `RenderPipeline`/`ctx.Batch`, `EffectBatch`). **Gate:
+  `python tools/check_spritebatch_scope.py`** — flags ANY `SpriteBatch` token outside
+  `Render/`, `Scenario/`, `Game1.cs`, `GameRenderer.*`, `Editor/BuffPreview.cs`,
+  `Editor/SpellPreview.cs` (those two own private batches for RT preview passes).
+  Run it after touching draw code; extend its ALLOW list (with a comment) only for
+  genuinely new render plumbing.
 - The queue flush (`SpriteQueuePass.Execute`) applies `mat.Tint(item.Color)` to
   submitted sprites — `SubmitSprite` colors are straight alpha too.
 - Fades: `ColorUtils.Fade(c, t)` scales A only (straight-alpha replacement for the
@@ -166,7 +180,10 @@ converts (once) per material:
   `BuffVisualSystem` (`EncodeColor` — per-instance blendMode incl. the A=0 additive
   trick), `LightningRenderer`, `PoisonCloudRenderer`, `DeathFogRenderer`,
   `ReanimEffectSystem`, `Bloom`/`UIShaders`/`FogOfWarSystem` internals,
-  `BlendTestScenario` (GPU truth test).
+  `Editor/BuffPreview` + `Editor/SpellPreview` (own private batches + RT passes),
+  `BlendTestScenario` (GPU truth test). One more encoding rule: **`SetData` texel
+  buffers stay premult** (same convention as loaded PNGs — e.g. MinimapHUD's fog
+  overlay constants); only draw TINTS are straight alpha.
 
 Underneath, the base convention (established by commit `d626422`) is unchanged:
 **textures are premultiplied at load, batches blend with `BlendState.AlphaBlend`

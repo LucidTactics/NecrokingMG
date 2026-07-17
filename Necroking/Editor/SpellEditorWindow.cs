@@ -912,13 +912,14 @@ public class SpellEditorWindow : EditorWindow
         if (_buffPreview == null || !_buffPreview.IsInitialized) return;
         if (_buffSelectedIdx < 0) return;
 
-        // End the current SpriteBatch so we can render to the RT
-        _ui._sb.End();
+        // Suspend the shared batch so the preview can render to its RT, then
+        // resume. Same captured scope for both halves of the cycle.
+        var scope = _ui.Scope;
+        scope.Suspend();
 
         _buffPreview.RenderToTarget();
 
-        // Re-begin the SpriteBatch to continue UI drawing
-        Render.Materials.Hud.Begin(_ui._sb);
+        scope.Resume();
     }
 
     private void DrawBuffManagerPopup(int screenW, int screenH)
@@ -1620,13 +1621,14 @@ public class SpellEditorWindow : EditorWindow
         if (_spellPreview == null || !_spellPreview.IsInitialized) return;
         if (_selectedIdx < 0) return;
 
-        // End the current SpriteBatch so we can render to the RT
-        _ui._sb.End();
+        // Suspend the shared batch so the preview can render to its RT, then
+        // resume. Same captured scope for both halves of the cycle.
+        var scope = _ui.Scope;
+        scope.Suspend();
 
         _spellPreview.RenderToTarget();
 
-        // Re-begin the SpriteBatch to continue UI drawing
-        Render.Materials.Hud.Begin(_ui._sb);
+        scope.Resume();
     }
 
     private void DrawPreviewPanel(int x, int y, int w, int h)

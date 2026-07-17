@@ -50,7 +50,7 @@ public static class WidgetLayoutUtils
     /// horizontal alignment, block vertical alignment, and extra line spacing in
     /// px. Shared by the editor preview and runtime renderer. Positions are
     /// rounded to integer pixels (PointClamp text rule).</summary>
-    public static void DrawTextBlock(SpriteScope batch,
+    public static void DrawTextBlock(SpriteScope scope,
         FontStashSharp.SpriteFontBase font, string text, Rectangle rect, Color color,
         string align, string valign, int lineSpacing, float charSpacing = 0f, bool bold = false,
         int outlineWidth = 0, Color outlineColor = default, float boldStrength = 1f,
@@ -91,15 +91,15 @@ public static class WidgetLayoutUtils
                     // (a second semi-transparent dark pass reads as mud).
                     // NOTE: FontStash anchors the stroked bitmap so the expansion
                     // lands down-right — offset by -amount to center the dilation.
-                    batch.Batch.DrawString(font, line,
+                    scope.Batch.DrawString(font, line,
                         new Vector2((int)x + outlineOffsetX - outlineWidth, (int)y + outlineOffsetY - outlineWidth),
-                        batch.EncodeTint(outlineColor), characterSpacing: charSpacing,
+                        scope.EncodeTint(outlineColor), characterSpacing: charSpacing,
                         effect: FontSystemEffect.Stroked, effectAmount: outlineWidth);
                 }
-                batch.Batch.DrawString(font, line, new Vector2((int)x, (int)y), batch.EncodeTint(color),
+                scope.Batch.DrawString(font, line, new Vector2((int)x, (int)y), scope.EncodeTint(color),
                     characterSpacing: charSpacing);
                 if (bold) // face weight only: +1px horizontal pass, boldStrength = opacity
-                    batch.Batch.DrawString(font, line, new Vector2((int)x + 1, (int)y), batch.EncodeTint(Core.ColorUtils.Fade(color, boldStrength)),
+                    scope.Batch.DrawString(font, line, new Vector2((int)x + 1, (int)y), scope.EncodeTint(Core.ColorUtils.Fade(color, boldStrength)),
                         characterSpacing: charSpacing);
             }
             y += lineH + lineSpacing;

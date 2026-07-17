@@ -11,7 +11,7 @@ namespace Necroking.Render;
 public static class DrawUtils
 {
     /// <summary>Draw a circle outline using line segments.</summary>
-    public static void DrawCircleOutline(SpriteScope batch, Texture2D pixel,
+    public static void DrawCircleOutline(SpriteScope scope, Texture2D pixel,
         Vector2 center, float radius, Color color, int segments = 48)
     {
         float step = MathF.PI * 2f / segments;
@@ -21,43 +21,43 @@ public static class DrawUtils
             float a2 = (i + 1) * step;
             var p1 = center + new Vector2(MathF.Cos(a1) * radius, MathF.Sin(a1) * radius);
             var p2 = center + new Vector2(MathF.Cos(a2) * radius, MathF.Sin(a2) * radius);
-            DrawLine(batch, pixel, p1, p2, color);
+            DrawLine(scope, pixel, p1, p2, color);
         }
     }
 
     /// <summary>Draw a 1-pixel line between two points.</summary>
-    public static void DrawLine(SpriteScope batch, Texture2D pixel, Vector2 a, Vector2 b, Color color)
+    public static void DrawLine(SpriteScope scope, Texture2D pixel, Vector2 a, Vector2 b, Color color)
     {
         float dx = b.X - a.X, dy = b.Y - a.Y;
         float len = MathF.Sqrt(dx * dx + dy * dy);
         if (len < 0.5f) return;
         float angle = MathF.Atan2(dy, dx);
-        batch.Draw(pixel, new Rectangle((int)a.X, (int)a.Y, (int)len, 1),
+        scope.Draw(pixel, new Rectangle((int)a.X, (int)a.Y, (int)len, 1),
             null, color, angle, Vector2.Zero, SpriteEffects.None, 0);
     }
 
     /// <summary>Draw a line with an arbitrary pixel thickness (centered on the a→b axis).</summary>
-    public static void DrawLine(SpriteScope batch, Texture2D pixel, Vector2 a, Vector2 b, Color color, float thickness)
+    public static void DrawLine(SpriteScope scope, Texture2D pixel, Vector2 a, Vector2 b, Color color, float thickness)
     {
         float dx = b.X - a.X, dy = b.Y - a.Y;
         float len = MathF.Sqrt(dx * dx + dy * dy);
         if (len < 0.5f) return;
         float angle = MathF.Atan2(dy, dx);
         // Origin (0, 0.5) centers the 1-px-tall pixel strip vertically before scaling to thickness.
-        batch.Draw(pixel, a, null, color, angle, new Vector2(0f, 0.5f),
+        scope.Draw(pixel, a, null, color, angle, new Vector2(0f, 0.5f),
             new Vector2(len, thickness), SpriteEffects.None, 0f);
     }
 
     /// <summary>Draw a checkmark fitted inside <paramref name="cell"/> — two thick
     /// strokes (short down-right, long up-right). The canonical "this option is
     /// selected" glyph for dropdown lists (the SpriteFonts have no ✓ glyph).</summary>
-    public static void DrawCheckmark(SpriteScope batch, Texture2D pixel, Rectangle cell, Color color, float thickness = 2f)
+    public static void DrawCheckmark(SpriteScope scope, Texture2D pixel, Rectangle cell, Color color, float thickness = 2f)
     {
         var a = new Vector2(cell.X + cell.Width * 0.10f, cell.Y + cell.Height * 0.55f);
         var b = new Vector2(cell.X + cell.Width * 0.40f, cell.Y + cell.Height * 0.85f);
         var c = new Vector2(cell.X + cell.Width * 0.90f, cell.Y + cell.Height * 0.15f);
-        DrawLine(batch, pixel, a, b, color, thickness);
-        DrawLine(batch, pixel, b, c, color, thickness);
+        DrawLine(scope, pixel, a, b, color, thickness);
+        DrawLine(scope, pixel, b, c, color, thickness);
     }
 
     /// <summary>Draw a checkbox glyph: a bg-filled square with a border (lit when
@@ -65,19 +65,19 @@ public static class DrawUtils
     /// <paramref name="value"/> is true. The canonical boolean-toggle visual,
     /// shared by the editor property panels (<c>EditorBase.DrawCheckbox</c>) and
     /// the debug settings panel — callers own the label + hit-testing.</summary>
-    public static void DrawCheckbox(SpriteScope batch, Texture2D pixel, Rectangle box,
+    public static void DrawCheckbox(SpriteScope scope, Texture2D pixel, Rectangle box,
         bool value, bool hovered, Color bg, Color border, Color borderHover, Color accent)
     {
-        batch.Draw(pixel, box, bg);
-        DrawRectBorder(batch, pixel, box, hovered ? borderHover : border);
+        scope.Draw(pixel, box, bg);
+        DrawRectBorder(scope, pixel, box, hovered ? borderHover : border);
         if (value)
-            batch.Draw(pixel, new Rectangle(box.X + 3, box.Y + 3, box.Width - 6, box.Height - 6), accent);
+            scope.Draw(pixel, new Rectangle(box.X + 3, box.Y + 3, box.Width - 6, box.Height - 6), accent);
     }
 
     /// <summary>Draw a texture (or a source region of it) scaled to fit inside
     /// <paramref name="dest"/> preserving aspect ratio, centered on both axes.
     /// The canonical "sprite thumbnail in a UI cell" draw (build menu grid, etc.).</summary>
-    public static void DrawAspectFit(SpriteScope batch, Texture2D tex, Rectangle? src,
+    public static void DrawAspectFit(SpriteScope scope, Texture2D tex, Rectangle? src,
         Rectangle dest, Color color)
     {
         int srcW = src?.Width ?? tex.Width, srcH = src?.Height ?? tex.Height;
@@ -85,25 +85,25 @@ public static class DrawUtils
         float scale = MathF.Min((float)dest.Width / srcW, (float)dest.Height / srcH);
         int w = (int)(srcW * scale), h = (int)(srcH * scale);
         var fitted = new Rectangle(dest.X + (dest.Width - w) / 2, dest.Y + (dest.Height - h) / 2, w, h);
-        batch.Draw(tex, fitted, src, color);
+        scope.Draw(tex, fitted, src, color);
     }
 
     /// <summary>Draw a rectangle outline. The single canonical rect-stroke — replaces
     /// ~13 per-file DrawBorder/DrawRectOutline copies. Corners are non-overlapping (drawn
     /// once each) so the stroke is correct under a translucent color as well as solid.</summary>
-    public static void DrawRectBorder(SpriteScope batch, Texture2D pixel, Rectangle r, Color color, int thickness = 1)
+    public static void DrawRectBorder(SpriteScope scope, Texture2D pixel, Rectangle r, Color color, int thickness = 1)
     {
         // Top/bottom span the full width; left/right fill only the gap between them, so
         // each corner pixel is drawn exactly once. (A full-height left/right would
         // double-draw the corners — invisible at solid alpha, but it darkens them under a
         // translucent color, e.g. the crafting/building menu borders.)
-        batch.Draw(pixel, new Rectangle(r.X, r.Y, r.Width, thickness), color);                          // top
-        batch.Draw(pixel, new Rectangle(r.X, r.Bottom - thickness, r.Width, thickness), color);         // bottom
+        scope.Draw(pixel, new Rectangle(r.X, r.Y, r.Width, thickness), color);                          // top
+        scope.Draw(pixel, new Rectangle(r.X, r.Bottom - thickness, r.Width, thickness), color);         // bottom
         int midH = r.Height - thickness * 2;
         if (midH > 0)
         {
-            batch.Draw(pixel, new Rectangle(r.X, r.Y + thickness, thickness, midH), color);             // left
-            batch.Draw(pixel, new Rectangle(r.Right - thickness, r.Y + thickness, thickness, midH), color); // right
+            scope.Draw(pixel, new Rectangle(r.X, r.Y + thickness, thickness, midH), color);             // left
+            scope.Draw(pixel, new Rectangle(r.Right - thickness, r.Y + thickness, thickness, midH), color); // right
         }
     }
 }

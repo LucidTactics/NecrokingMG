@@ -27,8 +27,7 @@ namespace Necroking.UI;
 public abstract class SideListMenu : IModalLayer
 {
     protected RuntimeWidgetRenderer _renderer = null!;
-    protected SpriteBatch _batch = null!;
-    protected Render.SpriteScope Scope => _batch;  // straight-alpha draw surface (implicit conversion)
+    protected Render.SpriteScope Scope => Game1.Instance.Scope;  // straight-alpha draw surface
     protected Texture2D _pixel = null!;
 
     protected bool _visible;
@@ -262,7 +261,7 @@ public abstract class SideListMenu : IModalLayer
             }
 
             if (IsItemSelected(i))
-                Necroking.Render.DrawUtils.DrawRectBorder(_batch, _pixel, rects[i], new Color(100, 255, 100, 80), 2);
+                Necroking.Render.DrawUtils.DrawRectBorder(Scope, _pixel, rects[i], new Color(100, 255, 100, 80), 2);
 
             if (!canAfford)
                 Scope.Draw(_pixel, rects[i], new Color(0, 0, 0, 80));

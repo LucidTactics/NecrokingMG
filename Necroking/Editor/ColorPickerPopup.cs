@@ -14,8 +14,7 @@ namespace Necroking.Editor;
 public class ColorPickerPopup : Necroking.UI.IModalLayer
 {
     // Drawing context (set externally via SetContext)
-    private SpriteBatch _sb = null!;
-    private Render.SpriteScope Scope => _sb;  // straight-alpha draw surface (implicit conversion)
+    private Render.SpriteScope Scope => Necroking.Game1.Instance.Scope;  // straight-alpha draw surface
     private Texture2D _pixel = null!;
     private SpriteFont? _font;
     private SpriteFont? _smallFont;
@@ -78,9 +77,8 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
     /// feeds <c>EditorBase.IsKeyboardCaptured</c> so editor hotkeys don't fire.</summary>
     public bool IsEditingText => _editingField >= 0;
 
-    public void SetContext(SpriteBatch sb, Texture2D pixel, SpriteFont? font, SpriteFont? smallFont)
+    public void SetContext(Texture2D pixel, SpriteFont? font, SpriteFont? smallFont)
     {
-        _sb = sb;
         _pixel = pixel;
         _font = font;
         _smallFont = smallFont;
@@ -1176,7 +1174,7 @@ public class ColorPickerPopup : Necroking.UI.IModalLayer
 
     private void DrawBorder(Rectangle rect, Color color, int thickness = 1)
     {
-        Necroking.Render.DrawUtils.DrawRectBorder(_sb, _pixel, rect, color, thickness);
+        Necroking.Render.DrawUtils.DrawRectBorder(Scope, _pixel, rect, color, thickness);
     }
 
     private void DrawText(string text, Vector2 pos, Color color, SpriteFont? font = null)

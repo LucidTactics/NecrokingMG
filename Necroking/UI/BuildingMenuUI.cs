@@ -55,12 +55,11 @@ public class BuildingMenuUI : SideListMenu
 
     public void Init(RuntimeWidgetRenderer renderer,
         Inventory inventory, ItemRegistry items, int screenH,
-        SpriteBatch batch, Texture2D pixel, SpellRegistry? spells = null)
+        Texture2D pixel, SpellRegistry? spells = null)
     {
         _renderer = renderer;
         _inventory = inventory;
         _items = items;
-        _batch = batch;
         _pixel = pixel;
         _spells = spells;
 
@@ -329,14 +328,14 @@ public class BuildingMenuUI : SideListMenu
     }
 
     /// <summary>Draw ghost preview of building at cursor position.</summary>
-    public void DrawGhostPreview(SpriteScope batch, Texture2D pixel, Vec2 mouseWorld,
+    public void DrawGhostPreview(SpriteScope scope, Texture2D pixel, Vec2 mouseWorld,
         Vector2 screenPos, Camera25D camera)
     {
         if (!IsPlacementActive) return;
 
         int defIdx = _buildableDefIndices[_selectedIndex];
         bool canPlace = _envSystem.CanPlaceObject(defIdx, mouseWorld.X, mouseWorld.Y);
-        EnvGhostRenderer.Draw(batch, _envSystem, defIdx, screenPos, camera.Zoom,
+        EnvGhostRenderer.Draw(scope, _envSystem, defIdx, screenPos, camera.Zoom,
             canPlace, EnvGhostRenderer.BuildValidTint, pixel);
     }
 

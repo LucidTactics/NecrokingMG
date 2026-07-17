@@ -47,13 +47,12 @@ public class CraftingMenuUI : SideListMenu
 
     public void Init(RuntimeWidgetRenderer renderer, Inventory inventory,
         ItemRegistry items, GameData gameData, int screenH,
-        SpriteBatch batch, Texture2D pixel)
+        Texture2D pixel)
     {
         _renderer = renderer;
         _inventory = inventory;
         _items = items;
         _gameData = gameData;
-        _batch = batch;
         _pixel = pixel;
 
         var def = renderer.GetWidgetDef(MenuWidgetId);

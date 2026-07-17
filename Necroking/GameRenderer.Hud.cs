@@ -167,7 +167,7 @@ partial class GameRenderer
 
     private void DrawToastBorder(Rectangle r, Color c)
     {
-        Necroking.Render.DrawUtils.DrawRectBorder(_g._spriteBatch, _g._pixel, r, c);
+        Necroking.Render.DrawUtils.DrawRectBorder(_batch, _g._pixel, r, c);
     }
 
     private void DrawTextRounded(SpriteFont f, string text, Vector2 pos, Color color)
@@ -211,7 +211,7 @@ partial class GameRenderer
             // Magenta line / lime hilt / red tip — saturated channels that
             // don't collide with the sprite's natural palette so the dots
             // stay visible against any pose.
-            _g._debugDraw.DrawLine(_g._spriteBatch, hiltSp, tipSp, new Color(255, 0, 255, 220));
+            _g._debugDraw.DrawLine(_batch, hiltSp, tipSp, new Color(255, 0, 255, 220));
             DrawDebugDot(hiltSp, new Color(60, 255, 60));
             DrawDebugDot(tipSp,  new Color(255, 40, 40));
         }
@@ -317,7 +317,7 @@ partial class GameRenderer
     /// labels at different heights so all three stay readable.</summary>
     private void DrawHordeRing(Vec2 center, float radius, Color color, string label, int screenW, int screenH)
     {
-        _g._debugDraw.DrawCircle(_g._spriteBatch, _g._renderer, _g._camera, center, radius, color, 48);
+        _g._debugDraw.DrawCircle(_batch, _g._renderer, _g._camera, center, radius, color, 48);
         if (_g._smallFont == null || radius < 0.5f) return;
         var top = _g._camera.WorldToScreen(center + new Vec2(0f, -radius), 0f, screenW, screenH);
         var sz = _g._smallFont.MeasureString(label);
@@ -350,7 +350,7 @@ partial class GameRenderer
         var facingDir = new Vec2(MathF.Cos(horde.CircleFacing), MathF.Sin(horde.CircleFacing));
         var centerSp = _g._camera.WorldToScreen(horde.CircleCenter, 0f, screenW, screenH);
         var facingEnd = _g._camera.WorldToScreen(horde.CircleCenter + facingDir * 3f, 0f, screenW, screenH);
-        _g._debugDraw.DrawArrow(_g._spriteBatch, centerSp, facingEnd, new Color(100, 255, 100, 200));
+        _g._debugDraw.DrawArrow(_batch, centerSp, facingEnd, new Color(100, 255, 100, 200));
 
         // Unit slots and connections
         foreach (var unit in horde.HordeUnits)
@@ -376,7 +376,7 @@ partial class GameRenderer
                 // Command-point marker (larger cross to distinguish from slot crosses)
                 _g.Scope.Draw(_g._pixel, new Rectangle((int)cmdSp.X - 4, (int)cmdSp.Y, 9, 1), cmdCol);
                 _g.Scope.Draw(_g._pixel, new Rectangle((int)cmdSp.X, (int)cmdSp.Y - 4, 1, 9), cmdCol);
-                _g._debugDraw.DrawArrow(_g._spriteBatch, unitSp, cmdSp, cmdCol);
+                _g._debugDraw.DrawArrow(_batch, unitSp, cmdSp, cmdCol);
             }
             // Line to slot target (formation followers only)
             else if (horde.GetTargetPosition(unit.UnitID, out Vec2 slotPos))
@@ -394,7 +394,7 @@ partial class GameRenderer
                     HordeUnitState.Returning => new Color(80, 150, 255, 150),
                     _ => new Color(150, 150, 150, 100)
                 };
-                _g._debugDraw.DrawLine(_g._spriteBatch, unitSp, slotSp, lineCol);
+                _g._debugDraw.DrawLine(_batch, unitSp, slotSp, lineCol);
             }
 
             // State label — show "Commanded" for units under orders (HordeUnitState is
@@ -435,7 +435,7 @@ partial class GameRenderer
                 if (tIdx >= 0 && _g._sim.Units[tIdx].Alive)
                 {
                     var tSp = _g._camera.WorldToScreen(_g._sim.Units[tIdx].Position, 0f, screenW, screenH);
-                    _g._debugDraw.DrawLine(_g._spriteBatch, sp, tSp, new Color(255, 100, 100, 100));
+                    _g._debugDraw.DrawLine(_batch, sp, tSp, new Color(255, 100, 100, 100));
                 }
             }
 
@@ -443,7 +443,7 @@ partial class GameRenderer
             if (speed > 0.1f)
             {
                 var velEnd = _g._camera.WorldToScreen(pos + _g._sim.Units[i].Velocity.Normalized() * 1.5f, 0f, screenW, screenH);
-                _g._debugDraw.DrawArrow(_g._spriteBatch, sp, velEnd, new Color(80, 200, 255, 150));
+                _g._debugDraw.DrawArrow(_batch, sp, velEnd, new Color(80, 200, 255, 150));
             }
 
             if (_g._smallFont == null) continue;
@@ -730,7 +730,7 @@ partial class GameRenderer
         var center = new Vector2(nr.X + nr.Width / 2f, nr.Y + nr.Height / 2f);
         float radius = MathF.Max(4f, nr.Width * 0.32f); // token scales with the node
         var fill = new Color(255, 196, 64); // vivid gold accent
-        _g._uiShaders.DrawCircle(_g._spriteBatch, center, radius, radius * 1.7f, fill, fill, new Color(255, 196, 64, 120));
+        _g._uiShaders.DrawCircle(_batch, center, radius, radius * 1.7f, fill, fill, new Color(255, 196, 64, 120));
 
         DrawAggressionTooltip(screenW, screenH, bar, nodes);
     }
@@ -930,7 +930,7 @@ partial class GameRenderer
             if (tex != null)
                 DrawPreserveAspect(tex, new Rectangle(cell.X + 1, cell.Y + 1, cell.Width - 2, cell.Height - 2), Color.White);
         }
-        Necroking.Render.DrawUtils.DrawRectBorder(_g._spriteBatch, _g._pixel, dest, new Color(100, 100, 180));
+        Necroking.Render.DrawUtils.DrawRectBorder(_batch, _g._pixel, dest, new Color(100, 100, 180));
     }
 
     internal void DrawGameOver(int screenW, int screenH)

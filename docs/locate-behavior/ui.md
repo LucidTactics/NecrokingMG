@@ -1,5 +1,18 @@
 # UI/ — overlays, panels & the selected-unit sheet
 
+**Draw-surface convention (SpriteScope lockdown, 2026-07-17):** ALL UI draw code goes
+through a `SpriteScope` (`private SpriteScope Scope => Game1.Instance.Scope;` — a
+PROPERTY, never a cached field, and never a stored/Init-passed `SpriteBatch`) and
+authors **STRAIGHT-alpha colors** — a raw `SpriteBatch.Draw` would send colors to the
+premultiplied `AlphaBlend` state unconverted (silently fine while opaque, wrong at the
+first translucent color). The raw batch is reachable only via `Scope.Batch` +
+`Scope.EncodeTint(color)` for FontStashSharp `DrawString` extensions (precedent:
+`WidgetLayoutUtils.DrawTextBlock`, `RuntimeWidgetRenderer.DrawText`) and sanctioned
+Begin/End cycles (`EditorBase.BeginClip/EndClip`). `Game1._spriteBatch` is private and
+`tools/check_spritebatch_scope.py` enforces zero raw-`SpriteBatch` mentions outside
+render plumbing — run it after touching draw code. Full premult map:
+[render.md](render.md) "Premultiplied alpha".
+
 Player-facing overlays and info panels. Most panels are built on the **runtime widget
 renderer** (`UI/RuntimeWidgetRenderer.cs`, driven by JSON widget defs) and sit in the
 **UIRouter** (below). Each panel owns its own show/hide and hit-test; there is **no
@@ -505,6 +518,10 @@ map editor; clamped to the map. The baked window is `_winX/_winY/_winW/_winH` (p
   `DrawCameraViewport` (outline of the camera's world rect). Fog is editor-aware:
   `fogOn = fog.Mode != Off && _menuState != MenuState.MapEditor` (mirrors the world
   pass skip — the old "fogs in the editor" gotcha is fixed).
+  All draws go through `Scope` (straight-alpha TINT constants — see the draw-surface
+  convention at the top of this file); the `FogUnexplored`/`FogExplored` constants are
+  **`SetData` TEXEL data** and stay premult-encoded by convention, same as loaded PNGs
+  — don't "fix" them to straight alpha.
 - **Screen→world**: public `TryScreenToWorld(mx,my,screenW,out world)` (bounds-checked)
   and `TryScreenToWorldNoBoundsCheck` — the inverse marker mapping against the baked
   window; both used by `MinimapLayer` drags.

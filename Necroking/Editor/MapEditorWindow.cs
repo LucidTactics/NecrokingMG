@@ -89,10 +89,9 @@ public class MapEditorWindow
     private RoadSystem _roadSystem => _game._roadSystem;
     private TileGrid _tileGrid => _game._sim.Grid;
     private Camera25D _camera => _game._camera;
-    private SpriteBatch _spriteBatch => _game._spriteBatch;
     // Straight-alpha draw surface — all draw calls go through this (colors get
-    // encoded per the open material); _spriteBatch stays only for Init plumbing.
-    private Render.SpriteScope Scope => _spriteBatch;
+    // encoded per the open material).
+    private Render.SpriteScope Scope => _game.Scope;
     private Texture2D _pixel => _game._pixel;
     private SpriteFont? _font => _game._font;
     private SpriteFont? _smallFont => _game._smallFont;
@@ -577,7 +576,7 @@ public class MapEditorWindow
         if (_eb != null)
         {
             _envObjectEditor = new EnvObjectEditorWindow();
-            _envObjectEditor.Init(_eb, _envSystem, _device, _spriteBatch, _pixel, _font, _smallFont, _triggerSystem);
+            _envObjectEditor.Init(_eb, _envSystem, _device, _pixel, _font, _smallFont, _triggerSystem);
             _envObjectEditor.SetItemRegistry(_itemRegistry);
 
             _wallEditor = new WallEditorWindow(_eb);
@@ -6667,7 +6666,7 @@ public class MapEditorWindow
 
     private void DrawRectBorder(int x, int y, int w, int h, Color color)
     {
-        Necroking.Render.DrawUtils.DrawRectBorder(_spriteBatch, _pixel, new Rectangle(x, y, w, h), color);
+        Necroking.Render.DrawUtils.DrawRectBorder(Scope, _pixel, new Rectangle(x, y, w, h), color);
     }
 
     private void DrawLine(Vector2 a, Vector2 b, Color color)

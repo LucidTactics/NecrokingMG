@@ -20,8 +20,7 @@ namespace Necroking.UI;
 public class RuntimeWidgetRenderer
 {
     private GraphicsDevice _device;
-    private SpriteBatch _batch;
-    private Render.SpriteScope Scope => _batch!;  // straight-alpha draw surface (implicit conversion)
+    private Render.SpriteScope Scope => Game1.Instance.Scope;  // straight-alpha draw surface
     private FontManager? _fontMgr;
     private Texture2D? _pixel;
 
@@ -66,10 +65,9 @@ public class RuntimeWidgetRenderer
 
     public bool IsLoaded => _widgetDefs.Count > 0;
 
-    public void Init(GraphicsDevice device, SpriteBatch batch, FontManager? fontMgr)
+    public void Init(GraphicsDevice device, FontManager? fontMgr)
     {
         _device = device;
-        _batch = batch;
         _fontMgr = fontMgr;
 
         _pixel = TextureUtil.GetWhitePixel(device);
@@ -469,7 +467,7 @@ public class RuntimeWidgetRenderer
                 else if (!string.IsNullOrEmpty(elemDef.NineSlice))
                 {
                     var childNs = GetNineSlice(elemDef.NineSlice, "el:" + elemDef.Id);
-                    if (childNs != null) { childNs.Draw(_batch, rect, tint, elemDef.NineSliceScale * child.NineSliceScale); drawn = true; }
+                    if (childNs != null) { childNs.Draw(Scope, rect, tint, elemDef.NineSliceScale * child.NineSliceScale); drawn = true; }
                 }
 
                 // Stroke
@@ -488,7 +486,7 @@ public class RuntimeWidgetRenderer
                 var font = _fontMgr?.GetFont(14);
                 if (font != null)
                     // FontStashSharp extension on the raw batch - encode the tint explicitly.
-                    _batch.DrawString(font, child.DefaultText,
+                    Scope.Batch.DrawString(font, child.DefaultText,
                         new Vector2((int)(rect.X + 4), (int)(rect.Y + rect.Height / 2f - 7)), Scope.EncodeTint(new Color(200, 200, 200, 180)));
             }
         }
@@ -523,7 +521,7 @@ public class RuntimeWidgetRenderer
         float boldStrength = txo?.BoldStrength ?? tr?.BoldStrength ?? 1f;
         int outlineOffX = txo?.OutlineOffsetX ?? tr?.OutlineOffsetX ?? 0;
         int outlineOffY = txo?.OutlineOffsetY ?? tr?.OutlineOffsetY ?? 0;
-        WidgetLayoutUtils.DrawTextBlock(_batch, dynFont, text, rect, fontColor, align, valign,
+        WidgetLayoutUtils.DrawTextBlock(Scope, dynFont, text, rect, fontColor, align, valign,
             lineSpacing, charSpacing, bold, outlineW, outlineColor, boldStrength, outlineOffX, outlineOffY);
     }
 
@@ -559,7 +557,7 @@ public class RuntimeWidgetRenderer
                 int bi = def.BackgroundInset;
                 var bgRect = new Rectangle(x + bi, y + bi, w - bi * 2, h - bi * 2);
                 var bgColor = def.BackgroundTint != null ? ByteColor(def.BackgroundTint) : Color.White;
-                bgNs.Draw(_batch, bgRect, bgColor, def.BackgroundScale);
+                bgNs.Draw(Scope, bgRect, bgColor, def.BackgroundScale);
             }
         }
         else if (!string.IsNullOrEmpty(def.BackgroundImagePath))
@@ -588,7 +586,7 @@ public class RuntimeWidgetRenderer
             else if (!string.IsNullOrEmpty(def.Stencil))
             {
                 var stNs = GetNineSlice(def.Stencil, "st:" + def.Id);
-                if (stNs != null) stNs.Draw(_batch, stRect, stColor);
+                if (stNs != null) stNs.Draw(Scope, stRect, stColor);
             }
         }
 
@@ -600,7 +598,7 @@ public class RuntimeWidgetRenderer
             {
                 var frColor = def.FrameTint != null ? ByteColor(def.FrameTint) : Color.White;
                 int fi = def.FrameInset;
-                frNs.Draw(_batch, new Rectangle(x + fi, y + fi, w - fi * 2 - def.FrameInsetR, h - fi * 2),
+                frNs.Draw(Scope, new Rectangle(x + fi, y + fi, w - fi * 2 - def.FrameInsetR, h - fi * 2),
                     frColor, def.FrameScale);
             }
         }
@@ -632,7 +630,7 @@ public class RuntimeWidgetRenderer
             {
                 var frColor = def.FrameTint != null ? ByteColor(def.FrameTint) : Color.White;
                 int fi = def.FrameInset;
-                frNs.Draw(_batch, new Rectangle(x + fi, y + fi, w - fi * 2 - def.FrameInsetR, h - fi * 2),
+                frNs.Draw(Scope, new Rectangle(x + fi, y + fi, w - fi * 2 - def.FrameInsetR, h - fi * 2),
                     frColor, def.FrameScale);
             }
         }
@@ -657,7 +655,7 @@ public class RuntimeWidgetRenderer
     /// </summary>
     public void DrawIcon(string iconPath, int x, int y, int w, int h)
     {
-        if (_batch == null) return;
+        if (_device == null) return;
         var tex = GetOrLoadTexture(iconPath);
         if (tex == null) return;
         Scope.Draw(tex, new Rectangle(x, y, w, h), Color.White);
@@ -669,7 +667,7 @@ public class RuntimeWidgetRenderer
     /// widget element's exact look at a dynamic size. No-op for non-image elements.</summary>
     public void DrawElementImage(string elementId, Rectangle rect, float srcInset = 0f)
     {
-        if (_batch == null) return;
+        if (_device == null) return;
         var elemDef = _elementDefs.FirstOrDefault(e => e.Id == elementId);
         if (elemDef == null) return;
         var elemTint = ByteColor(elemDef.TintColor ?? new byte[] { 255, 255, 255, 255 });
@@ -678,7 +676,7 @@ public class RuntimeWidgetRenderer
         // apply — the nine-slice's own borders handle the corners.
         if (elemDef.Type == "nineSlice" && !string.IsNullOrEmpty(elemDef.NineSlice))
         {
-            GetNineSlice(elemDef.NineSlice, "el:" + elemDef.Id)?.Draw(_batch, rect, elemTint, elemDef.NineSliceScale);
+            GetNineSlice(elemDef.NineSlice, "el:" + elemDef.Id)?.Draw(Scope, rect, elemTint, elemDef.NineSliceScale);
             return;
         }
         if (elemDef.Type != "image" || string.IsNullOrEmpty(elemDef.ImagePath)) return;
@@ -702,9 +700,9 @@ public class RuntimeWidgetRenderer
     /// borderScale shrinks the corner/edge size (use &lt;1 for a thinner frame).</summary>
     public void DrawNineSlice(string nsId, Rectangle rect, Color? tint = null, float borderScale = 1f)
     {
-        if (_batch == null) return;
+        if (_device == null) return;
         // Prefer a harmonized copy (if the def carries a harmonize block), else raw.
-        GetNineSlice(nsId, "ns")?.Draw(_batch, rect, tint ?? Color.White, borderScale);
+        GetNineSlice(nsId, "ns")?.Draw(Scope, rect, tint ?? Color.White, borderScale);
     }
 
     /// <summary>Draw a line of text directly (for code-driven content layered
@@ -712,11 +710,11 @@ public class RuntimeWidgetRenderer
     /// top-left; caller rounds to integer pixels.</summary>
     public void DrawText(string text, int x, int y, int fontSize, Color color, string? fontFamily = null)
     {
-        if (_batch == null || string.IsNullOrEmpty(text)) return;
+        if (_device == null || string.IsNullOrEmpty(text)) return;
         var font = _fontMgr?.GetFont(fontSize, string.IsNullOrEmpty(fontFamily) ? null : fontFamily);
         if (font == null) return;
         // FontStashSharp extension on the raw batch - encode the tint explicitly.
-        _batch.DrawString(font, text, new Vector2(x, y), Scope.EncodeTint(color));
+        Scope.Batch.DrawString(font, text, new Vector2(x, y), Scope.EncodeTint(color));
     }
 
     /// <summary>Measure a line of text in the given font (for layout).</summary>
