@@ -1059,7 +1059,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 // Ghost preview for building placement rides with the menu.
                 if (_buildingMenuUI.IsPlacementActive)
                 {
-                    Vec2 mw = _camera.ScreenToWorld(_input.MousePos, c.ScreenW, c.ScreenH);
+                    // Snap the ghost to the placement grid so it shows exactly where the building lands.
+                    Vec2 mw = Necroking.UI.BuildingMenuUI.SnapToGrid(_camera.ScreenToWorld(_input.MousePos, c.ScreenW, c.ScreenH));
                     var sp = _renderer.WorldToScreen(mw, 0f, _camera);
                     _buildingMenuUI.DrawGhostPreview(Scope, _pixel, mw, sp, _camera);
                 }
