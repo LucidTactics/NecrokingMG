@@ -144,7 +144,8 @@
         "+4: fatigue -85%"
       ],
       "cooldown": 1,
-      "damage": 3,
+      "armorNegating": true,
+      "damage": 1,
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
         "fps": 3,
@@ -162,7 +163,7 @@
         "duration": -1
       },
       "quantity": 40,
-      "trajectory": "Direct",
+      "trajectory": "DirectFire",
       "projectileSpeed": 50,
       "precisionBonus": -5,
       "projectileDelay": 0.02,
