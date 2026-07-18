@@ -205,3 +205,26 @@ Established by the consolidation batches (evidence: docs/consolidation-review/):
   same one the click path uses), and the valid tint (`BuildValidTint` green /
   `EditorValidTint` grey; invalid is always `InvalidTint` red). Used by
   BuildingMenuUI + map editor Objects tab.
+
+## Enum-string data fields: typed views + load validation (2026-07-17)
+
+Registry def fields that hold an enum-ish value stay `string` in JSON (the
+serialized form — enum-typed properties would get camelCased by the
+`JsonStringEnumConverter` and mass-rewrite the data files). The pattern
+(`Necroking/Data/EnumJson.cs`):
+
+- **Game code never calls `Enum.TryParse` on def fields.** Each field gets a
+  `[JsonIgnore]` parsed view backed by a `CachedEnum<TEnum>` struct field:
+  `public SpellCategory CategoryEnum => _categoryCache.Get(Category, SpellCategory.Unknown);`
+  Identity-keyed (re-parses only when the editor assigns a new string instance),
+  so hot loops pay a reference compare. Pick the fallback that preserves the
+  old unknown-string behavior (add an `Unknown` sentinel member if the old
+  behavior was "falls through every switch").
+- **Bad values are reported at load, not at use**: override
+  `RegistryBase.ValidateDef(def, report)` in the registry and use
+  `EnumJson.Check<TEnum>(...)` (enum-backed) / `EnumJson.CheckSet(...)` (fixed
+  string vocab with no enum, e.g. spell School). Errors print to console (so
+  `--roundtrip-data` shows them) + log/error.log. Never throw from ValidateDef
+  and never set LoadHadErrors — validation must not block Save.
+- When adding a NEW enum-ish field to a def: add the string property, the
+  CachedEnum view, and a line in that registry's ValidateDef — all three.
