@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Necroking.Data;
 using Necroking.GameSystems;
 using Necroking.World;
 
@@ -75,7 +76,12 @@ public sealed class GameSession : IDisposable
         sb.Append($"soul orbs: {Sim.SoulOrbs.Count}\n");
         sb.Append($"pending raises: {Sim.PendingZombieRaises.Count}\n");
         sb.Append($"squads: {Sim.Squads.Squads.Count}\n");
-        sb.Append($"projectiles: {Sim.Projectiles.Projectiles.Count}\n");
+        sb.Append($"projectiles: {Sim.Projectiles.Projectiles.Count,6} |" +
+                  $"Lobs: {Sim.Projectiles.Projectiles.Count(x => x.IsLob),6}" +
+                  $"Direct: {Sim.Projectiles.Projectiles.Count(x => !x.IsLob),6}" +
+                  $" | " +
+                  $"Explosive: {Sim.Projectiles.Projectiles.Count(x => x.Type == ProjectileType.Explosive),6}" +
+                  $"\n");
         sb.Append($"poison clouds: {Sim.PoisonClouds.Clouds.Count}\n");
         sb.Append($"lightning fx: {Sim.Lightning.Strikes.Count + Sim.Lightning.Zaps.Count + Sim.Lightning.Beams.Count + Sim.Lightning.Drains.Count}\n");
         sb.Append($"magic glyphs: {Sim.MagicGlyphs.Glyphs.Count}\n");

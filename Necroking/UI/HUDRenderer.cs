@@ -72,7 +72,7 @@ public partial class HUDRenderer
                      MenuGrimoire = 3, MenuSkills = 4, MenuCharacter = 5, MenuLog = 6;
     public const int MenuBtnCount = 7;
     public static readonly string[] MenuButtonLabels =
-        { "Inventory (I)", "Crafting (C)", "Building (B)", "Grimoire (J)", "Skills (K)", "Character (Tab)", "Log" };
+        { "Inventory (I)", "Crafting (C)", "Building (B)", "Grimoire (J)", "Skills (K)", "Character (Tab)", "Log Panel" };
     private const int MenuBtnH = 24;
     private const int MenuBtnTop = 8;
     private const int MenuBtnPadX = 8;   // text padding per side
@@ -85,7 +85,7 @@ public partial class HUDRenderer
     public const int EditorUnit = 0, EditorSpell = 1, EditorMap = 2, EditorUi = 3, EditorDebug = 4;
     public const int EditorBtnCount = 5;
     public static readonly string[] EditorButtonLabels =
-        { "Units (F9)", "Spells (F10)", "Map (F11)", "UI (F12)", "Debug" };
+        { "Units (F9)", "Spells (F10)", "Map (F11)", "UI (F12)", "Debug Settings" };
     private const int EditorBtnTop = MenuBtnTop + MenuBtnH + 4;
     private readonly Rectangle[] _editorBtnRects = new Rectangle[EditorBtnCount];
 
