@@ -101,6 +101,55 @@ All serialization is **System.Text.Json**; there is no third-party JSON library.
   (rendering change). Treat nullable nested objects as all-or-nothing subtrees.
 - Editing `data/*.json` by hand/tool → use the `edit-game-data` skill (`tools/json_data.py`).
 
+## Enum-string fields & the runtime-parse census (verified 2026-07-17)
+
+Registry def "enum" fields are **all plain strings** — no `Data/Registries/*` def class has
+an enum-typed property, so the `JsonStringEnumConverter` in `CreateJsonOptions` is latent
+for registry defs. Canonical enums live in `Necroking/Data/Enums.cs` (`SpellCategory`,
+`Trajectory`, `SpellTargetFilter`, `SpawnLocation`, `AIBehavior`, `WeaponArchetype`, …),
+plus `WeaponDamageType` in `Necroking/Data/WeaponClassifier.cs` and `AnimState` in
+`Render/AnimController.cs`. A bad string silently becomes the default at the parse site
+(`Enum.TryParse` failure or a switch `default:`), NOT a load error.
+
+String field → runtime parse site:
+
+- `SpellDef.Category` — switch-on-string in `Game/SpellCasting.cs` `TryStartSpellCast`
+  and `Game/SpellEffectSystem.cs` `Execute`; also copied as a **string** into
+  `PendingCast.Category` (`Game/SpellCasting.cs`). **`SpellCategory` in Enums.cs is
+  STALE**: live spells.json uses `Sacrifice`, `Cloud`, `Blight`, `WolfHunt`, `TestShape`,
+  none of which are in the enum — the switch cases are the real vocabulary.
+- `SpellDef.Trajectory` — `SpellEffectSystem.SpawnProjectile` `TryParse<Trajectory>` →
+  falls back to `Trajectory.Lob` on failure (the classic silent-drop).
+- `SpellDef.TargetFilter` — `TryParse<SpellTargetFilter>` per projectile spawn in
+  `SpellEffectSystem` AND **per-frame** in `GameRenderer.Units.cs` (aim-preview highlight).
+- `SpellDef.SpawnLocation` / `TrajectoryMods` / `AoeType` — string switches/comparisons
+  in `SpellEffectSystem` + `SpellCasting` (`spell.AoeType != "AOE"` etc.).
+- `UnitDef.AI` — `Simulation.ApplyDefRuntimeFields` `TryParse<AIBehavior>` at spawn
+  (**case-sensitive**, no ignoreCase arg); `UnitDef.Archetype` → `ArchetypeRegistry.FromName`.
+- `WeaponJson.Archetype` — `TryParse<WeaponArchetype>` in `UnitRegistry.BuildStats` and the
+  granted-weapon build in `Game/BuffSystem.cs` (keeps `None` on failure).
+- `WeaponJson.DamageType` — `WeaponClassifier.ParseDamageType` at BuildStats; note
+  `WeaponStats.DamageType` (`Data/CombatTypes.cs`) re-runs the `Classify(Name)` keyword
+  scan on every read when no override — combat-hot.
+- `BuffDef.IncapHoldAnim`/`IncapRecoverAnim` — `TryParse<AnimState>` in `Game/BuffSystem.cs`
+  at incap apply/expiry.
+- Open string vocabularies (switch-with-default, NOT enums): `PotionDef.OnHitEffect`
+  (`Game/PotionSystem.cs` `ApplyPotionEffect`), `JobDef.CollectKind`
+  (`Game/Jobs/WorkerSystem.cs`), `SpellDef.ToggleEffect`, `ItemDef.Category`.
+
+**`--roundtrip-data`** = `Necroking/Program.cs` (`LaunchArgs.RoundtripData`,
+`RoundtripDataFiles()`): headless `GameData.Load()` + `Save()` with a per-file changed
+report to Console — load-time validation errors surface here for free.
+
+Where load-time validation goes: a virtual per-entry hook in `RegistryBase.Load` (after
+`DeserializeItem`), overridden per registry — report via `DebugLog.Log("error", …)` +
+Console, do NOT throw (a throw in the per-entry catch drops the whole def and sets
+`LoadHadErrors`, which makes `Save` refuse to write). Typed-migration pitfall: JSON stores
+PascalCase values; making a property enum-typed means `JsonStringEnumConverter(CamelCase)`
+rewrites values to camelCase on the next save (mass diff). Safer pattern: keep the string
+property as the serialized form + a `[JsonIgnore]` parsed cache populated at load
+(precedent: `UnitDef.SpriteData`; `BuildStats` parse-at-load).
+
 ## Related
 
 - [editor.md](editor.md) — the in-game editors whose Save buttons call `GameData.Save()`.
