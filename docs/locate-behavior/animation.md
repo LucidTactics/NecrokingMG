@@ -184,6 +184,38 @@ above. Their lifecycle:
   (`[EditorVisible("Category","Beam"/"Drain")]`); add a `channelStopsMovement`-style field
   there and default it on for Beam/Drain.
 
+## Frame timing — where per-frame durations (ms) come from
+
+Playback is ms-driven when metadata exists. The chain, lowest to highest precedence:
+
+1. **Authored metadata** — `time_ms` arrays in the sprite `animationmeta` files, loaded by
+   `AnimMetaLoader.Load` (`Render/AnimationMeta.cs`) into a `"SpriteName.Category"` →
+   `AnimationMeta` dict (`Game1._animMeta`); per-yaw durations live in
+   `AnimYawMeta.FrameDurationsMs`. These `AnimationMeta` objects are **SHARED across every
+   unit using that sprite** — never mutate them per-unit.
+2. **Per-unit-def overrides** — `UnitDef.AnimTimings : Dictionary<string,
+   UnitAnimTimingOverride>` (`Data/Registries/UnitRegistry.cs`; `FrameDurationsMs` +
+   `EffectTimeMs`), authored in the unit editor (`Editor/UnitEditorWindow.cs` per-frame
+   "Frame N ms" fields, `BuildRuntimeTimingOverrides`). Wired to the controller in
+   `Game1.Animation.cs` `BuildUnitAnimData`: copies each into a per-controller
+   `AnimTimingOverride` (`new List<int>(...)` — controller-owned copies) →
+   `ctrl.SetAnimTimings`.
+3. **Lookup at play time** — `AnimController` resolves via the private trio
+   `GetEffectiveFrameDurations(spriteAngle)` / `GetEffectiveTotalDurationMs()` /
+   `GetEffectiveEffectTimeMs()` (override wins, else meta yaw data). `Update` accumulates
+   `_animTime` in **ms** and walks the cumulative durations to pick the frame; loop wrap,
+   effect_time firing, foot-phase carryover, and `LocomotionScaling` playback scaling all
+   read the same totals — so any timing hack must keep the per-frame list and the total
+   consistent (frame list summing ≠ total breaks wrap/effect-frame math).
+
+**Where per-unit timing jitter goes**: each unit has its OWN `AnimController`
+(`Game1._unitAnims`), and `SetAnimTimings` lists are controller-owned — so `BuildUnitAnimData`
+is the seam for per-unit (fixed-per-spawn) jittered copies; per-cycle re-roll needs a small
+`AnimController` feature (jitter amplitude field + cached jittered list regenerated on loop
+wrap, applied inside the `GetEffective*` trio so total/effect math stays consistent).
+No fallback-mode gotcha: when NO ms data exists, playback falls back to tick counting
+(`_animTime` counts ticks, `AnimationData.TotalTicks`) and ms overrides do nothing.
+
 ## Interruption / lock / cooldown mechanisms that exist
 
 - Priority lanes + same-priority "must have started" replacement gate (AnimResolver).
