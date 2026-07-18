@@ -164,11 +164,22 @@ public class BuildingMenuUI : SideListMenu
         }
     }
 
+    /// <summary>Grid size buildings snap to when placed via the build menu.</summary>
+    public const float GridSnap = 2f;
+
+    /// <summary>Snap a world position to the placement grid. One owner so the ghost and the commit agree.</summary>
+    public static Vec2 SnapToGrid(Vec2 w)
+        => new Vec2(MathF.Round(w.X / GridSnap) * GridSnap, MathF.Round(w.Y / GridSnap) * GridSnap);
+
     /// <summary>Try to place the selected building at world position. Returns true if placed.</summary>
     public bool TryPlace(float worldX, float worldY)
     {
         if (!_placementActive || _selectedIndex < 0 || _selectedIndex >= _buildableDefIndices.Count)
             return false;
+
+        // Snap to grid so continuous-cursor placement isn't tedious. Must match the ghost preview.
+        worldX = MathF.Round(worldX / GridSnap) * GridSnap;
+        worldY = MathF.Round(worldY / GridSnap) * GridSnap;
 
         int defIdx = _buildableDefIndices[_selectedIndex];
         var envDef = _envSystem.Defs[defIdx];

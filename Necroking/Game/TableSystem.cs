@@ -7,7 +7,7 @@ using Necroking.World;
 namespace Necroking.Game;
 
 /// <summary>
-/// Static helpers for craft-table interaction (Table2 etc.). A "table" is any
+/// Static helpers for craft-table interaction (necro_bench etc.). A "table" is any
 /// EnvironmentObjectDef with CorpseSlots > 0. This class owns the geometry
 /// queries (cursor-over-table + range-from-unit) and the slot-load logic;
 /// crafting tick lives in TableCraftingSystem (Phase E).
