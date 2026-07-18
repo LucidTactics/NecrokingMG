@@ -36,6 +36,12 @@ public class FlipbookRef
 
     [EditorField(Label = "Duration", Order = 7, Step = 0.01f, Decimals = 2, Tooltip = "Seconds the effect lasts. -1 = one full playthrough.")]
     [JsonPropertyName("duration")] public float Duration { get; set; } = -1.0f;
+
+    // Parsed views of the string fields above (identity-cached, never serialized).
+    private CachedEnum<EffectBlendMode> _blendModeCache;
+    private CachedEnum<EffectAlignment> _alignmentCache;
+    [JsonIgnore] public EffectBlendMode BlendModeEnum => _blendModeCache.Get(BlendMode, EffectBlendMode.Alpha);
+    [JsonIgnore] public EffectAlignment AlignmentEnum => _alignmentCache.Get(Alignment, EffectAlignment.Ground);
 }
 
 public class SpellDef : INamedDef
@@ -986,6 +992,41 @@ public class SpellDef : INamedDef
     [JsonPropertyName("toggleDuration")] public float ToggleDuration { get; set; }
 
     // ═══════════════════════════════════════
+    //  Parsed enum views (never serialized)
+    // ═══════════════════════════════════════
+    // The string properties above ARE the storage format (converting them to enum
+    // types would let JsonStringEnumConverter's camelCase policy rewrite every
+    // spells.json value on the next save). Game code reads these parsed views
+    // instead of calling Enum.TryParse per use: each is an identity-keyed cache
+    // (re-parses only when the editor assigns a new string), so hot loops pay a
+    // reference compare, and a typo'd value — reported at load by
+    // SpellRegistry.ValidateDef — falls back to the same default the old inline
+    // parses used. Type names are qualified because the string properties shadow
+    // the enum type names inside this class.
+    private CachedEnum<SpellCategory> _categoryCache;
+    private CachedEnum<AOEType> _aoeTypeCache;
+    private CachedEnum<Necroking.Data.Trajectory> _trajectoryCache;
+    private CachedEnum<TrajectoryMod> _trajectoryModCache;
+    private CachedEnum<SpellTargetFilter> _targetFilterCache;
+    private CachedEnum<Necroking.Data.SummonTargetReq> _summonTargetReqCache;
+    private CachedEnum<Necroking.Data.SummonMode> _summonModeCache;
+    private CachedEnum<Necroking.Data.SpawnLocation> _spawnLocationCache;
+    private CachedEnum<StrikeVisual> _strikeVisualCache;
+
+    /// <summary>Parsed <see cref="Category"/>. Unrecognized strings map to
+    /// <see cref="SpellCategory.Unknown"/>, which lands in the same
+    /// <c>default:</c> switch branches an unknown string always did.</summary>
+    [JsonIgnore] public SpellCategory CategoryEnum => _categoryCache.Get(Category, SpellCategory.Unknown);
+    [JsonIgnore] public AOEType AoeTypeEnum => _aoeTypeCache.Get(AoeType, AOEType.Single);
+    [JsonIgnore] public Necroking.Data.Trajectory TrajectoryEnum => _trajectoryCache.Get(Trajectory, Necroking.Data.Trajectory.Lob);
+    [JsonIgnore] public TrajectoryMod TrajectoryModEnum => _trajectoryModCache.Get(TrajectoryMods, TrajectoryMod.None);
+    [JsonIgnore] public SpellTargetFilter TargetFilterEnum => _targetFilterCache.Get(TargetFilter, SpellTargetFilter.AnyEnemy);
+    [JsonIgnore] public Necroking.Data.SummonTargetReq SummonTargetReqEnum => _summonTargetReqCache.Get(SummonTargetReq, Necroking.Data.SummonTargetReq.None);
+    [JsonIgnore] public Necroking.Data.SummonMode SummonModeEnum => _summonModeCache.Get(SummonMode, Necroking.Data.SummonMode.Spawn);
+    [JsonIgnore] public Necroking.Data.SpawnLocation SpawnLocationEnum => _spawnLocationCache.Get(SpawnLocation, Necroking.Data.SpawnLocation.AdjacentToCaster);
+    [JsonIgnore] public StrikeVisual StrikeVisualEnum => _strikeVisualCache.Get(StrikeVisualType, StrikeVisual.Lightning);
+
+    // ═══════════════════════════════════════
     //  Style builders — single source of truth
     //  Used by SpellEffectSystem (game) and SpellPreview (editor)
     // ═══════════════════════════════════════
@@ -1079,4 +1120,59 @@ public class SpellDef : INamedDef
 public class SpellRegistry : RegistryBase<SpellDef>
 {
     protected override string RootKey => "spells";
+
+    // Fixed string vocabularies with no backing enum — the allowed values come
+    // from the [EditorCombo] lists and the switch/compare sites that consume the
+    // field. Extend the array when a new value is taught to the consuming code.
+    private static readonly string[] Schools = { "Conjuration", "Alteration", "Evocation", "Construction", "Skill" };
+    private static readonly string[] TileTemplates = { "summon", "evocation", "buff", "debuff" };
+    private static readonly string[] CastAnims = { "Spell1", "ImbueGround", "ImbueTable", "Raise" };
+    private static readonly string[] TargetingModes = { "Instant", "Circle" };
+    private static readonly string[] ResistDifficulties = { "Normal", "Easy", "Hard" };
+    private static readonly string[] BlightModes = { "Add", "Purify" };
+    private static readonly string[] ToggleEffects = { "ghost_mode", "spirit_walk" };
+
+    protected override void ValidateDef(SpellDef def, Action<string> report)
+    {
+        EnumJson.Check<SpellCategory>(def.Category, "category", report, allowEmpty: false);
+        EnumJson.Check<AOEType>(def.AoeType, "aoeType", report);
+        EnumJson.Check<Trajectory>(def.Trajectory, "trajectory", report);
+        EnumJson.Check<TrajectoryMod>(def.TrajectoryMods, "trajectoryMods", report);
+        EnumJson.Check<SpellTargetFilter>(def.TargetFilter, "targetFilter", report);
+        EnumJson.Check<SummonTargetReq>(def.SummonTargetReq, "summonTargetReq", report);
+        EnumJson.Check<SummonMode>(def.SummonMode, "summonMode", report);
+        EnumJson.Check<SpawnLocation>(def.SpawnLocation, "spawnLocation", report);
+        EnumJson.Check<StrikeVisual>(def.StrikeVisualType, "strikeVisual", report);
+        EnumJson.CheckSet(def.School, "school", Schools, report);
+        EnumJson.CheckSet(def.TileTemplate, "tileTemplate", TileTemplates, report);
+        EnumJson.CheckSet(def.CastAnim, "castAnim", CastAnims, report);
+        EnumJson.CheckSet(def.TargetingMode, "targetingMode", TargetingModes, report);
+        EnumJson.CheckSet(def.ResistDifficulty, "resistDifficulty", ResistDifficulties, report);
+        EnumJson.CheckSet(def.BlightMode, "blightMode", BlightModes, report);
+        EnumJson.CheckSet(def.ToggleEffect, "toggleEffect", ToggleEffects, report);
+        CheckPath(def.PrimaryPath, "primaryPath", report);
+        CheckPath(def.SecondaryPath, "secondaryPath", report);
+        CheckFlipbook(def.ProjectileFlipbook, "projectileFlipbook", report);
+        CheckFlipbook(def.HitEffectFlipbook, "hitEffectFlipbook", report);
+        CheckFlipbook(def.CastFlipbook, "castFlipbook", report);
+        CheckFlipbook(def.SummonFlipbook, "summonFlipbook", report);
+        CheckFlipbook(def.DrainTargetEffect, "drainTargetEffect", report);
+    }
+
+    /// <summary>A typo'd magic-path id maps to MagicPath.None = "no requirement",
+    /// silently removing the spell's cast gate — the worst flavor of the silent
+    /// fallback, so it gets its own check.</summary>
+    private static void CheckPath(string? value, string field, Action<string> report)
+    {
+        if (string.IsNullOrEmpty(value)) return;
+        if (MagicPathHelpers.FromJsonId(value) == MagicPath.None)
+            report($"{field}=\"{value}\" is not a known magic path — the requirement would silently vanish");
+    }
+
+    private static void CheckFlipbook(FlipbookRef? fb, string field, Action<string> report)
+    {
+        if (fb == null) return;
+        EnumJson.Check<EffectBlendMode>(fb.BlendMode, field + ".blendMode", report);
+        EnumJson.Check<EffectAlignment>(fb.Alignment, field + ".alignment", report);
+    }
 }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
@@ -28,6 +29,11 @@ public class WeaponDef : INamedDef
     /// <summary>Attack archetype — "None" (default melee) or "Pounce". Weapons have
     /// exactly one archetype (unlike bonuses, which can stack).</summary>
     [JsonPropertyName("archetype")] public string Archetype { get; set; } = "None";
+
+    // Parsed view (identity-cached, never serialized; bad values reported at
+    // load by WeaponRegistry.ValidateDef).
+    private CachedEnum<WeaponArchetype> _archetypeCache;
+    [JsonIgnore] public WeaponArchetype ArchetypeEnum => _archetypeCache.Get(Archetype, WeaponArchetype.None);
 
     /// <summary>Cooldown in rounds (a round = GameSettings.Combat.RoundDuration seconds).
     /// 1 round default. Cycle time = CooldownRounds × RoundDuration.</summary>
@@ -71,4 +77,12 @@ public class WeaponDef : INamedDef
 public class WeaponRegistry : RegistryBase<WeaponDef>
 {
     protected override string RootKey => "weapons";
+
+    protected override void ValidateDef(WeaponDef def, Action<string> report)
+    {
+        EnumJson.Check<WeaponArchetype>(def.Archetype, "archetype", report);
+        EnumJson.Check<WeaponDamageType>(def.DamageType, "damageType", report);
+        foreach (var b in def.Bonuses)
+            EnumJson.Check<WeaponBonus>(b, "bonuses", report, allowEmpty: false);
+    }
 }

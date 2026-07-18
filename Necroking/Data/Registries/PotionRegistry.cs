@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using Necroking.Editor;
@@ -19,7 +20,7 @@ public class PotionDef : INamedDef
 
     // Targeting
     [EditorField(Label = "Target Type", Order = 0)]
-    [EditorCombo("Friendly", "Enemy", "Any", "FriendlyOrCorpse")]
+    [EditorCombo("Friendly", "Enemy", "Any", "FriendlyOrCorpse", "Self")]
     [JsonPropertyName("targetType")] public string TargetType { get; set; } = "Enemy";
 
     [EditorField(Label = "Throw Range", Order = 1, Step = 0.5f)]
@@ -59,4 +60,16 @@ public class PotionDef : INamedDef
 public class PotionRegistry : RegistryBase<PotionDef>
 {
     protected override string RootKey => "potions";
+
+    // Vocabularies from the [EditorCombo]s above; consumed by PotionSystem
+    // (OnHitEffect switch — unknown falls to the generic-buff branch) and the
+    // throw-targeting code (TargetType).
+    private static readonly string[] TargetTypes = { "Friendly", "Enemy", "Any", "FriendlyOrCorpse", "Self" };
+    private static readonly string[] OnHitEffects = { "Frenzy", "Paralysis", "Zombie", "Poison", "SpiritWalk" };
+
+    protected override void ValidateDef(PotionDef def, Action<string> report)
+    {
+        EnumJson.CheckSet(def.TargetType, "targetType", TargetTypes, report);
+        EnumJson.CheckSet(def.OnHitEffect, "onHitEffect", OnHitEffects, report);
+    }
 }

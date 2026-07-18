@@ -69,9 +69,21 @@ public enum Affliction : byte
 
 // --- Spell ---
 
-public enum SpellCategory : byte { Projectile, Buff, Debuff, Summon, Strike, Beam, Drain, Command, Toggle }
+// Every category that appears in data/spells.json. Unknown is the parse-failure
+// sentinel for SpellDef.CategoryEnum — it lands in the same `default:` switch
+// branches an unrecognized string always did, and the bad string itself is
+// reported at load by SpellRegistry.ValidateDef.
+public enum SpellCategory : byte
+{
+    Projectile, Buff, Debuff, Summon, Strike, Beam, Drain, Command, Toggle,
+    Cloud, Sacrifice, Blight, WolfHunt, TestShape,
+    Unknown,
+}
 public enum AOEType : byte { Single, AOE, Chain }
 public enum Trajectory : byte { Lob, DirectFire, Homing, Swirly, HomingSwirly, HighLob }
+/// <summary>Extra corkscrew wobble layered on a projectile's flight path
+/// (SpellDef.TrajectoryMods; "" = None).</summary>
+public enum TrajectoryMod : byte { None, Swirly, Swirly3d }
 public enum SummonTargetReq : byte { None, Corpse, UnitType, CorpseAOE }
 public enum SummonMode : byte { Spawn, Transform }
 public enum StrikeVisual : byte { Lightning, GodRay }
@@ -82,7 +94,10 @@ public enum EffectAlignment : byte { Ground, Upright }
 
 // --- Buff ---
 
-public enum BuffEffectType : byte { Set, Add, Multiply }
+// Unknown = parse-failure sentinel for BuffEffect.TypeEnum: an unrecognized type
+// string falls through every switch (the effect is inert), exactly as the raw
+// string compares behaved — and the bad string is reported at load.
+public enum BuffEffectType : byte { Set, Add, Multiply, Unknown }
 public enum BuffStat : byte { Strength, Attack, Defense, MagicResist, Toughness, CombatSpeed, MaxHP, Encumbrance, Count }
 
 // --- Weapon/Armor ---

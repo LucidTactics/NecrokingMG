@@ -157,6 +157,17 @@ public class UnitDef : INamedDef
     [JsonPropertyName("type")] public string UnitType { get; set; } = "Dynamic";
     [JsonPropertyName("faction")] public string Faction { get; set; } = "Undead";
     [JsonPropertyName("ai")] public string AI { get; set; } = "AttackClosest";
+
+    // Parsed views of the strings above (identity-cached, never serialized; bad
+    // values are reported at load by UnitRegistry.ValidateDef). Fallbacks mirror
+    // the historical behavior: an empty/unknown faction is Undead (all
+    // faction-less defs are zombies/skeletons/player forms), an empty/unknown ai
+    // is AttackClosest (the UnitModel field default). Types are qualified because
+    // the string properties shadow the enum names inside this class.
+    private CachedEnum<Necroking.Data.Faction> _factionCache;
+    private CachedEnum<AIBehavior> _aiCache;
+    [JsonIgnore] public Necroking.Data.Faction FactionEnum => _factionCache.Get(Faction, Necroking.Data.Faction.Undead);
+    [JsonIgnore] public AIBehavior AIEnum => _aiCache.Get(AI, AIBehavior.AttackClosest);
     [JsonPropertyName("orcaPriority")] public int OrcaPriority { get; set; }
     [JsonPropertyName("size")] public int Size { get; set; } = 2;
     [JsonPropertyName("radius")] public float Radius { get; set; } = 0.495f;
@@ -530,6 +541,19 @@ public class UnitRegistry : RegistryBase<UnitDef>
 {
     protected override string RootKey => "units";
 
+    protected override void ValidateDef(UnitDef def, Action<string> report)
+    {
+        // def.UnitType ("type") is deliberately unchecked: it's a legacy label no
+        // game code reads (live data holds free-form names like "Hunter").
+        EnumJson.Check<Faction>(def.Faction, "faction", report);
+        EnumJson.Check<AIBehavior>(def.AI, "ai", report);
+        // Archetype names are an open registry, not an enum — FromName is the
+        // single source of truth for the vocabulary.
+        if (!string.IsNullOrEmpty(def.Archetype)
+            && Necroking.AI.ArchetypeRegistry.FromName(def.Archetype) == Necroking.AI.ArchetypeRegistry.None)
+            report($"archetype=\"{def.Archetype}\" is not a registered archetype name");
+    }
+
     public int CountUnitsWithWeapon(string weaponID)
     {
         int count = 0;
@@ -642,8 +666,7 @@ public class UnitRegistry : RegistryBase<UnitDef>
                 TrampleKnockbackForce = w.TrampleKnockbackForce,
                 TrampleImpactForce = w.TrampleImpactForce,
             };
-            if (System.Enum.TryParse<WeaponArchetype>(w.Archetype, true, out var arch))
-                ws.Archetype = arch;
+            ws.Archetype = w.ArchetypeEnum;
 
             if (w.IsRanged)
             {

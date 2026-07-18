@@ -1468,8 +1468,7 @@ partial class GameRenderer
         // Light up what the cast would actually hit: same TargetFilter → faction
         // mask translation the strike resolution uses (LightningSystem.Update),
         // so the preview never lies about who gets hit.
-        Enum.TryParse<SpellTargetFilter>(spell.TargetFilter, out var tf);
-        FactionMask mask = tf switch
+        FactionMask mask = spell.TargetFilterEnum switch
         {
             SpellTargetFilter.AnyEnemy   => FactionMaskExt.AllExcept(Faction.Undead),
             SpellTargetFilter.LivingOnly => FactionMaskExt.AllExcept(Faction.Undead),

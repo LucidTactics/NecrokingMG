@@ -3806,7 +3806,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
             var targetPos = _sim.Units[evt.TargetUnitIdx].Position;
 
-            if (spell.Category == "Strike")
+            if (spell.CategoryEnum == SpellCategory.Strike)
             {
                 // Shared strike executor — traps go through the same pipeline as
                 // player/AI casts (MR penetration gate, damage number, god-ray
@@ -3820,7 +3820,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                     target: targetPos, sourceFaction: trapFaction,
                     damageNumbers: _damageNumbers);
             }
-            else if (spell.Category == "Cloud")
+            else if (spell.CategoryEnum == SpellCategory.Cloud)
             {
                 // Spawn cloud at the trap position (not the target — the trap itself is
                 // where the burst originates). Same code path as a caster casting the

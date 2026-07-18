@@ -122,9 +122,9 @@ public static class SpellEffectSystem
         // channeled cast reflects buffs present when the effect actually fires.
         int mastery = MasteryLevelsFor(spell, gameData, units, casterIdx);
 
-        switch (spell.Category)
+        switch (spell.CategoryEnum)
         {
-            case "Projectile":
+            case SpellCategory.Projectile:
                 SpawnProjectile(spell, sim.Projectiles, effectOrigin,
                     VolleyAimPoint(spell, target, game._rng), casterUid,
                     effectOriginH, casterFaction, mastery);
@@ -143,8 +143,8 @@ public static class SpellEffectSystem
                 }
                 break;
 
-            case "Buff":
-            case "Debuff":
+            case SpellCategory.Buff:
+            case SpellCategory.Debuff:
             {
                 // Apply to the unit the cast targeted — TryStartSpellCast already found
                 // the nearest valid ally (Buff) / enemy (Debuff) near the cursor and
@@ -168,16 +168,16 @@ public static class SpellEffectSystem
                 break;
             }
 
-            case "Strike":
+            case SpellCategory.Strike:
                 ExecuteStrike(spell, sim, gameData, casterIdx, target, effectOrigin,
                     game._damageNumbers, mastery);
                 break;
 
-            case "Summon":
+            case SpellCategory.Summon:
                 ExecuteSummonSpell(spell, game, pending, caster.Position, casterIdx);
                 break;
 
-            case "Beam":
+            case SpellCategory.Beam:
             {
                 // Honor TryStartSpellCast's targeting (written into pending at cast
                 // start); a target that died during the wind-up — or an AI cast with
@@ -196,7 +196,7 @@ public static class SpellEffectSystem
                 break;
             }
 
-            case "Drain":
+            case SpellCategory.Drain:
             {
                 // Honor TryStartSpellCast's targeting: enemy unit, corpse fallback,
                 // or the reversed-mode ally. AI casts arrive with an empty pending —
@@ -243,29 +243,29 @@ public static class SpellEffectSystem
             // "Command" is no longer a spell category — the order_attack ability is a
             // built-in (Game1.TryCommandHorde) so the category can host more uses.
 
-            case "Sacrifice":
+            case SpellCategory.Sacrifice:
                 ExecuteSacrifice(spell, sim, casterIdx, target, game._damageNumbers);
                 break;
 
-            case "Cloud":
+            case SpellCategory.Cloud:
                 ExecuteCloud(spell, sim, target, casterFaction, casterIdx, mastery);
                 break;
 
-            case "TestShape":
+            case SpellCategory.TestShape:
                 // ScatterGlow review primitives (glow line / glow circle) — bright
                 // solid shapes + data-driven scatter halos, fully owned by
                 // Render/ScatterGlowSystem.cs. Dev/test spells only.
                 game._scatterGlow.SpawnTestShape(spell, effectOrigin, target);
                 break;
 
-            case "WolfHunt":
+            case SpellCategory.WolfHunt:
                 // Point the player's zombie wolves at the herd near the cast point: they flank to the
                 // far side and drive it toward the necromancer. The behavior lives in AI.WolfPackHuntAI;
                 // this just arms the sim-level command for the spell's duration.
                 sim.CommandWolfHunt(target, spell.WolfHuntDuration > 0f ? spell.WolfHuntDuration : 18f);
                 break;
 
-            case "Blight":
+            case SpellCategory.Blight:
             {
                 // Mutate the death-fog ("blight") field — Add dumps blight at the
                 // target cell, Purify cleanses a 5×5 kernel.
@@ -274,7 +274,7 @@ public static class SpellEffectSystem
                 // present as a god-ray (StrikeVisual=GodRay) or a thrown bomb
                 // (ProjectileFlipbook set), driven entirely by the def. Damage stays 0
                 // — the fog change is the real effect.
-                bool hasBomb = spell.StrikeVisualType != "GodRay"
+                bool hasBomb = spell.StrikeVisualEnum != StrikeVisual.GodRay
                     && spell.ProjectileFlipbook != null
                     && !string.IsNullOrEmpty(spell.ProjectileFlipbook.FlipbookID);
 
@@ -284,7 +284,7 @@ public static class SpellEffectSystem
                 if (!hasBomb)
                     ApplyBlight(spell, target, game._deathFog);
 
-                if (spell.StrikeVisualType == "GodRay")
+                if (spell.StrikeVisualEnum == StrikeVisual.GodRay)
                 {
                     ExecuteStrike(spell, sim, gameData, casterIdx, target, effectOrigin,
                         game._damageNumbers, mastery);
@@ -310,7 +310,7 @@ public static class SpellEffectSystem
                 break;
             }
 
-            case "Toggle":
+            case SpellCategory.Toggle:
                 if (spell.ToggleEffect == "ghost_mode")
                    caster.GhostMode = !caster.GhostMode;
                 else if (spell.ToggleEffect == "spirit_walk")
@@ -383,7 +383,7 @@ public static class SpellEffectSystem
                 : units[casterIdx].FacingAngle;
             return;
         }
-        float duration = spell.Category == "Drain" && spell.DrainMaxDuration > 0f
+        float duration = spell.CategoryEnum == SpellCategory.Drain && spell.DrainMaxDuration > 0f
             ? spell.DrainMaxDuration
             : (spell.CastTime > 0f ? spell.CastTime : 4f);
         units[casterIdx].ChannelTimer = duration;
@@ -417,7 +417,7 @@ public static class SpellEffectSystem
         bool raiseGod = raiseBook != null
             && BuffSystem.HasBuff(sim.Units, necroIdx, "buff_god_mode");
 
-        if (spell.SummonTargetReq == "CorpseAOE") {
+        if (spell.SummonTargetReqEnum == SummonTargetReq.CorpseAOE) {
             // AOE corpse raise: iterate corpses in range, resolve zombie type per corpse
             int raised = 0;
             // Rises are QUEUED (deferred spawn), so HordeCapTracker.Available doesn't
@@ -474,7 +474,7 @@ public static class SpellEffectSystem
             string puppetSourceDef = "";  // corpse-puppet raise: the ORIGINAL corpse's def, so the
                                           // puppet piles as that body rather than the zombie it wears.
 
-            if (spell.SummonTargetReq == "Corpse" && pending.TargetCorpseID >= 0) {
+            if (spell.SummonTargetReqEnum == SummonTargetReq.Corpse && pending.TargetCorpseID >= 0) {
                 // Re-resolve the corpse by STABLE id, not the captured list index: a channeled
                 // reanimate executes after a multi-second channel, during which _corpses can be
                 // compacted (dissolve cleanup / carry-to-table) — the captured index would then
@@ -515,7 +515,7 @@ public static class SpellEffectSystem
                 };
             }
 
-            if (spell.SummonMode == "Transform" && pending.TargetUnitID != GameConstants.InvalidUnit) {
+            if (spell.SummonModeEnum == SummonMode.Transform && pending.TargetUnitID != GameConstants.InvalidUnit) {
                 // Transform mode: replace existing unit with the summon unit
                 int targetIdx = sim.ResolveUnitID(pending.TargetUnitID);
                 if (targetIdx >= 0 && !string.IsNullOrEmpty(summonUnitID)) {
@@ -533,22 +533,13 @@ public static class SpellEffectSystem
                 if (string.IsNullOrEmpty(summonUnitID)) return;
 
                 Vec2 spawnPos;
-                switch (spell.SpawnLocation) {
-                    case "NearestTargetToMouse":
-                        spawnPos = pending.TargetPos;
-                        break;
-                    case "NearestTargetToCaster":
-                        spawnPos = pending.TargetPos;
-                        break;
-                    case "AdjacentToCaster": {
+                switch (spell.SpawnLocationEnum) {
+                    case SpawnLocation.AdjacentToCaster: {
                         float angle = game._rng.Next(360) * MathF.PI / 180f;
                         spawnPos = necroPos + new Vec2(MathF.Cos(angle) * 2f, MathF.Sin(angle) * 2f);
                         break;
                     }
-                    case "AtTargetLocation":
-                        spawnPos = pending.TargetPos;
-                        break;
-                    default:
+                    default: // NearestTargetToMouse / NearestTargetToCaster / AtTargetLocation
                         spawnPos = pending.TargetPos;
                         break;
                 }
@@ -646,7 +637,7 @@ public static class SpellEffectSystem
         // unlike a physically-fired arrow that can be dodged.
         // Lob flies the min-energy ballistic arc, HighLob the mortar-style high arc;
         // every other trajectory is a flat direct-fire launch.
-        var traj = Enum.TryParse<Trajectory>(spell.Trajectory, true, out var t) ? t : Trajectory.Lob;
+        var traj = spell.TrajectoryEnum;
         bool lob = traj == Trajectory.Lob || traj == Trajectory.HighLob;
         float speed = spell.ProjectileSpeed > 0 ? spell.ProjectileSpeed : ProjectileManager.MagicSpeed;
         var proj = projectiles.Spawn(origin, target, casterFaction, ownerUid,
@@ -664,16 +655,16 @@ public static class SpellEffectSystem
         // Blight bombs must burst exactly where the player clicked, not wherever
         // the ballistic arc happens to land. Forward the aimed point and flag the
         // projectile so it detonates on overshoot. Other spells opt in via the def.
-        if (spell.Category == "Blight" || spell.DetonateAtTarget) {
+        if (spell.CategoryEnum == SpellCategory.Blight || spell.DetonateAtTarget) {
             proj.TargetPos = target;
             proj.DetonateAtTarget = true;
         }
 
-        switch (spell.TrajectoryMods) {
-           case "Swirly":
+        switch (spell.TrajectoryModEnum) {
+           case TrajectoryMod.Swirly:
               ApplySwirl(proj);
               break;
-           case "Swirly3d":
+           case TrajectoryMod.Swirly3d:
               ApplySwirl3d(proj);
               break;
         }
@@ -704,8 +695,8 @@ public static class SpellEffectSystem
             proj.HitEffectFlipbookID = spell.HitEffectFlipbook.FlipbookID;
             proj.HitEffectScale = spell.HitEffectFlipbook.Scale;
             proj.HitEffectColor = spell.HitEffectFlipbook.Color;
-            proj.HitEffectBlendMode = spell.HitEffectFlipbook.BlendMode == "Additive" ? 1 : 0;
-            proj.HitEffectAlignment = spell.HitEffectFlipbook.Alignment == "Upright" ? 1 : 0;
+            proj.HitEffectBlendMode = spell.HitEffectFlipbook.BlendModeEnum == EffectBlendMode.Additive ? 1 : 0;
+            proj.HitEffectAlignment = spell.HitEffectFlipbook.AlignmentEnum == EffectAlignment.Upright ? 1 : 0;
         }
     }
 
@@ -749,9 +740,9 @@ public static class SpellEffectSystem
     {
         var units = sim.UnitsMut;
         var style = spell.BuildStrikeStyle();
-        var sVis = spell.StrikeVisualType == "GodRay" ? StrikeVisual.GodRay : StrikeVisual.Lightning;
+        var sVis = spell.StrikeVisualEnum;
         var sGrp = spell.BuildGodRayParams();
-        Enum.TryParse<SpellTargetFilter>(spell.TargetFilter, out var sTF);
+        var sTF = spell.TargetFilterEnum;
         int damage = spell.ScaledDamage(masteryLevels);
 
         if (spell.StrikeTargetUnit)

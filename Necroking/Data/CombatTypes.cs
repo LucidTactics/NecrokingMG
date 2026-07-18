@@ -82,17 +82,49 @@ public class WeaponStats
     /// slashing post-prot bonus + limb-chopping). An explicit <see cref="DamageTypeOverride"/>
     /// (from data/weapons.json "damageType") WINS; otherwise it is inferred from
     /// <see cref="Name"/> via <see cref="WeaponClassifier"/>. The override exists so a
-    /// cosmetic rename can never silently change a weapon's combat mechanics.</summary>
-    public WeaponDamageType DamageType => DamageTypeOverride ?? WeaponClassifier.Classify(Name);
+    /// cosmetic rename can never silently change a weapon's combat mechanics.
+    /// The inference is cached per Name instance — this is read per hit in combat
+    /// resolution, and the keyword scan was rerunning on every read.</summary>
+    public WeaponDamageType DamageType
+    {
+        get
+        {
+            if (DamageTypeOverride.HasValue) return DamageTypeOverride.Value;
+            if (!ReferenceEquals(_classifiedName, Name))
+            {
+                _classifiedDamageType = WeaponClassifier.Classify(Name);
+                _classifiedTwoHanded = WeaponClassifier.IsTwoHanded(Name);
+                _classifiedName = Name;
+            }
+            return _classifiedDamageType;
+        }
+    }
 
     /// <summary>Explicit damage type from weapon data ("damageType"); null = infer from Name.</summary>
     public WeaponDamageType? DamageTypeOverride { get; set; }
 
+    private string? _classifiedName;
+    private WeaponDamageType _classifiedDamageType;
+    private bool _classifiedTwoHanded;
+
     /// <summary>True for unambiguously two-handed weapons (greatsword, maul, pike,
     /// halberd, …). Two-handed weapons add 125% of Strength to damage instead of
     /// 100% (manual p.61). Explicit <see cref="TwoHandedOverride"/> wins; else inferred
-    /// from <see cref="Name"/>.</summary>
-    public bool TwoHanded => TwoHandedOverride ?? WeaponClassifier.IsTwoHanded(Name);
+    /// from <see cref="Name"/> (cached per Name instance, same as <see cref="DamageType"/>).</summary>
+    public bool TwoHanded
+    {
+        get
+        {
+            if (TwoHandedOverride.HasValue) return TwoHandedOverride.Value;
+            if (!ReferenceEquals(_classifiedName, Name))
+            {
+                _classifiedDamageType = WeaponClassifier.Classify(Name);
+                _classifiedTwoHanded = WeaponClassifier.IsTwoHanded(Name);
+                _classifiedName = Name;
+            }
+            return _classifiedTwoHanded;
+        }
+    }
 
     /// <summary>Explicit two-handed flag from weapon data ("twoHanded"); null = infer from Name.</summary>
     public bool? TwoHandedOverride { get; set; }

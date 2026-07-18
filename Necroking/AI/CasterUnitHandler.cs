@@ -212,7 +212,7 @@ public class CasterUnitHandler : IArchetypeHandler
         // Aim point — the AI's "mouse": offensive categories aim at the enemy;
         // Buff aims at the caster itself so the shared targeting picks the ally
         // nearest to it (which may be itself).
-        Vec2 aim = spell.Category == "Buff" ? ctx.MyPos : units[targetIdx].Position;
+        Vec2 aim = spell.CategoryEnum == Data.SpellCategory.Buff ? ctx.MyPos : units[targetIdx].Position;
         ctx.SpellCasts.Add(new AISpellCastRequest
         {
             CasterId = ctx.MyId,

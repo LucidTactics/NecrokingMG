@@ -189,7 +189,7 @@ public partial class Game1 {
          string id = impacts[i].SpellID;
          if (string.IsNullOrEmpty(id)) continue;
          var spell = _gameData.Spells.Get(id);
-         if (spell == null || spell.Category != "Blight") continue;
+         if (spell == null || spell.CategoryEnum != SpellCategory.Blight) continue;
          GameSystems.SpellEffectSystem.ApplyBlight(spell, impacts[i].Position, _deathFog);
       }
    }

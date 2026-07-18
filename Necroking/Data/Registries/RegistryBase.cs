@@ -201,6 +201,7 @@ public abstract class RegistryBase<TDef> where TDef : class, IHasId, new()
                 _defs[def.Id] = def;
                 _orderedIDs.Add(def.Id);
             }
+            ValidateAll(path);
             return !LoadHadErrors;
         }
         catch (Exception ex)
@@ -270,6 +271,40 @@ public abstract class RegistryBase<TDef> where TDef : class, IHasId, new()
         if (toRemove != null)
             foreach (var key in toRemove) item.Remove(key);
     }
+
+    /// <summary>Errors reported by <see cref="ValidateDef"/> during the last
+    /// <see cref="Load"/>. Validation problems do NOT set <see cref="LoadHadErrors"/>
+    /// — every entry still loaded, so saving is safe; the data is just wrong.</summary>
+    public int ValidationErrorCount { get; private set; }
+
+    /// <summary>Run <see cref="ValidateDef"/> over every loaded def, reporting each
+    /// problem to log/error.log AND the console (so `--roundtrip-data` and scenario
+    /// runs surface them). This is the load-time guard against the silent-fallback
+    /// bug class: an enum-ish string that doesn't map to any known value used to be
+    /// quietly replaced by a default deep in game code (see
+    /// todos/validate_json_integrity.md).</summary>
+    private void ValidateAll(string path)
+    {
+        ValidationErrorCount = 0;
+        string file = Path.GetFileName(path);
+        foreach (var id in _orderedIDs)
+        {
+            if (!_defs.TryGetValue(id, out var def)) continue;
+            ValidateDef(def, msg =>
+            {
+                ValidationErrorCount++;
+                string line = $"{file} '{id}': {msg}";
+                DebugLog.Log("error", line);
+                Console.WriteLine("[data] " + line);
+            });
+        }
+    }
+
+    /// <summary>Per-registry data validation, called once per def at the end of
+    /// <see cref="Load"/>. Override to check enum-string / fixed-vocabulary fields
+    /// via <see cref="EnumJson"/>. Report problems — never throw: a throwing
+    /// validator would drop the def and trip the Save refusal.</summary>
+    protected virtual void ValidateDef(TDef def, Action<string> report) { }
 
     protected virtual TDef? DeserializeItem(JsonElement elem, JsonSerializerOptions options)
     {

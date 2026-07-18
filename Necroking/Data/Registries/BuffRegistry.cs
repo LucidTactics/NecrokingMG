@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using Necroking.Core;
@@ -9,6 +10,13 @@ public class BuffEffect
     [JsonPropertyName("type")] public string Type { get; set; } = "Add";
     [JsonPropertyName("stat")] public string Stat { get; set; } = "Strength";
     [JsonPropertyName("value")] public float Value { get; set; }
+
+    // Parsed view (identity-cached, never serialized). Stat stays a string by
+    // design — it's an open vocabulary (BuffStat names + MaxMana/AllPaths/Path*/
+    // ... resource keys); Type is the closed Add/Multiply/Set set the modifier
+    // loops switch on, where a typo used to be silently ignored.
+    private CachedEnum<BuffEffectType> _typeCache;
+    [JsonIgnore] public BuffEffectType TypeEnum => _typeCache.Get(Type, BuffEffectType.Unknown);
 }
 
 public class OrbitalVisual
@@ -132,6 +140,16 @@ public class BuffDef : INamedDef
     [JsonPropertyName("incapacitating")] public bool Incapacitating { get; set; }
     [JsonPropertyName("incapHoldAnim")] public string IncapHoldAnim { get; set; } = "";     // e.g. "Knockdown", "Stunned"
     [JsonPropertyName("incapRecoverAnim")] public string IncapRecoverAnim { get; set; } = ""; // e.g. "Standup"
+
+    // Parsed views (identity-cached, never serialized). Empty/unknown falls back
+    // to Idle — the fallback BuffSystem always used; bad values are reported at
+    // load by BuffRegistry.ValidateDef.
+    private CachedEnum<Necroking.Render.AnimState> _incapHoldCache;
+    private CachedEnum<Necroking.Render.AnimState> _incapRecoverCache;
+    [JsonIgnore] public Necroking.Render.AnimState IncapHoldAnimEnum
+        => _incapHoldCache.Get(IncapHoldAnim, Necroking.Render.AnimState.Idle);
+    [JsonIgnore] public Necroking.Render.AnimState IncapRecoverAnimEnum
+        => _incapRecoverCache.Get(IncapRecoverAnim, Necroking.Render.AnimState.Idle);
     [JsonPropertyName("incapRecoverTime")] public float IncapRecoverTime { get; set; } = 0.8f;
     [JsonPropertyName("incapHoldAtEnd")] public bool IncapHoldAtEnd { get; set; }            // Snap to last frame of hold anim
 
@@ -165,4 +183,14 @@ public class BuffDef : INamedDef
 public class BuffRegistry : RegistryBase<BuffDef>
 {
     protected override string RootKey => "buffs";
+
+    protected override void ValidateDef(BuffDef def, Action<string> report)
+    {
+        // Effect Stat is deliberately unchecked: it's an open vocabulary
+        // (BuffStat names + resource keys like MaxMana/AllPaths/PathShock/...).
+        foreach (var eff in def.Effects)
+            EnumJson.Check<BuffEffectType>(eff.Type, "effects.type", report, allowEmpty: false);
+        EnumJson.Check<Necroking.Render.AnimState>(def.IncapHoldAnim, "incapHoldAnim", report);
+        EnumJson.Check<Necroking.Render.AnimState>(def.IncapRecoverAnim, "incapRecoverAnim", report);
+    }
 }

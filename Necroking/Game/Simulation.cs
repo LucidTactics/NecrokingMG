@@ -3997,12 +3997,6 @@ public class Simulation
         }
     }
 
-    /// <summary>Parse a UnitDef faction string ("Human"/"Animal"/anything-else -> Undead).</summary>
-    private static Faction ParseFaction(string? faction) =>
-        faction == "Human" ? Faction.Human
-        : faction == "Animal" ? Faction.Animal
-        : Faction.Undead;
-
     /// <summary>Apply the def-derived runtime fields shared by Game1.SpawnUnit,
     /// SpawnUnitByID and TransformUnit (sprite/size/collision/faction/awareness/
     /// AI+archetype/stats/caster resources). Centralizing this fixed TransformUnit's
@@ -4023,7 +4017,7 @@ public class Simulation
         // Unconditional: an empty def faction means Undead (all faction-less defs
         // are zombies/skeletons/player forms) — matching the old Game1.SpawnUnit
         // default. AddUnit's Dynamic default is Human, so skipping would flip them.
-        _units[idx].Faction = ParseFaction(def.Faction);
+        _units[idx].Faction = def.FactionEnum;
         _units[idx].Stats = stats;
 
         // Awareness config (always, regardless of archetype)
@@ -4062,8 +4056,7 @@ public class Simulation
         else
         {
             _units[idx].Archetype = AI.ArchetypeRegistry.None;
-            if (Enum.TryParse<AIBehavior>(def.AI, out var ai))
-                _units[idx].AI = ai;
+            _units[idx].AI = def.AIEnum;
         }
 
         Movement.Locomotion.ResetSpeed(_units[idx]);

@@ -1,3 +1,4 @@
+using System;
 using Necroking.Editor;
 
 namespace Necroking.Data.Registries;
@@ -37,4 +38,13 @@ public class ItemDef : INamedDef
 public class ItemRegistry : RegistryBase<ItemDef>
 {
     protected override string RootKey => "items";
+
+    private static readonly string[] Categories = { "material", "potion", "consumable", "equipment" };
+    private static readonly string[] SkillPointPools = { "potions", "monstrology" };
+
+    protected override void ValidateDef(ItemDef def, Action<string> report)
+    {
+        EnumJson.CheckSet(def.Category, "category", Categories, report);
+        EnumJson.CheckSet(def.SkillPointPool, "skillPointPool", SkillPointPools, report);
+    }
 }

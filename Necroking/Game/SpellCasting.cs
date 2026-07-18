@@ -113,9 +113,9 @@ public static class SpellCaster
         outPending.CastingBuffID = spell.CastingBuffID;
         outPending.Active = true;
 
-        switch (spell.Category)
+        switch (spell.CategoryEnum)
         {
-            case "Projectile":
+            case SpellCategory.Projectile:
             {
                 float dist = (targetWorld - casterPos).Length();
                 if (dist > range) return CastResult.OutOfRange;
@@ -125,11 +125,11 @@ public static class SpellCaster
                 break;
             }
 
-            case "Buff":
-            case "Debuff":
+            case SpellCategory.Buff:
+            case SpellCategory.Debuff:
             {
                 outPending.TargetPos = targetWorld;
-                if (spell.AoeType != "AOE")
+                if (spell.AoeTypeEnum != AOEType.AOE)
                 {
                     // Single target: find closest valid unit near mouse within spell range
                     float bestDist = float.MaxValue;
@@ -139,8 +139,8 @@ public static class SpellCaster
                         if (!units[i].Alive) continue;
                         float distToCaster = (units[i].Position - casterPos).Length();
                         if (distToCaster > range) continue;
-                        if (spell.Category == "Buff" && units[i].Faction != casterFaction) continue;
-                        if (spell.Category == "Debuff" && units[i].Faction == casterFaction) continue;
+                        if (spell.CategoryEnum == SpellCategory.Buff && units[i].Faction != casterFaction) continue;
+                        if (spell.CategoryEnum == SpellCategory.Debuff && units[i].Faction == casterFaction) continue;
 
                         float distToCursor = (units[i].Position - targetWorld).Length();
                         if (distToCursor < bestDist)
@@ -157,9 +157,9 @@ public static class SpellCaster
                 break;
             }
 
-            case "Summon":
+            case SpellCategory.Summon:
             {
-                if (spell.SummonTargetReq == "Corpse")
+                if (spell.SummonTargetReqEnum == SummonTargetReq.Corpse)
                 {
                     // Find closest corpse to mouse within range of necromancer
                     // If summonUnitID is empty, corpse must have a valid zombieTypeID
@@ -207,7 +207,7 @@ public static class SpellCaster
                     outPending.TargetPos = corpses[bestCorpse].Position;
                     outPending.SummonUnitID = spell.SummonUnitID;
                 }
-                else if (spell.SummonTargetReq == "UnitType")
+                else if (spell.SummonTargetReqEnum == SummonTargetReq.UnitType)
                 {
                     // Find closest friendly unit matching acceptableTargets near mouse
                     float bestDist = float.MaxValue;
@@ -244,7 +244,7 @@ public static class SpellCaster
                     outPending.TargetPos = units[bestUnit].Position;
                     outPending.SummonUnitID = spell.SummonUnitID;
                 }
-                else if (spell.SummonTargetReq == "CorpseAOE")
+                else if (spell.SummonTargetReqEnum == SummonTargetReq.CorpseAOE)
                 {
                     // AOE corpse targeting: validate at least one valid corpse with zombieTypeID in AOE
                     float dist = (targetWorld - casterPos).Length();
@@ -267,10 +267,10 @@ public static class SpellCaster
                 }
                 else
                 {
-                    // SummonTargetReq == "None" — just mana + cooldown
+                    // SummonTargetReq == None — just mana + cooldown
                     outPending.SummonUnitID = spell.SummonUnitID;
-                    if (spell.SpawnLocation == "AtTargetLocation" ||
-                        spell.SpawnLocation == "NearestTargetToMouse")
+                    if (spell.SpawnLocationEnum == SpawnLocation.AtTargetLocation ||
+                        spell.SpawnLocationEnum == SpawnLocation.NearestTargetToMouse)
                     {
                         float dist = (targetWorld - casterPos).Length();
                         if (range > 0 && dist > range) return CastResult.OutOfRange;
@@ -290,11 +290,11 @@ public static class SpellCaster
                 // (different corpses may produce different categories).
                 // Player-only: the caps live on NecromancerState — AI casters'
                 // summons aren't part of the player's horde and aren't capped.
-                if (spell.SummonMode != "Transform" && caster is NecromancerState hordeState)
+                if (spell.SummonModeEnum != SummonMode.Transform && caster is NecromancerState hordeState)
                 {
                     string predictId = outPending.SummonUnitID;
                     if (string.IsNullOrEmpty(predictId)
-                        && spell.SummonTargetReq == "Corpse"
+                        && spell.SummonTargetReqEnum == SummonTargetReq.Corpse
                         && outPending.TargetCorpseIdx >= 0)
                     {
                         predictId = TableCraftingSystem.ResolveZombieUnitID(
@@ -313,7 +313,7 @@ public static class SpellCaster
                 break;
             }
 
-            case "Strike":
+            case SpellCategory.Strike:
             {
                 if (spell.StrikeTargetUnit)
                 {
@@ -347,7 +347,7 @@ public static class SpellCaster
                 break;
             }
 
-            case "Beam":
+            case SpellCategory.Beam:
             {
                 float bestDist = float.MaxValue;
                 int bestUnit = -1;
@@ -371,7 +371,7 @@ public static class SpellCaster
                 break;
             }
 
-            case "Drain":
+            case SpellCategory.Drain:
             {
                 // Try closest enemy unit near mouse first
                 float bestDist = float.MaxValue;
@@ -435,7 +435,7 @@ public static class SpellCaster
                 break;
             }
 
-            case "Sacrifice":
+            case SpellCategory.Sacrifice:
             {
                 // Target the friendly undead nearest the cursor within range (never
                 // the caster). A non-empty AcceptableTargets list restricts it to
@@ -465,7 +465,7 @@ public static class SpellCaster
                 break;
             }
 
-            case "Cloud":
+            case SpellCategory.Cloud:
             {
                 float dist = (targetWorld - casterPos).Length();
                 if (dist > range) return CastResult.OutOfRange;
@@ -473,7 +473,7 @@ public static class SpellCaster
                 break;
             }
 
-            case "Toggle":
+            case SpellCategory.Toggle:
             {
                 outPending.TargetPos = casterPos;
                 break;

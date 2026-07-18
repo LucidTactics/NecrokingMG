@@ -83,24 +83,14 @@ public static class BuffSystem
         // If this buff is incapacitating, set up the incap state
         if (def.Incapacitating)
         {
-            // Parse the buff's requested hold/recover anim states. Enum.TryParse succeeds
-            // on any string matching an enum name — it does NOT verify that this unit's
-            // sprite actually authored that animation. A missing sprite anim silently
-            // falls back to Idle at render time, making "incapacitated" units look fine.
-            // We don't have the sprite data here (that's on the AnimController, which is
-            // owned by Game1 via _unitAnims), so we can only sanity-check the parse.
-            if (!Enum.TryParse<AnimState>(def.IncapHoldAnim, out var holdAnim))
-            {
-                Necroking.Core.DebugLog.Log("asset",
-                    $"[BuffSystem] Buff '{def.Id}' IncapHoldAnim='{def.IncapHoldAnim}' does not match any AnimState — falling back to Idle");
-                holdAnim = AnimState.Idle;
-            }
-            if (!Enum.TryParse<AnimState>(def.IncapRecoverAnim, out var recoverAnim))
-            {
-                Necroking.Core.DebugLog.Log("asset",
-                    $"[BuffSystem] Buff '{def.Id}' IncapRecoverAnim='{def.IncapRecoverAnim}' does not match any AnimState — falling back to Idle");
-                recoverAnim = AnimState.Idle;
-            }
+            // The buff's hold/recover anim states (unknown/empty → Idle; a bad
+            // string is reported when the registry loads). Note this does NOT
+            // verify the unit's sprite actually authored that animation — a
+            // missing sprite anim silently falls back to Idle at render time
+            // (sprite data lives on the AnimController, owned by Game1 via
+            // _unitAnims).
+            var holdAnim = def.IncapHoldAnimEnum;
+            var recoverAnim = def.IncapRecoverAnimEnum;
             units[unitIdx].Incap = new IncapState
             {
                 Active = true,
@@ -162,7 +152,7 @@ public static class BuffSystem
     {
         int add = 0;
         foreach (var eff in def.Effects)
-            if (eff.Type == "Add" && eff.Stat == nameof(BuffStat.MaxHP)) add += (int)eff.Value;
+            if (eff.TypeEnum == BuffEffectType.Add && eff.Stat == nameof(BuffStat.MaxHP)) add += (int)eff.Value;
         if (add <= 0) return;
         var s = units[unitIdx].Stats;
         s.HP += add;
@@ -232,8 +222,7 @@ public static class BuffSystem
                         // because the hold anim is also Forced — a Combat (priority 2)
                         // override can't replace it, which would leave the unit stuck
                         // playing Knockdown forever after Incap cleanly finishes.
-                        Enum.TryParse<AnimState>(def.IncapRecoverAnim, out var recoverAnim);
-                        AnimResolver.SetOverride(units[i], AnimRequest.Forced(recoverAnim));
+                        AnimResolver.SetOverride(units[i], AnimRequest.Forced(def.IncapRecoverAnimEnum));
                     }
                 }
 
@@ -375,8 +364,7 @@ public static class BuffSystem
                 TrampleImpactForce = w.TrampleImpactForce,
                 SourceBuffID = def.Id,
             };
-            if (System.Enum.TryParse<WeaponArchetype>(w.Archetype, true, out var arch))
-                ws.Archetype = arch;
+            ws.Archetype = w.ArchetypeEnum;
             foreach (var b in w.Bonuses)
             {
                 if (b == "ArmorPiercing") ws.HasArmorPiercing = true;
@@ -473,7 +461,7 @@ public static class BuffSystem
         float sum = 0f;
         foreach (var buff in units[unitIdx].ActiveBuffs)
             foreach (var eff in buff.Effects)
-                if (eff.Stat == stat && eff.Type == "Add")
+                if (eff.Stat == stat && eff.TypeEnum == BuffEffectType.Add)
                     sum += eff.Value * buff.StackCount;
         return sum;
     }
@@ -500,7 +488,7 @@ public static class BuffSystem
         float? result = null;
         foreach (var buff in units[unitIdx].ActiveBuffs)
             foreach (var eff in buff.Effects)
-                if (eff.Stat == stat && eff.Type == "Set")
+                if (eff.Stat == stat && eff.TypeEnum == BuffEffectType.Set)
                     result = result.HasValue ? MathF.Max(result.Value, eff.Value) : eff.Value;
         return result;
     }
@@ -522,7 +510,7 @@ public static class BuffSystem
         float sum = 0f;
         foreach (var buff in units[unitIdx].ActiveBuffs)
             foreach (var eff in buff.Effects)
-                if (eff.Type == "Add" && eff.Stat == stat)
+                if (eff.TypeEnum == BuffEffectType.Add && eff.Stat == stat)
                     sum += eff.Value * buff.StackCount;
         return (int)sum;
     }
@@ -570,11 +558,11 @@ public static class BuffSystem
             foreach (var eff in buff.Effects)
             {
                 if (eff.Stat != statName) continue;
-                switch (eff.Type)
+                switch (eff.TypeEnum)
                 {
-                    case "Add": additive += eff.Value * buff.StackCount; break;
-                    case "Multiply": multiplicative *= MathF.Pow(eff.Value, buff.StackCount); break;
-                    case "Set": setValue = eff.Value; break;
+                    case BuffEffectType.Add: additive += eff.Value * buff.StackCount; break;
+                    case BuffEffectType.Multiply: multiplicative *= MathF.Pow(eff.Value, buff.StackCount); break;
+                    case BuffEffectType.Set: setValue = eff.Value; break;
                 }
             }
         }
