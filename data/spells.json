@@ -146,6 +146,7 @@
       "cooldown": 1,
       "armorNegating": true,
       "damage": 1,
+      "drn": -1,
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
         "fps": 3,

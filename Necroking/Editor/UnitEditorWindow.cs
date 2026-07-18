@@ -2039,7 +2039,7 @@ public class UnitEditorWindow
             "fight turns bad. Mindless undead use ~50.");
         curY += RowH;
 
-        // Dice tier: 1=d3, 2=d6, 3=d6 exploding once, 4=d6 open-ended
+        // Dice tier: 1=d3, 2=d6, 3=d6 exploding once, 4=d6 open-ended, -1=0 deterministic
         int newDrn = _ui.DrawIntField("st_drn", "DRN Level", s.Drn, x, curY, w);
         if (newDrn != s.Drn) { s.Drn = Math.Clamp(newDrn, 1, 4); _unsavedChanges = true; }
         Tip(x, curY, w, "Dice tier for damage/protection/morale rolls:",

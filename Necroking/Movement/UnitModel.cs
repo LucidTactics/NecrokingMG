@@ -695,6 +695,7 @@ public static class UnitUtil
     ///   2: d6 closed
     ///   3: d6, a 6 adds one extra d6 (max one reroll, so ≤12)
     ///   4: d6 open-ended (every 6 explodes into another die)
+    ///   -1: 0 deterministic
     /// Replaced the old Dominions 2d6-open DRN (2026-07), so averages are roughly
     /// half what the ported Dominions formulas were tuned for.</summary>
     public static int RollDRN(int level)
@@ -716,6 +717,8 @@ public static class UnitUtil
                 do { r = _rng.Next(1, 7); total += r; } while (r == 6);
                 return total;
             }
+            case -1:
+                return 0;
             default: // level 2 (and any unassigned/out-of-range value)
                 return _rng.Next(1, 7);
         }

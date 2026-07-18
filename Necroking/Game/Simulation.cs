@@ -842,9 +842,17 @@ public class Simulation
                 if (hit.ProjectileType == ProjectileType.RegularHit && hit.Precision > 0)
                 {
                     DamageFlags flags = default;
-                    if (spellDef != null) flags |= SpellEffectSystem.SpellDamageFlags(spellDef);
+                    if (spellDef != null)
+                    {
+                        flags |= SpellEffectSystem.SpellDamageFlags(spellDef);
+                        int drn = SpellPenetration.CasterRollTier(spellDef, _units, casterIdx);
+                        ResolveArrowHit(hit, casterIdx, flags, drn);
+                    }
+                    else
+                    {
+                        ResolveArrowHit(hit, casterIdx, flags);
+                    }
 
-                    ResolveArrowHit(hit, casterIdx, flags);
                 }
                 else if (spellDef != null)
                 {
@@ -2562,13 +2570,13 @@ public class Simulation
     /// Arrows count as piercing (15% armor reduction), and damage is weapon-only —
     /// no Strength behind a bowshot.
     /// </summary>
-    private void ResolveArrowHit(ProjectileHit hit, int attackerIdx, DamageFlags flags)
+    private void ResolveArrowHit(ProjectileHit hit, int attackerIdx, DamageFlags flags, int? drnOverride=default)
     {
         int defenderIdx = hit.UnitIdx;
         var defStats = _units[defenderIdx].Stats;
         // Shooter may have died while the arrow was in flight (attackerIdx == -1).
-        int atkDrn = attackerIdx >= 0 && attackerIdx < _units.Count
-            ? _units[attackerIdx].Stats.Drn : 2;
+        int atkDrn = drnOverride ?? (attackerIdx >= 0 && attackerIdx < _units.Count
+            ? _units[attackerIdx].Stats.Drn : 2);
 
         // Hit resolution rolls tier-4 dice for both sides (same rule as melee); the
         // damage/prot rolls below keep each unit's own Drn tier. Roll order preserved
@@ -2633,6 +2641,11 @@ public class Simulation
         int postArmor = hit.Damage + dmgDrnRoll - prot;
         int netDmg = DamageSystem.MitigateByToughness(postArmor, toughness);
         int toughnessMit = Math.Max(0, postArmor) - netDmg;
+
+        if (flags.HasFlag(DamageFlags.ArmorNegating))
+        {
+            netDmg = hit.Damage + dmgDrnRoll;
+        }
 
         logEntry.HitLoc = hit.HitLocation;
         logEntry.HitLocationName = hit.HitLocation.ToString();

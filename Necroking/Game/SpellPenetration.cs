@@ -44,7 +44,7 @@ public static class SpellPenetration
     /// override survives caster death, keeping the spell's dice deterministic).</summary>
     public static int CasterRollTier(SpellDef? spell, UnitArrays units, int casterIdx)
     {
-        if (spell != null && spell.Drn > 0) return spell.Drn > 4 ? 4 : spell.Drn;
+        if (spell != null && spell.Drn != 0) return spell.Drn > 4 ? 4 : spell.Drn;
         return casterIdx >= 0 && casterIdx < units.Count ? units[casterIdx].Stats.Drn : 2;
     }
 

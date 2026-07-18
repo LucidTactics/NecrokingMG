@@ -140,7 +140,7 @@ public class UnitStats
     /// <summary>Dice tier for this unit's rolls EXCEPT hit resolution: damage as
     /// attacker, protection as defender, morale, knockdown, MR. Attack-vs-defense
     /// hit rolls always use tier 4 for both sides (see UnitUtil.RollDRN).
-    /// 1=d3, 2=d6, 3=d6 exploding once, 4=d6 open-ended.</summary>
+    /// 1=d3, 2=d6, 3=d6 exploding once, 4=d6 open-ended, -1=0 deterministic.</summary>
     public int Drn { get; set; } = 2;
     public float CombatSpeed { get; set; } = 8.0f;
 

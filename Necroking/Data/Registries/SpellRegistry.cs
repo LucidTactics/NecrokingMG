@@ -301,7 +301,7 @@ public class SpellDef : INamedDef
     /// 0 = unset, use the caster's own tier. Editor-visible for Evocation only
     /// for now (by request) — the field works on any spell.</summary>
     [EditorVisible("School", "Evocation")]
-    [EditorField(Label = "DRN (0=caster)", Order = 197, Tooltip = "Caster dice tier for damage/penetration rolls: 1=d3,\n2=d6, 3=d6 exploding, 4=open-ended. 0 = caster's own.")]
+    [EditorField(Label = "DRN (0=caster)", Order = 197, Tooltip = "Caster dice tier for damage/penetration rolls: 1=d3,\n2=d6, 3=d6 exploding, 4=open-ended, -1=0 deterministic. 0 = caster's own.")]
     [JsonPropertyName("drn")] public int Drn { get; set; }
 
     // AoeRadius — compound conditions per category, handled manually
