@@ -13,7 +13,7 @@ namespace Necroking.Scenario.Scenarios;
 /// <summary>
 /// End-to-end test of the table-crafting pipeline.
 ///
-/// Setup: necromancer + Table2 + soldier corpse + 1 zombie potion deposited into
+/// Setup: necromancer + necro_bench + soldier corpse + 1 zombie potion deposited into
 /// the table item slot. Drives the craft directly (skips the F-press anim path
 /// and the UI button) by writing to the table state and routine fields, since
 /// scenarios can't synthesize input. Verifies:
@@ -65,18 +65,18 @@ public class CraftTableScenario : ScenarioBase
             return;
         }
 
-        // Find or register the Table2 def. The data file has it; if it didn't load
+        // Find or register the necro_bench def. The data file has it; if it didn't load
         // for some reason (e.g. running with a stripped data set), register a minimal
         // copy so the scenario still runs.
         var env = sim.EnvironmentSystem;
-        int tableDefIdx = env.FindDef("Table2");
+        int tableDefIdx = env.FindDef("necro_bench");
         if (tableDefIdx < 0)
         {
             // Scenarios don't load env_defs.json (only StartGame does), so we
             // recreate the relevant fields. Mirrors the real def at data/env_defs.json.
             var def = new EnvironmentObjectDef
             {
-                Id = "Table2", Name = "Table2", Category = "Building",
+                Id = "necro_bench", Name = "necro_bench", Category = "Building",
                 TexturePath = "assets/Environment/Buildings/Table2.png",
                 IsBuilding = true, BuildingMaxHP = 500,
                 CorpseSlots = 1, ItemSlots = 1, EssenceCost = 10,
@@ -89,18 +89,18 @@ public class CraftTableScenario : ScenarioBase
                 SpriteWorldHeight = 7f,
             };
             tableDefIdx = env.AddDef(def);
-            DebugLog.Log(ScenarioLog, "Registered fallback Table2 def (data file not loaded for scenarios)");
+            DebugLog.Log(ScenarioLog, "Registered fallback necro_bench def (data file not loaded for scenarios)");
         }
         else
         {
             // Override processTime to keep the scenario fast (data has 10s).
             var d = env.GetDef(tableDefIdx);
             d.ProcessTime = 2f;
-            DebugLog.Log(ScenarioLog, $"Found Table2 in data; processTime overridden to 2s for test");
+            DebugLog.Log(ScenarioLog, $"Found necro_bench in data; processTime overridden to 2s for test");
         }
 
         _tableIdx = env.AddObject((ushort)tableDefIdx, CX + 2f, CY);
-        DebugLog.Log(ScenarioLog, $"Placed Table2 at ({CX + 2f}, {CY}) envIdx={_tableIdx}");
+        DebugLog.Log(ScenarioLog, $"Placed necro_bench at ({CX + 2f}, {CY}) envIdx={_tableIdx}");
 
         // Necromancer
         var units = sim.UnitsMut;
