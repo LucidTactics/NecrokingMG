@@ -2436,6 +2436,45 @@
         "a": 255,
         "intensity": 1
       }
+    },
+    {
+      "name": "Skeleton Horde",
+      "id": "summon_skeleton_horde",
+      "category": "Summon",
+      "description": "Tears open a gate to the underworld, flooding the battlefield with a horde of skeletal warriors.",
+      "school": "Conjuration",
+      "tileTemplate": "summon",
+      "icon": "assets/UI/Icons/Spells/ArmyBodyEthereal2.png",
+      "range": 9999,
+      "manaCost": 25,
+      "primaryPath": "death",
+      "primaryLevel": 4,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
+      "cooldown": 15,
+      "summonUnitID": "skeleton",
+      "summonQuantity": 12,
+      "spawnLocation": "AtTargetLocation",
+      "summonFlipbook": {
+        "flipbookID": "",
+        "fps": -1,
+        "scale": 1,
+        "color": {
+          "r": 255,
+          "g": 255,
+          "b": 255,
+          "a": 255,
+          "intensity": 1
+        },
+        "rotation": 0,
+        "blendMode": "Alpha",
+        "alignment": "Ground",
+        "duration": -1
+      }
     }
   ]
 }
