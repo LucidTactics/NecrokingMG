@@ -2682,7 +2682,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // unaffected (it doesn't flow through here) — except `raw_mouse`, which
             // explicitly wants to be captured as if focused. Real states still reach
             // _prevMouse/_prevKb at the exit points, preserving refocus-click protection.
-            var neutral = new MouseState(vpW / 2, vpH / 2, mouse.ScrollWheelValue,
+            // Don't center of screen, triggers weird tooltips when unfocused.
+            var neutral = new MouseState(-1000, -1000, mouse.ScrollWheelValue,
                 ButtonState.Released, ButtonState.Released, ButtonState.Released,
                 ButtonState.Released, ButtonState.Released);
             _input.Capture(neutral, neutral, new KeyboardState(), new KeyboardState(), inputTime);
