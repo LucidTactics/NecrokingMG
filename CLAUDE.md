@@ -7,6 +7,7 @@ or refining a player-facing system (combat, spells, reanimation, crafting, autom
 
 ## Git Policy
 - **Commits**: OK to commit freely when a feature is known to be working. Good initiative.
+- **Branches**: Always commit to master. User doesn't understand branch management well.
 - **Push**: Always ask the user for permission before pushing. Never push without explicit approval.
 
 ### Collaborator / Drive-sync — reflexes (full detail: [docs/git-discipline.md](docs/git-discipline.md))
