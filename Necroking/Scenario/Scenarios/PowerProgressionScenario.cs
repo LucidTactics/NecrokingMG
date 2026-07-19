@@ -400,7 +400,7 @@ public class PowerProgressionScenario : ScenarioBase
         {
             if (!sim.Units[i].Alive || sim.Units[i].PendingAttack.IsNone) continue;
             if (sim.Units[i].Jumping || sim.Units[i].ChargePhase != 0) continue;
-            sim.ResolvePendingAttack(i);
+            GameSystems.Combat.AttackResolver.ResolvePendingAttack(sim, i);
         }
 
         foreach (var arena in _arenas) { arena.AliveA = 0; arena.AliveB = 0; }

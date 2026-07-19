@@ -295,7 +295,7 @@ public class BalanceMatrixScenario : ScenarioBase
         {
             if (!sim.Units[i].Alive || sim.Units[i].PendingAttack.IsNone) continue;
             if (sim.Units[i].Jumping || sim.Units[i].ChargePhase != 0) continue;
-            sim.ResolvePendingAttack(i);
+            GameSystems.Combat.AttackResolver.ResolvePendingAttack(sim, i);
         }
 
         int aliveA = 0, aliveB = 0;

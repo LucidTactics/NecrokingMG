@@ -96,9 +96,14 @@ public class SweepAttackScenario : ScenarioBase
         // Ally bear placed behind attacker (west) so it's outside the east-facing cone.
         // Even without SweepHitsAllies=false the cone filter would exclude it, but this
         // gives us confidence same-faction filter works even if facing drifts.
+        // AI = MoveToPoint (holding its own spawn), NOT IdleAtPoint: IdleAtPoint
+        // fights any enemy within a flat 10u regardless of the zeroed awareness
+        // fields, so an "idle" ally bear 4.3u from the soldiers joins the brawl,
+        // takes counter-punches, and scrambles the damage accounting.
         int ab = sim.SpawnUnitByID("Bear", new Vec2(7f, 10f));
         units[ab].Faction = Faction.Animal;
-        units[ab].AI = AIBehavior.IdleAtPoint;
+        units[ab].AI = AIBehavior.MoveToPoint;
+        units[ab].MoveTarget = new Vec2(7f, 10f);
         ZeroAwareness(units, ab);        // geometry prop — must never self-aggro
         units[ab].Stats.MaxHP = 99999;
         units[ab].Stats.HP = 99999;
@@ -165,6 +170,7 @@ public class SweepAttackScenario : ScenarioBase
         int sweepEntryCount = 0;
         int sweepHitCount = 0;
         int sweepMissCount = 0;
+        int sweepVsBearCount = 0;
         var entries = sim.CombatLog.Entries;
         for (int i = _initialCombatLogCount; i < entries.Count; i++)
         {
@@ -173,6 +179,9 @@ public class SweepAttackScenario : ScenarioBase
             sweepEntryCount++;
             if (e.Outcome == CombatLogOutcome.Hit) sweepHitCount++;
             else sweepMissCount++;
+            // A sweep entry with a Bear DEFENDER = the swing caught the ally —
+            // exactly what the cone + SweepHitsAllies filters must prevent.
+            if (e.DefenderName == "Bear") sweepVsBearCount++;
         }
         DebugLog.Log(ScenarioLog, $"Combat log: {sweepEntryCount} sweep attempts (hits={sweepHitCount} misses={sweepMissCount})");
 
@@ -188,13 +197,17 @@ public class SweepAttackScenario : ScenarioBase
         bool frontDamaged = totalFrontDamage > 0;
         bool multipleTargetsHit = damagedFrontCount >= 2;       // AOE behavior
         bool outOfConeUntouched = outConeDamage == 0;           // cone/range filter
-        bool allyUntouched = allyDamage == 0;                   // same-faction filter
+        // Same-faction filter: judged by SWEEP log entries against the ally, not
+        // by HP delta — the soldiers' counter-brawl with the attacker can spill
+        // incidental (legitimate) punches onto a bear without the sweep being at
+        // fault. HP delta is still reported above for eyeballing.
+        bool allyUntouched = sweepVsBearCount == 0;             // same-faction filter
 
         DebugLog.Log(ScenarioLog, $"Check - Sweep fired:                 {bearFiredSweep} ({sweepEntryCount} swings)");
         DebugLog.Log(ScenarioLog, $"Check - front soldiers damaged:      {frontDamaged} (total={totalFrontDamage})");
         DebugLog.Log(ScenarioLog, $"Check - ≥2 of 3 front damaged:       {multipleTargetsHit} ({damagedFrontCount}/3)");
         DebugLog.Log(ScenarioLog, $"Check - out-of-cone soldier clean:   {outOfConeUntouched} (damage={outConeDamage})");
-        DebugLog.Log(ScenarioLog, $"Check - ally bear clean:             {allyUntouched} (damage={allyDamage})");
+        DebugLog.Log(ScenarioLog, $"Check - ally bear clean of sweeps:   {allyUntouched} (sweep-vs-bear entries={sweepVsBearCount}, brawl damage={allyDamage})");
 
         bool pass = bearFiredSweep && frontDamaged && multipleTargetsHit
                  && outOfConeUntouched && allyUntouched;

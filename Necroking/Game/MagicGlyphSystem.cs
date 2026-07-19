@@ -213,8 +213,8 @@ public class MagicGlyphSystem
                                 if (spell.CloudAppliesParalysis)
                                     sim.ApplyParalysisAoE(g.Position, aoeR, g.OwnerFaction, spell, -1);
                                 else if (spell.Damage > 0)
-                                    sim.ApplySpellDamageAoE(g.Position, aoeR, spell.Damage,
-                                        spell, -1, g.OwnerFaction, DamageType.Poison);
+                                    Combat.AttackResolver.ApplySpellDamageAoE(sim, g.Position,
+                                        aoeR, spell.Damage, spell, -1, g.OwnerFaction, DamageType.Poison);
                             }
                         }
 
@@ -223,8 +223,8 @@ public class MagicGlyphSystem
                         if (g.Damage > 0)
                         {
                             float dmgR = g.DamageRadius > 0 ? g.DamageRadius : g.Radius;
-                            sim.ApplySpellDamageAoE(g.Position, dmgR, g.Damage,
-                                null, -1, g.OwnerFaction, DamageType.Physical);
+                            Combat.AttackResolver.ApplySpellDamageAoE(sim, g.Position, dmgR,
+                                g.Damage, null, -1, g.OwnerFaction, DamageType.Physical);
                         }
                     }
 

@@ -92,7 +92,10 @@ public class CombatLog
         // Detail lines (indented to align past "MM:SS  ")
         int totalAtk = e.AttackBase + e.AttackDRN;
         int totalDef = e.DefenseBase + e.DefenseDRN;
-        DebugLog.Log(Tag, $"         Attack: {e.AttackBase}+{e.AttackDRN}={totalAtk} vs Defense: {e.DefenseBase}+{e.DefenseDRN}={totalDef}");
+        // Spell entries auto-hit and never roll attack-vs-defense — skip the
+        // all-zero "Attack: 0+0=0 vs Defense: 0+0=0" noise line for those.
+        if (totalAtk != 0 || totalDef != 0)
+            DebugLog.Log(Tag, $"         Attack: {e.AttackBase}+{e.AttackDRN}={totalAtk} vs Defense: {e.DefenseBase}+{e.DefenseDRN}={totalDef}");
         if (e.DamageFlags != default)
             DebugLog.Log(Tag, $"         DamageFlags: {e.DamageFlags.ToString()}");
 

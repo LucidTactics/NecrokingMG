@@ -668,6 +668,11 @@ public static class UnitUtil
 
     private static readonly Random _rng = new();
 
+    /// <summary>Uniform 0–99 roll on the shared combat RNG. Use this for
+    /// percent-chance gates on sim paths — Random.Shared is banned there
+    /// (one RNG source keeps headless runs deterministic-ish).</summary>
+    public static int RollPercent() => _rng.Next(100);
+
     /// <summary>Roll a hit location based on size advantage and weapon length.</summary>
     public static HitLocation RollHitLocation(int attackerSize, int defenderSize, int weaponLength)
     {

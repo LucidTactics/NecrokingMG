@@ -893,7 +893,7 @@ public partial class Game1
                         _sim.Units[i].PendingWeaponIdx, _sim.Units[i].PendingWeaponIsRanged,
                         _sim.Units[i].Archetype);
                     if (animData.Ctrl.CurrentState == expectedAtkState)
-                        _sim.TryResolvePendingAttackAtImpact(i);
+                        GameSystems.Combat.AttackResolver.TryResolvePendingAttackAtImpact(_sim, i);
                 }
             }
 

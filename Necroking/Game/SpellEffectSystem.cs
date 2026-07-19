@@ -768,7 +768,7 @@ public static class SpellEffectSystem
                 // Standard spell pipeline: MR gate + opposed DRN damage roll. The
                 // damage event it emits already surfaces the floating number (the
                 // old flat path double-printed via an extra FloatingText here).
-                sim.ApplySpellDamage(enemy, damage, spell, casterIdx);
+                Combat.AttackResolver.ApplySpellDamage(sim, enemy, damage, spell, casterIdx);
             }
         }
         else
@@ -807,8 +807,8 @@ public static class SpellEffectSystem
 
         int damage = spell.ScaledDamage(masteryLevels);
         if (damage > 0)
-            sim.ApplySpellDamageAoE(target, radius, damage, spell, casterIdx,
-                casterFaction, DamageType.Poison);
+            Combat.AttackResolver.ApplySpellDamageAoE(sim, target, radius, damage, spell,
+                casterIdx, casterFaction, DamageType.Poison);
     }
 
     /// <summary>Build DamageFlags from a spell's AN/DN settings. Public because the
