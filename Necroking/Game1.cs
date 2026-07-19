@@ -1355,6 +1355,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _sim.OnForagerAte = OnForagerAte;
         // Worker job system back-ref so the sim can reach the job brain.
         _sim.Workers = _workerSystem;
+        // Anim metadata for sim/AI-side effect-time lookups (pounce takeoff, ranged
+        // shot windows). Loading calls this once on the ctor-era Sim; without the
+        // re-wire every fresh GameSession sim has null meta, so ranged PostAttackTimer
+        // fell back to a window shorter than the arrow-release frame and the
+        // SwingJanitor cleared every archer shot before it fired.
+        _sim.SetAnimMeta(_animMeta);
     }
 
     /// <summary>
