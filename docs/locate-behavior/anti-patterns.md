@@ -1,6 +1,12 @@
 # Anti Patterns
 *anti patterns to avoid and principles to follow*
 
+*This file holds the **generic** (everywhere) anti patterns — mostly UI/gameplay-structure
+ones, since those recur across the whole codebase. **Rendering-specific** anti patterns (zoom
+/ camera correctness, premultiplied-alpha color encoding, render targets, shaders, sort keys)
+live in their own counterpart: [anti-patterns-rendering.md](anti-patterns-rendering.md) — read
+it too before touching any draw-layer code.*
+
 *Egregious anti patterns should typically be refactored whenever found even if not asked to by the user, always, tell the main claude about these when found, and log them in [anti-patterns-list.md](anti-patterns-list.md).*
 *Regular anti patterns should be documented in [anti-patterns-list.md](anti-patterns-list.md) whenever found, and if its relevant to the caller claudes request bring these up as potential refactors or fixes as he goes.*
 *All anti pattern potential that the caller claude could be thought to do as it tries to solve the problem asked for should be brought up and explain what it should try to do instead in this case.*

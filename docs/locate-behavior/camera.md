@@ -175,6 +175,9 @@ mid-pause and compare screenshots.
   grass `MinZoomForGrass` (GrassTuftRenderer), DebugDraw's `Zoom >= 8` label gate.
 
 ## Related
+- [anti-patterns-rendering.md](anti-patterns-rendering.md) — the zoom-correctness lessons as
+  don't-do anti patterns (screen-space constants in world geometry, mixed scaling policy,
+  middle-ground curves, wrong height convention) + the rest of the draw-layer traps.
 - [render.md](render.md) — draw pipeline, damage-number height trap, lightning ribbons.
 - [game1-partials.md](game1-partials.md) — `_camera` field lives on Game1; camera follow +
   free-cam pan in `Game1.cs` Update.
