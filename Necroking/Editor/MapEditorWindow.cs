@@ -5917,11 +5917,19 @@ public class MapEditorWindow
         int curY = lo.AfterGridY;
 
         // Hover tooltip — queued globally, drawn topmost after the clip closes.
+        // Colored so the unit's grey Description line matches the in-game hover
+        // and spell tooltips.
         if (hoveredIdx >= 0 && hoveredIdx < unitIds.Count)
         {
             var def = _gameData.Units.Get(unitIds[hoveredIdx]);
-            string tip = def != null ? $"{def.DisplayName} [{def.Faction}]" : unitIds[hoveredIdx];
-            DrawGridCellTooltip(tip, hoveredCell);
+            var tip = new List<(string, Color)>
+            {
+                (def != null ? $"{def.DisplayName} [{def.Faction}]" : unitIds[hoveredIdx],
+                 Necroking.UI.SpellTooltip.Text),
+            };
+            if (!string.IsNullOrEmpty(def?.Description))
+                tip.Add((def.Description, Necroking.UI.SpellTooltip.Dim));
+            DrawGridCellTooltipLines(tip);
         }
 
         // Placed units count
@@ -6067,6 +6075,17 @@ public class MapEditorWindow
         if (!Game1.Popups.IsEmpty || (_eb != null && (_eb.IsColorPickerOpen || _eb.IsDropdownOpen)))
             return;
         Game1.Tooltips.RequestText(text, anchorCell);
+    }
+
+    /// <summary>Colored, multi-line variant of <see cref="DrawGridCellTooltip"/>
+    /// with the same popup/dropdown suppression. Cursor-anchored (the rect-anchored
+    /// RequestText has no colored overload), matching the in-game unit/spell
+    /// tooltips — used by the Units tab for the name + grey Description line.</summary>
+    private void DrawGridCellTooltipLines(IReadOnlyList<(string, Color)> lines)
+    {
+        if (!Game1.Popups.IsEmpty || (_eb != null && (_eb.IsColorPickerOpen || _eb.IsDropdownOpen)))
+            return;
+        Game1.Tooltips.RequestLines(lines);
     }
 
     private void DrawPlacedUnitMarkers(int screenW, int screenH)
