@@ -168,7 +168,37 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
   `bottomBarTop = panelY + (screenH - 20) - 92` in `Update` (the block that zeroes `leftClick`
   for clicks on the tab rows / bottom bar so scrolled tab content underneath never sees them).
   Ctrl+S / Ctrl+L in the `Update` shortcut block call the same `SaveMap`/`LoadMap`.
-- **`LoadMap()` is a data-only editor reload, NOT a game restart:** it clears + re-reads
+- **Panel-button draw/click split census (the "buttons diverge" bug class).** Three click
+  mechanisms coexist in `MapEditorWindow.cs`:
+  1. **`_eb.Draw*` EditorBase widgets** (`DrawButton`/`DrawCombo`/`DrawCheckbox`/`DrawTextField`,
+     60+ call sites) — fused draw+hit-test during `Draw`, fire on release via
+     `InputState.PressStartPos`/`DrawPrevMouse`. The **Zones tab is almost entirely this**
+     (incl. "Delete Zone" mutating the list mid-Draw — the proven in-file precedent that
+     panel-local actions may run during Draw). `EditorBase.DrawButton(text,x,y,w,h,bg,layer)`
+     + clip-aware `HitTest(rect)` are the shared primitives.
+  2. **Draw-only `DrawButtonRect(text,x,y,w,h,bg)`** (private, bottom of file) **+ a
+     hand-rolled y-math hit-test in the matching `Update<X>Tab`** — THE divergence source.
+     Draw and Update each own a parallel copy of the layout formula that must agree
+     byte-for-byte, e.g. `DrawGroundTab` receives `contentY` and advances it via
+     `DrawSectionHeader(ref contentY, …)` while `UpdateGroundTab` independently recomputes
+     `contentY = panelY + TabRowHeight*2 + HeaderHeight + 6`. Sites: Ground/Grass
+     "+ Add Type"/"Delete", Roads/Regions/Triggers "+ Add"/"Delete"/place-mode toggles,
+     bottom-bar Save/Load/Undo/Reload (`UpdateBottomBarClicks`). The comment at the
+     bottom-bar draw ("doing it here would compare against `_prevMouse` after it was already
+     overwritten") refers to MapEditorWindow's OWN raw-MouseState edge detection — it does
+     NOT apply to `_eb.DrawButton`, which uses InputState's Draw-frame snapshot.
+  3. **Cached-layout instance fields** (Units/Objects thumbnail grids: `_unitListDrawY` etc.
+     written in Draw, hit-tested in next frame's Update — one-frame-stale by design).
+  **Refactoring a tab to single-source layout:** make a pure per-tab layout step (method
+  returning a struct of named `Rectangle`s, or convert to `_eb.DrawButton`) computed from
+  `(panelX, contentY, contentH, _tabScroll[tab], selection)` and consumed by BOTH
+  `Draw<X>Tab` and `Update<X>Tab` — geometry is cheap, call it twice per frame (avoids the
+  stale-field pattern). Precedents for the layout-struct shape: `UI/MainMenuScreen.cs` /
+  `PauseMenuScreen.cs` / `ScenarioListScreen.cs` private `BuildLayout`, and
+  `UI/HUDRenderer.cs` `TimeControlLayout` (one formula shared by draw + hit-test + hit
+  rects). Keep Update-side actions honoring the shared gates (`leftClick` pre-zeroed for
+  tab-row/bottom-bar clicks, `overPanel`, popup blocking); actions that flip `_menuState` or
+  rebuild the world (Load/Reload) should stay in Update, not fire mid-Draw. it clears + re-reads
   ground types, env defs/objects, walls, grass, triggers, roads, zones and `_placedUnits`
   from `assets/maps/<_mapFilename>.json` (+ sidecars) and clears `_undoStack` — but never
   touches `_sim` (no unit respawn, no player move, no `StartGame`). A "reload the world as a
