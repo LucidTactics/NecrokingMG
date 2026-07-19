@@ -10,7 +10,7 @@
       "parents": [],
       "costs": [],
       "effect": "unlock_building",
-      "effectArg": "Table2",
+      "effectArg": "necro_bench",
       "startLearned": false
     },
     {
