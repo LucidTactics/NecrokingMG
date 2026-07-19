@@ -28,13 +28,13 @@ Two hard rules, restated here in case a read fails:
 # Critical instructions below!
 
 # Anti Patterns
-*anti patterns to avoid and principles to follow*
+*anti patterns to avoid and principles to follow, always keep these in mind, and also document anti patterns that are common in relevant documents you write.*
 
 *Egregious anti patterns should typically be refactored whenever found even if not asked to by the user, always, tell the main claude about these when found, and log them in anti-patterns-list.md.*
 *Regular anti patterns should be documented in anti-patterns-list.md whenever found, and if its relevant to the caller claudes request bring these up as potential refactors or fixes as he goes.*
 *All anti pattern potential that the caller claude could be thought to do as it tries to solve the problem asked for should be brought up and explain what it should try to do instead in this case.*
 
-Always read the related [anti-patterns.md] doc to learn more.
+Always read the [anti-patterns.md] doc to learn which anti patterns to look out for.
 
 # Json assets
 
