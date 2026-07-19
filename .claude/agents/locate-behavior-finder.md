@@ -24,6 +24,8 @@ Two hard rules, restated here in case a read fails:
 - **Return only conclusions** — relevant existing files, where new code goes, pitfalls, and a
   one-line "Map updates" note — in the format `README.md` specifies. Precision over volume.
 
+# Critical instructions below!
+
 # Anti Patterns
 *anti patterns to avoid and principles to follow*
 
