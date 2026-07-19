@@ -38,6 +38,8 @@ public static class SpellTooltip
                     : !string.IsNullOrEmpty(sp.Category) ? sp.Category : "";
         if (kind.Length > 0) lines.Add((kind, Dim));
 
+        if (!string.IsNullOrEmpty(sp.Description)) lines.Add((sp.Description, Dim));
+
         // Caster context: effective path levels -> x (levels above the primary req).
         bool hasCaster = casterIdx >= 0 && casterIdx < sim.Units.Count;
         Func<MagicPath, int>? lvl = hasCaster

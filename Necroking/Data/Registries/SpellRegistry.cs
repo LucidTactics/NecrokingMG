@@ -57,16 +57,19 @@ public class SpellDef : INamedDef
     [EditorCombo("Projectile", "Buff", "Debuff", "Summon", "Strike", "Beam", "Drain", "Cloud", "Sacrifice", "Blight", "WolfHunt")]
     [JsonPropertyName("category")] public string Category { get; set; } = "Projectile";
 
+    [EditorField(Label = "Description", Order = 3, Tooltip = "Short qualitative blurb shown in grey on the spell tooltip.\nDescribe what the spell does, not its numbers.")]
+    [JsonPropertyName("description")] public string Description { get; set; } = "";
+
     // ===== Grimoire presentation (tab school + tile template + icon) =====
-    [EditorField(Label = "School", Order = 3, Tooltip = "Grimoire tab this spell is listed under.")]
+    [EditorField(Label = "School", Order = 4, Tooltip = "Grimoire tab this spell is listed under.")]
     [EditorCombo("Conjuration", "Alteration", "Evocation", "Construction")]
     [JsonPropertyName("school")] public string School { get; set; } = "";
 
-    [EditorField(Label = "Tile Template", Order = 4, Tooltip = "Art template for the spell's grimoire tile.")]
+    [EditorField(Label = "Tile Template", Order = 5, Tooltip = "Art template for the spell's grimoire tile.")]
     [EditorCombo("summon", "evocation", "buff", "debuff")]
     [JsonPropertyName("tileTemplate")] public string TileTemplate { get; set; } = "";
 
-    [EditorField(Label = "Icon", Order = 5, Tooltip = "Icon image path for the grimoire tile and spell bar.")]
+    [EditorField(Label = "Icon", Order = 6, Tooltip = "Icon image path for the grimoire tile and spell bar.")]
     [JsonPropertyName("icon")] public string Icon { get; set; } = "";
 
     /// <summary>Hide from the grimoire (debug/internal spells).</summary>
