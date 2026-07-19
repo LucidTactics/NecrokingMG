@@ -48,8 +48,6 @@ public class Projectile
     public Vec2 BaseDirection;
     public Oscillator Swirl;
     public Oscillator Swirl2;
-    public float SwirlAmplitude2;
-    public float SwirlPhase2;
     public string PotionID = "";
     public string IconTexturePath = "";
     public bool HitsCorpses;
