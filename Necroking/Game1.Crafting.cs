@@ -99,6 +99,87 @@ public partial class Game1
         return true;
     }
 
+    /// <summary>Begin a corpse put-down (onto a craft table, or the ground when
+    /// <paramref name="tableIdx"/> &lt; 0). Enters the visual PutDown phase AND schedules the
+    /// gameplay resolution on the sim clock — the transfer/craft no longer waits on the
+    /// PutDown animation reporting IsAnimFinished (the old anim-coupling anti-pattern).
+    ///
+    /// The scheduled delay is the natural length of the PutDown clip, so the speed-1 animation
+    /// lands exactly as the event fires; if the clip has no timing we fall back to a fixed
+    /// duration and the animation still just reflects it. Caller sets the corpse's LerpStartPos
+    /// (table spawn slot vs. ground drop point) before calling. See ScheduledEvents /
+    /// Render.AnimTiming for the pattern.</summary>
+    internal void BeginCorpsePutDown(int necroIdx, int tableIdx)
+    {
+        if (necroIdx < 0) return;
+        _sim.UnitsMut[necroIdx].PutDownTableIdx = tableIdx;
+        _sim.UnitsMut[necroIdx].CorpseInteractPhase = 5; // PutDown (visual only from here on)
+
+        int corpseId = _sim.Units[necroIdx].CarryingCorpseID;
+
+        float putDownSeconds = 0.5f; // fallback if the clip has no timing metadata
+        uint uid = _sim.Units[necroIdx].Id;
+        if (_unitAnims.TryGetValue(uid, out var anim))
+        {
+            float natural = Render.AnimTiming.NaturalSeconds(anim.Ctrl, AnimState.PutDown);
+            if (natural > 0.01f) putDownSeconds = natural;
+        }
+
+        // corpseId/tableIdx are stable across index churn; resolve the necromancer at fire time.
+        _sim.ScheduledEvents.Schedule(putDownSeconds, () => CompleteCorpsePutDown(corpseId, tableIdx));
+    }
+
+    /// <summary>Resolve a scheduled corpse put-down (fired from Simulation.Tick via
+    /// ScheduledEvents): load the carried corpse into the table slot and remove it from the sim
+    /// (table drop), or settle it flat at the drop point (ground drop), then clear carry state
+    /// and auto-start the craft. Re-validates the necromancer is still mid-PutDown carrying this
+    /// exact corpse, so a stale event (interaction cancelled, corpse gone) is a safe no-op.</summary>
+    private void CompleteCorpsePutDown(int corpseId, int tableIdx)
+    {
+        int necroIdx = _sim.NecromancerIndex;
+        if (necroIdx < 0) return;
+        if (_sim.Units[necroIdx].CorpseInteractPhase != 5
+            || _sim.Units[necroIdx].CarryingCorpseID != corpseId)
+            return; // stale — the put-down was cancelled/superseded
+
+        var cc = _sim.FindCorpseByID(corpseId);
+
+        bool loadedIntoTable = false;
+        if (tableIdx >= 0 && _envSystem != null && cc != null
+            && TableSystem.LoadCorpseIntoTable(_envSystem, tableIdx, cc) >= 0)
+        {
+            int ci = _sim.FindCorpseIndexByID(corpseId);
+            if (ci >= 0) _sim.CorpsesMut.RemoveAt(ci);
+            loadedIntoTable = true;
+        }
+        else if (cc != null)
+        {
+            // Ground drop (or table-load fell through, e.g. slot taken). Land flat at the
+            // drop point — zero Z/physics so the settled draw lands where the put-down was.
+            cc.Position = cc.LerpStartPos;
+            cc.Z = 0f;
+            cc.InPhysics = false;
+            cc.DraggedByUnitID = GameConstants.InvalidUnit;
+        }
+
+        _sim.UnitsMut[necroIdx].CarryingCorpseID = -1;
+        _sim.UnitsMut[necroIdx].CorpseInteractPhase = 0;
+        _sim.UnitsMut[necroIdx].PutDownTableIdx = -1;
+        // Animation returns to Idle on its own next frame: the phase-0 work-anim guard in
+        // UpdateAnimations forces PutDown → Idle once CorpseInteractPhase is 0.
+
+        // Auto-start production; runs after the carry-state reset above or the unit is still
+        // IsLockedByAction when the craft routine starts. If refused (no essence / horde cap),
+        // fall back to opening the menu so the drop doesn't look like it ate the corpse for free.
+        if (loadedIntoTable && !StartTableCraft(tableIdx))
+        {
+            int sw = _graphics.PreferredBackBufferWidth;
+            int sh = _graphics.PreferredBackBufferHeight;
+            EnsureInventoryUIsInitialized();
+            _tableMenuUI.OpenForTable(tableIdx, sw, sh, _camera, _renderer);
+        }
+    }
+
     /// <summary>Start a foragable collection with arc animation instead of instant pickup.</summary>
     private void StartForagableCollection(int objIdx) => _foragables.StartCollection(objIdx);
 

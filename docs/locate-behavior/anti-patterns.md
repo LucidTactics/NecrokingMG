@@ -30,6 +30,36 @@ This makes us dependent on the animation timings, refactor this to put the timin
 ### **Egregious Anti Pattern**: Putting gameplay function calls in animation code
 This is especially bad since its very hard to track what the gameplay code actually does when you do this. Since now when you set an animation you not only set the visuals you are also declaring a gameplay function.
 
+### Canonical resolution: the timing-vs-animation abstraction (USE THIS)
+There is now one canonical way to sever animation↔gameplay coupling. It has two halves that
+compose; reach for them whenever you'd otherwise write `if (ctrl.IsAnimFinished) { …gameplay… }`
+or read an animation clock to decide *when* something happens:
+
+1. **Fire the gameplay event later** — `Necroking.Game.ScheduledEvents` (`Necroking/Game/ScheduledEvents.cs`),
+   reachable as `_sim.ScheduledEvents`. `Schedule(delaySeconds, () => …)` runs a callback on the
+   **sim clock** (ticked in `Simulation.Tick`, before the table-craft tick — deterministic, runs
+   headless). Returns a handle for `Cancel`. The callback should re-validate its target (ids can go
+   stale) and, per "direct over inject", closes over ids/indices and calls `Game1.Instance`/sim
+   methods directly rather than carrying injected delegates.
+2. **Make the animation reflect that clock** — `Necroking.Render.AnimTiming`
+   (`Necroking/Render/AnimTiming.cs`). `FitOneShot(ctrl, state, targetSeconds)` returns the
+   `PlaybackSpeed` that makes one play of a clip last exactly `targetSeconds`; `FitChannel(...)` fits a
+   Start→Loop→Finish triple into a target and hands back the Loop-phase `loopBudget`. `NaturalSeconds`
+   reads a clip's own length when *that* is the duration you want. Apply the returned speed right
+   before the per-frame `ctrl.Update`.
+
+**The rule:** a gameplay system owns the duration (a designer value like a table's `ProcessTime`, or a
+clip's natural length picked once); the animation is *fitted* to it and never advances it. Gameplay
+never waits on `IsAnimFinished`.
+
+**Worked example — necro-bench corpse drop (the fix that retired the egregious entry below):**
+`Game1.BeginCorpsePutDown` sets the visual PutDown phase and `Schedule`s the transfer+craft at the clip's
+`NaturalSeconds`; `Game1.CompleteCorpsePutDown` (fired from the sim clock) does the corpse transfer,
+`StartTableCraft`, and clears the phase — the animation returns to Idle on its own. The craft *loop* itself
+is fitted to `ProcessTime` via `AnimTiming.FitChannel` in `Game1.Animation.cs` (imbue-table block), with
+`TableCraftingSystem.Tick` completing on the same `LoopBudget`. `ChannelPlaybackSpeed` (reanimation casts)
+also delegates to `FitChannel` — one source of truth for the fit math.
+
 ## Principle: No dependence injection class patterns
 Call functions directly instead. Passing functions into objects should only be done when we add
 local information to the function, such as `void ValidateDef(UnitDef def, Action<string> report)`.
