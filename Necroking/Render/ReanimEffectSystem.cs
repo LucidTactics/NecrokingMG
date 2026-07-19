@@ -423,19 +423,25 @@ internal class ReanimEffectSystem
     private struct ParticleDraw
     {
         public Texture2D Tex; public Vector2 ScreenPos, Origin; public Rectangle Src;
-        public float Scale, Rot; public Color Color; public bool Additive; public float SortY, LayerDepth;
+        public float Scale, Rot; public Color Color; public float SortY, LayerDepth;
     }
     private readonly List<ParticleDraw> _sortScratch = new();
     // Delegates to the occluder stamp's mapping — puffs and unit stamps MUST share it to compare.
     private float FogDepth(float y) => Necroking.GameRenderer.FogDepthForY(y, _camera!.Position.Y);
 
+    // Camera-ward sort/depth nudge for every puff (world units at scale 1). The puff
+    // Y-scatter is ±0.43..0.53×scale (MakePuff: scatter*0.5), so +0.25 puts ~3/4 of the
+    // plume in front of the unit's own depth stamp and leaves the rest rising behind it.
+    private const float FrontSortBias = 0.25f;
+
     /// <summary>Draw ALL active reanim particles — the diffuse light + green cloud puffs (additive) and
-    /// the dark dust puffs (alpha) — in ONE Y-sorted sequence, flipping blend per puff, so bright and
-    /// dark puffs interleave by spawn position instead of the clouds always drawing over the dust.
+    /// the dark dust puffs (alpha) — in ONE Y-sorted premultiplied-AlphaBlend batch. Bright puffs are
+    /// encoded with A=0 (see <see cref="PremultAdditive"/>) so One/InvSrcAlpha degenerates to dst+src
+    /// for them — additive and alpha sprites interleave freely with no blend flips and no shader.
     /// DepthStencilState.DepthRead, so units already stamped into the depth buffer occlude them. Manages
-    /// its own batches (ends on exit); the caller re-Begins its own batch afterward. Used only on the
+    /// its own batch (ends on exit); the caller re-Begins its own batch afterward. Used only on the
     /// DepthSortedFog path — the OFF path still uses DrawAdditive + the Y-sorted dust depth list.</summary>
-    public void DrawSortedParticles(Microsoft.Xna.Framework.Graphics.Effect? hdrEffect)
+    public void DrawSortedParticles()
     {
         if (_batch == null || _camera == null || _renderer == null || _cloud?.Texture == null) return;
         float zoom = _camera.Zoom;
@@ -459,7 +465,7 @@ internal class ReanimEffectSystem
                     _sortScratch.Add(new ParticleDraw {
                         Tex = _glow, ScreenPos = lp, Src = new Rectangle(0, 0, _glow.Width, _glow.Height),
                         Origin = new Vector2(_glow.Width * 0.5f, _glow.Height * 0.5f), Scale = lscale, Rot = 0f,
-                        Color = inst.Cfg.LightColor.ToHdrVertex(la), Additive = true,
+                        Color = PremultAdditive(inst.Cfg.LightColor, la),
                         SortY = inst.Ground.Y, LayerDepth = FogDepth(inst.Ground.Y) });
                     RegisterScatter(inst, la);
                 }
@@ -472,26 +478,19 @@ internal class ReanimEffectSystem
         if (_sortScratch.Count == 0) return;
         _sortScratch.Sort(static (a, b) => a.SortY.CompareTo(b.SortY));   // back (small Y) -> front (large Y)
 
-        bool? curAdd = null;
+        _batch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend,
+            SamplerState.LinearClamp, DepthStencilState.DepthRead, RasterizerState.CullNone);
         for (int i = 0; i < _sortScratch.Count; i++)
         {
             var d = _sortScratch[i];
-            if (curAdd != d.Additive)
-            {
-                if (curAdd != null) _batch.End();
-                _batch.Begin(SpriteSortMode.Deferred, d.Additive ? BlendState.Additive : BlendState.AlphaBlend,
-                    SamplerState.LinearClamp, DepthStencilState.DepthRead, RasterizerState.CullNone,
-                    d.Additive ? hdrEffect : null);
-                curAdd = d.Additive;
-            }
             _batch.Draw(d.Tex, d.ScreenPos, d.Src, d.Color, d.Rot, d.Origin, d.Scale, SpriteEffects.None, d.LayerDepth);
         }
-        if (curAdd != null) _batch.End();
+        _batch.End();
     }
 
-    // One puff -> a draw descriptor in _sortScratch. Mirrors DrawAdditive's cloud math (additive, HDR
-    // colour) and AddDustToDepthList's dust math (alpha, premultiplied colour, sorted a half-size
-    // forward). Same cloud03 sheet either way; only blend + colour differ.
+    // One puff -> a draw descriptor in _sortScratch. Mirrors DrawAdditive's cloud math and
+    // AddDustToDepthList's dust math. Same cloud03 sheet either way; only the colour encoding
+    // differs (A=0 premult-additive vs real premultiplied alpha — see PremultAdditive).
     private void AddPuff(in Puff q, Instance inst, float cyc, Texture2D tex, int frameW, float zoom, bool additive)
     {
         if (q.Age <= 0f || q.Age >= q.Lifetime) return;
@@ -504,12 +503,32 @@ internal class ReanimEffectSystem
         int frame = _cloud!.GetFrameAtNormalizedTime((t * cyc + q.FramePhase) % 1f);
         var src = _cloud.GetFrameRect(frame);
         float scale = (q.WorldSize * zoom) / frameW;
-        float sortY = additive ? world.Y : world.Y + q.WorldSize * 0.5f;
+        // ONE sort convention for both families (their Y scatter interleaves bright and
+        // dark puffs), nudged camera-ward so most of the plume drifts in front of the
+        // unit's depth stamp. The old split (dust +half-size, clouds raw Y) out-ranged
+        // the scatter and segregated all dust in front of all clouds.
+        float sortY = world.Y + FrontSortBias * inst.Scale;
         _sortScratch.Add(new ParticleDraw {
             Tex = tex, ScreenPos = sp, Src = src, Origin = new Vector2(src.Width * 0.5f, src.Height * 0.5f),
-            Scale = scale, Rot = q.RotSpeed * inst.FogAge, Additive = additive,
-            Color = additive ? q.Color.ToHdrVertex(a) : ColorUtils.Premultiply(q.Color.R, q.Color.G, q.Color.B, a),
+            Scale = scale, Rot = q.RotSpeed * inst.FogAge,
+            Color = additive ? PremultAdditive(q.Color, a) : ColorUtils.Premultiply(q.Color.R, q.Color.G, q.Color.B, a),
             SortY = sortY, LayerDepth = FogDepth(sortY) });
+    }
+
+    // Additive inside the shared premultiplied AlphaBlend batch: RGB carries
+    // color × intensity × fade, A=0 turns One/InvSrcAlpha into pure dst+src (same trick as
+    // BuffVisualSystem.EncodeColor). This bypasses HdrSprite.fx, so the effective intensity
+    // ceiling is where a channel hits 255 (~1.0) — fine for the reanim presets (intensity
+    // ≤1.3 on channels ≤170), but a future high-intensity preset would silently clip here
+    // instead of blooming harder; route it back through the HDR shader if that's ever wanted.
+    private static Color PremultAdditive(HdrColor c, float fade)
+    {
+        float s = c.Intensity * fade * (c.A / 255f);
+        return new Color(
+            (byte)Math.Clamp(c.R * s, 0f, 255f),
+            (byte)Math.Clamp(c.G * s, 0f, 255f),
+            (byte)Math.Clamp(c.B * s, 0f, 255f),
+            (byte)0);
     }
 
     private static float EaseOut(float t) => 1f - (1f - t) * (1f - t);

@@ -42,10 +42,10 @@ partial class GameRenderer
                 // Depth-sorted fog: draw ALL reanim particles (light + clouds +
                 // dust) in ONE Y-sorted pass, so bright and dark puffs interleave
                 // by spawn position, depth-testing the units' stamps so a risen
-                // unit occludes them. It manages its own batches, so suspend the
+                // unit occludes them. It manages its own batch, so suspend the
                 // shared additive batch around it.
                 s.Suspend();
-                _g._reanimFx.DrawSortedParticles(_g._hdrSpriteEffect);
+                _g._reanimFx.DrawSortedParticles();
                 s.Resume();
             }
             else
