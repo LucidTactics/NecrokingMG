@@ -31,6 +31,12 @@ dotnet publish Necroking/Necroking.csproj -c Publish -r win-x64 --self-contained
 ```
 The exe references `assets/` and `data/` at the project root (two levels up from `bin/Publish/`) — no file copying needed.
 
+## Bash Commands
+A `PreToolUse` hook (`tools/hooks/bash_prompt_guard.py`) gates every Bash call. Keep commands guard-friendly (full detail in [tools/hooks/CLAUDE.md](tools/hooks/CLAUDE.md)):
+- **Read-only runs free.** No mutation = auto-allowed. Compound commands pass silently only when *every* segment (split on `&&`/`||`/`;`/`|`/newline) is read-only or allow-listed.
+- **Avoid, or expect a prompt/denial:** `>`/`>>` redirection, `$(...)` command substitution, heredocs, and mutating forms (`sed -i`, `find -delete`/`-exec`, `git push`, process/power-control). Non-allow-listed commands that *can* mutate are denied by default.
+- **Do:** prefer tools `Grep`/`Glob`/`Read` over `grep`/`find`/`cat` (clickable, faster). When the gate blocks legitimate work, fix it via an allow rule or catalogue entry — don't work around it silently.
+
 ## Directory Layout
 ```
 NecrokingMG/
