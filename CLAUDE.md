@@ -99,3 +99,4 @@ Use delegates for map/reduce or other such functional jobs, but not for dependen
    thing to avoid. Grep/Glob/LSP are for *verifying* a symbol the skill pointed you at, not
    for the initial "where is this" search.
 2. **Use `locate-behavior` again after scope changed significantly!** — we always want a well-grounded understanding of the code we work on.
+3. **Always use `locate-behaviour` before every refactor** - Even if you think you have enough context right now ask it again, refactors shouldn't be done lightly. It might even find wider refactor opportunities for you or potential problems that invalidates the refactor.
