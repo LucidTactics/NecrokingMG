@@ -71,6 +71,28 @@ Same-behavior-two-implementations violation. Fix direction: single-source the wi
 (a ranged-aware `GetAttackAnimDurationSec` twin, or fit the anim into the window via
 `AnimTiming`/compression like the archetype attack-override already does for cycles).
 
+**Update (commit `3766a9d`):** `RangedUnitHandler.ShotWindowSec` now derives the window from
+the anim's effect frame (`ctx.AnimMeta` lookup, covers the 50%-fallback case) — but it is
+DEFEATED in practice by the AnimMeta-loss bug below (`ctx.AnimMeta == null` → silent
+`PostShotFollowThrough` fallback), so archer shots still expire unresolved.
+
+# Set-once sim back-reference lost on GameSession recreate: `Simulation.SetAnimMeta` (found 2026-07-19)
+
+`_sim.SetAnimMeta(_animMeta)` is called EXACTLY ONCE, from the startup load step in
+`Necroking/Game1.Loading.cs` (~line 238) — on the ctor-era `Simulation`. But every
+`StartGame`/`StartScenario` runs `ResetWorldState()` → `_session = new GameSession()` →
+a fresh `Simulation` whose `_animMeta` is null, and `WireSimCallbacks()` (the designated
+"re-install Game1→Sim back-references after session recreate" hook) re-wires
+`ReanimHandler`/`OnForagerAte`/`Workers` but NOT AnimMeta. Consequence: in every real play
+session and every scenario, `AIContext.AnimMeta == null`, so `RangedUnitHandler.ShotWindowSec`
+falls back to the flat 0.6s window (archer arrows janitor-killed — the live "queued shots
+never resolve into FireArrowAt" bug) and any other AI effect-time lookup silently degrades.
+This is the "silent-null optional wiring" anti-pattern (cf. the `?.`-invoked DI delegates in
+anti-patterns.md): a `?`-nullable set-once field whose loss produces no error.
+**Fix: add `_sim.SetAnimMeta(_animMeta)` to `WireSimCallbacks()` in `Necroking/Game1.cs`**
+(guard for LoadContent ordering: `_animMeta` may be empty before load — call is harmless).
+Diagnostic: `[SetAnimMeta] N entries` in `log/jump.log` appears once at startup only.
+
 # Wrong-list weapon lookup for ranged pending attacks (latent, found 2026-07-19)
 
 `Game1.Animation.cs` `ComputeWeaponCycleSeconds(unitIdx, weaponIdx)` and

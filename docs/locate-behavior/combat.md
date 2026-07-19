@@ -343,14 +343,19 @@ impact frame (knockdown, physics, forced state) can't resolve during a later unr
 anim; `CombatTransitions.cs`/`HordeMinionHandler.cs` deliberately KEEP `PendingAttack`
 across routine exits because the janitor owns expiry. **Its correctness rests on the
 invariant "the impact frame lands inside the PostAttackTimer window"** — true for melee
-(the attack-selection loop stamps `PostAttackTimer = min(cycle, GetAttackAnimDurationSec)`),
-**FALSE for ranged**: `RangedUnitHandler.TryQueueShot` stamps a flat
-`PostAttackTimer = PostShotFollowThrough (0.6f)` (deliberately short for kiting). Any
-Ranged1 anim whose effect frame comes after 600ms → every shot expires unresolved, the
-bow anim plays, no arrow ever spawns. Real case: `NavarreLightInfantry_Archer` Ranged1 =
-1330ms total with `effect_time_ms:0` → 50% fallback = 665ms > 600ms window (the
-Inquisitor-family Ranged1 is 950ms → 475ms, which is why only archers break). See
-anti-patterns-list.md "Swing-expiry window".
+(the attack-selection loop stamps `PostAttackTimer = min(cycle, GetAttackAnimDurationSec)`).
+**Ranged**: `RangedUnitHandler.TryQueueShot` now stamps `PostAttackTimer =
+ShotWindowSec(...)` (commit `3766a9d`) — derived from the Ranged1 anim's effect frame via
+`ctx.AnimMeta` (covers the 50%-of-clip fallback), floored at `PostShotFollowThrough (0.6f)`.
+**BUT `ctx.AnimMeta` is null in every real session**: `Simulation.SetAnimMeta` is called
+only once at startup (`Game1.Loading.cs` ~238) and `ResetWorldState()`'s session recreate
+loses it (`WireSimCallbacks()` doesn't re-install it) → `ShotWindowSec` silently returns
+the flat 0.6s and every archer shot whose release lands later expires unresolved
+(`NavarreLightInfantry_Archer` Ranged1 = 1330ms, `effect_time_ms:0` → 665ms release >
+600ms window). See anti-patterns-list.md "Set-once sim back-reference lost on GameSession
+recreate". Note the split: the ANIM-side release frame works fine (per-unit
+`AnimController.SetAnimMeta` reads `Game1._animMeta` directly in `BuildUnitAnimData`);
+only the AI-side window lookup goes through the sim's lost copy.
 
 ### `Necroking/AI/SubroutineSteps.cs` / combat handlers
 `GetMeleeRange(ref ctx, targetIdx)` → `MeleeRangeUtil.Compute`. Handlers that gate melee on

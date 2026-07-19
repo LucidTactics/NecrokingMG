@@ -35,6 +35,38 @@ this doc is the code map.
   that want fast-forward batch extra `sim.Tick(1/60f)` calls themselves inside `OnTick`
   (see BalanceMatrixScenario `_speed`).
 
+## Headless facts scenarios rely on
+
+- **Headless runs the FULL frame loop** — `LaunchArgs.Headless` only hides/shrinks the
+  window; `Game1.Update` still calls `UpdateAnimations(_clock.WorldDt)` every frame
+  (`Game1.cs` ~3482, unconditional), so anim effect frames (`JustHitEffectFrame` →
+  `AttackResolver.TryResolvePendingAttackAtImpact` → arrow spawns) DO fire headless.
+  `AnimController` is data-driven (`.animationmeta`), not GPU-dependent. Caveat: the anim
+  pass runs once per FRAME — a scenario that batches extra `sim.Tick` calls for
+  fast-forward outruns the effect frames (why balance_matrix self-resolves swings).
+  Anim-triggered behavior (archer arrows) must run at 1x.
+- **Pass/fail contract**: `OnComplete(sim)` returns the process exit code (0 = pass,
+  nonzero = fail). Headless: `Environment.ExitCode = result; Exit()` + a stderr line
+  `SCENARIO PASS: <name>` / `SCENARIO FAIL: <name> (code=N)`. Template =
+  `TrampleKillScenario` (latch bools in `OnTick`, validate + `DebugLog.Log(ScenarioLog, …)`
+  in `OnComplete`, hard `MaxDuration` timeout so it can't wedge).
+- **Detecting projectiles**: `sim.Projectiles` = the `ProjectileManager`
+  (`Simulation.cs` `Projectiles => _projectiles`); live list =
+  `sim.Projectiles.Projectiles` (`IReadOnlyList<Projectile>`, `Projectile.cs`). Poll each
+  `OnTick` and latch (`Count > 0` / `Type == ProjectileType.RegularHit`) — projectiles die
+  on impact/ground/MaxAge 10s, so a one-shot check can miss.
+- **Spawning by def id**: `sim.SpawnUnitByID("<units.json id>", pos)` → unit index or -1;
+  `ApplyDefRuntimeFields` copies the def's archetype/stats, so the archetype AI runs
+  as-authored. Gotchas: def *id* ≠ sprite name (the archer is id `"archer"`, sprite
+  `NavarreLightInfantry_Archer`); deer = `"FemaleDeer"`/`"MaleDeer"`. Hostility is simply
+  faction ≠ faction (`FactionMaskExt.AllExcept`) — Human vs Animal are enemies.
+- **`ResetWorldState` wipes lose set-once sim wiring**: the fresh scenario `Simulation`
+  never gets `SetAnimMeta` (see anti-patterns-list.md) — `ctx.AnimMeta` is null in
+  scenarios, same as in normal play after StartGame.
+- **Unknown scenario name wedges**: `StartScenario` logs "Failed to create scenario" and
+  returns without exiting — the headless process idles forever. Double-check the
+  `Register` name before running (see MEMORY scenario-runner-gotchas).
+
 ## The balance tournament (worked example of a batch combat-stats harness)
 
 - **`Necroking/Scenario/Scenarios/BalanceMatrixScenario.cs`** (`balance_matrix`, Combat) —
