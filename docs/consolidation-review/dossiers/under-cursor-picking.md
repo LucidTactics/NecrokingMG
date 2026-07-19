@@ -7,7 +7,7 @@ under the cursor" and needs ONE world-pick API.
 
 **The consolidation the evidence asks for already happened — today.**
 `Necroking/Game/WorldQuery.cs` (`_sim.Query`, owned by `Simulation`, dated 2026-07-06 in
-`docs/locate-behavior/world.md:62` and `memory/standard_patterns.md:68`) is the declared
+`docs/locate-behavior/world.md:62` and `docs/standard_patterns.md:68`) is the declared
 single canonical home for "nearest X / X under cursor / all X in radius" over units, env
 objects, and corpses, with struct-generic filters (`EnvForagables`, `EnvWorkerHomes`,
 `EnvByDefIndex`, `EnvBerryBushes`, `CorpseExclude.Free`) and an explicit contract that
@@ -150,7 +150,7 @@ against `WorldQuery.IsExcluded`, Game1.cs:156-173).
 ## Note for the standard-patterns list
 
 Findings 2-4 should be appended to the "still-unmigrated scans" list in
-`memory/standard_patterns.md:78-81` / `docs/locate-behavior/world.md:68-70` if not
+`docs/standard_patterns.md:78-81` / `docs/locate-behavior/world.md:68-70` if not
 fixed immediately — the current list (WorkerSystem, CorpseInteractionManager,
 SpellCasting/Projectile, VillageThreat/BoarForageAI) omits `TryMeleeOrGather`,
 `FindBerryBushNear`, and `TryPickTetherEnd`.

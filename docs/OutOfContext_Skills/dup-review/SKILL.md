@@ -66,7 +66,7 @@ reconcile → **judge only changed units** → publish. Run `tools/*` via
 | 7 | **Concept audit.** Cross `clusters/summary.txt` + labeler `dup_hint`s against the subsystem inventory in `docs/locate-behavior/overview.md` → 15–25 investigation units. **Reuse the previous unit list** (`verdicts.json` `units[]`) as the frame; add units only for genuinely new/changed concept areas. | main session (Fable) |
 | 8 | **Reconcile.** `python tools/label_store.py reconcile --extract-dir cache/method_extract --show --json cache/method_extract/judge_worklist.json`. Emits per-finding buckets: `carried` / `resolved` / `needs_rejudge` / `needs_review` (rules below). | `label_store.py reconcile` |
 | 9 | **Judge.** For each unit with anything in `needs_rejudge` / `needs_review` (or new cluster evidence), spawn a **Fable** subagent with `judge-prompt.md` + the unit's cluster evidence + its prior dossier + prior verdicts. Each **must read the actual code at HEAD** and **emit anchors (store keys) for every finding**. Units that are entirely `carried` get NO judge. | Fable agents |
-| 10 | **Publish.** Rewrite `docs/consolidation-review/verdicts.md` + changed `dossiers/*`; update `store/verdicts.json` + `store/meta.json` (new `persisted_at_commit`, date, counts); append actionable CONSOLIDATE items to `memory/consolidation_opportunities.md`; refresh the README date/counts. Then **offer the user a single commit** (per git policy — this skill makes no commits or pushes itself). | main session |
+| 10 | **Publish.** Rewrite `docs/consolidation-review/verdicts.md` + changed `dossiers/*`; update `store/verdicts.json` + `store/meta.json` (new `persisted_at_commit`, date, counts); append actionable CONSOLIDATE items to `docs/consolidation_opportunities.md`; refresh the README date/counts. Then **offer the user a single commit** (per git policy — this skill makes no commits or pushes itself). | main session |
 
 ## Reconciliation rules (step 8, from operationalizing.md §1.3)
 
@@ -110,7 +110,7 @@ forces a full re-label (the ~2.6M worst case) — that's why the bar for taxonom
 - Store updates: `docs/consolidation-review/store/{labels.json, verdicts.json, meta.json}`.
 - Human-facing: `docs/consolidation-review/{README.md, verdicts.md, dossiers/*}` (rewritten
   in place; git history is the archive of past reviews).
-- Actionable follow-ups: appended to `memory/consolidation_opportunities.md`.
+- Actionable follow-ups: appended to `docs/consolidation_opportunities.md`.
 - Regenerable scratch (gitignored): `cache/method_extract/` (catalog, batches, clusters,
   worklists).
 

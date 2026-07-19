@@ -866,3 +866,9 @@ control, or positioning a new left-side HUD panel relative to the player status 
 - SpriteAtlas sync `Load` is reimplemented on the split-phase primitives;
   `LoadExtension` deliberately is not (placeholder-list bookend — see
   docs/consolidation-review/dossiers/texture-asset-caching.md).
+
+## VFX & Zoom
+Any new or changed visual effect must pass the zoom check before committing: every
+constant classified (world vs px-at-32 vs screen — offsets/anchors/speeds too), ONE
+scaling policy per effect, screenshot-verified paused at zoom 8/32/128. Full protocol +
+staging recipes: [docs/vfx-zoom-audit.md](docs/vfx-zoom-audit.md).

@@ -253,7 +253,7 @@ HEADLINE: The proposed INamedRegistry facade is mostly unnecessary — clone is 
 - [KEEP_SEPARATE/low] UnitRegistry CountUnitsWith*/Remove*FromAll equipment triples
     Weapons is a list of slot objects matched by .Id while Armors/Shields are List<string> — structural variance where a generic would just move the loop behind caller-supplied selectors; six adjacent 4-line methods with one consumer (editor delete-confirm) aren't worth a framework.
 - [KEEP_SEPARATE/low] Registry clone / DeepClone JSON round-trips
-    Evidence is stale: consolidation already happened — RegistryBase.CloneDef is the documented standard (memory/standard_patterns.md), editor Clone* methods are 1-line adapters adding DisplayName suffixes, and JsonClone.Deep vs UIEditor DeepClone use deliberately different serializer options (save-fidelity vs undo-fidelity) that are load-bearing.
+    Evidence is stale: consolidation already happened — RegistryBase.CloneDef is the documented standard (docs/standard_patterns.md), editor Clone* methods are 1-line adapters adding DisplayName suffixes, and JsonClone.Deep vs UIEditor DeepClone use deliberately different serializer options (save-fidelity vs undo-fidelity) that are load-bearing.
 
 ## movement-steering-helpers
 HEADLINE: The labeler's central claim is backwards — the forage/wolf-hunt helpers already route through SubroutineSteps — but verification surfaced the real duplicate it missed: the legacy AIBehavior path in Simulation.cs carries two private, already-diverged copies of the canonical MoveToward seek math, plus two small verbatim duplications (StrideCalibration formula, SoloPredator disengage) worth S-effort folds.

@@ -177,7 +177,7 @@ fires it spontaneously. It is a multi-hour, multi-million-token operation.
 | 7 | Concept audit | main session (Fable) | Cross the cluster summary + dup_hints against `docs/locate-behavior/overview.md`'s subsystem inventory → 15–25 investigation units. Reuse the previous unit list as the starting frame; add units only for new/changed concept areas. |
 | 8 | Reconcile | `label_store.py reconcile` | Applies §1.3: carried / resolved / needs-rejudge per finding; emits the judge worklist. |
 | 9 | Judge | Fable subagents, one per unit needing judgment | Each gets: unit evidence, prior dossier, prior verdicts for the unit, judge-prompt.md. Must read code at HEAD; must emit anchors for every finding. |
-| 10 | Publish | main session | Rewrite `verdicts.md` + changed `dossiers/*`, update `store/verdicts.json` + `meta.json`, append actionable items to `memory/consolidation_opportunities.md`, refresh the README date/counts. Offer a single commit (per git policy — orchestrated by the user session, this skill itself makes no pushes). |
+| 10 | Publish | main session | Rewrite `verdicts.md` + changed `dossiers/*`, update `store/verdicts.json` + `meta.json`, append actionable items to `docs/consolidation_opportunities.md`, refresh the README date/counts. Offer a single commit (per git policy — orchestrated by the user session, this skill itself makes no pushes). |
 
 ### 2.3 Budget expectations (state these in SKILL.md so the user can abort)
 
@@ -268,7 +268,7 @@ python tools/label_store.py query --like Necroking/X.cs::Type::Foo --top 10
 ```
 
 If a near-duplicate surfaces, normal CLAUDE.md consolidation rules apply (reuse/extend, or
-note it in `memory/consolidation_opportunities.md`). This is also how new code enters the
+note it in `docs/consolidation_opportunities.md`). This is also how new code enters the
 store between reviews instead of piling up as unlabeled drift.
 
 ### 3.3 Query mechanics (in `label_store.py`, pure python, no LLM)
