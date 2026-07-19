@@ -351,6 +351,64 @@ queued swing. The whiff mechanisms are upstream:
   `Unit.CurrentAttackLungeDist` (weapon `lungeDist`, stamped in the attack-selection loop);
   Position doesn't move.
 
+## Damage-application layer — the three resolver funnels + DamageSystem
+
+All damage converges on **three formula funnels** (each rolls dice, applies
+armor/toughness, and writes its own `CombatLogEntry`), which then hand the net
+number to `Game/DamageSystem.cs`:
+
+1. **Melee** — `Simulation.ResolveMeleeAttack` (`Necroking/Game/Simulation.cs`, private;
+   external door = `ResolveMeleeAttackExternal(attackerIdx, defenderIdx, weaponIdx,
+   suppressDodgeAnim, forceHit, peekOnly)` used by Trample/Sweep). Full Dominions-style
+   opposed roll: tier-4 DRN both sides, fatigue penalties (atk −1/20, def −1/10),
+   paralysis fractions, buff-modified Attack/Defense, defender weapon DefenseBonus +
+   ShieldDefense, Harassment penalty; miss → `Harassment++` + `ApplyDodgeAnim`; shield
+   interpose (`modAtk < modDef + ShieldParry` → shield prot added); hit location
+   (`UnitUtil.RollHitLocation`); damage = Strength(×1.25 2H) + weapon + DRN; blunt/head
+   +25% pre-prot, slashing +25% post-prot; piercing 15% / AP 50% / armor-defeating-roll
+   25% reductions cut armor AND toughness; limb cap ≤ maxHP/2; `MitigateByToughness`;
+   → `DamageSystem.ApplyDirect`. `peekOnly` sets `LastMeleeAttackHit` with no side effects.
+2. **Ranged (arrows)** — `Simulation.ResolveArrowHit(ProjectileHit, attackerIdx, flags,
+   drnOverride)` (private): physics already decided contact, so the only save is the
+   shield — Precision(+2 magic) + tier-4 DRN vs ShieldParry×2 + tier-4 DRN → Miss /
+   Blocked / Hit; hit-location armor (head vs body from the arc), arrows = piercing
+   (15% off armor+toughness), Blocked adds ShieldProtection; → `DealDamage`.
+3. **Spells** — `Simulation.ApplySpellDamage(targetIdx, damage, spell, casterIdx, type)`
+   = THE spell-damage entry point (projectile impacts, zaps/strikes via LightningSystem
+   `LightningDamage` events, beam/drain ticks, cloud ticks `PoisonCloudSystem`, glyph
+   traps `MagicGlyphSystem` via `ApplySpellDamageAoE`): MR gate
+   (`Game/SpellPenetration.cs` `Affects` + `CasterRollTier`), damage+casterDRN vs
+   BodyProtection+targetDRN, AN zeroes prot/toughness, AP halves; auto-hit (no defense
+   roll); Poison type → net becomes stacks. `ApplySpellDamageAoE` = the radius-selection
+   wrapper. **No CombatLogEntry with roll breakdown** — the projectile-hits loop in
+   `Simulation.Tick` logs a `NoteOnly` entry instead.
+
+**`Game/DamageSystem.cs`** (static, sim-level) = the application tail: `Apply(units,
+targetIdx, rawDamage, type, flags, damageEvents, attackerIdx)` (armor+toughness formula
+for callers that DIDN'T pre-roll — spell strikes via `DealDamage`, potions, weapon bonus
+effects), `ApplyDirect` (pre-calculated net: HP, attacker stamp, damage number, death),
+`MitigateByToughness` (THE toughness halving formula), `Kill` (the only sanctioned
+Alive=false), `StampAttacker` (attribution + auto-engage), `ApplyHitReactAnim`/
+`ApplyDodgeAnim` (reaction anims with shared cooldown gates). `Simulation.DealDamage` =
+the flat ArmorNegating shortcut (dev tools, sacrifice, magical strikes).
+`Simulation.ResolveWeaponBonusEffects` (~line 3038) + `Game/WeaponBonusEffect.cs` = on-hit
+weapon procs (extra damage via `DamageSystem.Apply`).
+
+**Hit-flag census:** there is NO crit and NO separate dodge/block ROLL stat — outcomes are
+`CombatLogOutcome { Hit, Miss, Blocked, Whiff, NoteOnly }`; "dodge"/"block" are the
+Miss/zero-damage reaction ANIMS (`ApplyDodgeAnim`/`BlockReact`), and shield-block is the
+melee shield-interpose / ranged parry stage. `DamageFlags` (`Data/CombatTypes.cs`):
+ArmorNegating / ArmorPiercing / MagicWeapon / DefenseNegating.
+
+**Combat logging:** `Game/CombatLog.cs` — `CombatLogEntry` (full roll breakdown:
+Attack/Defense/Damage/Prot base+DRN pairs, ToughnessMit, NetDamage, HitLoc, Outcome,
+free-text Note), `CombatLog.AddEntry` (200-entry ring, mirrors to `log/combat.log` via
+DebugLog). Owner `Simulation._combatLog` / public `Simulation.CombatLog`. Writers: the
+three funnels above + the Whiff entry in `TryResolvePendingAttackAtImpact` + NoteOnly
+entries in the projectile-hits loop + `Game/BuffSystem.cs`. On-screen: `UI/HUDRenderer.cs`
+`DrawCombatLog` fading lines; floating damage numbers = `DamageEvent` list
+(`_damageEvents`, filled by DamageSystem) → `GameRenderer.World.cs` `DrawDamageNumbers`.
+
 ## Pitfalls / gotchas
 - **Range is gated at stamp time, not at resolve time.** Any new code that sets
   `PendingAttack` directly (player orders, scripted attacks) must do its own
