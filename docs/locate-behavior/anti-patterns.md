@@ -29,3 +29,35 @@ This makes us dependent on the animation timings, refactor this to put the timin
 
 ## **Egregious Anti Pattern**: Putting gameplay function calls in animation code
 This is especially bad since its very hard to track what the gameplay code actually does when you do this. Since now when you set an animation you not only set the visuals you are also declaring a gameplay function.
+
+# Principle: No dependence injection class patterns
+Call functions directly instead. Passing functions into objects should only be done when we add
+local information to the function, such as `void ValidateDef(UnitDef def, Action<string> report)`.
+
+## **Anti Pattern**: Passing lots of functions in constructor or initializer field
+Look for functions being stored in big long lived classes, and those functions refers to big global classes we
+should just call directly instead of passing them as functions.
+This just confuses us when we try to look for what calls what, or what code this class is calling.
+
+Example constructor:
+```cs
+    public RegistryCrudPanel(EditorBase ui, RegistryBase<TDef> registry, string listId,
+        string idPrefix, string newDisplayName, string noun, string savePath,
+        Action<TDef, int, int, int, int> drawDetail,
+        Action<string> setStatus, Action markUnsaved,
+        Func<string, int>? countReferences = null, Action<string>? removeReferences = null)
+```
+
+Example field thats set on game start, note this one even has tooltip saying this is superflous,
+as we are binding it to a known function.
+```cs
+    /// <summary>Game1 wires this to its SpawnUnit so the brain can create units
+    /// without referencing Game1.</summary>
+    public Action<string, Vec2>? SpawnWorkerUnit;
+```
+Its only set here, which is very dangerous since if this part for some reason get missed during initialization
+we will not call this function since its called using `?.`, so it will fail silently.
+```cs
+_workerSystem.SpawnWorkerUnit = (defId, pos) =>
+    QueueReanimRise(defId, -1, "", posOverride: pos);  // "" → the unit's own effect (else reanim_smoke)
+```
