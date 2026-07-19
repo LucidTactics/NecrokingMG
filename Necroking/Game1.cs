@@ -2736,6 +2736,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // map load.
             _groundSystem.StampTerrainOnto(_sim.Grid);
             _envSystem.OnCollisionsDirty?.Invoke();
+            _clock.Resume(GameClock.PauseSource.Mapeditor);
         }
 
         // gameplay → MapEditor transition: default the editor to paused. The world
@@ -2745,7 +2746,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // routes — F11, the editor-row button, the pause menu — by reacting to the
         // state change, not the opening action.
         if (_prevMenuState != MenuState.MapEditor && _menuState == MenuState.MapEditor)
-            _clock.Pause(GameClock.PauseSource.User);
+            _clock.Pause(GameClock.PauseSource.Mapeditor);
 
         if (_menuState == MenuState.MainMenu)
         {
