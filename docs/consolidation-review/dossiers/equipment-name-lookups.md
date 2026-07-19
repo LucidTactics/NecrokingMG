@@ -119,7 +119,7 @@ maintenance surface is one screenful in one file. Not worth abstracting.
 The labeling pass flagged `CloneSpell/CloneBuff/CloneWeapon/CloneArmor/CloneShield`
 + UIEditor `CloneChild/CloneWidget` + `Core/JsonClone.cs` as parallel clones.
 Verified reality: **this consolidation already happened and is the documented
-standard** (`memory/standard_patterns.md:85-88`, `docs/locate-behavior/data-registries.md:23`):
+standard** (`docs/standard_patterns.md:85-88`, `docs/locate-behavior/data-registries.md:23`):
 
 - `RegistryBase.CloneDef` (`RegistryBase.cs:67`) is the canonical registry clone —
   JSON round-trip through the registry's **own** serializer options, so clone

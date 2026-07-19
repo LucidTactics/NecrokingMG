@@ -1211,7 +1211,7 @@
      "verdict": "KEEP_SEPARATE",
      "confidence": "low",
      "title": "Registry clone / DeepClone JSON round-trips",
-     "rationale": "Evidence is stale: consolidation already happened — RegistryBase.CloneDef is the documented standard (memory/standard_patterns.md), editor Clone* methods are 1-line adapters adding DisplayName suffixes, and JsonClone.Deep vs UIEditor DeepClone use deliberately different serializer options (save-fidelity vs undo-fidelity) that are load-bearing.",
+     "rationale": "Evidence is stale: consolidation already happened — RegistryBase.CloneDef is the documented standard (docs/standard_patterns.md), editor Clone* methods are 1-line adapters adding DisplayName suffixes, and JsonClone.Deep vs UIEditor DeepClone use deliberately different serializer options (save-fidelity vs undo-fidelity) that are load-bearing.",
      "anchors": [
       "Necroking/Data/Registries/RegistryBase.cs::RegistryBase::CloneDef::7ef681d5",
       "Necroking/Core/JsonClone.cs::JsonClone::Deep::3d88486a"

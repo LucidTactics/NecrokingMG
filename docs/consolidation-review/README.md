@@ -11,7 +11,7 @@ concept units were each investigated and judged by a Fable agent reading the act
 - [verdicts.md](verdicts.md) — every finding, one-liner each, grouped by unit.
 - [dossiers/](dossiers/) — one full dossier per unit: code evidence with file:line,
   proposed canonical design, migration notes.
-- Actionable queue: [`memory/consolidation_opportunities.md`](../../memory/consolidation_opportunities.md).
+- Actionable queue: [`docs/consolidation_opportunities.md`](../../docs/consolidation_opportunities.md).
 
 The KEEP_SEPARATE findings are as valuable as the CONSOLIDATE ones: ~half the labeler
 evidence dissolved on inspection (already-consolidated systems, intentional layering,

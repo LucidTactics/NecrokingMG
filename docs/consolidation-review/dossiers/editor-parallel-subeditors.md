@@ -105,7 +105,7 @@ var copy = new FlipbookDef {
 ```
 
 Covers all `FlipbookDef` fields *today* (FlipbookRegistry.cs:5-13), but directly violates
-the repo standard (memory/standard_patterns.md → "NEVER write field-by-field clone
+the repo standard (docs/standard_patterns.md → "NEVER write field-by-field clone
 functions") that every sibling already follows (`CloneSpell`/`CloneBuff` at
 SpellEditorWindow.cs:1734-1746, `CloneWeapon/Armor/Shield/Unit` at
 UnitEditorWindow.cs:3800-3810, `ItemEditorWindow.cs:600` — all `registry.CloneDef`).
@@ -215,4 +215,4 @@ exactly one builder.
 Migration ordering note: land F2 immediately (one line); F4 in place when SpellPreview is
 next touched; F1 as its own editor-refactor task with live /drive-game verification of all
 five panels (New/Copy/Delete/Save/Ctrl+C/V each). If F1 lands, add `RegistryCrudPanel` to
-memory/standard_patterns.md as the canonical "registry sub-editor" pattern.
+docs/standard_patterns.md as the canonical "registry sub-editor" pattern.
