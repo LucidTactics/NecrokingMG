@@ -765,15 +765,20 @@ Look/edit here when: the reanimate/raise visual is wrong. Driven from `Game1.Spe
   (`WorldLayer.EffectsHdrAdditive`, fx pass). Structural consequence: the two puff
   families can NEVER interleave per-puff — every dust puff draws in the world pass, every
   additive cloud in the later fx pass.
-- **ON** — `DrawSortedParticles(hdrEffect)`: ALL particles (light+clouds+dust) build one
-  `_sortScratch` list, sort by `SortY`, then draw flipping `BlendState.Additive`↔`AlphaBlend`
-  per contiguous run (own `_batch.Begin/End` cycle, DepthRead vs the `FogDepthOccluders`
-  unit stamps, `LayerDepth = FogDepthForY(sortY)`). **THE precedent for Y-sorting particles
-  across blend modes.** Called from `_cbFxReanim` with `s.Suspend()/Resume()` around it.
-  Sort-bias gotcha: `AddPuff` gives dust `SortY = world.Y + WorldSize*0.5` but clouds raw
-  `world.Y`; the ~1-unit bias exceeds the puff Y-scatter (±~0.5), so in practice dust still
-  sorts almost entirely in front of the additive clouds — unify the SortY convention if you
-  want true intermixing.
+- **ON** — `DrawSortedParticles()` (reworked 2026-07-19): ALL particles (light+clouds+dust)
+  build one `_sortScratch` list, sort by `SortY`, then draw in **ONE premultiplied
+  `BlendState.AlphaBlend` batch, no shader, no blend flips** — additive sprites are encoded
+  via `PremultAdditive` (RGB = color×intensity×fade, **A=0**, so One/InvSrcAlpha degenerates
+  to dst+src; same trick as `BuffVisualSystem.EncodeColor`), dust keeps real premultiplied
+  alpha. DepthRead vs the `FogDepthOccluders` unit stamps, `LayerDepth = FogDepthForY(sortY)`.
+  Both families share ONE sort convention: `SortY = world.Y + FrontSortBias(0.25)*scale`
+  (camera-ward nudge → ~75% of the plume renders in front of the unit's depth stamp; the old
+  dust-`+half-size`/clouds-raw split that segregated the families is gone). **THE precedent
+  for Y-interleaving bright-additive + dark-alpha particles in one batch.** Called from
+  `_cbFxReanim` with `s.Suspend()/Resume()` around it. HDR caveat: the A=0 trick bypasses
+  `HdrSprite.fx`, so effective intensity clips where a channel hits 255 (~1.0) — fine for
+  the reanim presets (≤1.3 on channels ≤170), but a genuinely-HDR preset would clip
+  instead of blooming harder (comment on `PremultAdditive`).
 
 ### Particle systems
 - `Necroking/Render/BuffVisualSystem.cs` (`WPParticle`) — buff-aura particles.
