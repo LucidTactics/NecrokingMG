@@ -88,6 +88,21 @@ bound to the *slot id*, not the *object*, and no flush happens on selection chan
   and the caller's `if (new != old) model = new;` write-back pattern.
 - **Adding a new editable field type** → add a `DrawXField(fieldId, label, value, …)` in
   `EditorBase` following the activate-once / return-`_inputBuffer`-while-active contract.
+- **Tab / Shift+Tab focus cycling between fields** → no field-order registry exists (as of
+  2026-07); everything needed is in `EditorBase.cs`. `FieldCore(fieldId, display, inputRect)`
+  is the single per-frame chokepoint every single-line field draws through
+  (`DrawTextField`/`DrawIntField`/`DrawFloatField`/`DrawSearchField`/the slider value box) —
+  record each drawn `fieldId` (+rect) there into an ordered per-frame list; promote/clear it
+  in `EndDrawFrame` (the `_openComboDrawnThisFrame` reset is the precedent; `EndDrawFrame` is
+  menuState-gated in `GameRenderer.Draw.cs` but runs every frame an editor is open, which is
+  the only time fields exist). The Tab keypress lands in `HandleTextInput`'s
+  `key == Keys.Enter || Keys.Tab` deactivate branch (`shift` bool already computed there);
+  to move focus, set a pending-focus field id that `FieldCore` consumes on the next Draw by
+  calling `FocusTextField` (the one activation helper — it already does select-all +
+  `_textFieldLayer.Panel`), rather than activating from stale rects in Update. Commit needs
+  no extra work: callers write the returned buffer back every active frame, so Tab-away
+  commits exactly like Enter does today. Textareas (`_textarea` suffix) have a separate
+  Tab-closes branch and their own activation path (not `FocusTextField`) — separate decision.
 
 ## Map editor (`Editor/MapEditorWindow.cs`) — tabs, object brushes, map save
 
@@ -153,7 +168,37 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
   `bottomBarTop = panelY + (screenH - 20) - 92` in `Update` (the block that zeroes `leftClick`
   for clicks on the tab rows / bottom bar so scrolled tab content underneath never sees them).
   Ctrl+S / Ctrl+L in the `Update` shortcut block call the same `SaveMap`/`LoadMap`.
-- **`LoadMap()` is a data-only editor reload, NOT a game restart:** it clears + re-reads
+- **Panel-button draw/click split census (the "buttons diverge" bug class).** Three click
+  mechanisms coexist in `MapEditorWindow.cs`:
+  1. **`_eb.Draw*` EditorBase widgets** (`DrawButton`/`DrawCombo`/`DrawCheckbox`/`DrawTextField`,
+     60+ call sites) — fused draw+hit-test during `Draw`, fire on release via
+     `InputState.PressStartPos`/`DrawPrevMouse`. The **Zones tab is almost entirely this**
+     (incl. "Delete Zone" mutating the list mid-Draw — the proven in-file precedent that
+     panel-local actions may run during Draw). `EditorBase.DrawButton(text,x,y,w,h,bg,layer)`
+     + clip-aware `HitTest(rect)` are the shared primitives.
+  2. **Draw-only `DrawButtonRect(text,x,y,w,h,bg)`** (private, bottom of file) **+ a
+     hand-rolled y-math hit-test in the matching `Update<X>Tab`** — THE divergence source.
+     Draw and Update each own a parallel copy of the layout formula that must agree
+     byte-for-byte, e.g. `DrawGroundTab` receives `contentY` and advances it via
+     `DrawSectionHeader(ref contentY, …)` while `UpdateGroundTab` independently recomputes
+     `contentY = panelY + TabRowHeight*2 + HeaderHeight + 6`. Sites: Ground/Grass
+     "+ Add Type"/"Delete", Roads/Regions/Triggers "+ Add"/"Delete"/place-mode toggles,
+     bottom-bar Save/Load/Undo/Reload (`UpdateBottomBarClicks`). The comment at the
+     bottom-bar draw ("doing it here would compare against `_prevMouse` after it was already
+     overwritten") refers to MapEditorWindow's OWN raw-MouseState edge detection — it does
+     NOT apply to `_eb.DrawButton`, which uses InputState's Draw-frame snapshot.
+  3. **Cached-layout instance fields** (Units/Objects thumbnail grids: `_unitListDrawY` etc.
+     written in Draw, hit-tested in next frame's Update — one-frame-stale by design).
+  **Refactoring a tab to single-source layout:** make a pure per-tab layout step (method
+  returning a struct of named `Rectangle`s, or convert to `_eb.DrawButton`) computed from
+  `(panelX, contentY, contentH, _tabScroll[tab], selection)` and consumed by BOTH
+  `Draw<X>Tab` and `Update<X>Tab` — geometry is cheap, call it twice per frame (avoids the
+  stale-field pattern). Precedents for the layout-struct shape: `UI/MainMenuScreen.cs` /
+  `PauseMenuScreen.cs` / `ScenarioListScreen.cs` private `BuildLayout`, and
+  `UI/HUDRenderer.cs` `TimeControlLayout` (one formula shared by draw + hit-test + hit
+  rects). Keep Update-side actions honoring the shared gates (`leftClick` pre-zeroed for
+  tab-row/bottom-bar clicks, `overPanel`, popup blocking); actions that flip `_menuState` or
+  rebuild the world (Load/Reload) should stay in Update, not fire mid-Draw. it clears + re-reads
   ground types, env defs/objects, walls, grass, triggers, roads, zones and `_placedUnits`
   from `assets/maps/<_mapFilename>.json` (+ sidecars) and clears `_undoStack` — but never
   touches `_sim` (no unit respawn, no player move, no `StartGame`). A "reload the world as a
@@ -214,6 +259,16 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
   `MapEditorWindow.DrawGridCellTooltip(text, anchorCell)` → `Game1.Tooltips.RequestText(...)`,
   gated on `Game1.Popups.IsEmpty && !_eb.IsColorPickerOpen && !_eb.IsDropdownOpen` so the
   tooltip (which sits ABOVE the Popup band) doesn't paint over an open dropdown/color-picker.
+  **`DrawGridCellTooltip` is single-line + uncolored** (RequestText is the ONLY rect-anchored
+  path; there is NO colored rect-anchored overload) and is **shared by the Objects tab
+  (`DrawObjectsTab`) and Units tab (`DrawUnitsTab`)** — to give the Units grid a coloured
+  multi-line tooltip (e.g. a grey `UnitDef.Description` line under the name, mirroring
+  `HUDRenderer.DrawUnitTooltip`), do NOT edit `DrawGridCellTooltip` (it would break the Objects
+  tooltip). Instead, in `DrawUnitsTab`'s hover block, build a `List<(string,Color)>` and call the
+  cursor-anchored coloured overload `Game1.Tooltips.RequestLines(lines)` directly, re-copying the
+  same popup/dropdown suppression guard. Note the anchoring changes from "centred above the cell"
+  to "at the cursor" — that matches the spell/HUD tooltips. Greys = `Necroking.UI.SpellTooltip.Dim`
+  (150,150,170) / white = `.Text` (needs `using Necroking.UI;`; MapEditorWindow lacks it).
   Hover detection = `EditorBase.HitTest(rect)` (clip-aware: rect AND inside `_activeClip`, so
   a scrolled-out row won't false-trigger); cursor = `EditorBase.MousePos`. The old
   "editors hand-roll rect + `DrawText`" pattern and the private `HUDRenderer.DrawCursorTooltip`

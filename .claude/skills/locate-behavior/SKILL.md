@@ -1,6 +1,6 @@
 ---
 name: locate-behavior
-description: Find where a behavior or feature lives in the Necroking codebase — which files and functions are responsible, and where new code should go (incl. files to create). USE THIS (don't freestyle grep) whenever you're about to locate where code lives or where to add a feature — invoke it FIRST, before Grep/Glob, at the start of any change. Triggers — "where is X handled", "which file does Y", "where should I add Z", "what code is responsible for W", or any task that begins with finding the right files (e.g. adding a command, system, editor hook, or data path). Backed by an on-demand, self-extending per-subsystem architecture map under docs/locate-behavior/.
+description: Find where a behavior or feature lives and get documentation about anything in the Necroking codebase — which files and functions are responsible, and where new code should go (incl. files to create). USE THIS (don't freestyle grep) whenever you're about to locate where code lives or where to add a feature — invoke it FIRST, before Grep/Glob, at the start of any change. Triggers — "where is X handled", "which file does Y", "where should I add Z", "what code is responsible for W", or any task that begins with finding the right files (e.g. adding a command, system, editor hook, or data path). Backed by an on-demand, self-extending per-subsystem architecture map under docs/locate-behavior/. Also checks for anti patterns or other problems, if you want to check some code for anti patterns use this.
 ---
 
 # Locate behavior in the Necroking codebase
@@ -43,5 +43,5 @@ The map is intentionally incomplete and self-extends on demand. The finder owns 
 workflow (read overview → open 1–3 area docs → verify with LSP/Grep → self-heal missing
 or stale docs → answer). Running it in a subagent keeps all that reading out of the main
 context; you pay only for the conclusion. Full behavior lives in
-`docs/locate-behavior/README.md` (the finder's operating manual), with the agent shim at
+`docs/locate-behavior/CLAUDE.md` (the finder's operating manual), with the agent shim at
 `.claude/agents/locate-behavior-finder.md`.

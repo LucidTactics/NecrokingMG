@@ -4,9 +4,10 @@ The player-facing save-game feature (distinct from **map** save, which writes
 `assets/maps/<map>.json` `placedObjects` via the map editor — see [editor.md](editor.md)).
 A save is a JSON snapshot of the *play session* that is re-applied on top of a normal
 `StartGame(mapName)` load. Currently captures map + player position/form/buffs + spellbar
-+ **inventory slots** (`SavedInventorySlot`, slot-indexed) + **the full skill book**
-(`SavedSkillBook` — learned set, point pools, event tallies, every unlock collection incl.
-`UnlockedBuildings` from the construction tree).
++ **inventory slots** (`SavedInventorySlot`, slot-indexed) + **the skill book**
+(`SavedSkillBook` — learned set, point pools, event tallies, passive flags, intrinsic-buff
+bindings, metamorphosis bonuses; the pure unlocks like `UnlockedBuildings` are re-derived
+from the learned talents on load, not stored — see the skill-book bullet below).
 Still **not** covered: raw mana/NecromancerState, `Inventory._everSeen`, horde/world state,
 and **player-placed world buildings** (those survive only via map save — see the comment in
 `UI/BuildingMenuUI.cs` `TryPlace`).
@@ -130,10 +131,14 @@ The pipeline is already almost file-free — the file I/O is confined to two lin
   restored in `ApplySaveToWorld` after `StartGame` recreates+clears `_inventory`.
   Runtime store: `Game1._inventory` (`Necroking.GameSystems.Inventory`, `Necroking/Game/Inventory.cs`).
 - **Skill book** is persisted: `SaveGameData.SkillBook` (`SavedSkillBook` DTO) ←
-  `SkillBookState.ExportSave()` / → `ApplySave()` (restores collections verbatim, replays
-  only `grant_path`; `Game1.Saves.cs` then re-applies CorpseEating/SoulConsumption stat
-  bonuses). **Adding a new unlock collection to the book = also add a `SavedSkillBook`
-  property + ExportSave/ApplySave lines** (see [skills.md](skills.md)).
+  `SkillBookState.ExportSave()` / → `ApplySave()`. The DTO only stores what can't be
+  re-derived (learned talents, skill points, event tallies, passive flags, intrinsic-buff
+  bindings, metamorphosis bonuses). The pure unlocks (potions/buildings/summons/AI/potion
+  slots) are **NOT** saved — `ApplySave` re-derives them by replaying each learned talent's
+  effect (`DerivableOnLoad` whitelist, + the code-built `grant_path` buff). So **a new pure,
+  idempotent unlock = just add its effect id to `DerivableOnLoad`** (no DTO change); a
+  non-derivable state still needs a `SavedSkillBook` property + ExportSave/ApplySave lines
+  (see [skills.md](skills.md)).
 - **`Inventory._everSeen`** (grow-only "has the player ever held this" set, gates potion
   throw-spells in the grimoire) is still **not persisted**.
 

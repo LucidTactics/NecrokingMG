@@ -148,7 +148,15 @@ public sealed class TimeControlsLayer : UILayer
             (int)input.MousePos.X, (int)input.MousePos.Y);
         if (hit == -2)
         {
-            _g._clock.TogglePause(GameClock.PauseSource.User);
+            if (_g._clock.IsPausedBy(GameClock.PauseSource.Mapeditor))
+            {
+                _g._clock.Resume(GameClock.PauseSource.User);
+                _g._clock.Resume(GameClock.PauseSource.Mapeditor);
+            }
+            else
+            {
+                _g._clock.TogglePause(GameClock.PauseSource.User);
+            }
         }
         else if (hit >= 0)
         {

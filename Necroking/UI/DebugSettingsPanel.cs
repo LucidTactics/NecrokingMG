@@ -15,7 +15,10 @@ namespace Necroking.UI;
 /// F3 Perf, F5 Death Fog, F6 Wind, F7 Gameplay, F8 Collision). Docks under the
 /// top-left player-data (HP/Mana) status bars and mirrors the exact same state
 /// the F-keys toggle — the F-key block in Game1.Update stays the source of
-/// truth for each field, this is the click-driven twin.
+/// truth for each field, this is the click-driven twin. Besides toggle rows the
+/// list also supports section headers (<c>DebugModeToggle.Header</c>) and
+/// full-width action buttons (<c>DebugModeToggle.Button</c>) — add new ones in
+/// <see cref="BuildToggles"/>.
 ///
 /// Self-contained (like LogPanel): owns its visibility, layout, draw and input.
 /// The thin <see cref="DebugSettingsPanelLayer"/> just routes into it (presses
@@ -29,8 +32,11 @@ public class DebugSettingsPanel
     private Game1 _g = null!;
     private SpriteScope Scope => _g.Scope;
 
-    // One debug mode the panel exposes: a label, its option names, and get/set
-    // hooks that read/write the live Game1 field (Direct over Inject).
+    // One panel row. Four kinds, all sharing the same RowH slot so the layout
+    // math stays uniform: a section header (label + rule, no control), a
+    // full-width button (fires OnClick on press), a boolean checkbox row, or a
+    // dropdown row. Toggle rows carry get/set hooks that read/write the live
+    // Game1 field (Direct over Inject).
     private sealed class DebugModeToggle
     {
         public string Label = "";
@@ -38,13 +44,26 @@ public class DebugSettingsPanel
         // Per-option hover tooltips, index-aligned with Options (null entry = no tip,
         // '\n' = line break). Dropdown rows show them while the option list is
         // expanded; boolean (checkbox) rows have no list, so they surface the
-        // "On" tip (index 1) as a whole-row hover tooltip instead.
+        // "On" tip (index 1) as a whole-row hover tooltip instead. Button rows
+        // use index 0 as their hover tooltip.
         public string?[]? Tooltips;
         public Func<int> Get = () => 0;
         public Action<int> Set = _ => { };
+        // Section divider row: label only, no control, no interaction.
+        public bool IsHeader;
+        // Full-width button row: fires on press instead of holding a value.
+        public Action? OnClick;
+        // Excluded from the "Reset Debug Settings" button (e.g. fog mode, which
+        // is a display setting rather than a debug overlay).
+        public bool SkipReset;
 
+        public bool IsButton => OnClick != null;
         // Plain On/Off rows render as a click-to-flip switch, not a dropdown.
         public bool IsBool => Options.Length == 2 && Options[0] == "Off" && Options[1] == "On";
+
+        public static DebugModeToggle Header(string label) => new() { Label = label, IsHeader = true };
+        public static DebugModeToggle Button(string label, string? tip, Action onClick)
+            => new() { Label = label, OnClick = onClick, Tooltips = tip != null ? new[] { tip } : null };
     }
 
     private List<DebugModeToggle>? _toggles;
@@ -95,6 +114,7 @@ public class DebugSettingsPanel
         return new List<DebugModeToggle>
         {
             new() { Label = "Fog", Options = SettingsWindow.FogModeNames,
+                SkipReset = true, // display setting, not a debug overlay
                 Get = () => _g._gameData.Settings.FogOfWar.Mode,
                 Set = v => _g._gameData.Settings.FogOfWar.Mode = v,
                 Tooltips = new[] { null,
@@ -132,18 +152,34 @@ public class DebugSettingsPanel
                     Set = v => _g._uiDebugDrawMode = v,
                     Tooltips = new[] { null,
                         "Outlines every registered UI hit-region with a\n1px yellow border." } },
+            DebugModeToggle.Header("Actions"),
+            DebugModeToggle.Button("Give Skill Resources",
+                "Same as Shift+O: +10 to every skill event tally\nand skill point pool, +10 evolution potions.",
+                () => _g.CheatAddAllSkillcounters(_g.FindNecromancer(), 10)),
+            DebugModeToggle.Button("Reset Debug Settings",
+                "Turns every debug toggle above back Off.\nFog mode is left as-is.",
+                ResetDebugSettings),
         };
+    }
+
+    /// <summary>Set every resettable toggle row back to its Off/default value.
+    /// Skips headers, buttons, and rows marked <c>SkipReset</c> (fog mode).</summary>
+    private void ResetDebugSettings()
+    {
+        foreach (var t in Toggles)
+            if (!t.IsHeader && !t.IsButton && !t.SkipReset)
+                t.Set(0);
     }
 
     // ── Layout ──────────────────────────────────────────────────────────────
     // Fixed top-left geometry, shared by draw + hit-test so they never desync.
     private const int PanX = 10;      // matches HUDRenderer.BarX
-    private const int PanW = 200;     // matches HUDRenderer.BarWidth
+    private const int PanW = 240;     // wider than HUDRenderer.BarWidth (200) so dropdown labels fit
     private const int PanY = 88;      // just under the HP/Mana bars (bottom ≈ 82)
     private const int HeaderH = 18;
     private const int RowH = 22;
     private const int Pad = 6;
-    private const int BoxW = 108;     // dropdown box on the right of each row
+    private const int BoxW = 148;     // dropdown box on the right of each row
     private const int OptH = 18;
 
     /// <summary>Panel footprint (excludes any open dropdown list). Exposed so the
@@ -173,6 +209,14 @@ public class DebugSettingsPanel
         return new Rectangle(PanX + PanW - Pad - BoxW, rowY + 1, BoxW, RowH - 4);
     }
 
+    /// <summary>Full-width clickable button for a button row (slightly inset
+    /// vertically inside the row slot). Shared by draw and hit-test.</summary>
+    private Rectangle ButtonRect(int i)
+    {
+        var row = RowRect(i);
+        return new Rectangle(row.X, row.Y + 1, row.Width, RowH - 4);
+    }
+
     /// <summary>Rect of option <paramref name="opt"/> in row <paramref name="i"/>'s
     /// open dropdown list (drawn below the box).</summary>
     private Rectangle OptionRect(int i, int opt)
@@ -192,11 +236,13 @@ public class DebugSettingsPanel
         return HitItem(mx, my) >= 0;
     }
 
-    /// <summary>Row index whose dropdown box contains the cursor, or -1.</summary>
+    /// <summary>Row index whose dropdown box contains the cursor, or -1.
+    /// Header/button rows have no dropdown box and never match.</summary>
     private int HitBox(int mx, int my)
     {
         for (int i = 0; i < Toggles.Count; i++)
-            if (BoxRect(i).Contains(mx, my)) return i;
+            if (!Toggles[i].IsHeader && !Toggles[i].IsButton && BoxRect(i).Contains(mx, my))
+                return i;
         return -1;
     }
 
@@ -219,6 +265,14 @@ public class DebugSettingsPanel
         return -1;
     }
 
+    /// <summary>Button row whose button rect contains the cursor, or -1.</summary>
+    private int HitButtonRow(int mx, int my)
+    {
+        for (int i = 0; i < Toggles.Count; i++)
+            if (Toggles[i].IsButton && ButtonRect(i).Contains(mx, my)) return i;
+        return -1;
+    }
+
     /// <summary>A left press granted to the panel (layer's OnPointer). Boolean
     /// rows flip immediately (click anywhere in the row); the rest open / arm /
     /// mark-for-close the eager dropdown, whose selection fires on release in
@@ -227,9 +281,9 @@ public class DebugSettingsPanel
     {
         int item = HitItem(mx, my);
 
-        // A press anywhere on a boolean row flips it now — but not when it lands
-        // on an open dropdown's option (selection wins, since an open list
-        // overlaps the rows below it).
+        // A press anywhere on a boolean row flips it now, and a press on a
+        // button row fires it — but not when it lands on an open dropdown's
+        // option (selection wins, since an open list overlaps the rows below it).
         if (item < 0)
         {
             int brow = HitBoolRow(mx, my);
@@ -238,6 +292,14 @@ public class DebugSettingsPanel
                 var t = Toggles[brow];
                 t.Set(t.Get() == 1 ? 0 : 1);
                 _dd.Close();
+                return;
+            }
+
+            int btn = HitButtonRow(mx, my);
+            if (btn >= 0)
+            {
+                _dd.Close();
+                Toggles[btn].OnClick!();
                 return;
             }
         }
@@ -304,8 +366,36 @@ public class DebugSettingsPanel
         for (int i = 0; i < toggles.Count; i++)
         {
             var t = toggles[i];
-            int cur = Math.Clamp(t.Get(), 0, t.Options.Length - 1);
             int rowY = PanY + HeaderH + Pad + i * RowH;
+
+            if (t.IsHeader)
+            {
+                // Section divider: header-colored label with a 1px rule filling
+                // the rest of the row width.
+                Text(f, t.Label, panel.X + Pad, rowY + 4, HeaderCol);
+                int lineX = panel.X + Pad + (int)f.MeasureString(t.Label).X + 6;
+                int lineR = panel.Right - Pad;
+                if (lineR > lineX)
+                    Scope.Draw(_g._pixel,
+                        new Rectangle(lineX, rowY + RowH / 2, lineR - lineX, 1), BoxBorder);
+                continue;
+            }
+
+            if (t.IsButton)
+            {
+                var btn = ButtonRect(i);
+                bool btnHover = btn.Contains(mx, my);
+                DrawPanel(btn, btnHover ? BoxHover : BoxBg, BoxBorder, 1, bottomAccent: true);
+                DrawUtils.DrawRectBorder(Scope, _g._pixel, btn, BoxBorder);
+                int tw = (int)f.MeasureString(t.Label).X;
+                Text(f, t.Label, btn.X + (btn.Width - tw) / 2, btn.Y + 2, ValActive);
+                string? btnTip = t.Tooltips != null && t.Tooltips.Length > 0 ? t.Tooltips[0] : null;
+                if (btnHover && !string.IsNullOrEmpty(btnTip))
+                    Game1.Tooltips.RequestLines(btnTip.Split('\n'));
+                continue;
+            }
+
+            int cur = Math.Clamp(t.Get(), 0, t.Options.Length - 1);
             var box = BoxRect(i);
 
             if (t.IsBool)

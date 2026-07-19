@@ -487,7 +487,7 @@ public static class JumpSystem
                         break;
                     }
                 }
-                sim.ResolvePendingAttack(idx);
+                Combat.AttackResolver.ResolvePendingAttack(sim, idx);
                 break;
         }
     }

@@ -190,7 +190,7 @@ overflowing a near-full pile.
 
 **Consolidation win:** build ONE reusable `OrderedPriorityTileList` widget (drag-reorder +
 per-tile cap/target). Used by both the Job Board and the per-job output targets. Register it
-in `memory/standard_patterns.md` when built.
+in `docs/standard_patterns.md` when built.
 
 ## 9. Reuse map (don't rebuild)
 | Need | Existing code |

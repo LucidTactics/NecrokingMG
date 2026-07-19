@@ -13,13 +13,13 @@ A spell flows through three files. Know which one you need to touch:
 |-------|------|------|
 | **Data / definition** | [`Necroking/Data/Registries/SpellRegistry.cs`](../Necroking/Data/Registries/SpellRegistry.cs) | `SpellDef` — every field of a spell, loaded from `data/spells.json`. Also the spell-editor schema (via `[EditorField]`/`[EditorVisible]` attrs) and the `Build*Style()` helpers shared by game + editor preview. |
 | **Targeting / start** | [`Necroking/Game/SpellCasting.cs`](../Necroking/Game/SpellCasting.cs) | `SpellCaster.TryStartSpellCast` — validates a cast (mana, cooldown, path requirements, range), resolves the target (corpse / unit / point) per category, fills a `PendingSpellCast`, then deducts mana + starts cooldown. Returns a `CastResult`. |
-| **Effect / payoff** | [`Necroking/Game/SpellEffectSystem.cs`](../Necroking/Game/SpellEffectSystem.cs) | `SpellEffectSystem.Execute(spell, game, casterIdx, target, slot)` — a static class holding the `switch (spell.Category)` that actually *does* the thing (spawn projectile, apply buff, fire beam, summon, blight, etc.). **All** category logic lives here, not in Game1. It takes `Game1` directly (same pattern as `GameRenderer`/`ForagableSystem`) and reaches Game1-owned state through it — `game._deathFog`, `game._channelingSlot`, `game._pendingProjectiles`, `game.QueueReanimRise(...)`, `game.SpawnUnit(...)`. |
+| **Effect / payoff** | [`Necroking/Game/SpellEffectSystem.cs`](../Necroking/Game/SpellEffectSystem.cs) | `SpellEffectSystem.Execute(spell, game, casterIdx, target, slot)` — a static class holding the `switch (spell.Category)` that actually *does* the thing (spawn projectile, apply buff, fire beam, summon, blight, etc.). **All** category logic lives here, not in Game1. It takes `Game1` directly (same pattern as `GameRenderer`/`ForagableSystem`) and reaches Game1-owned state through it — `game._deathFog`, `game._channelingSlot`, `game.QueueReanimRise(...)`, `game.SpawnUnit(...)`. Multi-shot follow-ups are `ProjectileVolleyTask` scheduled on `sim.Tasks`. |
 
 [`Necroking/Game1.Spells.cs`](../Necroking/Game1.Spells.cs) is the **orchestrator /
-glue**. It sits between input and those systems and owns the cast pipeline plus the
-queues it ticks each frame (`_pendingProjectiles`, `_pendingReanimRises`) and small
-effect-manager helpers. It does *not* contain category effect logic — that's
-delegated to `SpellEffectSystem`.
+glue**. It sits between input and those systems and owns the cast pipeline plus small
+effect-manager helpers. Deferred work (reanim rises, multi-shot volleys) is scheduled
+as `ScheduledTask` subclasses on `_sim.Tasks` (`Necroking/Game/ScheduledTasks.cs`).
+It does *not* contain category effect logic — that's delegated to `SpellEffectSystem`.
 
 ## The cast pipeline (what happens on a click)
 
@@ -53,13 +53,14 @@ is the single entry point for both spell bars. In order:
 6. `ExecuteSpellEffect` (in `Game1.Spells.cs`) spawns the cast flipbook at the caster,
    then calls `SpellEffectSystem.Execute(spell, this, casterIdx, target, slot, pending)`
    (the *effect* layer). No callbacks, no result struct: the system writes Game1-owned
-   results directly (`game._channelingSlot` for the player's Beam/Drain key-hold,
-   `game._pendingProjectiles` for multi-shot groups) and enqueues rises via
-   `game.QueueReanimRise`. `pending` is THIS cast's targeting record — the player's
-   `_pendingSpell` (it must survive a multi-second cast anim), or an AI cast's scratch.
+   results directly (`game._channelingSlot` for the player's Beam/Drain key-hold),
+   schedules `ProjectileVolleyTask`s on `sim.Tasks` for multi-shot spells, and enqueues
+   rises via `game.QueueReanimRise`. `pending` is THIS cast's targeting record — the
+   player's `_pendingSpell` (it must survive a multi-second cast anim), or an AI cast's
+   scratch.
 
 So: **targeting** is in `SpellCaster`, **all effects** are in `SpellEffectSystem`, and
-`Game1.Spells.cs` wires them together + ticks the deferred queues.
+`Game1.Spells.cs` wires them together; deferred work fires from `_sim.Tasks`.
 
 ## AI casters use the same pipeline
 
@@ -79,12 +80,11 @@ UnitDef) with no extra code.
 
 ## What lives directly in `Game1.Spells.cs`
 
-- **`TickPendingProjectiles`** — fires the staggered extra projectiles for
-  multi-shot spells (`Quantity > 1`, `ProjectileDelay`), re-anchoring origin on the
-  necromancer each shot (calls `SpellEffectSystem.SpawnProjectile` per shot).
-- **`QueueReanimRise` / `TickPendingReanimRises`** — the deferred reanimation-rise
-  queue (effect plays at the grave now, unit spawns after a delay). `internal` —
-  `SpellEffectSystem`'s summon logic enqueues through it.
+- **`QueueReanimRise` / `ReanimRiseTask`** — the deferred reanimation rise (effect
+  plays at the grave now, unit spawns after a delay via a `ScheduledTask` on
+  `_sim.Tasks`). `internal` — `SpellEffectSystem`'s summon logic enqueues through it.
+  (The staggered multi-shot `ProjectileVolleyTask` lives in `SpellEffectSystem.cs`,
+  re-anchoring origin on the caster's hand each shot.)
 - **`ApplyBlightBombImpacts`** — reads projectile impacts each tick and applies the
   deferred fog change for thrown Blight bombs (calls `SpellEffectSystem.ApplyBlight`).
 - **Cast/summon flipbook spawners** (`SpawnCastEffect`, `SpawnSummonEffect`),

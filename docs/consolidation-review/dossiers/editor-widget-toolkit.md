@@ -6,7 +6,7 @@ Context that matters: the codebase already has TWO stated canonical homes for th
 `Necroking/Render/DrawUtils.cs` ("Shared drawing primitives: circle outlines, lines, etc. Used by
 editors, HUD, and gameplay rendering"; its `DrawRectBorder` doc comment says it "replaces ~13
 per-file DrawBorder/DrawRectOutline copies") and `Necroking/Editor/EditorBase.cs` (the editor
-widget toolkit, with an entry in `memory/standard_patterns.md` → "Editor UI (EditorBase)").
+widget toolkit, with an entry in `docs/standard_patterns.md` → "Editor UI (EditorBase)").
 The rect-border consolidation was completed (all `DrawBorder`/`DrawRectOutline` wrappers found in
 UI/, GameRenderer.Units.cs, MapEditorWindow.cs delegate to `DrawUtils.DrawRectBorder`). The line /
 circle / ellipse primitives were never migrated the same way — that is the largest live finding.

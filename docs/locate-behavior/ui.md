@@ -147,6 +147,25 @@ shared `DrawCursorTooltip(lines, screenW, screenH)`):
 - **Dispatch:** all four are called from `HUDRenderer.Draw` (the DrawHUD signature ~line 160-166,
   calls ~line 195-198). Hovered ids are threaded through `GameRenderer.Hud.cs` `DrawHUD`
   (~line 604) from the `_g._hovered*Idx` fields.
+- **Line coloring:** `DrawCursorTooltip(string[], …)` → `Game1.Tooltips.RequestLines(params
+  string[])` renders every line in the default color. To emit a **grey sub-line** (like a
+  description), build a `List<(string, Color)>` and call the colored overload
+  `RequestLines(IReadOnlyList<(string,Color)>)` instead — grey convention = `SpellTooltip.Dim`
+  (`new(150,150,170)`). `DrawUnitTooltip` currently uses the plain `string[]` path (name / `HP:` /
+  membership), so adding a colored line means switching it to the tuple overload.
+
+### The shared spell-tooltip builder (`UI/SpellTooltip.cs`)
+`Necroking/UI/SpellTooltip.cs` — `static SpellTooltip.BuildLines(SpellDef, GameData, sim,
+casterIdx, inventory?)` = the ONE builder producing `List<(string Text, Color Color)>` for BOTH
+the spell bar (`HUDRenderer.DrawSpellSlotTooltip`) and the grimoire. Color palette is on the
+class: `Text`, `Dim` (grey sub-lines), `Header`, `Reached`, `Locked`. **The spell Description
+line** (commit `49d2c0e`) is `lines.Add((sp.Description, Dim))` right after the name + school/
+category kind line — this is the exact "grey tooltip line" to mirror for units. `SpellDef.Description`
+= `[JsonPropertyName("description")]` string in `Data/Registries/SpellRegistry.cs`, declared right
+below Name/ID/Category with `[EditorField(Order=3)]`.
+
+**Look/edit here when:** mirroring the spell grey-description line onto another tooltip, or
+changing spell tooltip colors/lines.
 
 **Hovered indices are computed in `Necroking/Game1.cs` Update (~lines 3470-3541):**
 `_hoveredObjectIdx`, `_hoveredCorpseIdx`, `_hoveredUnitIdx` (+ `_hoveredBellyUnitId` derived).

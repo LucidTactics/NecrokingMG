@@ -291,13 +291,12 @@ public static class TrampleSystem
         if (units[attackerIdx].TrampledIds!.Contains(units[defenderIdx].Id)) return false;
         units[attackerIdx].TrampledIds!.Add(units[defenderIdx].Id);
 
-        // Step 1: peek at the dice roll. Sets LastMeleeAttackHit but applies no
-        // side effects — no damage, no log, no dodge anim. We need to know
-        // hit/miss BEFORE applying physics so corpses can inherit knockback
-        // velocity (mirrors the spell-knockback pattern in Simulation.cs:443).
-        sim.ResolveMeleeAttackExternal(attackerIdx, defenderIdx, weaponIdx,
-            suppressDodgeAnim: true, peekOnly: true);
-        bool hit = sim.LastMeleeAttackHit;
+        // Step 1: peek at the dice roll — returns hit/miss but applies no side
+        // effects (no damage, no log, no dodge anim). We need to know hit/miss
+        // BEFORE applying physics so corpses can inherit knockback velocity
+        // (mirrors the spell-knockback pattern in AttackResolver).
+        bool hit = Combat.AttackResolver.ResolveMeleeAttack(sim, attackerIdx, defenderIdx,
+            weaponIdx, suppressDodgeAnim: true, peekOnly: true);
 
         if (!hit)
         {
@@ -324,8 +323,8 @@ public static class TrampleSystem
         // Step 3: apply the damage. forceHit: true skips the dice (we already
         // committed to hit in Step 1) but runs all the normal hit side effects:
         // damage, combat log, fatigue, knockdown bonus, weapon coats.
-        sim.ResolveMeleeAttackExternal(attackerIdx, defenderIdx, weaponIdx,
-            suppressDodgeAnim: true, forceHit: true);
+        Combat.AttackResolver.ResolveMeleeAttack(sim, attackerIdx, defenderIdx,
+            weaponIdx, suppressDodgeAnim: true, forceHit: true);
         return true;
     }
 

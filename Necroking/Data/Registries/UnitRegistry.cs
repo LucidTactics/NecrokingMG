@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Necroking.Editor;
 
 namespace Necroking.Data.Registries;
 
@@ -154,6 +155,10 @@ public class UnitDef : INamedDef
 {
     [JsonPropertyName("id")] public string Id { get; set; } = "";
     [JsonPropertyName("name")] public string DisplayName { get; set; } = "";
+
+    [EditorField(Label = "Description", Order = 3, Tooltip = "Short qualitative blurb shown in grey on the unit tooltip.\nDescribe what the unit is and how it fights, not its numbers.")]
+    [JsonPropertyName("description")] public string Description { get; set; } = "";
+
     [JsonPropertyName("type")] public string UnitType { get; set; } = "Dynamic";
     [JsonPropertyName("faction")] public string Faction { get; set; } = "Undead";
     [JsonPropertyName("ai")] public string AI { get; set; } = "AttackClosest";

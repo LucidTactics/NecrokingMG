@@ -9,18 +9,66 @@ using Necroking.Movement;
 
 namespace Necroking.GameSystems;
 
-/// <summary>Queued multi-projectile group for delayed spawning. Carries its caster's
-/// stable uid so follow-up shots track THAT caster's hand (player or AI) — the group
-/// is dropped if the caster dies mid-volley.</summary>
-public struct PendingProjectileGroup
+/// <summary>Repeating task firing the staggered follow-up shots of a Quantity&gt;1 spell
+/// (the first shot spawns immediately in <see cref="SpellEffectSystem.Execute"/>). Carries
+/// its caster's stable uid so follow-up shots track THAT caster's hand (player or AI) —
+/// the volley stops if the caster dies mid-volley. Scheduled on the sim clock
+/// (<c>sim.Tasks</c>) at <see cref="Interval"/> and re-arms itself until
+/// <see cref="ShotsRemaining"/> runs out.</summary>
+public sealed class ProjectileVolleyTask : ScheduledTask
 {
-    public string SpellID;
+    public string SpellID = "";
     public uint CasterUid;
-    public Vec2 Origin;
     public Vec2 Target;
-    public int Remaining;
-    public float Timer;
+    public int ShotsRemaining;
     public float Interval;
+
+    public override string Describe()
+        => $"ProjectileVolley({SpellID}, shots={ShotsRemaining})";
+
+    protected internal override void Fire()
+    {
+        var g = Game1.Instance;
+        var sim = g._sim;
+
+        // Follow-up shots track the volley's OWN caster (player or AI) by stable
+        // id; a caster that died mid-volley stops shooting.
+        int casterIdx = sim.ResolveUnitID(CasterUid);
+        if (casterIdx < 0 || !sim.Units[casterIdx].Alive) return;
+
+        var spell = g._gameData.Spells.Get(SpellID);
+
+        // Player volleys chase the live cursor: each follow-up shot re-aims at the
+        // cursor world position sampled at fire time. When it's invalid (unfocused
+        // window, cursor outside the viewport) the volley keeps its last valid target.
+        // AI volleys must not track the player's cursor. Barrages opt out
+        // (TracksCursor=false) so the whole spread doesn't home onto the cursor.
+        if (g._cursorAimWorld.HasValue && spell != null && spell.TracksCursor
+            && sim.Units[casterIdx].AI == AIBehavior.PlayerControlled)
+            Target = g._cursorAimWorld.Value;
+
+        if (spell != null)
+        {
+            // Re-sample the spread around the volley's base target for THIS shot, so
+            // a barrage scatters evenly over its disc instead of retracing one line.
+            var shotTarget = SpellEffectSystem.VolleyAimPoint(spell, Target, g._rng);
+            // Re-resolve mastery per shot so follow-up volley shots scale the
+            // same as the first (buffs could even shift mid-volley).
+            int shotMastery = SpellEffectSystem.MasteryLevelsFor(
+                spell, g._gameData, sim.UnitsMut, casterIdx);
+            // Same sprite-rig → physical conversion (+Z) as the first shot in
+            // SpellEffectSystem.Execute — follow-ups used to launch lower and
+            // to ignore an airborne caster's Z.
+            SpellEffectSystem.SpawnProjectile(spell, sim.Projectiles,
+                sim.Units[casterIdx].EffectSpawnPos2D, shotTarget, CasterUid,
+                sim.Units[casterIdx].EffectSpawnHeight / g._camera.YRatio
+                    + sim.Units[casterIdx].Z,
+                sim.Units[casterIdx].Faction, shotMastery);
+        }
+
+        ShotsRemaining--;
+        if (ShotsRemaining > 0) Repeat(Interval);
+    }
 }
 
 /// <summary>Floating damage/pickup number for visual feedback.</summary>
@@ -130,16 +178,15 @@ public static class SpellEffectSystem
                     effectOriginH, casterFaction, mastery);
                 if (spell.Quantity > 1)
                 {
-                    game._pendingProjectiles.Add(new PendingProjectileGroup
+                    float interval = spell.ProjectileDelay > 0f ? spell.ProjectileDelay : 0.1f;
+                    sim.Tasks.Schedule(new ProjectileVolleyTask
                     {
                         SpellID = spell.Id,
                         CasterUid = casterUid,
-                        Origin = effectOrigin,
                         Target = target,
-                        Remaining = spell.Quantity - 1,
-                        Timer = 0f,
-                        Interval = spell.ProjectileDelay > 0f ? spell.ProjectileDelay : 0.1f
-                    });
+                        ShotsRemaining = spell.Quantity - 1,
+                        Interval = interval
+                    }, interval);
                 }
                 break;
 
@@ -295,16 +342,15 @@ public static class SpellEffectSystem
                         effectOriginH, casterFaction, mastery);
                     if (spell.Quantity > 1)
                     {
-                        game._pendingProjectiles.Add(new PendingProjectileGroup
+                        float interval = spell.ProjectileDelay > 0f ? spell.ProjectileDelay : 0.1f;
+                        sim.Tasks.Schedule(new ProjectileVolleyTask
                         {
                             SpellID = spell.Id,
                             CasterUid = casterUid,
-                            Origin = effectOrigin,
                             Target = target,
-                            Remaining = spell.Quantity - 1,
-                            Timer = 0f,
-                            Interval = spell.ProjectileDelay > 0f ? spell.ProjectileDelay : 0.1f
-                        });
+                            ShotsRemaining = spell.Quantity - 1,
+                            Interval = interval
+                        }, interval);
                     }
                 }
                 break;
@@ -622,8 +668,8 @@ public static class SpellEffectSystem
 
     /// <summary>Spawn a spell projectile and post-configure it: tag it with the spell id
     /// (impact knockback / blight-bomb lookup), apply the def's Trajectory, and copy the
-    /// projectile/hit-effect flipbook refs. Public — Game1.TickPendingProjectiles also
-    /// calls it for the staggered Quantity&gt;1 shots.</summary>
+    /// projectile/hit-effect flipbook refs. Public — <see cref="ProjectileVolleyTask"/>
+    /// also calls it for the staggered Quantity&gt;1 shots.</summary>
     public static void SpawnProjectile(SpellDef spell, ProjectileManager projectiles,
         Vec2 origin, Vec2 target, uint ownerUid, float spawnHeight, Faction casterFaction,
         int masteryLevels = 0)
@@ -768,7 +814,7 @@ public static class SpellEffectSystem
                 // Standard spell pipeline: MR gate + opposed DRN damage roll. The
                 // damage event it emits already surfaces the floating number (the
                 // old flat path double-printed via an extra FloatingText here).
-                sim.ApplySpellDamage(enemy, damage, spell, casterIdx);
+                Combat.AttackResolver.ApplySpellDamage(sim, enemy, damage, spell, casterIdx);
             }
         }
         else
@@ -807,8 +853,8 @@ public static class SpellEffectSystem
 
         int damage = spell.ScaledDamage(masteryLevels);
         if (damage > 0)
-            sim.ApplySpellDamageAoE(target, radius, damage, spell, casterIdx,
-                casterFaction, DamageType.Poison);
+            Combat.AttackResolver.ApplySpellDamageAoE(sim, target, radius, damage, spell,
+                casterIdx, casterFaction, DamageType.Poison);
     }
 
     /// <summary>Build DamageFlags from a spell's AN/DN settings. Public because the

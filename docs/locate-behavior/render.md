@@ -755,7 +755,7 @@ Four layers per instance: unit outline, additive diffuse light, **additive green
 puffs** (HDR, `ToHdrVertex`), **alpha-blended dark dust puffs** (premultiplied color) —
 presets (`reanim_smoke`/`reanim_nosmoke`) in `BuildPresets` at the bottom of the file.
 Look/edit here when: the reanimate/raise visual is wrong. Driven from `Game1.Spells.cs`
-(`QueueReanimRise`/`TickPendingReanimRises`) with a preset id from `SpellRegistry`.
+(`QueueReanimRise`/`ReanimRiseTask`) with a preset id from `SpellRegistry`.
 
 **Two mutually-exclusive draw paths**, gated by `Performance.DepthSortedFog`
 (`GameSettings.cs`; H-key A/B toggle in `Game1.cs` Update; `depthSortedFog` dev command):
@@ -782,11 +782,12 @@ Look/edit here when: the reanimate/raise visual is wrong. Driven from `Game1.Spe
 
 ## Debug F-key toggles & debug overlays
 
-**All the debug F-key handlers live in one block in `Necroking/Game1.cs` `Update`** (gated
-on `!anyTextInputActive` so typing into an editor field doesn't trip them). Each toggle
-just flips an `internal` field on Game1 (declared ~lines 724-844); the overlays are then
-drawn from `GameRenderer.Pipeline.cs` (world-space) and `GameRenderer.Draw.cs`
-(screen-space label). Census:
+**All the debug F-key handlers are registered in `Necroking/Game1.Hotkeys.cs`
+`RegisterHotkeys`** as `HotkeyContext.Session` hotkeys (central `HotkeySystem` — see the
+hotkey entry in overview.md; the old per-site `anyTextInputActive` guard is now the
+system's single text-input gate). Each toggle just flips an `internal` field on Game1;
+the overlays are then drawn from `GameRenderer.Pipeline.cs` (world-space) and
+`GameRenderer.Draw.cs` (screen-space label). Census:
 
 | Key | Field (Game1) | Type / cycle | What it shows |
 |-----|---------------|--------------|---------------|
@@ -799,9 +800,13 @@ drawn from `GameRenderer.Pipeline.cs` (world-space) and `GameRenderer.Draw.cs`
 | F9-F12 | `_menuState` | `MenuState` | open/close the Unit / Spell / Map / UI editors (NOT overlays) |
 
 `CollisionDebugMode` enum + `DebugDraw.GetModeLabel` are in `Necroking/Render/DebugDraw.cs`.
-The dev-command mirror for F7 is `Game1.Dev.cs` (`gameplayDebugMode`). **A new debug-mode
-dropdown panel should write these same fields directly** (e.g. cycle/set `_collisionDebugMode`,
-`_gameplayDebugMode`, `_deathFog.ToggleDebug()`), reusing the existing input block's logic.
+The dev-command mirror for F7 is `Game1.Dev.cs` (`gameplayDebugMode`). **The click-driven
+twin of these F-keys exists: `Necroking/UI/DebugSettingsPanel.cs`** — its `BuildToggles()`
+list writes the same Game1 fields via `Get`/`Set` lambdas (one `DebugModeToggle` per row:
+Label + Options + optional Tooltips; `IsBool` rows render as checkboxes, others as eager
+dropdowns). Toggled by the top-right "Debug" editor-row button and the `?` hotkey
+(`Game1.Hotkeys.cs`, `_debugPanel.Toggle()`). Add a new debug toggle there + an F-key
+registration if wanted; both must write the same field.
 
 ## The player-data HUD (top-left status bars) — where to anchor a panel under it
 
@@ -882,3 +887,9 @@ control, or positioning a new left-side HUD panel relative to the player status 
 - SpriteAtlas sync `Load` is reimplemented on the split-phase primitives;
   `LoadExtension` deliberately is not (placeholder-list bookend — see
   docs/consolidation-review/dossiers/texture-asset-caching.md).
+
+## VFX & Zoom
+Any new or changed visual effect must pass the zoom check before committing: every
+constant classified (world vs px-at-32 vs screen — offsets/anchors/speeds too), ONE
+scaling policy per effect, screenshot-verified paused at zoom 8/32/128. Full protocol +
+staging recipes: [docs/vfx-zoom-audit.md](../vfx-zoom-audit.md).

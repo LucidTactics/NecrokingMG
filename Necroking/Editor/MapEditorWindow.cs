@@ -270,20 +270,10 @@ public class MapEditorWindow
     private int _unitFactionFilter; // 0=All, 1=Undead, 2=Human, 3=Animal
     private string _unitPatrolRoute = "";
     private bool _placeAsCorpse; // when set, the Units tool places dead bodies
-    // Units-tab thumbnail grid: layout cached from Draw for hit-testing in Update
+    // Units/Objects-tab thumbnail grids (geometry lives in ThumbGridLayout,
+    // built per pass by the tab Layout functions)
     private const int ThumbGridCols = 6;
     private const int ThumbGridGap = 2;
-    private int _unitGridDrawX;
-    private int _unitGridDrawY;
-    private int _unitGridCellW;
-    private int _unitGridCellH;
-    private int _unitGridViewH; // grid viewport height in px (scroll is continuous, not row-stepped)
-    // Objects-tab thumbnail grid (same scheme)
-    private int _objGridDrawX;
-    private int _objGridDrawY;
-    private int _objGridCellW;
-    private int _objGridCellH;
-    private int _objGridViewH;
 
     // When the editor is entered via a mouse click (e.g. the pause-menu "Map
     // Editor" button), that same click would otherwise bubble straight into the
@@ -318,6 +308,23 @@ public class MapEditorWindow
     // UpdateBottomBarClicks hit-tests, the tab-content reserve, and Update's
     // click-ownership guard all derive from this one constant so they can't drift.
     private const int BottomBarHeight = 2 + FieldHeight + 2 + ButtonHeight + 2 + ReloadButtonHeight + 2 + LineHeight + 20;
+
+    /// <summary>Vertical advance of a section header: EditorBase.DrawSectionHeader
+    /// draws a 22px bar and advances y by 24 (the no-EditorBase fallback matches).
+    /// The per-tab Layout functions use this so Update-side hit rects start exactly
+    /// where Draw's post-header content starts. (The old hand-rolled hit-tests
+    /// assumed HeaderHeight + 6 = 32 and sat 8px below every drawn button.)</summary>
+    private const int SectionHeaderAdvance = 24;
+
+    /// <summary>The tab-content area (below the tab rows, above the bottom bar) —
+    /// the rect Draw scissor-clips the tab body to. Single source for Draw, the
+    /// Update-side Layout calls, and Update's bar-click ownership guard.</summary>
+    private static Rectangle TabContentRect(int panelX, int panelY, int screenH)
+    {
+        int contentY = panelY + TabRowHeight * 2 + 2;
+        int contentH = (screenH - 20) - TabRowHeight * 2 - 2 - (BottomBarHeight + 2);
+        return new Rectangle(panelX, contentY, PanelWidth, contentH);
+    }
 
     // Colors
     private static readonly Color BgColor = new(25, 25, 40, 235);
@@ -1028,9 +1035,8 @@ public class MapEditorWindow
         // re-processed by the NEW tab's updater at a scrolled position.
         bool rawLeftClick = leftClick;
         {
-            int contentTopY = panelY + TabRowHeight * 2 + 2;
-            int bottomBarTop = panelY + (screenH - 20) - (BottomBarHeight + 2);
-            if (overPanel && (mouse.Y < contentTopY || mouse.Y >= bottomBarTop))
+            var contentRect = TabContentRect(panelX, panelY, screenH);
+            if (overPanel && (mouse.Y < contentRect.Top || mouse.Y >= contentRect.Bottom))
                 leftClick = false;
         }
 
@@ -1124,48 +1130,65 @@ public class MapEditorWindow
         return h.ToHashCode();
     }
 
+    /// <summary>Layout rects for the bottom bar (filename field, Save/Load/Undo,
+    /// Reload Map, hint + status lines). Built once per pass and shared by the
+    /// Draw pass and UpdateBottomBarClicks so the two can't drift.</summary>
+    private struct BottomBarLayout
+    {
+        public int FieldY;
+        public Rectangle SaveBtn, LoadBtn, UndoBtn, ReloadBtn;
+        public int HintY, StatusY;
+    }
+
+    private static BottomBarLayout LayoutBottomBar(int panelX, int panelY, int screenH)
+    {
+        var l = new BottomBarLayout();
+        int y = panelY + (screenH - 20) - BottomBarHeight + 2;
+        l.FieldY = y;
+        y += FieldHeight + 2;
+        int btnW3 = (PanelWidth - Margin * 2 - 8) / 3;
+        l.SaveBtn = new Rectangle(panelX + Margin, y, btnW3, ButtonHeight);
+        l.LoadBtn = new Rectangle(panelX + Margin + btnW3 + 4, y, btnW3, ButtonHeight);
+        l.UndoBtn = new Rectangle(panelX + Margin + (btnW3 + 4) * 2, y, btnW3, ButtonHeight);
+        y += ButtonHeight + 2;
+        l.ReloadBtn = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ReloadButtonHeight);
+        y += ReloadButtonHeight + 2;
+        l.HintY = y;
+        y += LineHeight;
+        l.StatusY = y;
+        return l;
+    }
+
     /// <summary>
-    /// Edge-detect clicks on the Save / Load / Undo buttons in the bottom bar.
-    /// Called from Update so we compare against the previous-frame _prevMouse
-    /// *before* it's overwritten — doing this in Draw would always compare the
-    /// current mouse against itself and never fire.
+    /// Edge-detect clicks on the bottom bar's Save / Load / Undo / Reload buttons,
+    /// against the same LayoutBottomBar rects the Draw pass renders. Called from
+    /// Update so we compare against the previous-frame _prevMouse *before* it's
+    /// overwritten — doing this in Draw would always compare the current mouse
+    /// against itself and never fire.
     /// </summary>
     private void UpdateBottomBarClicks(bool leftClick, MouseState mouse, int panelX, int panelY, int screenH)
     {
         if (!leftClick) return;
+        var bb = LayoutBottomBar(panelX, panelY, screenH);
 
-        int panelH = screenH - 20;
-        int buttonRowY = panelY + panelH - BottomBarHeight + 2 + FieldHeight + 2;
-        int relX = mouse.X - (panelX + Margin);
-
-        // Row 1: Save / Load / Undo thirds.
-        if (mouse.Y >= buttonRowY && mouse.Y < buttonRowY + ButtonHeight)
+        if (IsInRect(mouse, bb.SaveBtn))
         {
-            int btnW3 = (PanelWidth - Margin * 2 - 8) / 3;
-
-            if (relX >= 0 && relX < btnW3)
-            {
-                SaveMap();
-            }
-            else if (relX >= btnW3 + 4 && relX < btnW3 * 2 + 4)
-            {
-                LoadMap();
-            }
-            else if (relX >= (btnW3 + 4) * 2 && relX < (btnW3 + 4) * 2 + btnW3)
-            {
-                PerformUndo();
-                _statusMessage = $"Undo ({_undoStack.Count} remaining)";
-                _statusTimer = 1.5f;
-            }
-            return;
+            SaveMap();
         }
-
-        // Row 2: full-width "Reload Map" — only request it here; Game1.Update
-        // performs the world rebuild outside this editor's Update stack.
-        int reloadRowY = buttonRowY + ButtonHeight + 2;
-        if (mouse.Y >= reloadRowY && mouse.Y < reloadRowY + ReloadButtonHeight
-            && relX >= 0 && relX < PanelWidth - Margin * 2)
+        else if (IsInRect(mouse, bb.LoadBtn))
         {
+            LoadMap();
+        }
+        else if (IsInRect(mouse, bb.UndoBtn))
+        {
+            PerformUndo();
+            _statusMessage = $"Undo ({_undoStack.Count} remaining)";
+            _statusTimer = 1.5f;
+        }
+        else if (IsInRect(mouse, bb.ReloadBtn))
+        {
+            // Only request the reload here; Game1.Update performs the world
+            // rebuild outside this editor's Update stack.
             PendingMapReload = true;
         }
     }
@@ -1287,8 +1310,9 @@ public class MapEditorWindow
         Scope.Draw(_pixel, new Rectangle(panelX, tabsBottom, PanelWidth, 1), SeparatorColor);
 
         // Content area (reserve the bottom bar: filename + buttons + shortcuts + status)
-        int contentY = tabsBottom + 2;
-        int contentH = panelH - (tabsBottom - panelY) - 2 - (BottomBarHeight + 2);
+        var tabContentRect = TabContentRect(panelX, panelY, screenH);
+        int contentY = tabContentRect.Y;
+        int contentH = tabContentRect.Height;
 
         // Scissor-clip the tab content panel so partially-scrolled list items
         // can't spill above the section header or below the bottom bar. Each
@@ -1297,7 +1321,6 @@ public class MapEditorWindow
         // entry would draw its background up into the tab row. Dropdowns
         // inside tabs are deferred to DrawDropdownOverlays() after the tab
         // panel finishes, so clipping the tab body doesn't truncate them.
-        var tabContentRect = new Rectangle(panelX, contentY, PanelWidth, contentH);
         _eb.BeginClip(tabContentRect);
 
         switch (ActiveTab)
@@ -1341,44 +1364,38 @@ public class MapEditorWindow
         if (ActiveTab == MapEditorTab.Zones)
             DrawZoneLeftPanel(screenW, screenH);
 
-        // Bottom bar: map filename, Save/Load buttons, undo info, status message
-        int bottomH = BottomBarHeight;
-        int bottomY = panelY + panelH - bottomH;
-        Scope.Draw(_pixel, new Rectangle(panelX, bottomY, PanelWidth, 1), SeparatorColor);
-        bottomY += 2;
+        // Bottom bar: map filename, Save/Load buttons, undo info, status message.
+        // Same LayoutBottomBar rects UpdateBottomBarClicks hit-tests against.
+        var bb = LayoutBottomBar(panelX, panelY, screenH);
+        Scope.Draw(_pixel, new Rectangle(panelX, bb.FieldY - 2, PanelWidth, 1), SeparatorColor);
 
         // Map filename text field
         if (_eb != null)
         {
-            string newFilename = _eb.DrawTextField("map_filename", "Map File", _mapFilename, panelX + Margin, bottomY, PanelWidth - Margin * 2);
+            string newFilename = _eb.DrawTextField("map_filename", "Map File", _mapFilename, panelX + Margin, bb.FieldY, PanelWidth - Margin * 2);
             if (newFilename != _mapFilename) _mapFilename = newFilename;
         }
         else
         {
-            DrawSmallText($"Map: {_mapFilename}", panelX + Margin, bottomY + 3, TextColor);
+            DrawSmallText($"Map: {_mapFilename}", panelX + Margin, bb.FieldY + 3, TextColor);
         }
-        bottomY += FieldHeight + 2;
 
         // Save / Load / Undo buttons. Click handling lives in Update() (see
         // UpdateBottomBarClicks) — doing it here would compare against _prevMouse
         // after it was already overwritten, which is always-false.
-        int btnW3 = (PanelWidth - Margin * 2 - 8) / 3;
-        DrawButtonRect("Save", panelX + Margin, bottomY, btnW3, ButtonHeight, ButtonBg);
-        DrawButtonRect("Load", panelX + Margin + btnW3 + 4, bottomY, btnW3, ButtonHeight, ButtonBg);
-        DrawButtonRect($"Undo ({_undoStack.Count})", panelX + Margin + (btnW3 + 4) * 2, bottomY, btnW3, ButtonHeight,
+        DrawButtonRect("Save", bb.SaveBtn, ButtonBg);
+        DrawButtonRect("Load", bb.LoadBtn, ButtonBg);
+        DrawButtonRect($"Undo ({_undoStack.Count})", bb.UndoBtn,
             _undoStack.Count > 0 ? AccentColor : ButtonBg);
-        bottomY += ButtonHeight + 2;
 
         // Full-width "Reload Map": rebuild the world as a fresh StartGame from
         // the LIVE map state — unsaved editor changes included, nothing written
         // to disk (player carried across like a save/load; camera + editor
         // state untouched). Click handling lives in UpdateBottomBarClicks.
-        DrawButtonRect("Reload Map", panelX + Margin, bottomY, PanelWidth - Margin * 2, ReloadButtonHeight, ButtonBg);
-        bottomY += ReloadButtonHeight + 2;
+        DrawButtonRect("Reload Map", bb.ReloadBtn, ButtonBg);
 
         // Keyboard shortcuts hint
-        DrawSmallText("Ctrl+S Save | Ctrl+L Load | Ctrl+Z Undo", panelX + Margin, bottomY + 2, TextDim);
-        bottomY += LineHeight;
+        DrawSmallText("Ctrl+S Save | Ctrl+L Load | Ctrl+Z Undo", panelX + Margin, bb.HintY + 2, TextDim);
 
         // INF14: Status message with alpha fade
         if (_statusTimer > 0 && !string.IsNullOrEmpty(_statusMessage))
@@ -1387,7 +1404,7 @@ public class MapEditorWindow
                 || _statusMessage.StartsWith("Undo") || _statusMessage.StartsWith("Reloaded");
             Color baseColor = isSuccess ? SuccessColor : DangerColor;
             Color fadedColor = EditorBase.FadeStatusColor(baseColor, _statusTimer);
-            DrawSmallText(_statusMessage, panelX + Margin, bottomY + 2, fadedColor);
+            DrawSmallText(_statusMessage, panelX + Margin, bb.StatusY + 2, fadedColor);
         }
 
         // Wall editor overlay (drawn last, on top of everything)
@@ -1487,27 +1504,50 @@ public class MapEditorWindow
     //  GROUND TAB
     // ====================================================================
 
+    /// <summary>Layout rects for the Ground tab's hand-rolled widgets — computed
+    /// once per pass and shared by UpdateGroundTab (hit-tests) and DrawGroundTab
+    /// (rendering) so the two can't drift.</summary>
+    private struct GroundTabLayout
+    {
+        public int PanelX;
+        public int Top;          // post-header content top
+        public int ListY;        // first type row (scroll applied)
+        public Rectangle AddBtn;
+        public Rectangle DeleteBtn;
+        public bool HasDelete;
+        public int PropsY;       // section following the Add/Delete row
+        public Rectangle TypeRow(int i) =>
+            new(PanelX + Margin, ListY + i * (ButtonHeight + 2), PanelWidth - Margin * 2, ButtonHeight);
+    }
+
+    private GroundTabLayout LayoutGroundTab(int panelX, int contentY)
+    {
+        var l = new GroundTabLayout { PanelX = panelX, Top = contentY + SectionHeaderAdvance };
+        l.ListY = l.Top - (int)_tabScroll[(int)MapEditorTab.Ground];
+        int addY = l.ListY + _groundSystem.TypeCount * (ButtonHeight + 2) + 4;
+        l.AddBtn = new Rectangle(panelX + Margin, addY, 80, ButtonHeight);
+        l.DeleteBtn = new Rectangle(panelX + Margin + 90, addY, 70, ButtonHeight);
+        l.HasDelete = _groundSystem.TypeCount > 1 && SelectedGroundType >= 0;
+        l.PropsY = addY + ButtonHeight + 8;
+        return l;
+    }
+
     private void UpdateGroundTab(MouseState mouse, KeyboardState kb, bool leftClick, bool leftDown, bool leftUp,
         bool overPanel, int panelX, int panelY, int screenW, int screenH)
     {
         if (leftClick && overPanel)
         {
-            int contentY = panelY + TabRowHeight * 2 + HeaderHeight + 6;
+            var lo = LayoutGroundTab(panelX, TabContentRect(panelX, panelY, screenH).Y);
             for (int i = 0; i < _groundSystem.TypeCount; i++)
             {
-                int btnY = contentY + i * (ButtonHeight + 2) - (int)_tabScroll[0];
-                if (mouse.Y >= btnY && mouse.Y < btnY + ButtonHeight &&
-                    mouse.X >= panelX + Margin && mouse.X < panelX + PanelWidth - Margin)
+                if (IsInRect(mouse, lo.TypeRow(i)))
                 {
                     SelectedGroundType = i;
                     break;
                 }
             }
 
-            // Add Type button
-            int addY = contentY + _groundSystem.TypeCount * (ButtonHeight + 2) + 4 - (int)_tabScroll[0];
-            if (mouse.Y >= addY && mouse.Y < addY + ButtonHeight &&
-                mouse.X >= panelX + Margin && mouse.X < panelX + 80 + Margin)
+            if (IsInRect(mouse, lo.AddBtn))
             {
                 _groundSystem.AddGroundType(new GroundTypeDef
                 {
@@ -1516,10 +1556,7 @@ public class MapEditorWindow
                 });
             }
 
-            // Delete Type button
-            if (_groundSystem.TypeCount > 1 && SelectedGroundType >= 0 &&
-                mouse.Y >= addY && mouse.Y < addY + ButtonHeight &&
-                mouse.X >= panelX + Margin + 90 && mouse.X < panelX + Margin + 160)
+            if (lo.HasDelete && IsInRect(mouse, lo.DeleteBtn))
             {
                 _groundSystem.RemoveType(SelectedGroundType);
                 SelectedGroundType = Math.Min(SelectedGroundType, _groundSystem.TypeCount - 1);
@@ -1706,38 +1743,33 @@ public class MapEditorWindow
     private void DrawGroundTab(int panelX, int contentY, int contentH, int screenW, int screenH)
     {
         int viewBottom = contentY + contentH; // tab clip bottom, before the header advances contentY
+        var lo = LayoutGroundTab(panelX, contentY);
         DrawSectionHeader(panelX, ref contentY, $"Ground Types ({_groundSystem.TypeCount})");
 
         var mouse = _eb._input.Mouse;
-        float scroll = _tabScroll[0];
-        int startY = contentY;
+        int startY = lo.Top;
 
         for (int i = 0; i < _groundSystem.TypeCount; i++)
         {
-            int y = contentY + i * (ButtonHeight + 2) - (int)scroll;
-            if (y < startY - ButtonHeight || y > startY + contentH) continue;
+            var btnRect = lo.TypeRow(i);
+            if (btnRect.Y < startY - ButtonHeight || btnRect.Y > startY + contentH) continue;
 
             var def = _groundSystem.GetTypeDef(i);
             bool selected = i == SelectedGroundType;
-            var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
 
             var bgColor = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
             if (bgColor != Color.Transparent)
                 Scope.Draw(_pixel, btnRect, bgColor);
 
             string prefix = selected ? "[*] " : "[ ] ";
-            DrawSmallText(prefix + def.Name, panelX + Margin + 4, y + 3, TextColor);
+            DrawSmallText(prefix + def.Name, btnRect.X + 4, btnRect.Y + 3, TextColor);
         }
 
-        // Add Type button
-        int addY = contentY + _groundSystem.TypeCount * (ButtonHeight + 2) + 4 - (int)scroll;
-        DrawButtonRect("+ Add Type", panelX + Margin, addY, 80, ButtonHeight, ButtonBg);
+        DrawButtonRect("+ Add Type", lo.AddBtn, ButtonBg);
+        if (lo.HasDelete)
+            DrawButtonRect("Delete", lo.DeleteBtn, DangerColor);
 
-        // Delete Type button (only if >1 type)
-        if (_groundSystem.TypeCount > 1 && SelectedGroundType >= 0)
-            DrawButtonRect("Delete", panelX + Margin + 90, addY, 70, ButtonHeight, DangerColor);
-
-        addY += ButtonHeight + 8;
+        int addY = lo.PropsY;
 
         // Selected ground type editable properties
         if (SelectedGroundType >= 0 && SelectedGroundType < _groundSystem.TypeCount && _eb != null)
@@ -1807,37 +1839,65 @@ public class MapEditorWindow
     //  GRASS TAB
     // ====================================================================
 
+    /// <summary>Layout rects for the Grass tab's hand-rolled widgets — shared by
+    /// UpdateGrassTab (hit-tests) and DrawGrassTab (rendering).</summary>
+    private struct GrassTabLayout
+    {
+        public int PanelX;
+        public int Top;          // post-header content top
+        public Rectangle EraserRow;
+        public Rectangle GridToggleRow;
+        public int ListY;
+        public Rectangle AddBtn;
+        public Rectangle DeleteBtn;
+        public bool HasDelete;
+        public int PropsY;
+        public Rectangle TypeRow(int i) =>
+            new(PanelX + Margin, ListY + i * (ButtonHeight + 2), PanelWidth - Margin * 2, ButtonHeight);
+    }
+
+    private GrassTabLayout LayoutGrassTab(int panelX, int contentY)
+    {
+        var l = new GrassTabLayout { PanelX = panelX, Top = contentY + SectionHeaderAdvance };
+        int fw = PanelWidth - Margin * 2;
+        int y = l.Top - (int)_tabScroll[(int)MapEditorTab.Grass];
+        l.EraserRow = new Rectangle(panelX + Margin, y, fw, ButtonHeight);
+        y += ButtonHeight + 4;
+        l.GridToggleRow = new Rectangle(panelX + Margin, y, fw, ButtonHeight);
+        y += ButtonHeight + 4;
+        l.ListY = y;
+        int addY = y + _grassTypes.Count * (ButtonHeight + 2);
+        l.AddBtn = new Rectangle(panelX + Margin, addY, 80, ButtonHeight);
+        l.DeleteBtn = new Rectangle(panelX + Margin + 90, addY, 90, ButtonHeight);
+        l.HasDelete = !_grassEraserSelected && SelectedGrassType >= 0 && SelectedGrassType < _grassTypes.Count;
+        l.PropsY = addY + ButtonHeight + 8;
+        return l;
+    }
+
     private void UpdateGrassTab(MouseState mouse, KeyboardState kb, bool leftClick, bool leftDown, bool leftUp,
         bool overPanel, int panelX, int panelY, int screenW, int screenH)
     {
         if (leftClick && overPanel)
         {
-            int contentY = panelY + TabRowHeight * 2 + HeaderHeight + 6;
+            var lo = LayoutGrassTab(panelX, TabContentRect(panelX, panelY, screenH).Y);
 
             // Eraser button
-            int eraserY = contentY - (int)_tabScroll[1];
-            if (mouse.Y >= eraserY && mouse.Y < eraserY + ButtonHeight &&
-                mouse.X >= panelX + Margin && mouse.X < panelX + PanelWidth - Margin)
+            if (IsInRect(mouse, lo.EraserRow))
             {
                 _grassEraserSelected = true;
                 SelectedGrassType = -1;
             }
 
-            // Show/Hide Cell Grid toggle (one row below eraser)
-            int gridBtnY = eraserY + ButtonHeight + 4;
-            if (mouse.Y >= gridBtnY && mouse.Y < gridBtnY + ButtonHeight &&
-                mouse.X >= panelX + Margin && mouse.X < panelX + PanelWidth - Margin)
+            // Show/Hide Cell Grid toggle
+            if (IsInRect(mouse, lo.GridToggleRow))
             {
                 _grassGridDebugEnabled = !_grassGridDebugEnabled;
             }
 
-            // Type list (starts after eraser + grid toggle)
-            int listY = gridBtnY + ButtonHeight + 4;
+            // Type list
             for (int i = 0; i < _grassTypes.Count; i++)
             {
-                int btnY = listY + i * (ButtonHeight + 2);
-                if (mouse.Y >= btnY && mouse.Y < btnY + ButtonHeight &&
-                    mouse.X >= panelX + Margin && mouse.X < panelX + PanelWidth - Margin)
+                if (IsInRect(mouse, lo.TypeRow(i)))
                 {
                     SelectedGrassType = i;
                     _grassEraserSelected = false;
@@ -1846,9 +1906,7 @@ public class MapEditorWindow
             }
 
             // Add Type button
-            int addY = listY + _grassTypes.Count * (ButtonHeight + 2) + 4;
-            if (mouse.Y >= addY && mouse.Y < addY + ButtonHeight &&
-                mouse.X >= panelX + Margin && mouse.X < panelX + 80 + Margin)
+            if (IsInRect(mouse, lo.AddBtn))
             {
                 _grassTypes.Add(new GrassTypeDef
                 {
@@ -1867,9 +1925,7 @@ public class MapEditorWindow
             }
 
             // Delete Type button (next to Add button)
-            if (!_grassEraserSelected && SelectedGrassType >= 0 && SelectedGrassType < _grassTypes.Count &&
-                mouse.Y >= addY && mouse.Y < addY + ButtonHeight &&
-                mouse.X >= panelX + Margin + 90 && mouse.X < panelX + Margin + 180)
+            if (lo.HasDelete && IsInRect(mouse, lo.DeleteBtn))
             {
                 _grassTypes.RemoveAt(SelectedGrassType);
                 // Remap grass map
@@ -2016,66 +2072,59 @@ public class MapEditorWindow
     private void DrawGrassTab(int panelX, int contentY, int contentH, int screenW, int screenH)
     {
         int viewBottom = contentY + contentH; // tab clip bottom, before the header advances contentY
+        var lo = LayoutGrassTab(panelX, contentY);
         DrawSectionHeader(panelX, ref contentY, $"Grass Types ({_grassTypes.Count})");
 
         var mouse = _eb._input.Mouse;
-        float scroll = _tabScroll[1];
-        int y = contentY - (int)scroll;
 
         // Eraser entry
         {
-            var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
+            var btnRect = lo.EraserRow;
             var bg = _grassEraserSelected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
             if (bg != Color.Transparent)
                 Scope.Draw(_pixel, btnRect, bg);
             // X swatch for eraser
-            Scope.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), new Color(180, 60, 60));
-            DrawSmallText("Eraser", panelX + Margin + 24, y + 3, TextColor);
+            Scope.Draw(_pixel, new Rectangle(btnRect.X + 4, btnRect.Y + 4, 14, 14), new Color(180, 60, 60));
+            DrawSmallText("Eraser", btnRect.X + 24, btnRect.Y + 3, TextColor);
         }
-        y += ButtonHeight + 4;
 
         // Show Cell Grid toggle
         {
-            var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
+            var btnRect = lo.GridToggleRow;
             var bg = _grassGridDebugEnabled ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
             if (bg != Color.Transparent)
                 Scope.Draw(_pixel, btnRect, bg);
-            Scope.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), new Color(200, 200, 120));
+            Scope.Draw(_pixel, new Rectangle(btnRect.X + 4, btnRect.Y + 4, 14, 14), new Color(200, 200, 120));
             DrawSmallText(_grassGridDebugEnabled ? "Hide Cell Grid" : "Show Cell Grid",
-                panelX + Margin + 24, y + 3, TextColor);
+                btnRect.X + 24, btnRect.Y + 3, TextColor);
         }
-        y += ButtonHeight + 4;
 
         // Type list
         for (int i = 0; i < _grassTypes.Count; i++)
         {
-            if (y < contentY - ButtonHeight || y > contentY + contentH) { y += ButtonHeight + 2; continue; }
+            var btnRect = lo.TypeRow(i);
+            if (btnRect.Y < lo.Top - ButtonHeight || btnRect.Y > lo.Top + contentH) continue;
 
             var gt = _grassTypes[i];
             bool selected = !_grassEraserSelected && i == SelectedGrassType;
-            var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
 
             var bg = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
             if (bg != Color.Transparent)
                 Scope.Draw(_pixel, btnRect, bg);
 
             // Default tint swatch (left), corrupted tint swatch (right of it).
-            Scope.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), gt.DefaultTint);
-            Scope.Draw(_pixel, new Rectangle(panelX + Margin + 22, y + 4, 14, 14), gt.CorruptedTint);
+            Scope.Draw(_pixel, new Rectangle(btnRect.X + 4, btnRect.Y + 4, 14, 14), gt.DefaultTint);
+            Scope.Draw(_pixel, new Rectangle(btnRect.X + 22, btnRect.Y + 4, 14, 14), gt.CorruptedTint);
 
-            DrawSmallText(gt.Name, panelX + Margin + 42, y + 3, TextColor);
-            y += ButtonHeight + 2;
+            DrawSmallText(gt.Name, btnRect.X + 42, btnRect.Y + 3, TextColor);
         }
 
-        // Add button
-        DrawButtonRect("+ Add Type", panelX + Margin, y, 80, ButtonHeight, ButtonBg);
-        y += ButtonHeight + 8;
+        // Add / Delete buttons
+        DrawButtonRect("+ Add Type", lo.AddBtn, ButtonBg);
+        if (lo.HasDelete)
+            DrawButtonRect("Delete Type", lo.DeleteBtn, DangerColor);
 
-        // Delete Type button
-        if (!_grassEraserSelected && SelectedGrassType >= 0 && SelectedGrassType < _grassTypes.Count)
-        {
-            DrawButtonRect("Delete Type", panelX + Margin + 90, y - ButtonHeight - 8, 90, ButtonHeight, DangerColor);
-        }
+        int y = lo.PropsY;
 
         // Selected type properties (editable)
         if (!_grassEraserSelected && SelectedGrassType >= 0 && SelectedGrassType < _grassTypes.Count && _eb != null)
@@ -2296,6 +2345,94 @@ public class MapEditorWindow
         return h;
     }
 
+    /// <summary>Geometry of a 6-wide thumbnail grid (Units tab unit defs, Objects
+    /// tab env defs): viewport rect + cell size. Built by the tab Layout functions
+    /// and consumed by BOTH the Draw pass (cells, clip, scrollbar) and the Update
+    /// hit-test — replacing the old draw-cached, one-frame-stale grid fields.</summary>
+    private struct ThumbGridLayout
+    {
+        public int X, Y, W, ViewH;
+        public int CellW, CellH;
+        public int ColStride => CellW + ThumbGridGap;
+        public int RowStride => CellH + ThumbGridGap;
+        public int TotalRows(int itemCount) => (itemCount + ThumbGridCols - 1) / ThumbGridCols;
+
+        /// <summary>Item index under a mouse position given the continuous pixel
+        /// scroll, or -1 (gap between cells / outside the viewport / past the end).</summary>
+        public int HitIndex(int mx, int my, float scroll, int itemCount)
+        {
+            int relX = mx - X, relY = my - Y;
+            if (relX < 0 || relY < 0 || relY >= ViewH) return -1;
+            // Content-space Y: the grid scrolls continuously (by pixels), so add
+            // the raw scroll before the row math.
+            int conY = relY + (int)scroll;
+            if (relX % ColStride >= CellW || conY % RowStride >= CellH) return -1;
+            int col = relX / ColStride;
+            int i = (conY / RowStride) * ThumbGridCols + col;
+            return col < ThumbGridCols && i >= 0 && i < itemCount ? i : -1;
+        }
+    }
+
+    private static ThumbGridLayout LayoutThumbGrid(int x, int y, int w, int viewH)
+    {
+        int cellW = (w - (ThumbGridCols - 1) * ThumbGridGap) / ThumbGridCols;
+        return new ThumbGridLayout { X = x, Y = y, W = w, ViewH = viewH, CellW = cellW, CellH = cellW };
+    }
+
+    /// <summary>Layout rects for the Objects tab's hand-rolled widgets — shared by
+    /// UpdateObjectsTab (hit-tests) and DrawObjectsTab (rendering).</summary>
+    private struct ObjectsTabLayout
+    {
+        public int PanelX;
+        public int Top;             // post-header content top
+        public bool HasEditDefs;
+        public int EditDefsY;
+        public int CategoryY;
+        public int CatBtnW, CatsPerRow, CatRows;
+        public Rectangle SingleBtn, PaintBtn;
+        public int AutoGroundY;
+        public int ListTop;         // def grid / group list top (after separator)
+        public int ListAreaH;
+        public ThumbGridLayout Grid;
+        public Rectangle CategoryCell(int i)
+        {
+            int col = i % CatsPerRow, row = i / CatsPerRow;
+            return new Rectangle(PanelX + Margin + col * CatBtnW, CategoryY + row * (ButtonHeight + 2),
+                CatBtnW - 2, ButtonHeight);
+        }
+        public Rectangle GroupRow(int i, float scroll) =>
+            new(PanelX + Margin, ListTop + i * (ButtonHeight + 2) - (int)scroll, PanelWidth - Margin * 2, ButtonHeight);
+    }
+
+    private ObjectsTabLayout LayoutObjectsTab(int panelX, int contentY, int contentH, int categoryCount)
+    {
+        var l = new ObjectsTabLayout { PanelX = panelX, Top = contentY + SectionHeaderAdvance };
+        int contentTop = contentY;
+        int cy = l.Top;
+        l.HasEditDefs = _eb != null && _envObjectEditor != null;
+        if (l.HasEditDefs)
+        {
+            l.EditDefsY = cy;
+            cy += ButtonHeight + 4;
+        }
+        l.CategoryY = cy;
+        int availW = PanelWidth - Margin * 2;
+        l.CatBtnW = Math.Max(56, availW / Math.Clamp(categoryCount, 1, 5));
+        l.CatsPerRow = Math.Max(1, availW / l.CatBtnW);
+        l.CatRows = (categoryCount + l.CatsPerRow - 1) / l.CatsPerRow;
+        cy += l.CatRows * (ButtonHeight + 2) + 2;
+        int halfW = availW / 2;
+        l.SingleBtn = new Rectangle(panelX + Margin, cy, halfW - 1, ButtonHeight);
+        l.PaintBtn = new Rectangle(panelX + Margin + halfW, cy, halfW - 1, ButtonHeight);
+        cy += ButtonHeight + 4;
+        l.AutoGroundY = cy;
+        cy += AutoGroundControlsHeight(_objectsAutoGround);
+        l.ListTop = cy;
+        l.ListAreaH = contentH - (cy - contentTop) - 160;
+        l.Grid = LayoutThumbGrid(panelX + Margin, cy, availW, l.ListAreaH);
+        return l;
+    }
+
     private void UpdateObjectsTab(MouseState mouse, KeyboardState kb, bool leftClick, bool leftDown, bool leftUp,
         bool rightClick, bool overPanel, int panelX, int panelY, int screenW, int screenH)
     {
@@ -2309,52 +2446,36 @@ public class MapEditorWindow
 
         if (leftClick && overPanel)
         {
-            int contentY = panelY + TabRowHeight * 2 + HeaderHeight + 6;
-
-            // Skip past "Edit Defs" button area (handled by EditorBase.DrawButton)
-            if (_eb != null && _envObjectEditor != null)
-                contentY += ButtonHeight + 4;
-
-            // Category buttons — wrapping layout (must match DrawObjectsTab)
+            var content = TabContentRect(panelX, panelY, screenH);
             var categories = GetEnvCategories();
-            int availW = PanelWidth - Margin * 2;
-            int catBtnW = Math.Max(56, availW / Math.Clamp(categories.Count, 1, 5));
-            int catsPerRow = Math.Max(1, availW / catBtnW);
-            int catRows = (categories.Count + catsPerRow - 1) / catsPerRow;
-            int catTotalH = catRows * (ButtonHeight + 2) + 2;
-            if (mouse.Y >= contentY && mouse.Y < contentY + catTotalH)
+            var lo = LayoutObjectsTab(panelX, content.Y, content.Height, categories.Count);
+
+            // Category buttons ("Edit Defs" above them is an EditorBase button
+            // that handles its own click during Draw)
+            for (int i = 0; i < categories.Count; i++)
             {
-                int relX = mouse.X - (panelX + Margin);
-                int row = (mouse.Y - contentY) / (ButtonHeight + 2);
-                int col = relX / catBtnW;
-                int catIdx = row * catsPerRow + col;
-                if (catIdx >= 0 && catIdx < categories.Count)
-                    SelectedEnvCategory = catIdx;
+                if (IsInRect(mouse, lo.CategoryCell(i)))
+                {
+                    SelectedEnvCategory = i;
+                    break;
+                }
             }
 
             // Mode toggle
-            int modeY = contentY + catTotalH;
-            int halfW = (PanelWidth - Margin * 2) / 2;
-            if (mouse.Y >= modeY && mouse.Y < modeY + ButtonHeight)
-            {
-                int relX = mouse.X - (panelX + Margin);
-                if (relX >= 0 && relX < halfW) _objectPaintMode = false;
-                else if (relX >= halfW && relX < halfW * 2) _objectPaintMode = true;
-            }
+            if (IsInRect(mouse, lo.SingleBtn)) _objectPaintMode = false;
+            else if (IsInRect(mouse, lo.PaintBtn)) _objectPaintMode = true;
 
-            // Def list (or group list for M17). Account for the Auto-Ground
-            // controls block drawn between the mode toggle and the list.
-            int listY = modeY + ButtonHeight + 4 + AutoGroundControlsHeight(_objectsAutoGround);
+            // Def grid (or group list for M17)
             var filteredDefs = GetFilteredEnvDefs(categories);
-            // M17: If category is "Groups", show group list instead
             bool isGroupMode = SelectedEnvCategory < categories.Count && categories[SelectedEnvCategory] == "Groups";
             if (isGroupMode)
             {
                 var groups = GetEnvGroups();
                 for (int i = 0; i < groups.Count; i++)
                 {
-                    int itemY = listY + i * (ButtonHeight + 2) - (int)_envListScroll;
-                    if (mouse.Y >= itemY && mouse.Y < itemY + ButtonHeight)
+                    var row = lo.GroupRow(i, _envListScroll);
+                    if (row.Y > lo.ListTop + lo.ListAreaH) break;
+                    if (IsInRect(mouse, row))
                     {
                         // Store group index as negative to differentiate from def index
                         SelectedEnvDefIndex = -(i + 1); // -1 = group 0, -2 = group 1, etc.
@@ -2362,26 +2483,11 @@ public class MapEditorWindow
                     }
                 }
             }
-            else if (_objGridDrawY > 0 && _objGridCellW > 0)
+            else
             {
-                // Grid cell hit-test against the layout cached by DrawObjectsTab
-                // (same scheme as the Units tab).
-                int colStride = _objGridCellW + ThumbGridGap;
-                int rowStride = _objGridCellH + ThumbGridGap;
-                int relX = mouse.X - _objGridDrawX;
-                int relY = mouse.Y - _objGridDrawY;
-                // Content-space Y: the grid scrolls continuously (by pixels),
-                // so add the raw scroll before the row math.
-                int conY = relY + (int)_envListScroll;
-                if (relX >= 0 && relY >= 0 && relY < _objGridViewH
-                    && relX % colStride < _objGridCellW && conY % rowStride < _objGridCellH)
-                {
-                    int col = relX / colStride;
-                    int row = conY / rowStride;
-                    int i = row * ThumbGridCols + col;
-                    if (col < ThumbGridCols && i >= 0 && i < filteredDefs.Count)
-                        SelectedEnvDefIndex = filteredDefs[i];
-                }
+                int hit = lo.Grid.HitIndex(mouse.X, mouse.Y, _envListScroll, filteredDefs.Count);
+                if (hit >= 0)
+                    SelectedEnvDefIndex = filteredDefs[hit];
             }
         }
 
@@ -2848,12 +2954,13 @@ public class MapEditorWindow
         int contentTop = contentY;
 
         var categories = GetEnvCategories();
+        var lo = LayoutObjectsTab(panelX, contentY, contentH, categories.Count);
         DrawSectionHeader(panelX, ref contentY, $"Objects ({_envSystem.DefCount} defs, {_envSystem.ObjectCount} placed)");
 
         // "Edit Defs" button to open the EnvObjectEditor overlay
-        if (_eb != null && _envObjectEditor != null)
+        if (lo.HasEditDefs)
         {
-            if (_eb.DrawButton("Edit Defs", panelX + Margin, contentY, PanelWidth - Margin * 2, ButtonHeight, EditorBase.AccentColor))
+            if (_eb.DrawButton("Edit Defs", panelX + Margin, lo.EditDefsY, PanelWidth - Margin * 2, ButtonHeight, EditorBase.AccentColor))
             {
                 Core.DebugLog.Log("editor", $"Edit Defs clicked, opening EnvObjectEditor (defCount={_envSystem.DefCount})");
                 if (SelectedEnvDefIndex >= 0)
@@ -2861,51 +2968,41 @@ public class MapEditorWindow
                 else
                     _envObjectEditor.Open();
             }
-            contentY += ButtonHeight + 4;
         }
 
         var mouse = _eb._input.Mouse;
 
         // Category buttons — wrap to multiple rows if they exceed panel width
-        int availW = PanelWidth - Margin * 2;
-        int catBtnW = Math.Max(56, availW / Math.Clamp(categories.Count, 1, 5));
-        int catsPerRow = Math.Max(1, availW / catBtnW);
-        int catRows = (categories.Count + catsPerRow - 1) / catsPerRow;
         for (int i = 0; i < categories.Count; i++)
         {
-            int col = i % catsPerRow;
-            int row = i / catsPerRow;
             bool active = i == SelectedEnvCategory;
-            var btnRect = new Rectangle(panelX + Margin + col * catBtnW, contentY + row * (ButtonHeight + 2), catBtnW - 2, ButtonHeight);
+            var btnRect = lo.CategoryCell(i);
             var bg = active ? TabActiveColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : TabInactiveColor);
             Scope.Draw(_pixel, btnRect, bg);
             DrawTextCentered(categories[i], btnRect, TextColor);
         }
-        contentY += catRows * (ButtonHeight + 2) + 2;
 
         // Mode toggle: Single | Paint
-        int halfW = (PanelWidth - Margin * 2) / 2;
-        {
-            var singleRect = new Rectangle(panelX + Margin, contentY, halfW - 1, ButtonHeight);
-            var paintRect = new Rectangle(panelX + Margin + halfW, contentY, halfW - 1, ButtonHeight);
-            Scope.Draw(_pixel, singleRect, !_objectPaintMode ? TabActiveColor : TabInactiveColor);
-            Scope.Draw(_pixel, paintRect, _objectPaintMode ? TabActiveColor : TabInactiveColor);
-            DrawTextCentered("Single", singleRect, TextColor);
-            DrawTextCentered("Paint", paintRect, TextColor);
-        }
-        contentY += ButtonHeight + 4;
+        Scope.Draw(_pixel, lo.SingleBtn, !_objectPaintMode ? TabActiveColor : TabInactiveColor);
+        Scope.Draw(_pixel, lo.PaintBtn, _objectPaintMode ? TabActiveColor : TabInactiveColor);
+        DrawTextCentered("Single", lo.SingleBtn, TextColor);
+        DrawTextCentered("Paint", lo.PaintBtn, TextColor);
 
         // Auto-ground controls: stamp a ground patch under each placed object
         // (e.g. dirt under trees on grassland). Applies in single and paint modes.
         if (_eb != null)
-            DrawAutoGroundControls(_objectsAutoGround, "obj", panelX, ref contentY);
+        {
+            int agY = lo.AutoGroundY;
+            DrawAutoGroundControls(_objectsAutoGround, "obj", panelX, ref agY);
+        }
+        contentY = lo.ListTop;
 
         // Separator
         Scope.Draw(_pixel, new Rectangle(panelX, contentY - 2, PanelWidth, 1), SeparatorColor);
 
         // M17: Check if category is "Groups"
         bool isGroupMode = SelectedEnvCategory < categories.Count && categories[SelectedEnvCategory] == "Groups";
-        int listAreaH = contentH - (contentY - contentTop) - 160;
+        int listAreaH = lo.ListAreaH;
 
         if (isGroupMode)
         {
@@ -2913,12 +3010,10 @@ public class MapEditorWindow
             var groups = GetEnvGroups();
             for (int i = 0; i < groups.Count; i++)
             {
-                int itemY = contentY + i * (ButtonHeight + 2) - (int)_envListScroll;
-                if (itemY < contentY - ButtonHeight || itemY > contentY + listAreaH) continue;
+                var btnRect = lo.GroupRow(i, _envListScroll);
+                if (btnRect.Y < contentY - ButtonHeight || btnRect.Y > contentY + listAreaH) continue;
 
                 bool selected = SelectedEnvDefIndex == -(i + 1);
-                var btnRect = new Rectangle(panelX + Margin, itemY, PanelWidth - Margin * 2, ButtonHeight);
-
                 var bgColor = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
                 if (bgColor != Color.Transparent)
                     Scope.Draw(_pixel, btnRect, bgColor);
@@ -2928,7 +3023,7 @@ public class MapEditorWindow
                 for (int d = 0; d < _envSystem.DefCount; d++)
                     if (_envSystem.GetDef(d).Group == groups[i]) defCount++;
 
-                DrawSmallText($"{groups[i]} ({defCount} defs)", panelX + Margin + 4, itemY + 3, selected ? TextBright : TextColor);
+                DrawSmallText($"{groups[i]} ({defCount} defs)", btnRect.X + 4, btnRect.Y + 3, selected ? TextBright : TextColor);
             }
 
             // Clamp + thin scrollbar for the group list (the def grid clamps
@@ -2959,12 +3054,12 @@ public class MapEditorWindow
             // name), same scheme as the Units tab.
             var filteredDefs = GetFilteredEnvDefs(categories);
 
-            int gridX = panelX + Margin;
-            int gridW = PanelWidth - Margin * 2;
-            int cellW = (gridW - (ThumbGridCols - 1) * ThumbGridGap) / ThumbGridCols;
-            int cellH = cellW;
-            int rowStride = cellH + ThumbGridGap;
-            int totalRows = (filteredDefs.Count + ThumbGridCols - 1) / ThumbGridCols;
+            int gridX = lo.Grid.X;
+            int gridW = lo.Grid.W;
+            int cellW = lo.Grid.CellW;
+            int cellH = lo.Grid.CellH;
+            int rowStride = lo.Grid.RowStride;
+            int totalRows = lo.Grid.TotalRows(filteredDefs.Count);
 
             // Clamp the wheel-driven scroll to the end of the grid (the wheel
             // handler in Update only clamps at 0). Pixel-exact so the grid
@@ -2974,13 +3069,6 @@ public class MapEditorWindow
             int scrollPx = (int)_envListScroll;
             int firstRow = scrollPx / rowStride;
             int subRowOff = scrollPx % rowStride; // partial-row offset — rows glide, clip catches the spill
-
-            // Cache for Update hit-testing
-            _objGridDrawX = gridX;
-            _objGridDrawY = contentY;
-            _objGridCellW = cellW;
-            _objGridCellH = cellH;
-            _objGridViewH = listAreaH;
 
             // MousePos, not raw .Mouse: the mousepos dev override patches only
             // MousePos, and with a real mouse the two are identical.
@@ -3003,7 +3091,7 @@ public class MapEditorWindow
 
                     int defIdx = filteredDefs[i];
                     var def = _envSystem.GetDef(defIdx);
-                    var cell = new Rectangle(gridX + c * (cellW + ThumbGridGap), cellY, cellW, cellH);
+                    var cell = new Rectangle(gridX + c * lo.Grid.ColStride, cellY, cellW, cellH);
                     bool selected = defIdx == SelectedEnvDefIndex;
                     bool hovered = cell.Contains(mx, my) && my >= contentY && my < contentY + listAreaH;
                     if (hovered) { hoveredIdx = i; hoveredCell = cell; }
@@ -3127,29 +3215,47 @@ public class MapEditorWindow
     //  WALLS TAB
     // ====================================================================
 
+    /// <summary>Layout rects for the Walls tab's hand-rolled widgets — shared by
+    /// UpdateWallsTab (hit-tests) and DrawWallsTab (rendering).</summary>
+    private struct WallsTabLayout
+    {
+        public int PanelX;
+        public int Top;          // post-header content top
+        public Rectangle EraseRow;
+        public int ListY;
+        public int AfterListY;
+        public Rectangle DefRow(int i) =>
+            new(PanelX + Margin, ListY + i * (ButtonHeight + 2), PanelWidth - Margin * 2, ButtonHeight);
+    }
+
+    private WallsTabLayout LayoutWallsTab(int panelX, int contentY)
+    {
+        var l = new WallsTabLayout { PanelX = panelX, Top = contentY + SectionHeaderAdvance };
+        int y = l.Top - (int)_tabScroll[(int)MapEditorTab.Walls];
+        l.EraseRow = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
+        l.ListY = y + ButtonHeight + 4;
+        l.AfterListY = l.ListY + _wallSystem.DefCount * (ButtonHeight + 2);
+        return l;
+    }
+
     private void UpdateWallsTab(MouseState mouse, KeyboardState kb, bool leftClick, bool leftDown, bool leftUp,
         bool rightClick, bool rightDown, bool rightUp,
         bool overPanel, int panelX, int panelY, int screenW, int screenH)
     {
         if (leftClick && overPanel)
         {
-            int contentY = panelY + TabRowHeight * 2 + HeaderHeight + 6;
+            var lo = LayoutWallsTab(panelX, TabContentRect(panelX, panelY, screenH).Y);
 
             // Erase entry
-            int y = contentY - (int)_tabScroll[3];
-            if (mouse.Y >= y && mouse.Y < y + ButtonHeight &&
-                mouse.X >= panelX + Margin && mouse.X < panelX + PanelWidth - Margin)
+            if (IsInRect(mouse, lo.EraseRow))
             {
                 SelectedWallType = 0;
             }
-            y += ButtonHeight + 4;
 
             // Wall def list
             for (int i = 0; i < _wallSystem.DefCount; i++)
             {
-                int btnY = y + i * (ButtonHeight + 2);
-                if (mouse.Y >= btnY && mouse.Y < btnY + ButtonHeight &&
-                    mouse.X >= panelX + Margin && mouse.X < panelX + PanelWidth - Margin)
+                if (IsInRect(mouse, lo.DefRow(i)))
                 {
                     SelectedWallType = i + 1; // 1-based
                     break;
@@ -3237,43 +3343,40 @@ public class MapEditorWindow
     private void DrawWallsTab(int panelX, int contentY, int contentH, int screenW, int screenH)
     {
         int viewBottom = contentY + contentH; // tab clip bottom, before the header advances contentY
+        var lo = LayoutWallsTab(panelX, contentY);
         DrawSectionHeader(panelX, ref contentY, $"Walls ({_wallSystem.DefCount} types)");
 
         var mouse = _eb._input.Mouse;
-        float scroll = _tabScroll[3];
-        int y = contentY - (int)scroll;
 
         // Erase entry
         {
             bool selected = SelectedWallType == 0;
-            var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
+            var btnRect = lo.EraseRow;
             var bg = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
             if (bg != Color.Transparent) Scope.Draw(_pixel, btnRect, bg);
-            Scope.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), DangerColor);
-            DrawSmallText("Erase Walls", panelX + Margin + 24, y + 3, TextColor);
+            Scope.Draw(_pixel, new Rectangle(btnRect.X + 4, btnRect.Y + 4, 14, 14), DangerColor);
+            DrawSmallText("Erase Walls", btnRect.X + 24, btnRect.Y + 3, TextColor);
         }
-        y += ButtonHeight + 4;
 
         // Wall def list
         for (int i = 0; i < _wallSystem.DefCount; i++)
         {
-            if (y < contentY - ButtonHeight || y > contentY + contentH) { y += ButtonHeight + 2; continue; }
+            var btnRect = lo.DefRow(i);
+            if (btnRect.Y < lo.Top - ButtonHeight || btnRect.Y > lo.Top + contentH) continue;
 
             var def = _wallSystem.Defs[i];
             bool selected = SelectedWallType == i + 1;
-            var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
 
             var bg = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
             if (bg != Color.Transparent) Scope.Draw(_pixel, btnRect, bg);
 
             // Color swatch
-            Scope.Draw(_pixel, new Rectangle(panelX + Margin + 4, y + 4, 14, 14), def.Color);
-            DrawSmallText($"{def.Name} (HP:{def.MaxHP})", panelX + Margin + 24, y + 3, TextColor);
-            y += ButtonHeight + 2;
+            Scope.Draw(_pixel, new Rectangle(btnRect.X + 4, btnRect.Y + 4, 14, 14), def.Color);
+            DrawSmallText($"{def.Name} (HP:{def.MaxHP})", btnRect.X + 24, btnRect.Y + 3, TextColor);
         }
 
         // Brush size
-        y += 8;
+        int y = lo.AfterListY + 8;
         DrawBrushSizeControl(panelX, y);
         y += ButtonHeight + 4;
 
@@ -3311,20 +3414,92 @@ public class MapEditorWindow
     //  ROADS TAB
     // ====================================================================
 
+    /// <summary>Layout rects for the Roads tab's hand-rolled widgets — shared by
+    /// UpdateRoadsTab (hit-tests) and DrawRoadsTab (rendering). Walks the same
+    /// y-cursor path Draw renders (selected-road properties, texture defs) so the
+    /// junction buttons land exactly where they're drawn — previously Update
+    /// hit-tested them right below the Place Mode toggle while Draw put them after
+    /// the whole properties stack.</summary>
+    private struct RoadsTabLayout
+    {
+        public int PanelX;
+        public int Top;             // post-header content top (pre-scroll)
+        public int ListY;           // first road row (scroll applied)
+        public int RowCount;        // road rows before the cull-break
+        public Rectangle AddBtn, DeleteBtn, PlaceModeBtn;
+        public int PropsY;          // selected-road properties (separator line)
+        public int TexDefsY;        // road texture defs section (pre-gap)
+        public int JunctionsY;      // junctions section (pre-gap)
+        public Rectangle AddJunctionBtn, PlaceJunctionBtn;
+        public int JunctionListY;
+        public Rectangle RoadRow(int i) =>
+            new(PanelX + Margin, ListY + i * (ButtonHeight + 2), PanelWidth - Margin * 2, ButtonHeight);
+    }
+
+    private RoadsTabLayout LayoutRoadsTab(int panelX, int contentY, int contentH)
+    {
+        var l = new RoadsTabLayout { PanelX = panelX, Top = contentY + SectionHeaderAdvance };
+        l.ListY = l.Top - (int)_tabScroll[(int)MapEditorTab.Roads];
+        int cutoff = l.Top + contentH - 200;
+
+        int y = l.ListY;
+        l.RowCount = _roadSystem.RoadCount;
+        for (int i = 0; i < _roadSystem.RoadCount; i++)
+        {
+            if (y > cutoff) { l.RowCount = i; break; }
+            y += ButtonHeight + 2;
+        }
+
+        l.AddBtn = new Rectangle(panelX + Margin, y, 75, ButtonHeight);
+        l.DeleteBtn = new Rectangle(panelX + Margin + 85, y, 75, ButtonHeight);
+        y += ButtonHeight + 4;
+        l.PlaceModeBtn = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
+        y += ButtonHeight + 8;
+
+        l.PropsY = y;
+        if (SelectedRoadIndex >= 0 && SelectedRoadIndex < _roadSystem.RoadCount)
+        {
+            y += 4; // separator gap
+            y += _eb != null
+                ? 9 * (FieldHeight + 2) + 2 * LineHeight // name..edge + rim fields + new-pt width, "Rim:" + "Points:" lines
+                : 7 * LineHeight;
+        }
+
+        l.TexDefsY = y;
+        y += 4 + 4 + LineHeight; // gap, separator, section header line
+        if (_eb != null)
+        {
+            for (int tdi = 0; tdi < _roadSystem.TextureDefCount; tdi++)
+            {
+                if (y > cutoff) break;
+                y += FieldHeight + 2;
+            }
+        }
+        else
+        {
+            y += _roadSystem.TextureDefCount * LineHeight;
+        }
+
+        l.JunctionsY = y;
+        y += 4 + 4 + LineHeight; // gap, separator, "Junctions" line
+        l.AddJunctionBtn = new Rectangle(panelX + Margin, y, 120, ButtonHeight);
+        l.PlaceJunctionBtn = new Rectangle(panelX + Margin + 110, y, 120, ButtonHeight);
+        l.JunctionListY = y + ButtonHeight + 4;
+        return l;
+    }
+
     private void UpdateRoadsTab(MouseState mouse, KeyboardState kb, bool leftClick, bool leftDown, bool leftUp,
         bool rightClick, bool overPanel, int panelX, int panelY, int screenW, int screenH)
     {
         if (leftClick && overPanel)
         {
-            int contentY = panelY + TabRowHeight * 2 + HeaderHeight + 6;
-            float scroll = _tabScroll[4];
+            var content = TabContentRect(panelX, panelY, screenH);
+            var lo = LayoutRoadsTab(panelX, content.Y, content.Height);
 
             // Road list
-            int y = contentY - (int)scroll;
-            for (int i = 0; i < _roadSystem.RoadCount; i++)
+            for (int i = 0; i < lo.RowCount; i++)
             {
-                int btnY = y + i * (ButtonHeight + 2);
-                if (mouse.Y >= btnY && mouse.Y < btnY + ButtonHeight)
+                if (IsInRect(mouse, lo.RoadRow(i)))
                 {
                     SelectedRoadIndex = i;
                     SelectedRoadPoint = -1;
@@ -3333,35 +3508,32 @@ public class MapEditorWindow
             }
 
             // Add Road button
-            int addY = y + _roadSystem.RoadCount * (ButtonHeight + 2) + 4;
-            if (mouse.Y >= addY && mouse.Y < addY + ButtonHeight &&
-                mouse.X >= panelX + Margin && mouse.X < panelX + 80 + Margin)
+            if (IsInRect(mouse, lo.AddBtn))
             {
                 SelectedRoadIndex = _roadSystem.AddRoad();
             }
 
             // Delete Road button
-            int delY = addY;
-            if (mouse.Y >= delY && mouse.Y < delY + ButtonHeight &&
-                mouse.X >= panelX + 90 + Margin && mouse.X < panelX + 160 + Margin &&
-                SelectedRoadIndex >= 0)
+            if (SelectedRoadIndex >= 0 && IsInRect(mouse, lo.DeleteBtn))
             {
                 _roadSystem.RemoveRoad(SelectedRoadIndex);
                 SelectedRoadIndex = Math.Min(SelectedRoadIndex, _roadSystem.RoadCount - 1);
             }
 
             // Place Mode toggle
-            int modeY = addY + ButtonHeight + 4;
-            if (mouse.Y >= modeY && mouse.Y < modeY + ButtonHeight)
+            if (IsInRect(mouse, lo.PlaceModeBtn))
             {
                 _roadPlaceMode = !_roadPlaceMode;
             }
 
-            // Junction section
-            int juncY = modeY + ButtonHeight + 4;
+            // RM15: Toggle click-to-place junction mode. Tested before Add Junction —
+            // the two rects overlap by 10px and Place on Map draws on top.
+            if (IsInRect(mouse, lo.PlaceJunctionBtn))
+            {
+                _junctionPlaceMode = !_junctionPlaceMode;
+            }
             // Add Junction (at camera center)
-            if (mouse.Y >= juncY && mouse.Y < juncY + ButtonHeight &&
-                mouse.X >= panelX + Margin && mouse.X < panelX + 100 + Margin)
+            else if (IsInRect(mouse, lo.AddJunctionBtn))
             {
                 Vec2 camPos = _camera.Position;
                 int newJuncIdx = _roadSystem.AddJunction(camPos);
@@ -3372,13 +3544,6 @@ public class MapEditorWindow
                     var junc = _roadSystem.GetJunction(newJuncIdx);
                     junc.TextureDefIndex = _roadSystem.GetRoad(SelectedRoadIndex).TextureDefIndex;
                 }
-            }
-
-            // RM15: Toggle click-to-place junction mode (same row as Add Junction)
-            if (mouse.Y >= juncY && mouse.Y < juncY + ButtonHeight &&
-                mouse.X >= panelX + Margin + 110 && mouse.X < panelX + Margin + 230)
-            {
-                _junctionPlaceMode = !_junctionPlaceMode;
             }
         }
 
@@ -3477,40 +3642,37 @@ public class MapEditorWindow
     private void DrawRoadsTab(int panelX, int contentY, int contentH, int screenW, int screenH)
     {
         int viewBottom = contentY + contentH; // tab clip bottom, before the header advances contentY
+        var lo = LayoutRoadsTab(panelX, contentY, contentH);
         DrawSectionHeader(panelX, ref contentY, $"Roads ({_roadSystem.RoadCount} roads, {_roadSystem.JunctionCount} junctions)");
 
         var mouse = _eb._input.Mouse;
-        float scroll = _tabScroll[4];
-        int y = contentY - (int)scroll;
 
         // Road list
-        for (int i = 0; i < _roadSystem.RoadCount; i++)
+        for (int i = 0; i < lo.RowCount; i++)
         {
-            if (y < contentY - ButtonHeight) { y += ButtonHeight + 2; continue; }
-            if (y > contentY + contentH - 200) break;
+            var btnRect = lo.RoadRow(i);
+            if (btnRect.Y < lo.Top - ButtonHeight) continue;
 
             var road = _roadSystem.GetRoad(i);
             bool selected = i == SelectedRoadIndex;
-            var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
 
             var bg = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
             if (bg != Color.Transparent) Scope.Draw(_pixel, btnRect, bg);
 
             string label = string.IsNullOrEmpty(road.Name) ? road.Id : road.Name;
-            DrawSmallText($"{label} ({road.Points.Count} pts)", panelX + Margin + 4, y + 3,
+            DrawSmallText($"{label} ({road.Points.Count} pts)", btnRect.X + 4, btnRect.Y + 3,
                 selected ? TextBright : TextColor);
-            y += ButtonHeight + 2;
         }
 
         // Add / Delete buttons
-        DrawButtonRect("+ Add", panelX + Margin, y, 75, ButtonHeight, ButtonBg);
-        DrawButtonRect("Delete", panelX + Margin + 85, y, 75, ButtonHeight, SelectedRoadIndex >= 0 ? DangerColor : ButtonBg);
-        y += ButtonHeight + 4;
+        DrawButtonRect("+ Add", lo.AddBtn, ButtonBg);
+        DrawButtonRect("Delete", lo.DeleteBtn, SelectedRoadIndex >= 0 ? DangerColor : ButtonBg);
 
         // Place mode toggle
-        DrawButtonRect(_roadPlaceMode ? "[Place Mode ON]" : "[Place Mode OFF]", panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight,
+        DrawButtonRect(_roadPlaceMode ? "[Place Mode ON]" : "[Place Mode OFF]", lo.PlaceModeBtn,
             _roadPlaceMode ? AccentColor : ButtonBg);
-        y += ButtonHeight + 8;
+
+        int y = lo.PropsY;
 
         // Selected road properties (editable)
         if (SelectedRoadIndex >= 0 && SelectedRoadIndex < _roadSystem.RoadCount)
@@ -3594,7 +3756,7 @@ public class MapEditorWindow
         }
 
         // M15: Road Texture Defs section - editable names
-        y += 4;
+        y = lo.TexDefsY + 4;
         Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
         y += 4;
         DrawSmallText($"Road Texture Defs ({_roadSystem.TextureDefCount})", panelX + Margin, y, AccentColor);
@@ -3624,15 +3786,15 @@ public class MapEditorWindow
         }
 
         // Junctions header
-        y += 4;
+        y = lo.JunctionsY + 4;
         Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
         y += 4;
-        DrawSmallText("Junctions", panelX + Margin, y, AccentColor); y += LineHeight;
-        DrawButtonRect("+ Add Junction", panelX + Margin, y, 120, ButtonHeight, ButtonBg);
+        DrawSmallText("Junctions", panelX + Margin, y, AccentColor);
+        DrawButtonRect("+ Add Junction", lo.AddJunctionBtn, ButtonBg);
         // RM15: Click-to-place junction button
-        DrawButtonRect(_junctionPlaceMode ? "[Placing...]" : "Place on Map", panelX + Margin + 110, y, 120, ButtonHeight,
+        DrawButtonRect(_junctionPlaceMode ? "[Placing...]" : "Place on Map", lo.PlaceJunctionBtn,
             _junctionPlaceMode ? AccentColor : ButtonBg);
-        y += ButtonHeight + 4;
+        y = lo.JunctionListY;
 
         for (int i = 0; i < _roadSystem.JunctionCount; i++)
         {
@@ -3711,21 +3873,134 @@ public class MapEditorWindow
     //  REGIONS TAB
     // ====================================================================
 
+    /// <summary>Layout rects for the Regions tab's hand-rolled widgets — shared by
+    /// UpdateRegionsTab (hit-tests) and DrawRegionsTab (rendering). Walks the same
+    /// y-cursor path Draw renders (region properties, patrol routes, route
+    /// properties incl. the truncated waypoint list), replacing the old
+    /// hand-approximated hit positions that had drifted from the drawn layout.</summary>
+    private struct RegionsTabLayout
+    {
+        public int PanelX;
+        public int Top;             // post-header content top (pre-scroll)
+        public int ListY;           // first region row (scroll applied)
+        public int RowCount;        // region rows before the cull-break
+        public Rectangle AddBtn, DeleteBtn;
+        public int PropsY;          // selected-region properties (separator line)
+        public bool HasProps;
+        public Rectangle ShapeBtn;  // valid when HasProps and EditorBase is present
+        public int PatrolY;         // patrol routes section (separator line)
+        public int PatrolListY;
+        public int PatrolRowCount;
+        public bool HasRouteButtons;
+        public Rectangle AddRouteBtn, DelRouteBtn;
+        public int RoutePropsY;
+        public bool HasRouteProps;
+        public int PlaceWpHelpY;
+        public Rectangle PlaceWpBtn;
+        public Rectangle RegionRow(int i) =>
+            new(PanelX + Margin, ListY + i * (ButtonHeight + 2), PanelWidth - Margin * 2, ButtonHeight);
+        public Rectangle PatrolRow(int i) =>
+            new(PanelX + Margin, PatrolListY + i * (ButtonHeight + 2), PanelWidth - Margin * 2, ButtonHeight);
+    }
+
+    private RegionsTabLayout LayoutRegionsTab(int panelX, int contentY, int contentH)
+    {
+        var l = new RegionsTabLayout { PanelX = panelX, Top = contentY + SectionHeaderAdvance };
+        int fw = PanelWidth - Margin * 2;
+        l.ListY = l.Top - (int)_tabScroll[(int)MapEditorTab.Regions];
+
+        var regions = _triggerSystem.Regions;
+        int y = l.ListY;
+        l.RowCount = regions.Count;
+        int cutRegions = l.Top + contentH - 300;
+        for (int i = 0; i < regions.Count; i++)
+        {
+            if (y > cutRegions) { l.RowCount = i; break; }
+            y += ButtonHeight + 2;
+        }
+
+        l.AddBtn = new Rectangle(panelX + Margin, y, 75, ButtonHeight);
+        l.DeleteBtn = new Rectangle(panelX + Margin + 85, y, 75, ButtonHeight);
+        y += ButtonHeight + 8;
+
+        l.PropsY = y;
+        l.HasProps = SelectedRegionIndex >= 0 && SelectedRegionIndex < regions.Count;
+        if (l.HasProps)
+        {
+            y += 4; // separator gap
+            if (_eb != null)
+            {
+                y += (FieldHeight + 2) * 2;                     // Name, ID
+                l.ShapeBtn = new Rectangle(panelX + Margin, y, fw, ButtonHeight);
+                y += ButtonHeight + 2;
+                y += (FieldHeight + 2) * 2;                     // Pos X, Pos Y
+                y += regions[SelectedRegionIndex].Shape == RegionShape.Rectangle
+                    ? (FieldHeight + 2) * 2                     // Half W, Half H
+                    : (FieldHeight + 2);                        // Radius
+            }
+            else
+            {
+                y += 5 * LineHeight;
+            }
+            y += 4;
+        }
+
+        l.PatrolY = y;
+        y += 4 + LineHeight; // separator gap + "Patrol Routes" header
+
+        var pr = _triggerSystem.PatrolRoutes;
+        l.PatrolListY = y;
+        l.PatrolRowCount = pr.Count;
+        int cutPatrol = l.Top + contentH - 200;
+        for (int i = 0; i < pr.Count; i++)
+        {
+            if (y > cutPatrol) { l.PatrolRowCount = i; break; }
+            y += ButtonHeight + 2;
+        }
+
+        l.HasRouteButtons = y < l.Top + contentH - ButtonHeight * 3;
+        if (l.HasRouteButtons)
+        {
+            l.AddRouteBtn = new Rectangle(panelX + Margin, y, 100, ButtonHeight);
+            l.DelRouteBtn = new Rectangle(panelX + Margin + 110, y, 100, ButtonHeight);
+            y += ButtonHeight + 4;
+        }
+
+        l.RoutePropsY = y;
+        l.HasRouteProps = SelectedPatrolRoute >= 0 && SelectedPatrolRoute < pr.Count;
+        if (l.HasRouteProps)
+        {
+            if (_eb != null)
+                y += (FieldHeight + 2) * 3;                     // Name, ID, Loop
+            y += LineHeight;                                    // "Waypoints" header
+            int cutWp = l.Top + contentH - ButtonHeight;
+            var wps = pr[SelectedPatrolRoute].Waypoints;
+            for (int wi = 0; wi < wps.Count; wi++)
+            {
+                if (y > cutWp) break;
+                y += LineHeight;
+            }
+            y += 4;
+            l.PlaceWpHelpY = y;
+            y += LineHeight;
+            l.PlaceWpBtn = new Rectangle(panelX + Margin, y, 80, ButtonHeight);
+        }
+        return l;
+    }
+
     private void UpdateRegionsTab(MouseState mouse, KeyboardState kb, bool leftClick, bool leftDown, bool leftUp,
         bool rightClick, bool overPanel, int panelX, int panelY, int screenW, int screenH)
     {
         if (leftClick && overPanel)
         {
-            int contentY = panelY + TabRowHeight * 2 + HeaderHeight + 6;
-            float scroll = _tabScroll[5];
-            int y = contentY - (int)scroll;
+            var content = TabContentRect(panelX, panelY, screenH);
+            var lo = LayoutRegionsTab(panelX, content.Y, content.Height);
+            var regions = _triggerSystem.Regions;
 
             // Region list
-            var regions = _triggerSystem.Regions;
-            for (int i = 0; i < regions.Count; i++)
+            for (int i = 0; i < lo.RowCount; i++)
             {
-                int btnY = y + i * (ButtonHeight + 2);
-                if (mouse.Y >= btnY && mouse.Y < btnY + ButtonHeight)
+                if (IsInRect(mouse, lo.RegionRow(i)))
                 {
                     SelectedRegionIndex = i;
                     break;
@@ -3733,9 +4008,7 @@ public class MapEditorWindow
             }
 
             // Add Region button
-            int addY = y + regions.Count * (ButtonHeight + 2) + 4;
-            if (mouse.Y >= addY && mouse.Y < addY + ButtonHeight &&
-                mouse.X >= panelX + Margin && mouse.X < panelX + 80 + Margin)
+            if (IsInRect(mouse, lo.AddBtn))
             {
                 var newRegion = new TriggerRegion
                 {
@@ -3748,56 +4021,25 @@ public class MapEditorWindow
             }
 
             // Delete Region button
-            if (mouse.Y >= addY && mouse.Y < addY + ButtonHeight &&
-                mouse.X >= panelX + 90 + Margin && mouse.X < panelX + 160 + Margin &&
-                SelectedRegionIndex >= 0)
+            if (SelectedRegionIndex >= 0 && IsInRect(mouse, lo.DeleteBtn))
             {
                 _triggerSystem.RemoveRegion(SelectedRegionIndex);
                 SelectedRegionIndex = Math.Min(SelectedRegionIndex, _triggerSystem.Regions.Count - 1);
             }
 
-            // Shape toggle button -- compute Y offset from region properties section
-            // We use a rough layout calculation: region list + Add/Delete row + separator + 2 fields (Name, ID) + shape button
-            if (SelectedRegionIndex >= 0 && SelectedRegionIndex < regions.Count)
+            // Shape toggle button
+            if (lo.HasProps && _eb != null && IsInRect(mouse, lo.ShapeBtn))
             {
-                int shapeY = addY + ButtonHeight + 8 + 4 + (FieldHeight + 2) * 2; // after Name + ID fields
-                if (mouse.Y >= shapeY && mouse.Y < shapeY + ButtonHeight &&
-                    mouse.X >= panelX + Margin && mouse.X < panelX + PanelWidth - Margin)
-                {
-                    var region = _triggerSystem.RegionsMut[SelectedRegionIndex];
-                    region.Shape = region.Shape == RegionShape.Rectangle ? RegionShape.Circle : RegionShape.Rectangle;
-                }
+                var region = _triggerSystem.RegionsMut[SelectedRegionIndex];
+                region.Shape = region.Shape == RegionShape.Rectangle ? RegionShape.Circle : RegionShape.Rectangle;
             }
 
-            // Patrol route list clicks and buttons - these are drawn below the region properties
-            // We need approximate Y positions. Use a simplified approach:
-            // scan the patrol route list buttons in the rendered area
             var pr = _triggerSystem.PatrolRoutes;
 
-            // Look for patrol route Add/Delete Route clicks
-            // Since the exact Y depends on region properties, we check the patrol route list from the bottom area.
-            // A simpler approach: iterate patrol route items and check position.
-            // We rely on the fact that patrol routes section is after region properties. Approximate:
-            int regionPropsHeight = 0;
-            if (SelectedRegionIndex >= 0 && SelectedRegionIndex < regions.Count)
+            // Patrol route list
+            for (int i = 0; i < lo.PatrolRowCount; i++)
             {
-                var reg = regions[SelectedRegionIndex];
-                regionPropsHeight = 4 + (FieldHeight + 2) * 2 + ButtonHeight + 2 + (FieldHeight + 2) * 2; // Name + ID + Shape + PosX + PosY
-                if (reg.Shape == RegionShape.Rectangle)
-                    regionPropsHeight += (FieldHeight + 2) * 2; // HalfW + HalfH
-                else
-                    regionPropsHeight += (FieldHeight + 2); // Radius
-                regionPropsHeight += 4; // spacing
-            }
-
-            int prSectionY = addY + ButtonHeight + 8 + regionPropsHeight + 1 + 4 + LineHeight; // separator + header
-
-            // Click on patrol route items
-            for (int i = 0; i < pr.Count; i++)
-            {
-                int prBtnY = prSectionY + i * (ButtonHeight + 2);
-                if (mouse.Y >= prBtnY && mouse.Y < prBtnY + ButtonHeight &&
-                    mouse.X >= panelX + Margin && mouse.X < panelX + PanelWidth - Margin)
+                if (IsInRect(mouse, lo.PatrolRow(i)))
                 {
                     SelectedPatrolRoute = i;
                     break;
@@ -3805,9 +4047,7 @@ public class MapEditorWindow
             }
 
             // Add Route button
-            int addRouteY = prSectionY + pr.Count * (ButtonHeight + 2);
-            if (mouse.Y >= addRouteY && mouse.Y < addRouteY + ButtonHeight &&
-                mouse.X >= panelX + Margin && mouse.X < panelX + Margin + 100)
+            if (lo.HasRouteButtons && IsInRect(mouse, lo.AddRouteBtn))
             {
                 var newRoute = new PatrolRoute
                 {
@@ -3819,31 +4059,17 @@ public class MapEditorWindow
             }
 
             // Delete Route button
-            if (mouse.Y >= addRouteY && mouse.Y < addRouteY + ButtonHeight &&
-                mouse.X >= panelX + Margin + 110 && mouse.X < panelX + Margin + 210 &&
-                SelectedPatrolRoute >= 0 && SelectedPatrolRoute < pr.Count)
+            if (lo.HasRouteButtons && SelectedPatrolRoute >= 0 && SelectedPatrolRoute < pr.Count &&
+                IsInRect(mouse, lo.DelRouteBtn))
             {
                 _triggerSystem.PatrolRoutesMut.RemoveAt(SelectedPatrolRoute);
                 SelectedPatrolRoute = Math.Min(SelectedPatrolRoute, _triggerSystem.PatrolRoutes.Count - 1);
             }
 
-            // Place WP button - appears below patrol route properties
-            if (SelectedPatrolRoute >= 0 && SelectedPatrolRoute < pr.Count)
+            // Place WP toggle at the bottom of the patrol section
+            if (lo.HasRouteProps && IsInRect(mouse, lo.PlaceWpBtn))
             {
-                // The Place WP button is at the bottom of the patrol section
-                // We scan for it roughly
-                int wpBtnY = addRouteY + ButtonHeight + 4;
-                if (_eb != null)
-                    wpBtnY += (FieldHeight + 2) * 3; // Name + ID + Loop
-                wpBtnY += LineHeight; // Waypoints header
-                wpBtnY += pr[SelectedPatrolRoute].Waypoints.Count * LineHeight; // waypoints
-                wpBtnY += 4 + LineHeight; // help text
-
-                if (mouse.Y >= wpBtnY && mouse.Y < wpBtnY + ButtonHeight &&
-                    mouse.X >= panelX + Margin && mouse.X < panelX + Margin + 80)
-                {
-                    _regionPlaceWaypoint = !_regionPlaceWaypoint;
-                }
+                _regionPlaceWaypoint = !_regionPlaceWaypoint;
             }
         }
 
@@ -3960,36 +4186,34 @@ public class MapEditorWindow
     private void DrawRegionsTab(int panelX, int contentY, int contentH, int screenW, int screenH)
     {
         int viewBottom = contentY + contentH; // tab clip bottom, before the header advances contentY
+        var lo = LayoutRegionsTab(panelX, contentY, contentH);
         DrawSectionHeader(panelX, ref contentY, $"Regions ({_triggerSystem.Regions.Count})");
 
         var mouse = _eb._input.Mouse;
-        float scroll = _tabScroll[5];
-        int y = contentY - (int)scroll;
 
         // Region list
         var regions = _triggerSystem.Regions;
-        for (int i = 0; i < regions.Count; i++)
+        for (int i = 0; i < lo.RowCount; i++)
         {
-            if (y < contentY - ButtonHeight) { y += ButtonHeight + 2; continue; }
-            if (y > contentY + contentH - 300) break;
+            var btnRect = lo.RegionRow(i);
+            if (btnRect.Y < lo.Top - ButtonHeight) continue;
 
             bool selected = i == SelectedRegionIndex;
-            var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
             var bg = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
             if (bg != Color.Transparent) Scope.Draw(_pixel, btnRect, bg);
 
-            DrawSmallText($"{regions[i].Name} ({regions[i].Id})", panelX + Margin + 4, y + 3,
+            DrawSmallText($"{regions[i].Name} ({regions[i].Id})", btnRect.X + 4, btnRect.Y + 3,
                 selected ? TextBright : TextColor);
-            y += ButtonHeight + 2;
         }
 
         // Add / Delete
-        DrawButtonRect("+ Add", panelX + Margin, y, 75, ButtonHeight, ButtonBg);
-        DrawButtonRect("Delete", panelX + Margin + 85, y, 75, ButtonHeight, SelectedRegionIndex >= 0 ? DangerColor : ButtonBg);
-        y += ButtonHeight + 8;
+        DrawButtonRect("+ Add", lo.AddBtn, ButtonBg);
+        DrawButtonRect("Delete", lo.DeleteBtn, SelectedRegionIndex >= 0 ? DangerColor : ButtonBg);
+
+        int y = lo.PropsY;
 
         // Selected region properties (editable)
-        if (SelectedRegionIndex >= 0 && SelectedRegionIndex < regions.Count)
+        if (lo.HasProps)
         {
             Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
             y += 4;
@@ -4006,9 +4230,8 @@ public class MapEditorWindow
                 if (newId != region.Id) region.Id = newId;
                 y += FieldHeight + 2;
 
-                // Shape toggle button
-                string shapeLabel = $"Shape: {region.Shape}";
-                DrawButtonRect(shapeLabel, panelX + Margin, y, fw, ButtonHeight, ButtonBg);
+                // Shape toggle button (click handled in UpdateRegionsTab via lo.ShapeBtn)
+                DrawButtonRect($"Shape: {region.Shape}", lo.ShapeBtn, ButtonBg);
                 y += ButtonHeight + 2;
 
                 float newX = _eb.DrawFloatField("region_x", "Position X", region.X, panelX + Margin, y, fw, 1f);
@@ -4052,36 +4275,34 @@ public class MapEditorWindow
         }
 
         // Patrol Routes section
+        y = lo.PatrolY;
         Scope.Draw(_pixel, new Rectangle(panelX, y, PanelWidth, 1), SeparatorColor);
         y += 4;
         DrawSmallText($"Patrol Routes ({_triggerSystem.PatrolRoutes.Count})", panelX + Margin, y, AccentColor);
-        y += LineHeight;
 
         var patrolRoutes = _triggerSystem.PatrolRoutes;
-        for (int i = 0; i < patrolRoutes.Count; i++)
+        for (int i = 0; i < lo.PatrolRowCount; i++)
         {
-            if (y > contentY + contentH - 200) break;
+            var prBtnRect = lo.PatrolRow(i);
             bool selected = i == SelectedPatrolRoute;
-            var prBtnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
             var prBg = selected ? HighlightColor : (IsInRect(mouse, prBtnRect) ? ButtonHoverColor : Color.Transparent);
             if (prBg != Color.Transparent)
                 Scope.Draw(_pixel, prBtnRect, prBg);
             DrawSmallText($"{patrolRoutes[i].Name} ({patrolRoutes[i].Waypoints.Count} wps)",
-                panelX + Margin + 4, y + 3, selected ? TextBright : TextColor);
-            y += ButtonHeight + 2;
+                prBtnRect.X + 4, prBtnRect.Y + 3, selected ? TextBright : TextColor);
         }
 
         // Add patrol route button region
-        if (y < contentY + contentH - ButtonHeight * 3)
+        if (lo.HasRouteButtons)
         {
-            DrawButtonRect("+ Add Route", panelX + Margin, y, 100, ButtonHeight, ButtonBg);
-            DrawButtonRect("Delete Route", panelX + Margin + 110, y, 100, ButtonHeight,
+            DrawButtonRect("+ Add Route", lo.AddRouteBtn, ButtonBg);
+            DrawButtonRect("Delete Route", lo.DelRouteBtn,
                 SelectedPatrolRoute >= 0 ? DangerColor : ButtonBg);
-            y += ButtonHeight + 4;
         }
+        y = lo.RoutePropsY;
 
         // Selected patrol route editable properties
-        if (SelectedPatrolRoute >= 0 && SelectedPatrolRoute < patrolRoutes.Count)
+        if (lo.HasRouteProps)
         {
             var route = _triggerSystem.PatrolRoutesMut[SelectedPatrolRoute];
             int fw = PanelWidth - Margin * 2;
@@ -4126,11 +4347,10 @@ public class MapEditorWindow
                 y += LineHeight;
             }
 
-            y += 4;
-            DrawSmallText("Click 'Place WP' then click on world", panelX + Margin, y, TextDim);
-            y += LineHeight;
-            DrawButtonRect(_regionPlaceWaypoint ? "[Placing...]" : "Place WP", panelX + Margin, y, 80, ButtonHeight,
+            DrawSmallText("Click 'Place WP' then click on world", panelX + Margin, lo.PlaceWpHelpY, TextDim);
+            DrawButtonRect(_regionPlaceWaypoint ? "[Placing...]" : "Place WP", lo.PlaceWpBtn,
                 _regionPlaceWaypoint ? AccentColor : ButtonBg);
+            y = lo.PlaceWpBtn.Y;
         }
 
         // (Region overlays drawn by DrawWorldOverlaysForActiveTab, outside the clip.)
@@ -4920,32 +5140,68 @@ public class MapEditorWindow
     //  TRIGGERS TAB
     // ====================================================================
 
+    /// <summary>Layout rects for the Triggers tab's hand-rolled widgets — shared by
+    /// UpdateTriggersTab (hit-tests) and DrawTriggersTab (rendering). Laid out for
+    /// the ACTIVE sub-section (defs or instances).</summary>
+    private struct TriggersTabLayout
+    {
+        public int PanelX;
+        public int Top;             // post-header content top (sub-section toggle row)
+        public Rectangle DefsToggle, InstToggle;
+        public int ListTop;         // below toggle + separator (pre-scroll)
+        public int ListY;           // first row (scroll applied)
+        public int RowCount;        // rows before the cull-break
+        public Rectangle AddBtn, DeleteBtn;
+        public int PropsY;
+        public Rectangle Row(int i) =>
+            new(PanelX + Margin, ListY + i * (ButtonHeight + 2), PanelWidth - Margin * 2, ButtonHeight);
+    }
+
+    private TriggersTabLayout LayoutTriggersTab(int panelX, int contentY, int contentH)
+    {
+        var l = new TriggersTabLayout { PanelX = panelX, Top = contentY + SectionHeaderAdvance };
+        int halfW = (PanelWidth - Margin * 2) / 2;
+        l.DefsToggle = new Rectangle(panelX + Margin, l.Top, halfW - 1, ButtonHeight);
+        l.InstToggle = new Rectangle(panelX + Margin + halfW, l.Top, halfW - 1, ButtonHeight);
+        l.ListTop = l.Top + ButtonHeight + 4;
+        l.ListY = l.ListTop - (int)_tabScroll[(int)MapEditorTab.Triggers];
+
+        int count = _triggerSubSection == 0 ? _triggerSystem.Triggers.Count : _triggerSystem.Instances.Count;
+        int cutoff = l.ListTop + contentH - (_triggerSubSection == 0 ? 300 : 200);
+        int y = l.ListY;
+        l.RowCount = count;
+        for (int i = 0; i < count; i++)
+        {
+            if (y > cutoff) { l.RowCount = i; break; }
+            y += ButtonHeight + 2;
+        }
+
+        l.AddBtn = new Rectangle(panelX + Margin, y, 75, ButtonHeight);
+        l.DeleteBtn = new Rectangle(panelX + Margin + 85, y, 75, ButtonHeight);
+        l.PropsY = y + ButtonHeight + 8;
+        return l;
+    }
+
     private void UpdateTriggersTab(MouseState mouse, KeyboardState kb, bool leftClick,
         bool overPanel, int panelX, int panelY, int screenW, int screenH)
     {
         if (leftClick && overPanel)
         {
-            int contentY = panelY + TabRowHeight * 2 + HeaderHeight + 6;
-            float scroll = _tabScroll[6];
+            var content = TabContentRect(panelX, panelY, screenH);
+            var lo = LayoutTriggersTab(panelX, content.Y, content.Height);
 
-            // Sub-section toggle: Defs | Instances
-            int halfW = (PanelWidth - Margin * 2) / 2;
-            if (mouse.Y >= contentY && mouse.Y < contentY + ButtonHeight)
-            {
-                int relX = mouse.X - (panelX + Margin);
-                if (relX >= 0 && relX < halfW) _triggerSubSection = 0;
-                else if (relX >= halfW) _triggerSubSection = 1;
-            }
-
-            int y = contentY + ButtonHeight + 4 - (int)scroll;
+            // Sub-section toggle: Defs | Instances. A toggle click can't also hit
+            // the list below, so the pre-toggle layout stays valid for this frame.
+            if (IsInRect(mouse, lo.DefsToggle)) _triggerSubSection = 0;
+            else if (IsInRect(mouse, lo.InstToggle)) _triggerSubSection = 1;
 
             if (_triggerSubSection == 0)
             {
-                // Trigger def list
-                for (int i = 0; i < _triggerSystem.Triggers.Count; i++)
+                // Trigger def list (RowCount clamped: a toggle click switches the
+                // sub-section this frame, so the layout may be for the other list)
+                for (int i = 0; i < Math.Min(lo.RowCount, _triggerSystem.Triggers.Count); i++)
                 {
-                    int btnY = y + i * (ButtonHeight + 2);
-                    if (mouse.Y >= btnY && mouse.Y < btnY + ButtonHeight)
+                    if (IsInRect(mouse, lo.Row(i)))
                     {
                         SelectedTriggerDefIndex = i;
                         break;
@@ -4953,9 +5209,7 @@ public class MapEditorWindow
                 }
 
                 // Add Trigger Def
-                int addY = y + _triggerSystem.Triggers.Count * (ButtonHeight + 2) + 4;
-                if (mouse.Y >= addY && mouse.Y < addY + ButtonHeight &&
-                    mouse.X >= panelX + Margin && mouse.X < panelX + 80 + Margin)
+                if (IsInRect(mouse, lo.AddBtn))
                 {
                     var newDef = new TriggerDef
                     {
@@ -4966,9 +5220,7 @@ public class MapEditorWindow
                 }
 
                 // Delete Trigger Def
-                if (mouse.Y >= addY && mouse.Y < addY + ButtonHeight &&
-                    mouse.X >= panelX + 90 + Margin && mouse.X < panelX + 160 + Margin &&
-                    SelectedTriggerDefIndex >= 0)
+                if (SelectedTriggerDefIndex >= 0 && IsInRect(mouse, lo.DeleteBtn))
                 {
                     _triggerSystem.RemoveTrigger(SelectedTriggerDefIndex);
                     SelectedTriggerDefIndex = Math.Min(SelectedTriggerDefIndex, _triggerSystem.Triggers.Count - 1);
@@ -4976,11 +5228,10 @@ public class MapEditorWindow
             }
             else
             {
-                // Instance list
-                for (int i = 0; i < _triggerSystem.Instances.Count; i++)
+                // Instance list (RowCount clamped — see the defs branch)
+                for (int i = 0; i < Math.Min(lo.RowCount, _triggerSystem.Instances.Count); i++)
                 {
-                    int btnY = y + i * (ButtonHeight + 2);
-                    if (mouse.Y >= btnY && mouse.Y < btnY + ButtonHeight)
+                    if (IsInRect(mouse, lo.Row(i)))
                     {
                         SelectedTriggerInstanceIndex = i;
                         break;
@@ -4988,9 +5239,7 @@ public class MapEditorWindow
                 }
 
                 // Add Instance
-                int addY = y + _triggerSystem.Instances.Count * (ButtonHeight + 2) + 4;
-                if (mouse.Y >= addY && mouse.Y < addY + ButtonHeight &&
-                    mouse.X >= panelX + Margin && mouse.X < panelX + 80 + Margin)
+                if (IsInRect(mouse, lo.AddBtn))
                 {
                     var newInst = new TriggerInstance
                     {
@@ -5002,9 +5251,7 @@ public class MapEditorWindow
                 }
 
                 // Delete Instance
-                if (mouse.Y >= addY && mouse.Y < addY + ButtonHeight &&
-                    mouse.X >= panelX + 90 + Margin && mouse.X < panelX + 160 + Margin &&
-                    SelectedTriggerInstanceIndex >= 0)
+                if (SelectedTriggerInstanceIndex >= 0 && IsInRect(mouse, lo.DeleteBtn))
                 {
                     _triggerSystem.RemoveInstance(SelectedTriggerInstanceIndex);
                     SelectedTriggerInstanceIndex = Math.Min(SelectedTriggerInstanceIndex, _triggerSystem.Instances.Count - 1);
@@ -5019,51 +5266,44 @@ public class MapEditorWindow
     private void DrawTriggersTab(int panelX, int contentY, int contentH)
     {
         int viewBottom = contentY + contentH; // tab clip bottom, before the header advances contentY
+        var lo = LayoutTriggersTab(panelX, contentY, contentH);
         DrawSectionHeader(panelX, ref contentY, "Triggers");
 
         var mouse = _eb._input.Mouse;
 
         // Sub-section tabs: Defs | Instances
-        int halfW = (PanelWidth - Margin * 2) / 2;
-        {
-            var defsRect = new Rectangle(panelX + Margin, contentY, halfW - 1, ButtonHeight);
-            var instRect = new Rectangle(panelX + Margin + halfW, contentY, halfW - 1, ButtonHeight);
-            Scope.Draw(_pixel, defsRect, _triggerSubSection == 0 ? TabActiveColor : TabInactiveColor);
-            Scope.Draw(_pixel, instRect, _triggerSubSection == 1 ? TabActiveColor : TabInactiveColor);
-            DrawTextCentered($"Defs ({_triggerSystem.Triggers.Count})", defsRect, TextColor);
-            DrawTextCentered($"Instances ({_triggerSystem.Instances.Count})", instRect, TextColor);
-        }
-        contentY += ButtonHeight + 4;
+        Scope.Draw(_pixel, lo.DefsToggle, _triggerSubSection == 0 ? TabActiveColor : TabInactiveColor);
+        Scope.Draw(_pixel, lo.InstToggle, _triggerSubSection == 1 ? TabActiveColor : TabInactiveColor);
+        DrawTextCentered($"Defs ({_triggerSystem.Triggers.Count})", lo.DefsToggle, TextColor);
+        DrawTextCentered($"Instances ({_triggerSystem.Instances.Count})", lo.InstToggle, TextColor);
+        contentY = lo.ListTop;
         Scope.Draw(_pixel, new Rectangle(panelX, contentY - 2, PanelWidth, 1), SeparatorColor);
 
-        float scroll = _tabScroll[6];
-        int y = contentY - (int)scroll;
+        int y;
 
         if (_triggerSubSection == 0)
         {
             // Trigger Defs
-            for (int i = 0; i < _triggerSystem.Triggers.Count; i++)
+            for (int i = 0; i < lo.RowCount; i++)
             {
-                if (y < contentY - ButtonHeight) { y += ButtonHeight + 2; continue; }
-                if (y > contentY + contentH - 300) break;
+                var btnRect = lo.Row(i);
+                if (btnRect.Y < lo.ListTop - ButtonHeight) continue;
 
                 var def = _triggerSystem.Triggers[i];
                 bool selected = i == SelectedTriggerDefIndex;
-                var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
 
                 var bg = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
                 if (bg != Color.Transparent) Scope.Draw(_pixel, btnRect, bg);
 
                 string label = $"{def.Name} ({def.Id})";
-                DrawSmallText(label, panelX + Margin + 4, y + 3, selected ? TextBright : TextColor);
-                y += ButtonHeight + 2;
+                DrawSmallText(label, btnRect.X + 4, btnRect.Y + 3, selected ? TextBright : TextColor);
             }
 
             // Add / Delete
-            DrawButtonRect("+ Add", panelX + Margin, y, 75, ButtonHeight, ButtonBg);
-            DrawButtonRect("Delete", panelX + Margin + 85, y, 75, ButtonHeight,
+            DrawButtonRect("+ Add", lo.AddBtn, ButtonBg);
+            DrawButtonRect("Delete", lo.DeleteBtn,
                 SelectedTriggerDefIndex >= 0 ? DangerColor : ButtonBg);
-            y += ButtonHeight + 8;
+            y = lo.PropsY;
 
             // Properties for selected def (editable)
             if (SelectedTriggerDefIndex >= 0 && SelectedTriggerDefIndex < _triggerSystem.Triggers.Count)
@@ -5223,28 +5463,26 @@ public class MapEditorWindow
         else
         {
             // Trigger Instances
-            for (int i = 0; i < _triggerSystem.Instances.Count; i++)
+            for (int i = 0; i < lo.RowCount; i++)
             {
-                if (y < contentY - ButtonHeight) { y += ButtonHeight + 2; continue; }
-                if (y > contentY + contentH - 200) break;
+                var btnRect = lo.Row(i);
+                if (btnRect.Y < lo.ListTop - ButtonHeight) continue;
 
                 var inst = _triggerSystem.Instances[i];
                 bool selected = i == SelectedTriggerInstanceIndex;
-                var btnRect = new Rectangle(panelX + Margin, y, PanelWidth - Margin * 2, ButtonHeight);
 
                 var bg = selected ? HighlightColor : (IsInRect(mouse, btnRect) ? ButtonHoverColor : Color.Transparent);
                 if (bg != Color.Transparent) Scope.Draw(_pixel, btnRect, bg);
 
                 DrawSmallText($"{inst.InstanceID} -> {inst.ParentTriggerID}",
-                    panelX + Margin + 4, y + 3, selected ? TextBright : TextColor);
-                y += ButtonHeight + 2;
+                    btnRect.X + 4, btnRect.Y + 3, selected ? TextBright : TextColor);
             }
 
             // Add / Delete
-            DrawButtonRect("+ Add", panelX + Margin, y, 75, ButtonHeight, ButtonBg);
-            DrawButtonRect("Delete", panelX + Margin + 85, y, 75, ButtonHeight,
+            DrawButtonRect("+ Add", lo.AddBtn, ButtonBg);
+            DrawButtonRect("Delete", lo.DeleteBtn,
                 SelectedTriggerInstanceIndex >= 0 ? DangerColor : ButtonBg);
-            y += ButtonHeight + 8;
+            y = lo.PropsY;
 
             // Properties for selected instance (editable)
             if (SelectedTriggerInstanceIndex >= 0 && SelectedTriggerInstanceIndex < _triggerSystem.Instances.Count)
@@ -5468,32 +5706,57 @@ public class MapEditorWindow
     //  UNITS TAB
     // ====================================================================
 
+    /// <summary>Layout anchors for the Units tab — shared by UpdateUnitsTab
+    /// (grid hit-test) and DrawUnitsTab (rendering). The tab has no section
+    /// header; the top widgets are EditorBase combos/checkbox that self-handle
+    /// input, so only their heights matter here (they position the grid).</summary>
+    private struct UnitsTabLayout
+    {
+        public int FactionY;
+        public bool HasPatrol;
+        public int PatrolY;
+        public int CorpseY;
+        public int LabelY;
+        public ThumbGridLayout Grid;
+        public int AfterGridY;
+    }
+
+    private UnitsTabLayout LayoutUnitsTab(int panelX, int contentY, int contentH)
+    {
+        var l = new UnitsTabLayout();
+        int curY = contentY + 4;
+        l.FactionY = curY;
+        curY += 24;
+        l.HasPatrol = _triggerSystem.PatrolRoutes.Count > 0;
+        if (l.HasPatrol)
+        {
+            l.PatrolY = curY;
+            curY += 24;
+        }
+        l.CorpseY = curY;
+        curY += 24;
+        l.LabelY = curY;
+        curY += 18;
+        int listH = contentH - (curY - contentY) - 100;
+        l.Grid = LayoutThumbGrid(panelX + Margin, curY, PanelWidth - Margin * 2, listH);
+        l.AfterGridY = curY + listH;
+        return l;
+    }
+
     private void UpdateUnitsTab(MouseState mouse, KeyboardState kb, bool leftClick,
         bool overPanel, int panelX, int panelY, int screenW, int screenH)
     {
         if (_gameData == null) return;
 
-        // Click on a grid cell to select a unit def (uses cached layout from Draw)
-        if (leftClick && overPanel && _unitGridDrawY > 0 && _unitGridCellW > 0)
+        // Click on a grid cell to select a unit def — same layout Draw renders.
+        if (leftClick && overPanel)
         {
+            var content = TabContentRect(panelX, panelY, screenH);
+            var lo = LayoutUnitsTab(panelX, content.Y, content.Height);
             var unitIds = GetFilteredUnitIds();
-            int colStride = _unitGridCellW + ThumbGridGap;
-            int rowStride = _unitGridCellH + ThumbGridGap;
-            int relX = mouse.X - _unitGridDrawX;
-            int relY = mouse.Y - _unitGridDrawY;
-            // Content-space Y: the grid scrolls continuously (by pixels), so
-            // add the raw scroll before the row math — quantizing the scroll
-            // to rows would misalign clicks when scrolled mid-row.
-            int conY = relY + (int)_tabScroll[(int)MapEditorTab.Units];
-            if (relX >= 0 && relY >= 0 && relY < _unitGridViewH
-                && relX % colStride < _unitGridCellW && conY % rowStride < _unitGridCellH)
-            {
-                int col = relX / colStride;
-                int row = conY / rowStride;
-                int idx = row * ThumbGridCols + col;
-                if (col < ThumbGridCols && idx >= 0 && idx < unitIds.Count)
-                    _selectedUnitDefIdx = idx;
-            }
+            int idx = lo.Grid.HitIndex(mouse.X, mouse.Y, _tabScroll[(int)MapEditorTab.Units], unitIds.Count);
+            if (idx >= 0)
+                _selectedUnitDefIdx = idx;
         }
 
         // Click on world to place selected unit
@@ -5545,16 +5808,16 @@ public class MapEditorWindow
     {
         if (_gameData == null || _eb == null) return;
 
+        var lo = LayoutUnitsTab(panelX, contentY, contentH);
         int x = panelX + Margin;
         int w = PanelWidth - Margin * 2;
-        int curY = contentY + 4;
 
         // Faction filter. Changing it re-filters the list, so the selection
         // index (which points into the FILTERED list) must reset — otherwise it
         // silently re-points at a different unit.
         string[] factionLabels = { "All", "Undead", "Human", "Animal" };
         string curFaction = factionLabels[_unitFactionFilter];
-        string newFaction = _eb.DrawCombo("unit_faction", "Faction", curFaction, factionLabels, x, curY, w);
+        string newFaction = _eb.DrawCombo("unit_faction", "Faction", curFaction, factionLabels, x, lo.FactionY, w);
         for (int fi = 0; fi < factionLabels.Length; fi++)
         {
             if (factionLabels[fi] == newFaction && fi != _unitFactionFilter)
@@ -5563,18 +5826,17 @@ public class MapEditorWindow
                 _selectedUnitDefIdx = -1;
             }
         }
-        curY += 24;
 
         // Patrol route selector
         var routes = _triggerSystem.PatrolRoutes;
-        if (routes.Count > 0)
+        if (lo.HasPatrol)
         {
             var routeNames = new string[routes.Count + 1];
             routeNames[0] = "(none)";
             for (int ri = 0; ri < routes.Count; ri++)
                 routeNames[ri + 1] = string.IsNullOrEmpty(routes[ri].Name) ? routes[ri].Id : routes[ri].Name;
             string curRoute = string.IsNullOrEmpty(_unitPatrolRoute) ? "(none)" : _unitPatrolRoute;
-            string newRoute = _eb.DrawCombo("unit_patrol", "Patrol", curRoute, routeNames, x, curY, w);
+            string newRoute = _eb.DrawCombo("unit_patrol", "Patrol", curRoute, routeNames, x, lo.PatrolY, w);
             _unitPatrolRoute = newRoute == "(none)" ? "" : newRoute;
             // Resolve name back to ID if needed
             if (!string.IsNullOrEmpty(_unitPatrolRoute))
@@ -5585,25 +5847,23 @@ public class MapEditorWindow
                     if (rLabel == _unitPatrolRoute) { _unitPatrolRoute = routes[ri].Id; break; }
                 }
             }
-            curY += 24;
         }
 
         // Place-as-corpse toggle: when set, clicking the world drops a dead body
         // of the selected unit instead of a living one.
-        _placeAsCorpse = _eb.DrawCheckbox("Place as corpse", _placeAsCorpse, x, curY, w);
-        curY += 24;
+        _placeAsCorpse = _eb.DrawCheckbox("Place as corpse", _placeAsCorpse, x, lo.CorpseY, w);
 
         // Unit def grid: 6-wide sprite thumbnails (hover a cell for the name)
         // instead of one-per-row text — far more defs visible at once.
         var unitIds = GetFilteredUnitIds();
-        _eb.DrawText("Unit Defs:", new Vector2(x, curY), EditorBase.TextBright);
-        curY += 18;
+        _eb.DrawText("Unit Defs:", new Vector2(x, lo.LabelY), EditorBase.TextBright);
 
-        int listH = contentH - (curY - contentY) - 100;
-        int cellW = (w - (ThumbGridCols - 1) * ThumbGridGap) / ThumbGridCols;
-        int cellH = cellW;
-        int rowStride = cellH + ThumbGridGap;
-        int totalRows = (unitIds.Count + ThumbGridCols - 1) / ThumbGridCols;
+        int gridY = lo.Grid.Y;
+        int listH = lo.Grid.ViewH;
+        int cellW = lo.Grid.CellW;
+        int cellH = lo.Grid.CellH;
+        int rowStride = lo.Grid.RowStride;
+        int totalRows = lo.Grid.TotalRows(unitIds.Count);
 
         // Clamp the wheel-driven scroll to the end of the grid (the generic
         // wheel handler in Update only clamps at 0). Pixel-exact so the grid
@@ -5614,13 +5874,6 @@ public class MapEditorWindow
         int firstRow = scrollPx / rowStride;
         int subRowOff = scrollPx % rowStride; // partial-row offset — rows glide, clip catches the spill
 
-        // Cache for Update hit-testing
-        _unitGridDrawX = x;
-        _unitGridDrawY = curY;
-        _unitGridCellW = cellW;
-        _unitGridCellH = cellH;
-        _unitGridViewH = listH;
-
         // MousePos, not raw .Mouse: the mousepos dev override patches only
         // MousePos, and with a real mouse the two are identical.
         int mx = (int)_eb._input.MousePos.X, my = (int)_eb._input.MousePos.Y;
@@ -5628,22 +5881,22 @@ public class MapEditorWindow
         Rectangle hoveredCell = default;
         // Nested clip: partially-scrolled rows must not bleed above the grid
         // or into the placed-units section below it.
-        _eb.BeginClip(new Rectangle(x, curY, w, listH));
+        _eb.BeginClip(new Rectangle(x, gridY, w, listH));
         for (int r = 0; ; r++)
         {
             int row = firstRow + r;
             if (row >= totalRows) break;
-            int cellY = curY + r * rowStride - subRowOff;
-            if (cellY >= curY + listH) break;
+            int cellY = gridY + r * rowStride - subRowOff;
+            if (cellY >= gridY + listH) break;
             for (int c = 0; c < ThumbGridCols; c++)
             {
                 int idx = row * ThumbGridCols + c;
                 if (idx >= unitIds.Count) break;
 
-                var cell = new Rectangle(x + c * (cellW + ThumbGridGap), cellY, cellW, cellH);
+                var cell = new Rectangle(x + c * lo.Grid.ColStride, cellY, cellW, cellH);
                 var def = _gameData.Units.Get(unitIds[idx]);
                 bool selected = idx == _selectedUnitDefIdx;
-                bool hovered = cell.Contains(mx, my) && my >= curY && my < curY + listH;
+                bool hovered = cell.Contains(mx, my) && my >= gridY && my < gridY + listH;
                 if (hovered) { hoveredIdx = idx; hoveredCell = cell; }
 
                 Scope.Draw(_pixel, cell, selected ? new Color(60, 60, 100, 220)
@@ -5659,16 +5912,24 @@ public class MapEditorWindow
 
         // Thin scrollbar in the panel's right margin, spanning the grid viewport.
         _tabScroll[(int)MapEditorTab.Units] = _eb.DrawVScrollbar("maptab_unitgrid",
-            panelX + PanelWidth - 6, curY, listH,
+            panelX + PanelWidth - 6, gridY, listH,
             totalRows * rowStride, _tabScroll[(int)MapEditorTab.Units]);
-        curY += listH;
+        int curY = lo.AfterGridY;
 
         // Hover tooltip — queued globally, drawn topmost after the clip closes.
+        // Colored so the unit's grey Description line matches the in-game hover
+        // and spell tooltips.
         if (hoveredIdx >= 0 && hoveredIdx < unitIds.Count)
         {
             var def = _gameData.Units.Get(unitIds[hoveredIdx]);
-            string tip = def != null ? $"{def.DisplayName} [{def.Faction}]" : unitIds[hoveredIdx];
-            DrawGridCellTooltip(tip, hoveredCell);
+            var tip = new List<(string, Color)>
+            {
+                (def != null ? $"{def.DisplayName} [{def.Faction}]" : unitIds[hoveredIdx],
+                 Necroking.UI.SpellTooltip.Text),
+            };
+            if (!string.IsNullOrEmpty(def?.Description))
+                tip.Add((def.Description, Necroking.UI.SpellTooltip.Dim));
+            DrawGridCellTooltipLines(tip);
         }
 
         // Placed units count
@@ -5814,6 +6075,17 @@ public class MapEditorWindow
         if (!Game1.Popups.IsEmpty || (_eb != null && (_eb.IsColorPickerOpen || _eb.IsDropdownOpen)))
             return;
         Game1.Tooltips.RequestText(text, anchorCell);
+    }
+
+    /// <summary>Colored, multi-line variant of <see cref="DrawGridCellTooltip"/>
+    /// with the same popup/dropdown suppression. Cursor-anchored (the rect-anchored
+    /// RequestText has no colored overload), matching the in-game unit/spell
+    /// tooltips — used by the Units tab for the name + grey Description line.</summary>
+    private void DrawGridCellTooltipLines(IReadOnlyList<(string, Color)> lines)
+    {
+        if (!Game1.Popups.IsEmpty || (_eb != null && (_eb.IsColorPickerOpen || _eb.IsDropdownOpen)))
+            return;
+        Game1.Tooltips.RequestLines(lines);
     }
 
     private void DrawPlacedUnitMarkers(int screenW, int screenH)
@@ -6744,14 +7016,16 @@ public class MapEditorWindow
             new Vector2((int)(rect.X + (rect.Width - size.X) / 2f), (int)(rect.Y + (rect.Height - size.Y) / 2f)), color);
     }
 
-    private void DrawButtonRect(string text, int x, int y, int w, int h, Color bg)
+    private void DrawButtonRect(string text, Rectangle rect, Color bg)
     {
         var mouse = _eb._input.Mouse;
-        var rect = new Rectangle(x, y, w, h);
         bool hovered = IsInRect(mouse, rect);
         Scope.Draw(_pixel, rect, hovered ? ButtonHoverColor : bg);
         DrawTextCentered(text, rect, TextColor);
     }
+
+    private void DrawButtonRect(string text, int x, int y, int w, int h, Color bg)
+        => DrawButtonRect(text, new Rectangle(x, y, w, h), bg);
 
     private void DrawRectBorder(int x, int y, int w, int h, Color color)
     {

@@ -19,7 +19,7 @@ public static class CorpseInteractionManager
 
         var nu = sim.Units[necroIdx];
 
-        // Currently carrying → start PutDown
+        // Currently carrying → start PutDown (ground drop, no table).
         if (nu.CarryingCorpseID >= 0 && nu.CorpseInteractPhase == 0)
         {
             var cc = sim.FindCorpseByID(nu.CarryingCorpseID);
@@ -27,7 +27,9 @@ public static class CorpseInteractionManager
             {
                 cc.LerpStartPos = nu.Position + Movement.FacingUtil.ForwardDir(nu) * 0.8f;
             }
-            sim.UnitsMut[necroIdx].CorpseInteractPhase = 5; // PutDown
+            // Enters the PutDown visual AND schedules the ground drop on the sim clock —
+            // the corpse settles from a scheduled event, not when the anim reports finished.
+            Necroking.Game1.Instance?.BeginCorpsePutDown(necroIdx, -1);
             return;
         }
 

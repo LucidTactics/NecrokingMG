@@ -27,8 +27,8 @@ namespace Necroking.GameSystems;
 /// the player wakes up in the body right away, and the spirit stays behind as a
 /// stationary scrying eye — sight halved, expiring after <see cref="EyeDuration"/>.
 ///
-/// Same pattern as JumpSystem / TickPendingReanimRises: a plain timer system,
-/// ticked from Game1.Update on WorldDt (a buff can't mutate the world on expiry).
+/// Same pattern as JumpSystem: a plain timer system, ticked from Game1.Update on
+/// WorldDt (a buff can't mutate the world on expiry).
 /// State is per-game — Game1.ResetWorldState calls <see cref="Reset"/>. Stores
 /// Unit.Ids, never indices (swap-pop safety).
 /// </summary>

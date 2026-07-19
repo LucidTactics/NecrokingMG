@@ -200,7 +200,7 @@ running several scenarios in a row or returning from a scenario to the normal ma
 **duplicated (not extracted) clear block** at the top: `_gameWorldLoaded=false`, `_gameOver=false`,
 `_clock.OnWorldStart()`, then `.Clear()` on `_damageNumbers`, `_unitAnims`, `_corpseAnims`,
 `_effectManager`, `_reanimFx`, `_buffVisuals`, `_tethers`/`_tetherAnchor`/`_tetherDustAccum`.
-**Only `StartGame` additionally resets:** `_pendingProjectiles`, `_foragables` (pickup arcs),
+**Only `StartGame` additionally resets:** `_foragables` (pickup arcs),
 `_skillBookState.InitFromDefs()` + `_skillLearnToasts`, `_workerSystem.Reset()` (stockpiles/jobs),
 `_grassRenderer.ClearAllFades()`, `_zoneSystem.Clear()`, the grass-field arrays, `_roadSystem.Init()`,
 `_dayNightSystem.Init()`. **Crucially `StartGame` does `_session.Dispose(); _session = new GameSession()`
@@ -247,14 +247,15 @@ See also: `World/` (foragable + env-object systems), `Game/` (table-craft system
 
 ### `Necroking/Game1.Spells.cs` — player spell cast pipeline, deferred queues, horde commands
 What lives here: the player spell-cast pipeline as orchestrated from `Game1` — dispatching casts,
-queuing and ticking delayed zombie rises and staggered multi-shot projectiles, deferred blight-bomb
+scheduling delayed zombie rises (`ReanimRiseTask` on `_sim.Tasks`), deferred blight-bomb
 impacts, casting cast/summon visual effects, potion-spell casting, spell-slot flash feedback,
 built-in (no-path) abilities, horde command/regroup orders, and poison-berry harvest.
 Key members: `ExecuteSpellEffect` (thin glue → `SpellEffectSystem.Execute`), `QueueReanimRise`,
-`TickPendingReanimRises`, `OnSimReanimReady`, `ApplyBlightBombImpacts`, `SpawnCastEffect`,
+`ReanimRiseTask`, `OnSimReanimReady`, `ApplyBlightBombImpacts`, `SpawnCastEffect`,
 `SpawnSummonEffect`, `SpawnFlipbookEffect`, `CastPotionSpell`, `FlashSpellSlot`,
 `TryDispatchBuiltinAbility`, `TryCommandHorde`, `TryRegroupHorde`, `ValidatePotionAbilities`,
-`TryStartPoisonBerries`, `TickPendingProjectiles`, `RemoveCastingBuffAll`.
+`TryStartPoisonBerries`, `RemoveCastingBuffAll`. (Staggered multi-shot projectiles are
+`ProjectileVolleyTask` in `Game/SpellEffectSystem.cs`, also on `_sim.Tasks`.)
 NOTE (2026-07): `ExecuteSummonSpell`, `SpawnSpellProjectile` (→ `SpawnProjectile`), and
 `ApplyBlightSpell` (→ `ApplyBlight`) moved into `Game/SpellEffectSystem.cs` — a static class whose
 `Execute(spell, game, casterIdx, target, slot)` takes `Game1` directly and owns ALL category logic.
@@ -287,7 +288,7 @@ use the `Game1._aiPendingSpell` scratch (reset per cast, consumed immediately in
 `DrainAISpellCasts`). Mana + per-spell cooldowns are behind
 `Movement.ICasterResources` — implemented by `NecromancerState` (player) and
 `Movement.UnitCasterResources` (AI units: `Unit.Mana` + lazily-allocated
-`Unit.SpellCooldowns` dict). `_pendingProjectiles` groups carry `CasterUid` (multi-shot
+`Unit.SpellCooldowns` dict). `ProjectileVolleyTask`s carry `CasterUid` (multi-shot
 follows the caster's hand, player or AI; dropped if the caster dies).
 Still player-only: `_pendingCastAnim` + `TickCastPlant`/`SetNecromancerCasting` (cast
 anims/plant), `_channelingSlot` (key-hold channel release — AI channels use

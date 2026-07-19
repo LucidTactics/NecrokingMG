@@ -886,12 +886,17 @@ public partial class HUDRenderer
                 _              => "Wildlife",
             };
 
-        DrawCursorTooltip(new[]
+        // Colored lines (mirrors the spell tooltip): name white, an optional grey
+        // description blurb right below it, then HP + membership.
+        var lines = new List<(string, Color)>
         {
-            name,
-            $"HP: {u.Stats.HP}/{u.Stats.MaxHP}",
-            membership,
-        }, screenW, screenH);
+            (name, SpellTooltip.Text),
+        };
+        if (!string.IsNullOrEmpty(def?.Description))
+            lines.Add((def.Description, SpellTooltip.Dim));
+        lines.Add(($"HP: {u.Stats.HP}/{u.Stats.MaxHP}", SpellTooltip.Text));
+        lines.Add((membership, SpellTooltip.Text));
+        Game1.Tooltips.RequestLines(lines);
     }
 
     /// <summary>Floating cursor tooltip for the hovered spell-bar slot. Spell

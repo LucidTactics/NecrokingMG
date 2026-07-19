@@ -24,23 +24,22 @@ public class SaveGameData
 }
 
 /// <summary>Snapshot of SkillBookState (+ its PlayerEventTracker tallies).
-/// Mirrors the book's own collections verbatim — restoring fills them back and
-/// replays only the effects that can't round-trip any other way (grant_path;
-/// see SkillBookState.ApplySave). The necromancer's skill-granted buffs travel
-/// in SavedPlayer.Buffs like every other buff.</summary>
+/// Persists only what can't be re-derived: the learned talents (the source of
+/// truth), point pools, event tallies, passive flags, intrinsic-buff bindings,
+/// and metamorphosis bonuses. The unlocks a talent grants — potions, buildings,
+/// summons, AI behaviors, potion slots — are NOT stored; they're re-derived by
+/// replaying each learned talent's effect on load (see SkillBookState.ApplySave /
+/// DerivableOnLoad). The necromancer's skill-granted buffs travel in
+/// SavedPlayer.Buffs like every other buff. Older saves that still carry the
+/// dropped unlock keys load fine — the extra JSON is ignored and re-derived.</summary>
 public class SavedSkillBook
 {
     [JsonPropertyName("learned")] public List<string> Learned { get; set; } = new();
     [JsonPropertyName("skillPoints")] public Dictionary<string, int> SkillPoints { get; set; } = new();
     /// <summary>Cumulative milestone tallies (monster_kill, cast_spell, …).</summary>
     [JsonPropertyName("events")] public Dictionary<string, int> Events { get; set; } = new();
-    [JsonPropertyName("unlockedPotions")] public List<string> UnlockedPotions { get; set; } = new();
-    [JsonPropertyName("unlockedBuildings")] public List<string> UnlockedBuildings { get; set; } = new();
     [JsonPropertyName("passiveFlags")] public List<string> PassiveFlags { get; set; } = new();
     [JsonPropertyName("intrinsicBuffs")] public List<SavedIntrinsicBuff> IntrinsicBuffs { get; set; } = new();
-    [JsonPropertyName("unlockedSummons")] public List<string> UnlockedSummons { get; set; } = new();
-    [JsonPropertyName("unlockedAI")] public Dictionary<string, int> UnlockedAI { get; set; } = new();
-    [JsonPropertyName("potionSlots")] public int PotionSlots { get; set; }
     [JsonPropertyName("corpseEatingBonus")] public int CorpseEatingBonus { get; set; }
     [JsonPropertyName("soulConsumptionBonus")] public int SoulConsumptionBonus { get; set; }
 }

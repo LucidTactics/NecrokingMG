@@ -177,7 +177,7 @@ fires it spontaneously. It is a multi-hour, multi-million-token operation.
 | 7 | Concept audit | main session (Fable) | Cross the cluster summary + dup_hints against `docs/locate-behavior/overview.md`'s subsystem inventory → 15–25 investigation units. Reuse the previous unit list as the starting frame; add units only for new/changed concept areas. |
 | 8 | Reconcile | `label_store.py reconcile` | Applies §1.3: carried / resolved / needs-rejudge per finding; emits the judge worklist. |
 | 9 | Judge | Fable subagents, one per unit needing judgment | Each gets: unit evidence, prior dossier, prior verdicts for the unit, judge-prompt.md. Must read code at HEAD; must emit anchors for every finding. |
-| 10 | Publish | main session | Rewrite `verdicts.md` + changed `dossiers/*`, update `store/verdicts.json` + `meta.json`, append actionable items to `memory/consolidation_opportunities.md`, refresh the README date/counts. Offer a single commit (per git policy — orchestrated by the user session, this skill itself makes no pushes). |
+| 10 | Publish | main session | Rewrite `verdicts.md` + changed `dossiers/*`, update `store/verdicts.json` + `meta.json`, append actionable items to `docs/consolidation_opportunities.md`, refresh the README date/counts. Offer a single commit (per git policy — orchestrated by the user session, this skill itself makes no pushes). |
 
 ### 2.3 Budget expectations (state these in SKILL.md so the user can abort)
 
@@ -243,7 +243,7 @@ when you want to know whether similar code already exists. The finder can be *as
 the query, but nothing routes to it automatically.
 
 **Declined design (kept for the record) — extend the locate-behavior finder** (would have
-edited `docs/locate-behavior/README.md` + a paragraph in the skill's SKILL.md; the finder
+edited `docs/locate-behavior/CLAUDE.md` + a paragraph in the skill's SKILL.md; the finder
 agent shim's tool list already includes Bash). Under it, when the ask involved *adding* code
 (vs. just finding existing behavior), the finder would additionally:
 1. Derives facets for the intended code from `store/taxonomy.md` — pick verb, target,
@@ -268,7 +268,7 @@ python tools/label_store.py query --like Necroking/X.cs::Type::Foo --top 10
 ```
 
 If a near-duplicate surfaces, normal CLAUDE.md consolidation rules apply (reuse/extend, or
-note it in `memory/consolidation_opportunities.md`). This is also how new code enters the
+note it in `docs/consolidation_opportunities.md`). This is also how new code enters the
 store between reviews instead of piling up as unlabeled drift.
 
 ### 3.3 Query mechanics (in `label_store.py`, pure python, no LLM)
@@ -367,7 +367,7 @@ Built this session (ordered; 1–3 unlocked everything else):
 4. [x] `docs/OutOfContext_Skills/dup-review/` — `SKILL.md` (pipeline §2.2, budgets §2.3,
    user-invoked-only), `labeler-prompt.md`, `judge-prompt.md`. Plus `!docs/OutOfContext_Skills/dup-review/`
    in `.gitignore`.
-5. [ ] **DECLINED by the user** — `docs/locate-behavior/README.md` "Similar existing code"
+5. [ ] **DECLINED by the user** — `docs/locate-behavior/CLAUDE.md` "Similar existing code"
    step. Not built and not to be built; the manual `label_store.py query` CLI is the
    authoring-time path instead.
 6. [ ] `CLAUDE.md` pointer lines — **not done this build** (CLAUDE.md was out of the build

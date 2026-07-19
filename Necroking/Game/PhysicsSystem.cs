@@ -186,8 +186,11 @@ public class PhysicsSystem
         for (int bi = _bodies.Count - 1; bi >= 0; bi--)
         {
             var body = _bodies[bi];
-            int idx = UnitUtil.ResolveUnitIndex(units, body.UnitId);
-            if (idx < 0)
+            // Raw index lookup, NOT UnitUtil.ResolveUnitIndex — that helper filters
+            // out dead units, which routed every dead-but-not-yet-removed body into
+            // the "unit gone" drop below and silently discarded the velocity the
+            // dead-unit-keep branch exists to preserve for the corpse.
+            if (!units.TryGetIndex(body.UnitId, out int idx))
             {
                 // Unit no longer exists (removed) — drop the body.
                 _bodies.RemoveAt(bi);

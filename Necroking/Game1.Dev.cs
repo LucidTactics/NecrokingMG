@@ -80,6 +80,12 @@ public partial class Game1 {
                break;
             }
 
+            // List the sim's currently scheduled delayed-execution tasks (ScheduledTasks):
+            // one line per pending task with its name, seconds left, and handle.
+            case "tasks":
+               c.Complete(Necroking.Dev.DevServer.Ok(_sim.Tasks.DescribeActive()));
+               break;
+
             // Memory diagnostic: managed heap before/after a forced compacting GC, plus
             // process private/working set. If managedAfter stays high across map reloads it's
             // a managed retained-reference leak; if managed stays flat but priv climbs it's a
@@ -208,6 +214,16 @@ public partial class Game1 {
                bool want = DevToggle(c.Args, has);
                if (want != has) ToggleGodMode(ni);
                c.Complete(Necroking.Dev.DevServer.Ok($"godmode {(want ? "on" : "off")}"));
+               break;
+            }
+
+            // Set the player's essence (table-craft currency).
+            // devctl: cmd set_essence 100 [maxEssence]
+            case "set_essence": {
+               if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("need <essence> [maxEssence]")); break; }
+               if (c.Args.Length > 1) _sim.PlayerResources.MaxEssence = (int)DevFloat(c.Args[1]);
+               _sim.PlayerResources.Essence = System.Math.Min(_sim.PlayerResources.MaxEssence, (int)DevFloat(c.Args[0]));
+               c.Complete(Necroking.Dev.DevServer.Ok($"essence {_sim.PlayerResources.Essence}/{_sim.PlayerResources.MaxEssence}"));
                break;
             }
 
@@ -2020,6 +2036,59 @@ public partial class Game1 {
                break;
             }
 
+            // Queue synthetic key presses — each press replaces Keyboard.GetState()
+            // for one Update frame (gap frame in between), reaching everything the
+            // real keyboard reaches (editor text fields included). Repeat args for
+            // multiple presses; "shift" after a key name holds shift with it.
+            // window.dev('key',['tab'])  ·  window.dev('key',['tab','shift'])
+            case "key": {
+               if (c.Args.Length < 1) {
+                  c.Complete(Necroking.Dev.DevServer.Error("key needs: <keyName> [shift] [<keyName> [shift]]..."));
+                  break;
+               }
+               int queued = 0;
+               bool keyErr = false;
+               for (int i = 0; i < c.Args.Length; i++) {
+                  if (!Enum.TryParse<Microsoft.Xna.Framework.Input.Keys>(c.Args[i], true, out var devKey)) {
+                     c.Complete(Necroking.Dev.DevServer.Error($"unknown key '{c.Args[i]}' (XNA Keys name, e.g. Tab, Enter, A)"));
+                     keyErr = true;
+                     break;
+                  }
+                  bool withShift = i + 1 < c.Args.Length
+                     && c.Args[i + 1].Equals("shift", StringComparison.OrdinalIgnoreCase);
+                  if (withShift) i++;
+                  _devKeyPresses.Enqueue((devKey, withShift));
+                  queued++;
+               }
+               if (!keyErr)
+                  c.Complete(Necroking.Dev.DevServer.Ok($"queued {queued} key press(es)"));
+               break;
+            }
+
+            // Report the editor UI's focused field + last Draw's field tab order —
+            // headless verification of Tab-cycling. window.dev('editor_focus')
+            case "editor_focus": {
+               var efEb = _menuState == MenuState.UIEditor && _uiEditor != null ? _uiEditor : _editorUi;
+               var efOrder = string.Join(",", efEb.DevFieldTabOrder.Select(f => $"\"{f}\""));
+               c.Complete(Necroking.Dev.DevServer.OkRaw(
+                  $"{{\"active\":{(efEb.DevActiveFieldId == null ? "null" : $"\"{efEb.DevActiveFieldId}\"")}," +
+                  $"\"tabOrder\":[{efOrder}]}}"));
+               break;
+            }
+
+            // Focus a single-line editor field by id (same path a Tab hop uses).
+            // window.dev('focus_field',['prop_Id'])
+            case "focus_field": {
+               if (c.Args.Length < 1) {
+                  c.Complete(Necroking.Dev.DevServer.Error("focus_field needs: <fieldId>  (see editor_focus tabOrder)"));
+                  break;
+               }
+               var ffEb = _menuState == MenuState.UIEditor && _uiEditor != null ? _uiEditor : _editorUi;
+               ffEb.DevFocusField(c.Args[0]);
+               c.Complete(Necroking.Dev.DevServer.Ok($"pending focus -> {c.Args[0]}"));
+               break;
+            }
+
             // Set the F7 gameplay-debug overlay: 0=Off, 1=Horde, 2=Unit Info.
             // window.dev('gpdebug',['1'])  (no arg → Horde)
             case "gpdebug": {
@@ -2401,6 +2470,7 @@ public partial class Game1 {
                   "zombify [selector]", "set_ai <selector> <AIBehavior>", "move <selector> <x> <y>",
                   "set_hp <selector> <hp> [maxHp]", "set_mana <selector|necro> <mana> [maxMana]",
                   "set_spell <selector> <spellID>", "set_necro_type <unitDefId>", "godmode [on|off]",
+                  "set_essence <essence> [maxEssence]",
                   "walk_necro <x> <y>  (or 'clear'; cancelled by any WASD press)",
                   "mark <selector|clear>", "unmark [selector]",
                   // spells & reanimation
@@ -2413,6 +2483,8 @@ public partial class Game1 {
                   "save_map [name]", "reload_map  (map editor's Reload Map button)",
                   // headless input (clicks / mouse / hover)
                   "click <x> <y> [right]", "mousepos <x> <y>|clear", "pile_click <x> <y>",
+                  "key <keyName> [shift]...  (queue synthetic key presses, e.g. key tab shift)",
+                  "editor_focus  (focused editor field + Tab order)", "focus_field <fieldId>",
                   "hover <selector>|clear", "hover_obj <index>|clear",
                   "hover_at <screenX> <screenY>", "hover_variant <-1..20>",
                   "tether <x> <y>", "rope [x y]",

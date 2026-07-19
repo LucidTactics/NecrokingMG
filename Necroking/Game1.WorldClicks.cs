@@ -287,8 +287,9 @@ public partial class Game1
                     {
                         if (cc != null)
                             cc.LerpStartPos = Game.TableSystem.GetSpawnPos(_envSystem, tableIdx);
-                        _sim.UnitsMut[necroIdx].PutDownTableIdx = tableIdx;
-                        _sim.UnitsMut[necroIdx].CorpseInteractPhase = 5;
+                        // Enters the PutDown visual AND schedules the corpse transfer + craft
+                        // start on the sim clock (no longer gated on IsAnimFinished).
+                        BeginCorpsePutDown(necroIdx, tableIdx);
                         DebugLog.Log("table", $"[F-press] Started PutDown anim → table {tableIdx}");
                     }
                     else

@@ -7,12 +7,24 @@ sim and the AI so engage/attack range can't drift.
 
 ```
 intent (AI combat loop OR player click)  → sets Unit.PendingAttack (+ Target)
-   → anim plays; JustHitEffectFrame fires → Simulation.ResolvePendingAttack(i)
-      → ResolveMeleeAttack(...) applies damage   (NO distance check here)
+   → anim plays; JustHitEffectFrame fires → AttackResolver.TryResolvePendingAttackAtImpact(sim,i)
+      → AttackResolver.ResolveMeleeAttack(sim,…) applies damage   (impact-frame whiff check only)
 ```
 
+**Extraction note (commit `0e5b8fd`, verified 2026-07-19):** all attack→damage RESOLUTION
+was moved out of `Simulation.cs` into the static `Necroking/Game/Combat/AttackResolver.cs`.
+Every resolver is now `AttackResolver.Xxx(Simulation sim, …)` taking `sim` as its first arg.
+**Simulation keeps the *stamp* side** (the attack-selection loop, `InitiatePounceWithWeapon`),
+the per-tick recovery timers (`UpdateKnockdownRecovery`), the hit-consumer dispatch loop (now
+just forwards to `AttackResolver`), and the flat `DealDamage` shortcut. The split is clean —
+resolution vs decision/stamp — with **no orphaned duplicate methods left in Simulation.cs**
+(verified: zero resolver method bodies remain there). `ResolveMeleeAttackExternal` +
+`LastMeleeAttackHit` were REPLACED by `ResolveMeleeAttack(…, peekOnly:true)` returning bool;
+`ResolveWeaponBonusEffects` was renamed to the private `ApplyBonusEffectsOnHit`.
+
 **Key invariant / trap:** `ResolvePendingAttack` / `ResolveMeleeAttack` do **not**
-re-check distance for melee — they trust that whoever stamped `PendingAttack`
+re-check melee distance except for the generous `TryResolvePendingAttackAtImpact` whiff
+tolerance (`ImpactWhiffTolerance = 1.5u`) — they trust that whoever stamped `PendingAttack`
 already gated on range. So the range check must happen **at stamp time**. AI paths do
 this; a player click that stamps `PendingAttack` directly must do it too or melee
 lands at any range.
@@ -26,12 +38,29 @@ attackerIdx, targetIdx, gd)` = `Settings.Combat.MeleeRange` (fallback `MeleeRang
 **Use this anywhere you gate "am I close enough to melee".** `SubroutineSteps.GetMeleeRange`
 forwards to it so AI and sim share one formula (they previously drifted — 1.5f vs 0.8f).
 
-### `Necroking/Game/Simulation.cs` — resolution + AI-side gating
-- **`ResolvePendingAttack(int unitIdx)`** — consumes `Unit.PendingAttack`: ranged branch
-  spawns an arrow; melee branch resolves `ResolveMeleeAttack` (or `ResolveMeleeSweep` for
-  sweep weapons). **No melee distance check** — refunds only when the target vanished.
-- **`ResolveMeleeAttack` / `ResolveMeleeAttackExternal`** — the actual hit/damage resolver
-  (also used by TrampleSystem/SweepSystem which bypass `PendingAttack`).
+### `Necroking/Game/Combat/AttackResolver.cs` — THE resolution funnel (static, sim-level)
+Every way an attack turns into damage. All methods are `static … (Simulation sim, …)`.
+- **`TryResolvePendingAttackAtImpact(sim, unitIdx)`** — the anim hit-frame entry (called from
+  `Game1.Animation.cs`). Melee gets the `ImpactWhiffTolerance` (1.5u) reach re-check → logs a
+  `Whiff` if the target outran the swing; ranged resolves unchecked; then → `ResolvePendingAttack`.
+- **`ResolvePendingAttack(sim, unitIdx)`** — consumes `Unit.PendingAttack`: ranged branch →
+  `FireArrowAt`; sweep weapon → `ResolveMeleeSweep`; else `ResolveMeleeAttack`. **No melee
+  distance check** — refunds `PostAttackTimer` only when the target vanished. Called directly by
+  `JumpSystem` (pounce landing) and the balance/power scenarios.
+- **`ResolveMeleeAttack(sim, atk, def, weaponIdx, suppressDodgeAnim, forceHit, peekOnly)`** —
+  the hit/damage resolver (public; also used by `TrampleSystem` via the `peekOnly`/`forceHit`
+  bool-return pattern that replaced the old `ResolveMeleeAttackExternal`+`LastMeleeAttackHit`).
+- `FireArrowAt`/`IsFireLaneClear`, `ResolveMeleeSweep`, `ResolveProjectileImpact`/`ResolveArrowHit`,
+  `ApplySpellDamage`/`ApplySpellDamageAoE`, `ResolveLightningDamage`/`ResolveCloudDamage`,
+  `ApplyDrainHeal`, on-hit riders `ApplyBonusEffectsOnHit`/`TryApplyKnockdownOnHit`/
+  `TryApplyLimbChop`/`ApplyAffliction` — all now here. Knockdown-recovery consts
+  (`KnockdownCheckInterval` etc.) are `internal` on this class; `Simulation.UpdateKnockdownRecovery`
+  reads them.
+- **Reaches back into `sim` for everything it needs** via public accessors added for the extraction:
+  `UnitsMut`, `Quadtree`, `DamageEventsMut`, `Projectiles`, `Physics`, `CombatLog`, `GameTime`,
+  `GameData`, plus `DealDamage`/`GetUnitDisplayName` (all on `Simulation.cs`, ~lines 192–303/2555/3218).
+
+### `Necroking/Game/Simulation.cs` — the STAMP side + AI-side gating (resolution moved out)
 - **Attack-selection loop** (`~line 2384`, the "Attack cooldowns and queuing" block) — the
   AI/general path that STAMPS `PendingAttack` from `EngagedTarget`. It is gated by range:
   the engage/`InCombat` update just above (`~line 2374`, `dist <= MeleeRangeUtil.Compute(...)`)
@@ -202,25 +231,19 @@ per-frame `Update(dt, units, qt, corpses)` (physics, homing/swirl, collision, pr
   `ProjectileManager.Spawn` (Explosive when `AoeRadius > 0`, else RegularHit) and
   post-configures the returned projectile from the `SpellDef` (SpellID tag, homing/swirl
   trajectories, DetonateAtTarget for Blight, flipbooks).
-  Called from `SpellEffectSystem` cast paths and `Game1.Spells.cs`
-  (`TickPendingProjectiles` staggered Quantity>1 shots) — a new per-projectile field set
-  here covers every shot.
-- **Over-time volley state (`Quantity>1` spells)**: `PendingProjectileGroup`
-  (struct in `Necroking/Game/SpellEffectSystem.cs`: `SpellID`, `CasterUid`, `Origin`,
-  **`Target`** = the fixed aim point captured at cast, `Remaining`, `Timer`, `Interval`)
-  is added to `Game1._pendingProjectiles` by `SpellEffectSystem.Execute` (Projectile +
-  Blight-bomb cases) and ticked by **`Game1.Spells.cs` `TickPendingProjectiles(dt)`**
-  (called from `Game1.cs` Update ~line 3709 on `WorldDt`, inside the sim gate). Each tick
-  re-resolves the caster by stable uid (`_sim.ResolveUnitID(pg.CasterUid)`; group dropped if
-  dead) and fires from the live `EffectSpawnPos2D` but **at the frozen `pg.Target`** — the
-  aim does NOT update between shots. **To retarget each shot to the cursor:** the group is
-  caster-agnostic, so gate on the player — `casterIdx == FindNecromancer()` (or
-  `_sim.Units[casterIdx].AI == AIBehavior.PlayerControlled`) — then overwrite `pg.Target`
-  with the current cursor world before `SpawnProjectile`. Cursor world = `_camera.ScreenToWorld(_input.MousePos, vpW, vpH)`; **validity** = the `cursorOutside`
-  test in `Game1.Update` (`mouse.X<0 || mouse.Y<0 || mouse.X>=vpW || mouse.Y>=vpH`, ~line
-  2825) — that local isn't visible from `TickPendingProjectiles`, so cache a
-  `_lastValidCursorWorld` Game1 field each focused/in-window frame and only update `pg.Target`
-  when valid (leaving `pg.Target` = last valid / initial cast target = the fallback for free).
+  Called from `SpellEffectSystem` cast paths and `ProjectileVolleyTask.Fire`
+  (staggered Quantity>1 shots) — a new per-projectile field set here covers every shot.
+- **Over-time volley state (`Quantity>1` spells)**: `ProjectileVolleyTask`
+  (a repeating `ScheduledTask` subclass in `Necroking/Game/SpellEffectSystem.cs`: `SpellID`,
+  `CasterUid`, `Target`, `ShotsRemaining`, `Interval`) is scheduled on `sim.Tasks` by
+  `SpellEffectSystem.Execute` (Projectile + Blight-bomb cases) at `Interval` and re-arms
+  itself via `Repeat(Interval)` until `ShotsRemaining` runs out (fires from
+  `Simulation.Tick`'s scheduled_tasks phase, sim clock). Each fire re-resolves the caster by
+  stable uid (`sim.ResolveUnitID(CasterUid)`; volley dropped if dead) and shoots from the
+  live `EffectSpawnPos2D`. **Cursor re-aim**: player volleys with `SpellDef.TracksCursor`
+  re-aim `Target` at `Game1._cursorAimWorld` (sampled at fire time; null when the window is
+  unfocused / cursor outside the viewport → keeps the last valid target). AI volleys and
+  barrages (`TracksCursor=false`) keep the cast target.
 
 ### Projectile RENDERING — `Necroking/GameRenderer.World.cs` (two passes, branches on `Projectile.Type`)
 Where each in-flight projectile is drawn. **Two separate draw methods, split by type:**
@@ -350,6 +373,67 @@ queued swing. The whiff mechanisms are upstream:
   `Render/LungeSystem.cs` only writes a cosmetic `RenderOffset` from
   `Unit.CurrentAttackLungeDist` (weapon `lungeDist`, stamped in the attack-selection loop);
   Position doesn't move.
+
+## Damage-application layer — the three resolver funnels + DamageSystem
+
+All damage converges on **three formula funnels** (each rolls dice, applies
+armor/toughness, and writes its own `CombatLogEntry`), which then hand the net
+number to `Game/DamageSystem.cs`:
+
+1. **Melee** — `AttackResolver.ResolveMeleeAttack(sim, attackerIdx, defenderIdx, weaponIdx,
+   suppressDodgeAnim, forceHit, peekOnly)` (`Necroking/Game/Combat/AttackResolver.cs`, public;
+   Trample calls it with `peekOnly`/`forceHit`). Full Dominions-style
+   opposed roll: tier-4 DRN both sides, fatigue penalties (atk −1/20, def −1/10),
+   paralysis fractions, buff-modified Attack/Defense, defender weapon DefenseBonus +
+   ShieldDefense, Harassment penalty; miss → `Harassment++` + `ApplyDodgeAnim`; shield
+   interpose (`modAtk < modDef + ShieldParry` → shield prot added); hit location
+   (`UnitUtil.RollHitLocation`); damage = Strength(×1.25 2H) + weapon + DRN; blunt/head
+   +25% pre-prot, slashing +25% post-prot; piercing 15% / AP 50% / armor-defeating-roll
+   25% reductions cut armor AND toughness; limb cap ≤ maxHP/2; `MitigateByToughness`;
+   → `DamageSystem.ApplyDirect`. `peekOnly` sets `LastMeleeAttackHit` with no side effects.
+2. **Ranged (arrows)** — `AttackResolver.ResolveArrowHit(sim, ProjectileHit, spellDef)`
+   (private; reached via `ResolveProjectileImpact`): physics already decided contact, so the only save is the
+   shield — Precision(+2 magic) + tier-4 DRN vs ShieldParry×2 + tier-4 DRN → Miss /
+   Blocked / Hit; hit-location armor (head vs body from the arc), arrows = piercing
+   (15% off armor+toughness), Blocked adds ShieldProtection; → `DealDamage`.
+3. **Spells** — `AttackResolver.ApplySpellDamage(sim, targetIdx, damage, spell, casterIdx, type)`
+   = THE spell-damage entry point (projectile impacts, zaps/strikes via LightningSystem
+   `LightningDamage` events, beam/drain ticks, cloud ticks `PoisonCloudSystem`, glyph
+   traps `MagicGlyphSystem` via `ApplySpellDamageAoE`): MR gate
+   (`Game/SpellPenetration.cs` `Affects` + `CasterRollTier`), damage+casterDRN vs
+   BodyProtection+targetDRN, AN zeroes prot/toughness, AP halves; auto-hit (no defense
+   roll); Poison type → net becomes stacks. `ApplySpellDamageAoE` = the radius-selection
+   wrapper. **No CombatLogEntry with roll breakdown** — the projectile-hits loop in
+   `Simulation.Tick` logs a `NoteOnly` entry instead.
+
+**`Game/DamageSystem.cs`** (static, sim-level) = the application tail: `Apply(units,
+targetIdx, rawDamage, type, flags, damageEvents, attackerIdx)` (armor+toughness formula
+for callers that DIDN'T pre-roll — spell strikes via `DealDamage`, potions, weapon bonus
+effects), `ApplyDirect` (pre-calculated net: HP, attacker stamp, damage number, death),
+`MitigateByToughness` (THE toughness halving formula), `Kill` (the only sanctioned
+Alive=false), `StampAttacker` (attribution + auto-engage), `ApplyHitReactAnim`/
+`ApplyDodgeAnim` (reaction anims with shared cooldown gates). `Simulation.DealDamage` =
+the flat ArmorNegating shortcut (dev tools, sacrifice, magical strikes; stays in Simulation,
+called by AttackResolver via `sim.DealDamage`).
+`AttackResolver.ApplyBonusEffectsOnHit` (private; was `Simulation.ResolveWeaponBonusEffects`) +
+`Game/WeaponBonusEffect.cs` = on-hit weapon procs (extra damage via `DamageSystem.Apply`), fired
+from the tail of `ResolveMeleeAttack`.
+
+**Hit-flag census:** there is NO crit and NO separate dodge/block ROLL stat — outcomes are
+`CombatLogOutcome { Hit, Miss, Blocked, Whiff, NoteOnly }`; "dodge"/"block" are the
+Miss/zero-damage reaction ANIMS (`ApplyDodgeAnim`/`BlockReact`), and shield-block is the
+melee shield-interpose / ranged parry stage. `DamageFlags` (`Data/CombatTypes.cs`):
+ArmorNegating / ArmorPiercing / MagicWeapon / DefenseNegating.
+
+**Combat logging:** `Game/CombatLog.cs` — `CombatLogEntry` (full roll breakdown:
+Attack/Defense/Damage/Prot base+DRN pairs, ToughnessMit, NetDamage, HitLoc, Outcome,
+free-text Note), `CombatLog.AddEntry` (200-entry ring, mirrors to `log/combat.log` via
+DebugLog). Owner `Simulation._combatLog` / public `Simulation.CombatLog`. Writers (all the
+combat ones now in `AttackResolver`): the three funnels above + the Whiff entry in
+`AttackResolver.TryResolvePendingAttackAtImpact` + NoteOnly entries in `ResolveProjectileImpact`/
+`ApplySpellDamage` + `Game/BuffSystem.cs`. On-screen: `UI/HUDRenderer.cs`
+`DrawCombatLog` fading lines; floating damage numbers = `DamageEvent` list
+(`_damageEvents`, filled by DamageSystem) → `GameRenderer.World.cs` `DrawDamageNumbers`.
 
 ## Pitfalls / gotchas
 - **Range is gated at stamp time, not at resolve time.** Any new code that sets

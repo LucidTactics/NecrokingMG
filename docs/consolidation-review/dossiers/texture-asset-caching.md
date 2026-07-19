@@ -214,7 +214,7 @@ variance; nothing here will meaningfully diverge (the `__N` convention is fixed 
 1. Finding 2 (delete dead method) — free.
 2. Finding 5 (TextureUtil internal) — free, same file.
 3. Finding 1 (`Render/TextureCache`) — establishes the utility; add to
-   memory/standard_patterns.md as the canonical path→texture cache.
+   docs/standard_patterns.md as the canonical path→texture cache.
 4. Finding 3 (WidgetResourceCache on top of it).
 5. Finding 4 (SpriteAtlas re-plumb) — separately, with multi-sheet visual verification.
 

@@ -157,14 +157,7 @@ public partial class Game1
     private static float ChannelPlaybackSpeed(AnimController ctrl, in PendingCastAnim pca, out float loopBudget)
     {
         GetChannelStates(pca.CastAnim, out var startS, out var loopS, out var finishS);
-        float sD = ctrl.AnimDurationMsFor(startS) / 1000f;
-        float lC = MathF.Max(0.05f, ctrl.AnimDurationMsFor(loopS) / 1000f);
-        float fD = finishS.HasValue ? ctrl.AnimDurationMsFor(finishS.Value) / 1000f : 0f;
-        float baseTotal = sD + lC + fD;
-        bool tooShort = pca.CastTime > 0.01f && baseTotal > pca.CastTime;
-        float spd = tooShort ? baseTotal / pca.CastTime : 1f;
-        loopBudget = tooShort ? lC / spd : MathF.Max(lC, pca.CastTime - sD - fD);
-        return spd;
+        return AnimTiming.FitChannel(ctrl, startS, loopS, finishS, pca.CastTime, out loopBudget);
     }
 
     /// <summary>Drive a channeled reanimation cast: Start → Loop → (Finish). The
@@ -485,14 +478,12 @@ public partial class Game1
                 {
                     int tIdx = _sim.Units[i].CraftTableIdx;
                     var tdef = _envSystem.Defs[_envSystem.GetObject(tIdx).DefIndex];
-                    float pt = tdef.ProcessTime;
-                    float sD = animData.Ctrl.AnimDurationMsFor(AnimState.ImbueTableStart) / 1000f;
-                    float lC = animData.Ctrl.AnimDurationMsFor(AnimState.ImbueTableLoop) / 1000f;
-                    float fD = animData.Ctrl.AnimDurationMsFor(AnimState.ImbueTableFinish) / 1000f;
-                    float baseTotal = sD + lC + fD;
-                    float spd = (pt > 0.01f && baseTotal > pt) ? baseTotal / pt : 1f;
-                    float budget = baseTotal > pt ? lC / spd : MathF.Max(lC, pt - sD - fD);
-                    animData.Ctrl.PlaybackSpeed = spd;
+                    // The craft duration (ProcessTime) is the gameplay clock; the imbue
+                    // animation is fitted to it (never the reverse). TableCraftingSystem.Tick
+                    // completes the craft on the same LoopBudget this writes.
+                    animData.Ctrl.PlaybackSpeed = AnimTiming.FitChannel(animData.Ctrl,
+                        AnimState.ImbueTableStart, AnimState.ImbueTableLoop, AnimState.ImbueTableFinish,
+                        tdef.ProcessTime, out float budget);
                     _envSystem.GetTableState(tIdx).LoopBudget = budget;
                 }
 
@@ -571,50 +562,17 @@ public partial class Game1
                         }
                         break;
 
-                    case 5: // PutDown — body bag tracks hilt visually via DrawCarriedBodyBag
+                    case 5: // PutDown — VISUAL ONLY. The corpse transfer + craft start fire
+                        // from a scheduled sim task (Game1.CompleteCorpsePutDown), NOT from
+                        // IsAnimFinished. Gameplay owns the clock; this just plays the clip and
+                        // keeps the carried body's facing synced. See BeginCorpsePutDown /
+                        // ScheduledTasks / Render.AnimTiming.
                         if (animData.Ctrl.CurrentState != AnimState.PutDown)
                             animData.Ctrl.ForceState(AnimState.PutDown);
                         {
                             var cc = _sim.FindCorpseByID(_sim.Units[i].CarryingCorpseID);
                             if (cc != null)
                                 cc.FacingAngle = _sim.Units[i].FacingAngle;
-                        }
-                        if (animData.Ctrl.IsAnimFinished)
-                        {
-                            // Dispatch on PutDownTableIdx: if a table was targeted at F-press
-                            // time, load the corpse into its slot and remove the corpse from
-                            // the sim. Otherwise, place on ground at LerpStartPos as before.
-                            int tableIdx = _sim.Units[i].PutDownTableIdx;
-                            int corpseId = _sim.Units[i].CarryingCorpseID;
-                            var cc = _sim.FindCorpseByID(corpseId);
-
-                            if (tableIdx >= 0 && _envSystem != null && cc != null
-                                && Game.TableSystem.LoadCorpseIntoTable(_envSystem, tableIdx, cc) >= 0)
-                            {
-                                int ci = _sim.FindCorpseIndexByID(corpseId);
-                                if (ci >= 0) _sim.CorpsesMut.RemoveAt(ci);
-                                // Auto-open the table menu so the player can pick items
-                                // and start crafting without an extra click.
-                                int sw = _graphics.PreferredBackBufferWidth;
-                                int sh = _graphics.PreferredBackBufferHeight;
-                                EnsureInventoryUIsInitialized();
-                                _tableMenuUI.OpenForTable(tableIdx, sw, sh, _camera, _renderer);
-                            }
-                            else if (cc != null)
-                            {
-                                // Ground drop (or table-load fell through e.g. slot taken).
-                                // Land flat at the drop point — zero Z/physics so the
-                                // settled draw lands exactly where the put-down draw was.
-                                cc.Position = cc.LerpStartPos;
-                                cc.Z = 0f;
-                                cc.InPhysics = false;
-                                cc.DraggedByUnitID = GameConstants.InvalidUnit;
-                            }
-
-                            _sim.UnitsMut[i].CarryingCorpseID = -1;
-                            _sim.UnitsMut[i].CorpseInteractPhase = 0;
-                            _sim.UnitsMut[i].PutDownTableIdx = -1;
-                            animData.Ctrl.ForceState(AnimState.Idle);
                         }
                         break;
 
@@ -893,7 +851,7 @@ public partial class Game1
                         _sim.Units[i].PendingWeaponIdx, _sim.Units[i].PendingWeaponIsRanged,
                         _sim.Units[i].Archetype);
                     if (animData.Ctrl.CurrentState == expectedAtkState)
-                        _sim.TryResolvePendingAttackAtImpact(i);
+                        GameSystems.Combat.AttackResolver.TryResolvePendingAttackAtImpact(_sim, i);
                 }
             }
 
@@ -968,7 +926,8 @@ public partial class Game1
 
         _effectManager.Update(dt);
         _reanimFx.Update(dt);
-        TickPendingReanimRises(dt);   // spawn deferred rises in lockstep with their effect clock
+        // (Deferred reanim rises fire from _sim.Tasks — same WorldDt clock as _reanimFx,
+        // so the rise stays in lockstep with its effect.)
         _buffVisuals.Update(dt, _sim.Units, _gameData.Buffs, _gameTime);
         _foragables.Update(dt);
         Toasts.Update(dt);

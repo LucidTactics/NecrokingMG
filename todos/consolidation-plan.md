@@ -1,14 +1,14 @@
 # Consolidation Implementation Plan
 
 Executes the findings from [docs/consolidation-review/](../docs/consolidation-review/README.md)
-(116 findings; queue in [memory/consolidation_opportunities.md](../memory/consolidation_opportunities.md)).
+(116 findings; queue in [docs/consolidation_opportunities.md](../docs/consolidation_opportunities.md)).
 Check off items here as they land; delete this file when the queue is drained.
 
 **Status (2026-07-07 evening): EXECUTED. 41 consolidation commits landed across 6 sequential
 agent batches (sim/combat core, Game1 glue, data/IO, editor toolkit, render/core/texture, UI
 panels). All A+B items done; C/D done except principled deferrals — see the pruned
-memory/consolidation_opportunities.md for what remains + open questions. Canonical homes
-recorded in memory/standard_patterns.md + locate-behavior docs. This file can be deleted once
+docs/consolidation_opportunities.md for what remains + open questions. Canonical homes
+recorded in docs/standard_patterns.md + locate-behavior docs. This file can be deleted once
 the deferred questions are answered and the /dup-review + label-store tooling decision is made
 (design: docs/consolidation-review/operationalizing.md).**
 
@@ -24,7 +24,7 @@ the necromancer trends toward being a NORMAL unit that the engine merely knows i
 - Behavior-visible changes get a regression scenario or a drive-game verification first
   (reproduce → fix → re-verify), so "bug fixed" claims are grounded.
 - After each green batch: offer to push (Drive-sync collaborator; never leave half-committed work).
-- When a consolidation establishes a canonical home, update `memory/standard_patterns.md`
+- When a consolidation establishes a canonical home, update `docs/standard_patterns.md`
   and the relevant `docs/locate-behavior/<area>.md` in the same commit.
 - Net/ untouched throughout.
 

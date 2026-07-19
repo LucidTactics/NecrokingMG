@@ -66,6 +66,8 @@ public sealed class GameClock
         Inspect = 2,
         /// <summary>Dev-server 'pause' command.</summary>
         Dev = 4,
+
+        Mapeditor = 8,
     }
 
     /// <summary>Unclamped wall-clock frame delta. Never pauses, never scales.</summary>
