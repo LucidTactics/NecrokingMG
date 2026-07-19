@@ -14,6 +14,10 @@ NOT under `.claude/`) so the finder can read **and update** it without permissio
 - **[anti-patterns-ui.md](anti-patterns-ui.md)** — UI/editor/input anti patterns (scroll/layout
   math, stale-session refs, input-gesture & router ownership, hit-test math, hotkeys, tooltips,
   transient-vs-persisted settings). Read before any UI/editor/input work.
+- **[anti-patterns-gameplay.md](anti-patterns-gameplay.md)** — gameplay-simulation anti patterns
+  (wrong-clock ticking, unit-state ownership, damage/death/strike pipeline, buff coverage &
+  expiry, spawn/despawn/session-recreate asymmetry, unit grouping/leash, order priority, AI
+  behavior state machine). Read before movement/combat/AI/buff/spawn work.
 - **[anti-patterns-list.md](anti-patterns-list.md)** — Contains lists of known anti patterns already in the code.
 - **[asset-management.md](asset-management.md)** — Contains rules regarding json management etc. Always read it.
 - **`<area>.md`** — one doc per subsystem/folder (e.g. [game1-partials.md](game1-partials.md),

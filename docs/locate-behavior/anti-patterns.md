@@ -10,6 +10,10 @@ subsystem counterparts — read the relevant one before touching that layer:*
 - *[anti-patterns-ui.md](anti-patterns-ui.md) — UI/editor/input: scroll/layout math,
   stale-session refs, input-gesture/router ownership, hit-test math, hotkeys, tooltips,
   transient-vs-persisted settings.*
+- *[anti-patterns-gameplay.md](anti-patterns-gameplay.md) — gameplay simulation: wrong-clock
+  ticking, unit-state ownership, damage/death/strike pipeline, buffable-stat coverage & buff
+  expiry, spawn/despawn/session-recreate asymmetry, unit grouping/leash, order priority, AI
+  behavior state machine.*
 
 *Egregious anti patterns should typically be refactored whenever found even if not asked to by the user, always, tell the main claude about these when found, and log them in [anti-patterns-list.md](anti-patterns-list.md).*
 *Regular anti patterns should be documented in [anti-patterns-list.md](anti-patterns-list.md) whenever found, and if its relevant to the caller claudes request bring these up as potential refactors or fixes as he goes.*

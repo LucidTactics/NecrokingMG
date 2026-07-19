@@ -259,4 +259,7 @@ of the runtime stack.
   to prevent snap-turns and wall tunneling — keep them if refactoring integration.
 
 Related: [ai.md](ai.md) (who writes PreferredVel/MoveTarget), [combat.md](combat.md)
-(InCombat plants units), [game1-partials.md](game1-partials.md) (input → `_necroMoveInput`).
+(InCombat plants units), [game1-partials.md](game1-partials.md) (input → `_necroMoveInput`),
+[anti-patterns-gameplay.md](anti-patterns-gameplay.md) (unit-state-ownership anti patterns:
+systems fighting over Position/Z/facing, re-aim extending a committed motion, facing from one
+loco vector).

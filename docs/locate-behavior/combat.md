@@ -483,6 +483,9 @@ combat ones now in `AttackResolver`): the three funnels above + the Whiff entry 
   to defaults today.
 
 ## Related areas
+- [anti-patterns-gameplay.md](anti-patterns-gameplay.md) — combat-resolution anti patterns
+  (damage/death/strike outside the one pipeline, phantom swings from anim-timed transitions,
+  re-aim extending a committed pounce). Read before touching damage/attack code.
 - [ai.md](ai.md) — AI archetype handlers that decide when to engage/attack (they call
   `GetMeleeRange`); `SubroutineSteps.AttackTarget`/`Disengage`.
 - game1-partials.md — `Game1.WorldClicks.cs` world-click dispatch, `Game1.Animation.cs`
