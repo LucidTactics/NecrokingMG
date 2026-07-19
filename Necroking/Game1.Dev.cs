@@ -2020,6 +2020,59 @@ public partial class Game1 {
                break;
             }
 
+            // Queue synthetic key presses — each press replaces Keyboard.GetState()
+            // for one Update frame (gap frame in between), reaching everything the
+            // real keyboard reaches (editor text fields included). Repeat args for
+            // multiple presses; "shift" after a key name holds shift with it.
+            // window.dev('key',['tab'])  ·  window.dev('key',['tab','shift'])
+            case "key": {
+               if (c.Args.Length < 1) {
+                  c.Complete(Necroking.Dev.DevServer.Error("key needs: <keyName> [shift] [<keyName> [shift]]..."));
+                  break;
+               }
+               int queued = 0;
+               bool keyErr = false;
+               for (int i = 0; i < c.Args.Length; i++) {
+                  if (!Enum.TryParse<Microsoft.Xna.Framework.Input.Keys>(c.Args[i], true, out var devKey)) {
+                     c.Complete(Necroking.Dev.DevServer.Error($"unknown key '{c.Args[i]}' (XNA Keys name, e.g. Tab, Enter, A)"));
+                     keyErr = true;
+                     break;
+                  }
+                  bool withShift = i + 1 < c.Args.Length
+                     && c.Args[i + 1].Equals("shift", StringComparison.OrdinalIgnoreCase);
+                  if (withShift) i++;
+                  _devKeyPresses.Enqueue((devKey, withShift));
+                  queued++;
+               }
+               if (!keyErr)
+                  c.Complete(Necroking.Dev.DevServer.Ok($"queued {queued} key press(es)"));
+               break;
+            }
+
+            // Report the editor UI's focused field + last Draw's field tab order —
+            // headless verification of Tab-cycling. window.dev('editor_focus')
+            case "editor_focus": {
+               var efEb = _menuState == MenuState.UIEditor && _uiEditor != null ? _uiEditor : _editorUi;
+               var efOrder = string.Join(",", efEb.DevFieldTabOrder.Select(f => $"\"{f}\""));
+               c.Complete(Necroking.Dev.DevServer.OkRaw(
+                  $"{{\"active\":{(efEb.DevActiveFieldId == null ? "null" : $"\"{efEb.DevActiveFieldId}\"")}," +
+                  $"\"tabOrder\":[{efOrder}]}}"));
+               break;
+            }
+
+            // Focus a single-line editor field by id (same path a Tab hop uses).
+            // window.dev('focus_field',['prop_Id'])
+            case "focus_field": {
+               if (c.Args.Length < 1) {
+                  c.Complete(Necroking.Dev.DevServer.Error("focus_field needs: <fieldId>  (see editor_focus tabOrder)"));
+                  break;
+               }
+               var ffEb = _menuState == MenuState.UIEditor && _uiEditor != null ? _uiEditor : _editorUi;
+               ffEb.DevFocusField(c.Args[0]);
+               c.Complete(Necroking.Dev.DevServer.Ok($"pending focus -> {c.Args[0]}"));
+               break;
+            }
+
             // Set the F7 gameplay-debug overlay: 0=Off, 1=Horde, 2=Unit Info.
             // window.dev('gpdebug',['1'])  (no arg → Horde)
             case "gpdebug": {
@@ -2413,6 +2466,8 @@ public partial class Game1 {
                   "save_map [name]", "reload_map  (map editor's Reload Map button)",
                   // headless input (clicks / mouse / hover)
                   "click <x> <y> [right]", "mousepos <x> <y>|clear", "pile_click <x> <y>",
+                  "key <keyName> [shift]...  (queue synthetic key presses, e.g. key tab shift)",
+                  "editor_focus  (focused editor field + Tab order)", "focus_field <fieldId>",
                   "hover <selector>|clear", "hover_obj <index>|clear",
                   "hover_at <screenX> <screenY>", "hover_variant <-1..20>",
                   "tether <x> <y>", "rope [x y]",

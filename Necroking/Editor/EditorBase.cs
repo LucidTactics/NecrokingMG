@@ -183,6 +183,19 @@ public class EditorBase
     // Text input state
     protected string? _activeFieldId;
     private string _inputBuffer = "";
+    // Tab-cycling between single-line fields: FieldCore records every field it
+    // draws (draw order = visual order); Tab in Update picks the next/prev id
+    // from the last completed Draw's list, and FieldCore activates it on the
+    // following Draw so the fresh value/rect are used.
+    private readonly List<string> _fieldTabOrderCur = new();
+    private readonly List<string> _fieldTabOrderPrev = new();
+    private string? _pendingFocusFieldId;
+
+    /// <summary>Dev-server introspection/driving of the field focus (the
+    /// `editor_focus` / `focus_field` dev commands) — headless Tab-cycle tests.</summary>
+    public string? DevActiveFieldId => _activeFieldId;
+    public IReadOnlyList<string> DevFieldTabOrder => _fieldTabOrderPrev;
+    public void DevFocusField(string fieldId) => _pendingFocusFieldId = fieldId;
     private float _cursorBlink;
     private double _keyRepeatTimer;
     private Keys _lastRepeatingKey;
@@ -515,6 +528,14 @@ public class EditorBase
         if (IsDropdownOpen && !_openComboDrawnThisFrame)
             CloseActiveDropdown();
         _openComboDrawnThisFrame = false;
+
+        // Promote this Draw's field order for next frame's Tab handling; a
+        // pending focus target that wasn't drawn (panel closed, row clipped
+        // away) is unreachable — drop it instead of letting it linger.
+        _fieldTabOrderPrev.Clear();
+        _fieldTabOrderPrev.AddRange(_fieldTabOrderCur);
+        _fieldTabOrderCur.Clear();
+        _pendingFocusFieldId = null;
     }
 
     /// <summary>Push or pop <see cref="_dropdownLayer"/> / <see cref="_textFieldLayer"/>
@@ -1155,6 +1176,13 @@ public class EditorBase
     private (string text, bool active, bool committed) FieldCore(
         string fieldId, string display, Rectangle inputRect, string? placeholder = null)
     {
+        _fieldTabOrderCur.Add(fieldId);
+        if (_pendingFocusFieldId == fieldId && _activeFieldId == null)
+        {
+            FocusTextField(fieldId, display, inputRect);
+            _pendingFocusFieldId = null;
+        }
+
         bool isActive = _activeFieldId == fieldId;
         bool hovered = IsHovered(inputRect);
         bool committed = false;
@@ -2352,6 +2380,18 @@ public class EditorBase
 
                 if (key == Keys.Enter || key == Keys.Tab)
                 {
+                    // Tab hops to the next/prev field in last Draw's visual
+                    // order (wrapping); FieldCore activates it next Draw with
+                    // select-all via FocusTextField.
+                    if (key == Keys.Tab)
+                    {
+                        int idx = _fieldTabOrderPrev.IndexOf(_activeFieldId);
+                        if (idx >= 0 && _fieldTabOrderPrev.Count > 1)
+                        {
+                            int n = _fieldTabOrderPrev.Count;
+                            _pendingFocusFieldId = _fieldTabOrderPrev[(idx + (shift ? -1 : 1) + n) % n];
+                        }
+                    }
                     _activeFieldId = null;
                     _selectAll = false;
                     _selectionStart = -1;

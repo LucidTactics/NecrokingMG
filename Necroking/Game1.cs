@@ -685,6 +685,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     // Mouse.GetState() at the top of Update so headless runs can drive the raw
     // main-menu-family input paths (buttons + wheel, not just the cursor).
     private MouseState? _devRawMouse;
+    // Dev keyboard injection (the `key` dev command) — queued presses replace
+    // Keyboard.GetState() at the top of Update for one frame each (with a
+    // key-up gap frame between presses so repeats register as new presses).
+    private readonly Queue<(Keys key, bool shift)> _devKeyPresses = new();
+    private bool _devKeyGapFrame;
     // Menu state as of the last input capture — detects mode transitions so the
     // in-flight press gesture can be invalidated (see Update, ConsumeGesture).
     private MenuState _menuStateAtLastCapture;
@@ -2608,6 +2613,18 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // Dev-injected mouse (the `raw_mouse` dev command): stands in for the OS
         // mouse entirely so the raw menu paths below are drivable headless.
         if (_devRawMouse.HasValue) mouse = _devRawMouse.Value;
+
+        // Dev-injected keyboard (the `key` dev command): one press per frame,
+        // with a real-keyboard gap frame after each so the press edge (and a
+        // repeated same-key press) always registers.
+        if (_devKeyGapFrame)
+            _devKeyGapFrame = false;
+        else if (_devKeyPresses.Count > 0)
+        {
+            var (devKey, devShift) = _devKeyPresses.Dequeue();
+            kb = devShift ? new KeyboardState(devKey, Keys.LeftShift) : new KeyboardState(devKey);
+            _devKeyGapFrame = true;
+        }
 
         // Window unfocused or minimized (polled OS focus, not the unreliable
         // IsActive — see above). Exempt scenario / headless runs — automated runs
