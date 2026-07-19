@@ -3,6 +3,7 @@
     {
       "id": "necromancer",
       "name": "Necromancer",
+      "description": "A living necromancer who raises and commands the dead. Frail in melee — true power is the horde at your back.",
       "type": "Necromancer",
       "ai": "PlayerControlled",
       "orcaPriority": 3,
@@ -56,6 +57,7 @@
     {
       "id": "skeleton",
       "name": "Skeleton",
+      "description": "Raised infantry bound to a spear. Brittle bones, but utterly fearless and endlessly expendable.",
       "type": "Skeleton",
       "spriteScale": 0.9,
       "color": {
@@ -94,6 +96,7 @@
     {
       "id": "FemaleDeer",
       "name": "Female Deer",
+      "description": "Skittish woodland prey. Bolts at the first sign of danger and kicks only when cornered.",
       "faction": "Animal",
       "ai": "",
       "radius": 0.5,
@@ -135,6 +138,7 @@
     {
       "id": "Rat",
       "name": "Rat",
+      "description": "Vermin that means nothing alone but boils out of the underbrush in packs. A bite and little else.",
       "faction": "Animal",
       "ai": "",
       "radius": 0.5,
@@ -174,6 +178,7 @@
     {
       "id": "ZombieRat",
       "name": "Zombie Rat",
+      "description": "A reanimated rat — a tireless, expendable scrap of the swarm that never flees.",
       "ai": "",
       "radius": 0.5,
       "spriteScale": 0.25,
@@ -206,6 +211,7 @@
     {
       "id": "ZombieFemaleDeer",
       "name": "Zombie Female Deer",
+      "description": "A shambling doe-corpse. Timid even in undeath, it lashes out with dead hooves only when pressed.",
       "spriteScale": 0.74375,
       "sprite": {
         "atlas": "ZombieAnimals1",
@@ -250,6 +256,7 @@
     {
       "id": "MaleDeer",
       "name": "Male Deer",
+      "description": "A wary stag. Fast and flighty, but will wheel and gore with its antlers when it cannot run.",
       "faction": "Animal",
       "ai": "",
       "radius": 0.5,
@@ -293,6 +300,7 @@
     {
       "id": "Wolf",
       "name": "Wolf",
+      "description": "A pack hunter that circles, then pounces to drag down its prey. Dangerous in numbers.",
       "faction": "Animal",
       "ai": "",
       "radius": 0.5,
@@ -373,6 +381,7 @@
     {
       "id": "Bear",
       "name": "Bear",
+      "description": "A hulking bruiser. Slow to close, but its sweeping paws batter everything in front of it and it soaks punishment.",
       "faction": "Animal",
       "ai": "",
       "size": 3,
@@ -455,6 +464,7 @@
     {
       "id": "GrizzlyBear",
       "name": "Grizzly Bear",
+      "description": "An apex predator of the wild — vast, thickly muscled, and able to maul a whole rank with a single sweep.",
       "faction": "Animal",
       "ai": "",
       "size": 4,
@@ -537,6 +547,7 @@
     {
       "id": "DireWolf",
       "name": "Dire Wolf",
+      "description": "A great lone wolf. Swift and savage, it pounces from range to tear into a single target.",
       "faction": "Animal",
       "ai": "",
       "size": 3,
@@ -592,6 +603,7 @@
     {
       "id": "JuvWolf",
       "name": "Wolf Cub",
+      "description": "A half-grown wolf. It still pounces and bites, but has little weight behind the attack.",
       "faction": "Animal",
       "ai": "",
       "radius": 0.5,
@@ -646,6 +658,7 @@
     {
       "id": "ZombieWolf",
       "name": "Zombie Wolf",
+      "description": "A rotting pack-beast. It keeps the wolf's pounce and hunger, and no longer knows fear.",
       "radius": 0.5,
       "spriteScale": 0.6875,
       "wadingFractionByDirection": {
@@ -712,6 +725,7 @@
     {
       "id": "WolfCubZombie",
       "name": "Wolf Cub Zombie",
+      "description": "A reanimated wolf pup — small and weak, but a fearless, tireless minion of the horde.",
       "radius": 0.5,
       "spriteScale": 0.515625,
       "sprite": {
@@ -749,6 +763,7 @@
     {
       "id": "ZombieMaleDeer",
       "name": "Zombie Male Deer",
+      "description": "A dead stag driven on. It still gores with antlers, though it hangs back timidly until forced to fight.",
       "radius": 0.5,
       "spriteScale": 0.796875,
       "sprite": {
@@ -795,6 +810,7 @@
     {
       "id": "abomination",
       "name": "Abomination",
+      "description": "A towering stitched horror of dead flesh. Immense, resilient, and shockingly fast — it hooks its victims apart.",
       "type": "Abomination",
       "ai": "",
       "orcaPriority": 2,
@@ -841,6 +857,7 @@
     {
       "id": "militia",
       "name": "Light Infantry Pikeman",
+      "description": "Living Navarrese levy behind a long pike. Its reach keeps attackers at bay in a formed line.",
       "type": "Militia",
       "faction": "Human",
       "spriteWorldHeight": 1.9,
@@ -885,6 +902,7 @@
     {
       "id": "militia_copy2",
       "name": "LightInfantryZombie1",
+      "description": "A raised Navarre footman. The armor still hangs on it as it claws and bites for the horde.",
       "spriteWorldHeight": 1.9,
       "color": {
         "r": 180,
@@ -928,6 +946,7 @@
     {
       "id": "militia_copy2_copy",
       "name": "LightInfantryZombie2",
+      "description": "A risen light infantryman stripped of all discipline — now only teeth and nails serve the horde.",
       "spriteWorldHeight": 1.9,
       "color": {
         "r": 180,
@@ -971,6 +990,7 @@
     {
       "id": "militia_copy2_copy_copy",
       "name": "LightInfantryZombie3",
+      "description": "A reanimated Navarre soldier, its last scraps of plate rattling as it claws at the living.",
       "spriteWorldHeight": 1.9,
       "color": {
         "r": 180,
@@ -1013,6 +1033,7 @@
     {
       "id": "militia_copy2_copy_copy_copy",
       "name": "TemplarZombie1",
+      "description": "A raised Templar, still helmed and mailed. Heavier than the common levy-dead, it rends with dead claws.",
       "spriteWorldHeight": 1.9,
       "color": {
         "r": 180,
@@ -1055,6 +1076,7 @@
     {
       "id": "militia_copy2_copy_copy_copy_copy",
       "name": "TemplarZombie2",
+      "description": "A risen Templar in battered mail — a sturdier horde-thrall that tears with its claws.",
       "spriteWorldHeight": 1.9,
       "color": {
         "r": 180,
@@ -1097,6 +1119,7 @@
     {
       "id": "militia_copy2_copy_copy_copy_copy_copy",
       "name": "TemplarZombie3",
+      "description": "A reanimated Templar that both claws and bites, its helm all that remains of its holy order.",
       "spriteWorldHeight": 1.9,
       "color": {
         "r": 180,
@@ -1139,6 +1162,7 @@
     {
       "id": "militia_copy2_copy_copy_copy_copy_copy_copy",
       "name": "TemplarZombie4",
+      "description": "A helmed Templar-corpse, clawing and biting tirelessly in service of the necromancer.",
       "spriteWorldHeight": 1.9,
       "color": {
         "r": 180,
@@ -1181,6 +1205,7 @@
     {
       "id": "militia_copy",
       "name": "Light Infantry Sword & Shield",
+      "description": "Living Navarre light infantry with blade and shield — a swift, lightly armored line trooper.",
       "faction": "Human",
       "color": {
         "r": 180,
@@ -1222,6 +1247,7 @@
     {
       "id": "militia_copy_copy",
       "name": "Priest",
+      "description": "A living cleric who channels the Heavens, calling down god-rays to sear the undead. Guard him, or fall to the light.",
       "faction": "Human",
       "ai": "Caster",
       "color": {
@@ -1269,6 +1295,7 @@
     {
       "id": "soldier",
       "name": "Soldier",
+      "description": "A disciplined Templar man-at-arms behind a tower shield — steady, armored, and hard to break in the line.",
       "type": "Soldier",
       "faction": "Human",
       "color": {
@@ -1315,6 +1342,7 @@
     {
       "id": "knight",
       "name": "Knight",
+      "description": "The heaviest of Navarre's living blades. Encased in plate behind a tower shield, few soldiers hit harder or hold longer.",
       "type": "Knight",
       "faction": "Human",
       "orcaPriority": 1,
@@ -1365,6 +1393,7 @@
     {
       "id": "archer",
       "name": "Light Infantry Archer",
+      "description": "A living bowman who kills at range and draws a dagger only when the enemy closes.",
       "type": "Archer",
       "faction": "Human",
       "ai": "",
@@ -1409,6 +1438,7 @@
     {
       "id": "skeleton_copy",
       "name": "Skeleton Warrior",
+      "description": "An armored skeleton with sword and shield — quicker and better protected than a common raised footman.",
       "spriteWorldHeight": 1.9,
       "color": {
         "r": 160,
@@ -1452,6 +1482,7 @@
     {
       "id": "skeleton_copy_copy",
       "name": "Elite Skeleton",
+      "description": "A veteran skeleton hefting a battle-axe. Tougher and heavier-hitting than the rank and file.",
       "orcaPriority": 1,
       "color": {
         "r": 160,
@@ -1495,6 +1526,7 @@
     {
       "id": "skeleton_copy_copy_copy",
       "name": "Risen",
+      "description": "A towering vampire-risen. Fast, powerful, and thickly warded, it flenses foes with a flurry of dead claws.",
       "orcaPriority": 1,
       "size": 3,
       "spriteScale": 1.3,
@@ -1537,6 +1569,7 @@
     {
       "id": "Boar",
       "name": "Boar",
+      "description": "A wild boar that lowers its head and charges, trampling and goring. Stubborn and hard to put down.",
       "faction": "Animal",
       "ai": "",
       "size": 3,
@@ -1588,6 +1621,7 @@
     {
       "id": "GreatBoar",
       "name": "Great Boar",
+      "description": "A massive tusked boar. Its charge hits like a battering ram and its hide shrugs off blows.",
       "faction": "Animal",
       "ai": "",
       "size": 3,
@@ -1639,6 +1673,7 @@
     {
       "id": "ZombieJuvenileBear",
       "name": "Zombie Juvenile Bear",
+      "description": "A reanimated bear. Enormous and tireless, it sweeps whole ranks aside for the horde.",
       "size": 3,
       "radius": 0.75,
       "spriteScale": 0.842188,
@@ -1695,6 +1730,7 @@
     {
       "id": "ZombieGrizzlyBear",
       "name": "Zombie Grizzly Bear",
+      "description": "The largest of the risen beasts — a rotting grizzly that batters everything before it with sweeping claws.",
       "size": 4,
       "radius": 1,
       "spriteScale": 1.185938,
@@ -1751,6 +1787,7 @@
     {
       "id": "ZombieBoar",
       "name": "Zombie Boar",
+      "description": "A dead boar that still charges and gores. Left to wander, it roots up food to feed the horde.",
       "size": 3,
       "radius": 0.5,
       "spriteScale": 0.682812,
@@ -1805,6 +1842,7 @@
     {
       "id": "ZombieGreatBoar",
       "name": "Zombie Great Boar",
+      "description": "A great tusked corpse-beast. It gores the living and forages the wilds to sustain the dead.",
       "size": 3,
       "radius": 0.75,
       "spriteScale": 0.8625,
@@ -1855,6 +1893,7 @@
     {
       "id": "wretched",
       "name": "Wretched",
+      "description": "The necromancer's first, feeblest shape — barely more than a robed corpse. Every evolution begins here.",
       "type": "Necromancer",
       "ai": "PlayerControlled",
       "spriteScale": 0.9,
@@ -1898,6 +1937,7 @@
     {
       "id": "pale_acolyte",
       "name": "Pale Acolyte",
+      "description": "An early necromancer form hardened against harm — unnaturally tough for so slight a frame.",
       "type": "Necromancer",
       "ai": "PlayerControlled",
       "spriteScale": 0.9,
@@ -1940,6 +1980,7 @@
     {
       "id": "wight",
       "name": "Wight",
+      "description": "A martial necromancer form. Stronger and hardier than its earlier shapes, able to hold its own in the fray.",
       "type": "Necromancer",
       "ai": "PlayerControlled",
       "spriteScale": 0.9,
@@ -1982,6 +2023,7 @@
     {
       "id": "lich",
       "name": "Lich",
+      "description": "A mighty undead sorcerer-form. Deeply warded and hard to fell, commanding the deepest death magic.",
       "type": "Necromancer",
       "ai": "PlayerControlled",
       "radius": 0.9,
@@ -2024,6 +2066,7 @@
     {
       "id": "grand_necromancer",
       "name": "Grand Necromancer",
+      "description": "The pinnacle necromancer form — master of the death path and the horde it raises.",
       "type": "Necromancer",
       "ai": "PlayerControlled",
       "spriteScale": 0.85,
@@ -2066,6 +2109,7 @@
     {
       "id": "necromancer_debug",
       "name": "Necromancer (Debug)",
+      "description": "A testing form with every school mastered and bottomless power. Not meant for normal play.",
       "type": "Necromancer",
       "ai": "PlayerControlled",
       "orcaPriority": 3,
@@ -2132,6 +2176,7 @@
     {
       "id": "corpse_puppet",
       "name": "Corpse Puppet",
+      "description": "A corpse briefly puppeted to fight with a spear — a short-lived thrall torn from a fresh body.",
       "type": "Skeleton",
       "spriteScale": 0.9,
       "color": {
@@ -2170,6 +2215,7 @@
     {
       "id": "peasant",
       "name": "Peasant",
+      "description": "An unarmed villager with only a knife and no stomach for battle. It flees, or dies, or rises again.",
       "type": "Civilian",
       "faction": "Human",
       "sprite": {
@@ -2203,6 +2249,7 @@
     {
       "id": "hunter",
       "name": "Huntsman",
+      "description": "A keen-eyed woodsman with a longbow. He spots threats from afar and looses arrows before they close.",
       "type": "Hunter",
       "faction": "Human",
       "ai": "",
@@ -2243,6 +2290,7 @@
     {
       "id": "watchdog",
       "name": "Watchdog",
+      "description": "A chained guard dog with a sharp nose and a louder bark — it rouses the whole settlement long before it bites.",
       "type": "Watchdog",
       "faction": "Human",
       "radius": 0.5,
@@ -2309,6 +2357,7 @@
     {
       "id": "ZombieDireWolf",
       "name": "Zombie Dire Wolf",
+      "description": "A risen dire wolf. It keeps its pounce and its speed, hunting for the horde without fear or fatigue.",
       "radius": 0.75,
       "spriteScale": 0.91875,
       "wadingFractionByDirection": {
