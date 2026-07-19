@@ -8,6 +8,7 @@ NOT under `.claude/`) so the finder can read **and update** it without permissio
   documented-vs-not list. Start here.
 - **[anti-patterns.md](anti-patterns.md)** — Contains lists of anti patterns to look for and
   either log or tell the caller to fix. Read this before you start to investigate.
+- **[asset-management.md](asset-management.md)** — Contains rules regarding json management etc. Always read it.
 - **`<area>.md`** — one doc per subsystem/folder (e.g. [game1-partials.md](game1-partials.md),
   [render.md](render.md), [jobs-workers.md](jobs-workers.md), [dev.md](dev.md)).
 - **This README** — the workflow, self-heal rules, commit discipline, doc format, and the
