@@ -251,6 +251,63 @@ BASH_RULES = (rule_python_validate, rule_worktree_remove_force)
 _REMOTE_PUSH_SUBCMDS = {"push", "send-pack"}
 
 
+# --- Windows link creation (junction / symlink) detection ---------------------------
+# The link-creating words. Only meaningful where they can EXECUTE: as the invoked
+# program (Sysinternals junction.exe; mklink as a leader), or inside the inline payload
+# of a shell host that interprets them (mklink is a cmd.exe builtin, `New-Item
+# -ItemType Junction/SymbolicLink` a PowerShell cmdlet — either host can nest the other).
+_WINLINK_RE = re.compile(
+    r"\bmklink\b|\bjunction(\.exe)?\s|-ItemType\s+(Junction|SymbolicLink)\b",
+    re.IGNORECASE)
+
+# Program leaders that ARE a link creator. bash_ast leaders come basename-normalized
+# (path and .exe stripped, lowercased); _fallback_leader matches that.
+_WINLINK_LEADERS = {"mklink", "junction"}
+
+# Hosts whose inline argument text is executed as commands and can therefore smuggle a
+# link creation (`cmd /c "mklink /J a b"`, `powershell -c "New-Item -ItemType Junction …"`).
+_WINLINK_HOSTS = {"cmd", "powershell", "pwsh"}
+
+
+def _fallback_leader(seg: str) -> str:
+    """Leader of a segment for the no-parse fallback: the first non-`VAR=val` token,
+    normalized like bash_ast._basename (path and .exe/.bat/.cmd stripped, lowercased)."""
+    toks = _tokenize(seg)
+    i = 0
+    while i < len(toks) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", toks[i]):
+        i += 1
+    if i >= len(toks):
+        return ""
+    base = toks[i].rsplit("/", 1)[-1].rsplit("\\", 1)[-1].lower()
+    if base.endswith((".exe", ".bat", ".cmd")):
+        base = base.rsplit(".", 1)[0]
+    return base
+
+
+def _creates_windows_link(seg: str, command) -> bool:
+    """True if this segment can actually create a Windows junction/symlink.
+
+    The old check regex-scanned the WHOLE segment text, so innocent data tripped it —
+    a git commit message mentioning "junction buttons", a grep for mklink. Now the
+    link words only count where they can execute: as the segment's own leader, or in
+    the inline payload of a cmd/powershell host. `command` is the bash_ast per-invocation
+    view (preferred); on parse failure the leader is recovered from the segment's own
+    tokens, so heredoc-body lines (whose fallback "leader" is just prose) stay inert."""
+    if command is not None:
+        leader, payload = command.leader, " ".join(command.args)
+    else:
+        leader, payload = _fallback_leader(seg), seg
+    if leader in _WINLINK_LEADERS:
+        return True
+    if leader in _WINLINK_HOSTS:
+        # A heredoc-fed host executes its stdin, which the args can't show — scan the
+        # whole segment text in that case (conservative).
+        if command is not None and "<<" in seg:
+            payload = seg
+        return bool(_WINLINK_RE.search(payload))
+    return False
+
+
 def rule_intended_prompt(seg: str, command=None):
     """Layer-2 whitelist: a single-command segment we've AGREED should reach the user as
     a normal prompt rather than be force-allowed or thrown back. Return a short reason
@@ -269,13 +326,13 @@ def rule_intended_prompt(seg: str, command=None):
         return ("A push to a remote publishes your commits and needs your explicit "
                 "approval — every other git command is auto-accepted, just this one "
                 "prompts. Approve to proceed.")
-    # Windows link creation — in any form, including nested inside `cmd /c "…"` or a
-    # powershell inline (hence a whole-segment text scan, not just the leader). A junction
-    # or directory symlink pointing at a real folder is a landmine: recursive deleters can
+    # Windows link creation — as the invoked program or nested inside `cmd /c "…"` /
+    # a powershell inline (structural check; link-y words in ordinary argument DATA,
+    # like a commit message mentioning "junction", don't count). A junction or
+    # directory symlink pointing at a real folder is a landmine: recursive deleters can
     # traverse it and destroy the TARGET (assets/ wipe, 2026-07-05). Copy the files
     # instead; if a link is genuinely needed, the user should knowingly approve it.
-    if re.search(r"\bmklink\b|\bjunction(\.exe)?\s|-ItemType\s+(Junction|SymbolicLink)\b",
-                 seg, re.IGNORECASE):
+    if _creates_windows_link(seg, command):
         return ("This creates a Windows junction/symlink. Links into real project "
                 "folders are dangerous: recursive deletes (git worktree remove, some "
                 "cleanup tools) can traverse the link and destroy the TARGET's contents "

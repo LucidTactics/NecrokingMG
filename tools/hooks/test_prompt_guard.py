@@ -224,6 +224,31 @@ fails += not check("git commit pushy message -> allow (subcommand is commit)",
 fails += not check("quoted semicolon stays one segment -> allow",
                    evb('echo "a; rm -rf b"'), "allow")
 
+# --- Windows link guard: real link creation prompts; link-y words as DATA don't -----
+fails += not check("mklink via cmd -> ask", evb('cmd /c "mklink /J a b"'), "ask")
+fails += not check("mklink unquoted via cmd -> ask",
+                   evb("cmd /c mklink /D link target"), "ask")
+fails += not check("sysinternals junction.exe -> ask",
+                   evb(r"junction.exe C:\link C:\target"), "ask")
+fails += not check("powershell New-Item junction -> ask",
+                   evb('powershell -c "New-Item -ItemType Junction -Path a -Target b"'),
+                   "ask")
+fails += not check("pwsh New-Item symlink -> ask",
+                   evb('pwsh -Command "New-Item -ItemType SymbolicLink -Path a -Target b"'),
+                   "ask")
+fails += not check("commit message mentioning junction -> allow (data, not a link)",
+                   evb('git commit -m "fix Roads junction buttons hit-test"'), "allow")
+fails += not check("heredoc commit body mentioning junction -> defer (was ask)",
+                   evb("git commit -F - <<'EOF'\nRoads junction buttons were fixed\nEOF"),
+                   "defer")
+fails += not check("heredoc-in-substitution commit msg with junction -> defer (was ask)",
+                   evb("git commit -m \"$(cat <<'EOF'\nRoads junction buttons were "
+                       "hit-tested wrong\nEOF\n)\""), "defer")
+fails += not check("grep for mklink -> allow (search text, not a link)",
+                   evb("grep -rn mklink tools/"), "allow")
+fails += not check("echo junction text -> allow (data)",
+                   evb('echo "junction ahead"'), "allow")
+
 # --- robocopy: allow when DEST is inside the project, else prompt/deny -------------
 PROJ = r"C:\Users\Johan\source\repos\Lucid\NecrokingMG"
 
