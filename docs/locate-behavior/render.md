@@ -751,8 +751,29 @@ in `Data/Registries/` (not yet documented) — that's where you register a new e
 ### `Necroking/Render/ReanimEffectSystem.cs` — composite reanimation "rise" effect
 What lives here: a preset-driven, multi-part effect played at a grave on reanimate; it's
 handle-based (returns an `FxInstanceId`) so an outline can attach to the spawning unit.
+Four layers per instance: unit outline, additive diffuse light, **additive green cloud
+puffs** (HDR, `ToHdrVertex`), **alpha-blended dark dust puffs** (premultiplied color) —
+presets (`reanim_smoke`/`reanim_nosmoke`) in `BuildPresets` at the bottom of the file.
 Look/edit here when: the reanimate/raise visual is wrong. Driven from `Game1.Spells.cs`
 (`QueueReanimRise`/`TickPendingReanimRises`) with a preset id from `SpellRegistry`.
+
+**Two mutually-exclusive draw paths**, gated by `Performance.DepthSortedFog`
+(`GameSettings.cs`; H-key A/B toggle in `Game1.cs` Update; `depthSortedFog` dev command):
+- **OFF (default)** — dust joins the unit Y-sort depth list (`AddDustToDepthList` from
+  `GameRenderer.Units.cs` `CollectWorldItems`, per-item `DrawSingleDust`, world pass /
+  AlphaBlend), while light + additive clouds draw later in `DrawAdditive` via `_cbFxReanim`
+  (`WorldLayer.EffectsHdrAdditive`, fx pass). Structural consequence: the two puff
+  families can NEVER interleave per-puff — every dust puff draws in the world pass, every
+  additive cloud in the later fx pass.
+- **ON** — `DrawSortedParticles(hdrEffect)`: ALL particles (light+clouds+dust) build one
+  `_sortScratch` list, sort by `SortY`, then draw flipping `BlendState.Additive`↔`AlphaBlend`
+  per contiguous run (own `_batch.Begin/End` cycle, DepthRead vs the `FogDepthOccluders`
+  unit stamps, `LayerDepth = FogDepthForY(sortY)`). **THE precedent for Y-sorting particles
+  across blend modes.** Called from `_cbFxReanim` with `s.Suspend()/Resume()` around it.
+  Sort-bias gotcha: `AddPuff` gives dust `SortY = world.Y + WorldSize*0.5` but clouds raw
+  `world.Y`; the ~1-unit bias exceeds the puff Y-scatter (±~0.5), so in practice dust still
+  sorts almost entirely in front of the additive clouds — unify the SortY convention if you
+  want true intermixing.
 
 ### Particle systems
 - `Necroking/Render/BuffVisualSystem.cs` (`WPParticle`) — buff-aura particles.
