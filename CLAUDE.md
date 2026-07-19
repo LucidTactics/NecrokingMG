@@ -90,7 +90,7 @@ Game1 will always be there.
 
 Use delegates for map/reduce or other such functional jobs, but not for dependency injection.
 
-### Before Writing New Code
+### Before Writing New Code or editing Json data files such as adding spells or editing the map file
 1. **Locate first — use the `locate-behavior` skill, don't freestyle grep.** Any time you
    need to find *where* a behavior lives or *where new code should go* (which file/function
    is responsible, where to add a feature, what file to create), invoke `/locate-behavior`
