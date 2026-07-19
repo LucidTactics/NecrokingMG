@@ -1417,8 +1417,78 @@
       "cloudDuration": 6,
       "cloudTickRate": 3,
       "cloudTickDamage": 1,
+      "cloudEruptionDuration": 1,
+      "cloudSpreadDuration": 2,
       "cloudSlowBuffID": "buff_miasma_slow",
-      "cloudPlaguedBuffID": "buff_plagued"
+      "cloudPlaguedBuffID": "buff_plagued",
+      "cloudColor": {
+        "r": 62,
+        "g": 80,
+        "b": 52,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudGlowColor": {
+        "r": 70,
+        "g": 210,
+        "b": 110,
+        "a": 255,
+        "intensity": 1
+      },
+      "cloudPalette": [
+        {
+          "color": {
+            "r": 45,
+            "g": 52,
+            "b": 42,
+            "a": 255,
+            "intensity": 1
+          },
+          "weight": 0.4,
+          "outerWeight": 0.5,
+          "glowWeight": 0,
+          "additive": false
+        },
+        {
+          "color": {
+            "r": 115,
+            "g": 150,
+            "b": 100,
+            "a": 255,
+            "intensity": 1
+          },
+          "weight": 0.3,
+          "outerWeight": 0.5,
+          "glowWeight": 0,
+          "additive": false
+        },
+        {
+          "color": {
+            "r": 185,
+            "g": 120,
+            "b": 255,
+            "a": 255,
+            "intensity": 1.6
+          },
+          "weight": 0.15,
+          "outerWeight": 0,
+          "glowWeight": 0.5,
+          "additive": true
+        },
+        {
+          "color": {
+            "r": 120,
+            "g": 240,
+            "b": 150,
+            "a": 255,
+            "intensity": 1.4
+          },
+          "weight": 0.15,
+          "outerWeight": 0,
+          "glowWeight": 0.5,
+          "additive": true
+        }
+      ]
     },
     {
       "name": "Poison Burst",

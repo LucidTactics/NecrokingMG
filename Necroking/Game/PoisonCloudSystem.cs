@@ -57,6 +57,9 @@ public class PoisonCloud
     public float NoiseOffset;          // Per-cloud randomization
     public byte ColorR = 90, ColorG = 180, ColorB = 55;   // Base cloud color
     public byte GlowR = 80, GlowG = 255, GlowB = 40;     // Center glow color
+    // Optional per-puff color mix (see SpellDef.CloudPalette). Shared REFERENCE to the
+    // registry def's list — read-only, never mutate. Null/empty = derived ring shades.
+    public System.Collections.Generic.List<Data.Registries.CloudPaletteEntry>? Palette;
 
     public CloudPhase Phase
     {
@@ -141,6 +144,7 @@ public class PoisonCloudSystem
             GlowR = spell.CloudGlowColor.R,
             GlowG = spell.CloudGlowColor.G,
             GlowB = spell.CloudGlowColor.B,
+            Palette = spell.CloudPalette,
         });
     }
 

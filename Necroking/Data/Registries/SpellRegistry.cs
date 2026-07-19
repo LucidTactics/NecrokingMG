@@ -44,6 +44,30 @@ public class FlipbookRef
     [JsonIgnore] public EffectAlignment AlignmentEnum => _alignmentCache.Get(Alignment, EffectAlignment.Ground);
 }
 
+/// <summary>One weighted color family for a cloud spell's smoke puffs (SpellDef.CloudPalette).
+/// Weights are relative shares normalized against the list's total per tier, and puff counts
+/// are FIXED by those ratios (largest-remainder rounding), not rolled per puff — only the
+/// placement (which angle gets which family) varies per cloud. Weight = the middle+inner
+/// body rings; OuterWeight = the outer fringe ring (-1 = reuse Weight); GlowWeight = the two
+/// center glow puffs (when any entry sets it >0, the glow uses the palette instead of
+/// CloudGlowColor). Additive entries EMIT light — drawn with the A=0 premult-additive trick,
+/// Color.Intensity scaling the brightness (clips where a channel reaches 255, ~1.0
+/// effective) — while non-additive entries are normal occluding smoke.</summary>
+public class CloudPaletteEntry
+{
+    [JsonPropertyName("color")]
+    [JsonConverter(typeof(HdrColorJsonConverter))]
+    public HdrColor Color { get; set; } = new(90, 180, 55, 255, 1.0f);
+
+    [JsonPropertyName("weight")] public float Weight { get; set; } = 1f;
+
+    [JsonPropertyName("outerWeight")] public float OuterWeight { get; set; } = -1f;
+
+    [JsonPropertyName("glowWeight")] public float GlowWeight { get; set; }
+
+    [JsonPropertyName("additive")] public bool Additive { get; set; }
+}
+
 public class SpellDef : INamedDef
 {
     // ============ Top fields (ungrouped) ============
@@ -951,6 +975,12 @@ public class SpellDef : INamedDef
     [JsonPropertyName("cloudGlowColor")]
     [JsonConverter(typeof(HdrColorJsonConverter))]
     public HdrColor CloudGlowColor { get; set; } = new(80, 255, 40, 255, 1.0f);
+
+    // Optional per-puff color mix for the smoke body. When non-empty, every body puff
+    // picks ONE entry by Weight (deterministic per puff, stable across frames) instead
+    // of the derived outer/middle/inner shades of CloudColor; Additive entries emit.
+    // JSON-only for now — not surfaced in the spell editor.
+    [JsonPropertyName("cloudPalette")] public List<CloudPaletteEntry>? CloudPalette { get; set; }
 
     // ============ SACRIFICE ============
     // Sacrifice the friendly undead nearest the cursor: it dies (crumbles into a
