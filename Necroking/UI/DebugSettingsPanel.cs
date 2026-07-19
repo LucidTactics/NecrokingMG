@@ -174,12 +174,12 @@ public class DebugSettingsPanel
     // ── Layout ──────────────────────────────────────────────────────────────
     // Fixed top-left geometry, shared by draw + hit-test so they never desync.
     private const int PanX = 10;      // matches HUDRenderer.BarX
-    private const int PanW = 200;     // matches HUDRenderer.BarWidth
+    private const int PanW = 240;     // wider than HUDRenderer.BarWidth (200) so dropdown labels fit
     private const int PanY = 88;      // just under the HP/Mana bars (bottom ≈ 82)
     private const int HeaderH = 18;
     private const int RowH = 22;
     private const int Pad = 6;
-    private const int BoxW = 108;     // dropdown box on the right of each row
+    private const int BoxW = 148;     // dropdown box on the right of each row
     private const int OptH = 18;
 
     /// <summary>Panel footprint (excludes any open dropdown list). Exposed so the
