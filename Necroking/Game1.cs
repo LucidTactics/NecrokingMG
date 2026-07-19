@@ -3689,7 +3689,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         u.Subroutine = AI.WorkRoutine.WorkEnd;
     }
 
-    private void CheatAddAllSkillcounters(int necroIdx, int amount)
+    internal void CheatAddAllSkillcounters(int necroIdx, int amount)
     {
        if (necroIdx < 0 || _gameData == null) return;
 
