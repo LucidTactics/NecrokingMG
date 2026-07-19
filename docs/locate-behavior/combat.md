@@ -325,12 +325,37 @@ chains into standing units via inelastic mass³ momentum transfer, and lands wit
   (`Data/Registries/SpellRegistry.cs`, PHYSICS editor group) consumed in the Simulation
   hits loop; weapons have `TrampleKnockbackForce` (TrampleSystem).
 
-### `Necroking/Game1.Animation.cs` — the resolve trigger
-The per-unit anim tick (`~line 752`): when `animData.Ctrl.JustHitEffectFrame` fires and the
-unit has a non-none `PendingAttack`, it calls `_sim.ResolvePendingAttack(i)`. (A pending
-*spell* cast on the necromancer takes precedence via `ExecuteSpellEffect`.) So melee damage
-lands at the swing's hit frame, not at click time. `JumpSystem.cs` (`~line 392`) resolves a
-pounce's `PendingAttack` at landing.
+### `Necroking/Game1.Animation.cs` — the resolve trigger + the SwingJanitor
+The per-unit anim tick: when `animData.Ctrl.JustHitEffectFrame` fires (the one-frame edge
+set in `AnimController.Update` when `_animTime` crosses the state's `effect_time_ms` — or
+**50% of the clip when `effect_time_ms` is 0/unauthored**) and the unit has a non-none
+`PendingAttack`, it calls `AttackResolver.TryResolvePendingAttackAtImpact(_sim, i)` —
+**but only if `Ctrl.CurrentState == ResolvePendingAttackAnim(...)`** (impact integrity:
+only the actual attack anim may deliver the swing; the 50% fallback edge fires for ANY
+state incl. Run loops). A pending *spell* cast on the necromancer takes precedence via
+`ExecuteSpellEffect`. `JumpSystem.cs` resolves a pounce's `PendingAttack` at landing.
+
+**The SwingJanitor** (same loop, right after the effect-frame block): if
+`!PendingAttack.IsNone && PostAttackTimer <= 0f`, logs
+`[SwingJanitor] unit#N queued swing expired unresolved …` to the `combat` DebugLog channel
+and clears `PendingAttack`/`PendingWeaponIdx`. It exists so a swing preempted before its
+impact frame (knockdown, physics, forced state) can't resolve during a later unrelated
+anim; `CombatTransitions.cs`/`HordeMinionHandler.cs` deliberately KEEP `PendingAttack`
+across routine exits because the janitor owns expiry. **Its correctness rests on the
+invariant "the impact frame lands inside the PostAttackTimer window"** — true for melee
+(the attack-selection loop stamps `PostAttackTimer = min(cycle, GetAttackAnimDurationSec)`).
+**Ranged**: `RangedUnitHandler.TryQueueShot` now stamps `PostAttackTimer =
+ShotWindowSec(...)` (commit `3766a9d`) — derived from the Ranged1 anim's effect frame via
+`ctx.AnimMeta` (covers the 50%-of-clip fallback), floored at `PostShotFollowThrough (0.6f)`.
+**BUT `ctx.AnimMeta` is null in every real session**: `Simulation.SetAnimMeta` is called
+only once at startup (`Game1.Loading.cs` ~238) and `ResetWorldState()`'s session recreate
+loses it (`WireSimCallbacks()` doesn't re-install it) → `ShotWindowSec` silently returns
+the flat 0.6s and every archer shot whose release lands later expires unresolved
+(`NavarreLightInfantry_Archer` Ranged1 = 1330ms, `effect_time_ms:0` → 665ms release >
+600ms window). See anti-patterns-list.md "Set-once sim back-reference lost on GameSession
+recreate". Note the split: the ANIM-side release frame works fine (per-unit
+`AnimController.SetAnimMeta` reads `Game1._animMeta` directly in `BuildUnitAnimData`);
+only the AI-side window lookup goes through the sim's lost copy.
 
 ### `Necroking/AI/SubroutineSteps.cs` / combat handlers
 `GetMeleeRange(ref ctx, targetIdx)` → `MeleeRangeUtil.Compute`. Handlers that gate melee on
@@ -447,6 +472,15 @@ combat ones now in `AttackResolver`): the three funnels above + the Whiff entry 
   by Trample/Sweep external dispatchers that intentionally hit at their own ranges.
 - Use `MeleeRangeUtil.Compute`, never a hardcoded literal (the 1.5f/0.8f drift is exactly the
   bug this util was created to kill).
+- **Ranged swings can be janitor-killed before firing.** The `PostAttackTimer` window is the
+  swing's lifetime; ranged stamps a flat 0.6s (`PostShotFollowThrough`) not an anim-derived
+  one — if the ranged anim's effect frame (or the 50%-of-clip fallback when `effect_time_ms`
+  is unauthored) lands later, the arrow never spawns. Author `effect_time_ms` on ranged
+  attack anims and/or derive the window from time-to-effect.
+- `ComputeWeaponCycleSeconds` (Game1.Animation.cs) and `GetAttackAnimDurationSec`
+  (Simulation.cs) index `Stats.MeleeWeapons` even when the pending weapon is ranged
+  (`PendingWeaponIdx` then indexes `RangedWeapons`) — latent wrong-list lookup, falls back
+  to defaults today.
 
 ## Related areas
 - [ai.md](ai.md) — AI archetype handlers that decide when to engage/attack (they call

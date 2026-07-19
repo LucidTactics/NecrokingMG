@@ -39,6 +39,7 @@ public static class ScenarioRegistry
         Register("trample_no_escape", "Combat", () => new Scenarios.TrampleNoEscapeScenario());
         Register("trample_blocker", "Combat", () => new Scenarios.TrampleBlockerScenario());
         Register("trample_kill", "Combat", () => new Scenarios.TrampleKillScenario());
+        Register("archer_vs_deer", "Combat", () => new Scenarios.ArcherVsDeerScenario());
         Register("knockdown_test", "Combat", () => new Scenarios.KnockdownTestScenario());
         Register("weapon_attach_debug", "Combat", () => new Scenarios.WeaponAttachDebugScenario());
         Register("cast_point_debug", "Combat", () => new Scenarios.CastPointDebugScenario());

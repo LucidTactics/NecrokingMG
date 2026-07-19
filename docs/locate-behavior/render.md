@@ -898,3 +898,10 @@ Any new or changed visual effect must pass the zoom check before committing: eve
 constant classified (world vs px-at-32 vs screen — offsets/anchors/speeds too), ONE
 scaling policy per effect, screenshot-verified paused at zoom 8/32/128. Full protocol +
 staging recipes: [docs/vfx-zoom-audit.md](../vfx-zoom-audit.md).
+
+## Rendering anti-patterns
+The recurring draw-layer traps this doc's subsystems have paid for — screen-space constants in
+world geometry, hand-encoded (premult) draw colors / stray raw `SpriteBatch`, RT
+`DiscardContents` wipes, set-once shader uniforms, mismatched sort keys — are collected as
+principles + "what to do instead" in
+[anti-patterns-rendering.md](anti-patterns-rendering.md). Read it before touching draw code.

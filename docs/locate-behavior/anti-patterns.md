@@ -1,6 +1,16 @@
 # Anti Patterns
 *anti patterns to avoid and principles to follow*
 
+*This file holds the **generic** (everywhere) anti patterns — cross-discipline structural ones
+that recur across the whole codebase (the draw-vs-hit-test skew, animation↔gameplay coupling,
+delayed-execution timers, dependency injection). Discipline-specific anti patterns live in
+subsystem counterparts — read the relevant one before touching that layer:*
+- *[anti-patterns-rendering.md](anti-patterns-rendering.md) — draw-layer: zoom/camera
+  correctness, premultiplied-alpha color encoding, render targets, shaders, sort keys.*
+- *[anti-patterns-ui.md](anti-patterns-ui.md) — UI/editor/input: scroll/layout math,
+  stale-session refs, input-gesture/router ownership, hit-test math, hotkeys, tooltips,
+  transient-vs-persisted settings.*
+
 *Egregious anti patterns should typically be refactored whenever found even if not asked to by the user, always, tell the main claude about these when found, and log them in [anti-patterns-list.md](anti-patterns-list.md).*
 *Regular anti patterns should be documented in [anti-patterns-list.md](anti-patterns-list.md) whenever found, and if its relevant to the caller claudes request bring these up as potential refactors or fixes as he goes.*
 *All anti pattern potential that the caller claude could be thought to do as it tries to solve the problem asked for should be brought up and explain what it should try to do instead in this case.*
