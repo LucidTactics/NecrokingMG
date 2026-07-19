@@ -39,15 +39,6 @@ Look for functions being stored in big long lived classes, and those functions r
 should just call directly instead of passing them as functions.
 This just confuses us when we try to look for what calls what, or what code this class is calling.
 
-Example constructor:
-```cs
-    public RegistryCrudPanel(EditorBase ui, RegistryBase<TDef> registry, string listId,
-        string idPrefix, string newDisplayName, string noun, string savePath,
-        Action<TDef, int, int, int, int> drawDetail,
-        Action<string> setStatus, Action markUnsaved,
-        Func<string, int>? countReferences = null, Action<string>? removeReferences = null)
-```
-
 Example field thats set on game start, note this one even has tooltip saying this is superflous,
 as we are binding it to a known function.
 ```cs
