@@ -11,15 +11,20 @@ wall-collision pass integrates position. "Repath" = flow-field cache invalidatio
 1. `RebuildQuadtree()` — rebuild unit quadtree from scratch.
 2. Push `Settings.Performance` into pathfinder; `_pathfinder.BeginTick(frame)` — reset
    per-tick Dijkstra ms budget, drain deferred flow requests priority-first.
-3. `UpdateAI` (legacy `AIBehavior` switch + archetype handlers) writes `PreferredVel`
-   and/or `MoveTarget`; `BoarForageAI` / `WolfPackHuntAI` may override afterward.
-4. Dodge-hop lerp, `TrampleSystem.TickAll`, `ApplyTerrainSpeedModulation` (scales
-   `MaxSpeed` by `TerrainCosts.GetSpeedMultiplier`).
-5. `UpdateMovement(dt)` — ORCA gather+solve, stuck nudge, Newtonian accel caps,
+3. `Locomotion.UpdateSpeeds` (pre-AI) — **the ONLY runtime writer of `Unit.MaxSpeed`**:
+   ramps `Unit.EffortMult`, then composes buffed CombatSpeed × effort × `RoutineSpeedCap`
+   × paralysis × terrain × player sprint/cast-plant/rope-drag/ghost exactly once (the
+   old post-hoc `ApplyTerrainSpeedModulation` is gone — terrain is folded in here).
+4. `UpdateAI` (legacy `AIBehavior` switch + archetype handlers) writes `PreferredVel`
+   and/or `MoveTarget`; `WildUndeadJoinAI` / `BoarForageAI` / `WolfPackHuntAI` may
+   override afterward.
+5. Dodge-hop lerp, `TrampleSystem.TickAll`.
+6. `UpdateMovement(dt)` — ORCA gather+solve, stuck nudge, Newtonian accel caps,
    stuck-in-tile / stuck-in-env escapes, sub-stepped wall collision, bounds clamp.
-6. `_physics.Update` (knockback arcs own units with `InPhysics`), `Horde.UpdateStates`,
-   `UpdateFacingAngles`, `UpdateCombat`.
-7. Cleanup: `_flowFields.EvictIfNeeded()` (legacy), `_pathfinder.EvictStaleFlowFields(frame, 600)`.
+7. `_physics.Update` (knockback arcs own units with `InPhysics`), `Horde.UpdateStates`,
+   `Locomotion.UpdateLocoVectorsAndGait` (single gait selector from the smoothed loco
+   vector) + `Locomotion.UpdateFacing` (the central facing priority ladder), `UpdateCombat`.
+8. Cleanup: `_flowFields.EvictIfNeeded()` (legacy), `_pathfinder.EvictStaleFlowFields(frame, 600)`.
 
 ## Files
 
@@ -116,20 +121,47 @@ shared static — single-threaded assumption.
 other, NaN velocities, parallelizing movement.
 
 ### `Necroking/Movement/UnitModel.cs` — Unit data model + UnitArrays
-`Unit` (Position/Velocity/PreferredVel/MoveTarget/MaxSpeed/Radius/OrcaPriority/
-StuckTime/MoveEffort/GhostMode/InPhysics + all gameplay state), `MoveEffort` gait-bias
-enum, `UnitArrays` (swap-and-pop removal with O(1) `_idToIndex`), `UnitUtil.ResolveUnitIndex`.
+`Unit` (Position/Velocity/PreferredVel/MoveTarget/MaxSpeed/EffortMult/RoutineSpeedCap/
+LocoVector/Radius/OrcaPriority/StuckTime/MoveEffort/GhostMode/InPhysics + all gameplay
+state; `CachedDef`/`CachedDefKey` = memoized UnitDef), `MoveEffort` intent enum,
+`UnitArrays` (swap-and-pop removal with O(1) `_idToIndex`), `UnitUtil.ResolveUnitIndex`,
+and `UnitUtil.ResolveDef(u, gameData)` — the cheap per-tick def lookup (reference-compares
+`CachedDefKey` vs `UnitDefID`, re-resolves automatically on morph). Hot per-tick code
+should use `ResolveDef`, not string-keyed registry Gets.
 **Look/edit here when…** adding per-unit movement state; index-vs-id stability questions.
 
-### `Necroking/Movement/Locomotion.cs` — `FacingUtil` (shared turn-rate-capped rotation)
-`FacingUtil` lives in `Locomotion.cs` (there is **no** `FacingUtil.cs`).
-`TurnToward(unit, targetAngle, dt, gd)` = the turn-rate-capped rotation step used by
-`Simulation.UpdateFacingAngles` and handler FacePosition calls;
+### `Necroking/Movement/Locomotion.cs` — THE effort→speed→gait→facing home (+ `FacingUtil`)
+`Locomotion` static class = the single home for unit speed and movement-anim selection
+(see the big doc-block at the top of the file):
+- `SetEffort(unit, MoveEffort, routineCapMult?)` — AI/player declare INTENT only; no
+  speed written here.
+- `UpdateSpeeds(units, gameData, grid, dt, PlayerLocoInput)` — **the ONLY runtime writer
+  of `Unit.MaxSpeed`**, run pre-AI from `Simulation.Tick`: ramps `Unit.EffortMult` at the
+  unit's physical accel/decel rate, then composes buffed CombatSpeed × effort ×
+  `RoutineSpeedCap` × paralysis × terrain × player drag/ghost. **A new per-unit speed
+  modifier/pulse belongs at the end of this compose** — post-hoc multiplies elsewhere get
+  clobbered by write ordering (that's why `ApplyTerrainSpeedModulation` was folded in).
+- `PreferredVelToward`, `ResolveEffortSpeed`, `SprintTopSpeed`, `ResetSpeed`.
+- `UpdateLocoVectorsAndGait` (post-movement) — `Unit.LocoVector = Lerp(Velocity,
+  PreferredVel, 0.2)`; picks Idle/Walk/Jog/Run via `LocomotionProfile.PickTier` (small
+  hysteresis bands — a speed that oscillates across `JogThreshold` flaps the gait).
+- `ComputePlayback(unit, gameData, state, speed)` — the single feet-lock playback formula
+  (speed / per-gait anim velocity, clamped 0.25–3.0); called from `Game1.Animation.cs`
+  with `Velocity.Length()`, so any move-speed modulation feeds straight back into anim
+  playback rate.
+- `UpdateFacing` — the per-tick facing priority ladder (player cast-aim / loco-vector /
+  cursor; engaged target unless fleeing it; loco vector; stationary combat target).
+- `LocomotionProfile` — per-unit gait thresholds + per-gait feet-lock velocities
+  (pixel-stride calibration or CombatSpeed-derived defaults).
+
+`FacingUtil` also lives in `Locomotion.cs` (there is **no** `FacingUtil.cs`).
+`TurnToward(unit, targetAngle, dt, gd)` = the turn-rate-capped rotation step;
 `TurnTowardPosition(unit, worldTarget, dt, gd)` turns toward a world point;
 `ForwardDir(unit)` = `AngleToDir(unit.FacingAngle)` (the unit's facing vector, `FacingAngle`
 in degrees). For an **instant** face-snap (no turn cap — the `Face(vector)` equivalent),
 write `unit.FacingAngle` directly or, for the player, `Simulation.SetNecromancerFacing(deg)`.
-**Look/edit here when…** turn speed / facing snap / "which way is the unit facing".
+**Look/edit here when…** anything speed-cap related (adding a speed multiplier), gait tier
+selection, anim playback rate, turn speed / facing snap.
 
 ### `Necroking/Game/Simulation.cs` — UpdateMovement + steering entry points
 The per-frame consumer of everything above.
@@ -164,15 +196,17 @@ The per-frame consumer of everything above.
   also zero `Velocity`) in this case when the cast flag is set. The cast-in-progress flag
   (`_pendingCastAnim`) is a `Game1` field, so plumb it in like the existing inputs via a new
   `Simulation.SetNecromancerCasting(bool)` setter called next to `SetNecromancerInput`.
-- `ApplyTerrainSpeedModulation`, `UpdateFacingAngles`, `RebuildQuadtree`.
+- `RebuildQuadtree`. (Terrain speed modulation + facing moved to `Movement/Locomotion.cs`
+  — `ApplyTerrainSpeedModulation` and `UpdateFacingAngles` no longer exist.)
 - `RebuildPathfinder()` — the invalidation choke point: bake walls → `RebuildCostField`
   → env collisions → `_envIndex.Rebuild` → `_pathfinder.Rebuild()` (clears all caches).
 **Look/edit here when…** units slide during combat, get stuck on trees/walls, tunneling
 at high game speed, acceleration feel, adding a movement gate.
 
 ### `Necroking/AI/SubroutineSteps.cs` — archetype-AI move primitives
-`MoveToward(ctx, target, speed)` (same pathfind-vs-beeline split + locomotion anim),
-`SetLocomotionAnim`, `SetIdle`, `SetEffort` (MoveEffort → MaxSpeed), flee target setters
+`MoveToward(ctx, target, speed)` (same pathfind-vs-beeline split; sets
+`PreferredVel = dir * speed`, callers pass `ctx.MyMaxSpeed`), `SetLocomotionAnim`,
+`SetIdle`, `SetEffort` (thin forwarder to `Locomotion.SetEffort` — intent only), flee target setters
 (`SetFleeRandomTarget`, `SetFleeFromTarget`). All archetype handlers steer through
 these. See [ai.md](ai.md).
 **Look/edit here when…** adding a movement primitive for handlers, arrival thresholds.
