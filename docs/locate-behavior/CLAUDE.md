@@ -11,6 +11,9 @@ NOT under `.claude/`) so the finder can read **and update** it without permissio
 - **[anti-patterns-rendering.md](anti-patterns-rendering.md)** — Rendering-specific anti patterns
   (zoom/camera, premult color encoding, render targets, shaders, sort keys). Read before any
   draw-layer work.
+- **[anti-patterns-ui.md](anti-patterns-ui.md)** — UI/editor/input anti patterns (scroll/layout
+  math, stale-session refs, input-gesture & router ownership, hit-test math, hotkeys, tooltips,
+  transient-vs-persisted settings). Read before any UI/editor/input work.
 - **[anti-patterns-list.md](anti-patterns-list.md)** — Contains lists of known anti patterns already in the code.
 - **[asset-management.md](asset-management.md)** — Contains rules regarding json management etc. Always read it.
 - **`<area>.md`** — one doc per subsystem/folder (e.g. [game1-partials.md](game1-partials.md),

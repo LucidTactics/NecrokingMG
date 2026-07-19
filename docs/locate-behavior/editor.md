@@ -653,6 +653,9 @@ editor — invalidate the gesture via `InputState.ConsumeGesture()` (as `ToggleE
 and the `_menuState`-transition check already do), don't add a per-editor suppress flag.
 
 ## Related areas
+- [anti-patterns-ui.md](anti-patterns-ui.md) — UI/editor/input anti patterns, incl. the
+  ghost-replay (own mouse history), scroll/content-height double-count, degenerate-open layout
+  corruption, and hit-test-math traps documented below.
 - Runtime widget rendering/layout: `UI/RuntimeWidgetRenderer.cs`, `UI/WidgetLayoutUtils.cs`
   (see [ui.md](ui.md) for the runtime overlays/panels that consume widgets).
 - Harmonize/recolor payload: `Editor/HarmonizeSettings.cs`, `Editor/ColorHarmonizer.cs`.

@@ -623,6 +623,10 @@ minimap fog behavior, changing the editor click/drag controls (`MinimapLayer`), 
 something (editor world labels) draws on top of the minimap.
 
 ## Cross-links
+- [anti-patterns-ui.md](anti-patterns-ui.md) — the recurring UI/editor/input traps as don't-do
+  anti patterns (scroll/layout math, stale-session refs, input-gesture & router ownership,
+  hit-test math, hotkeys, tooltip z-order/clipping, transient-vs-persisted settings). Read
+  before UI/input work.
 - [corpses.md](corpses.md) — corpse data model, pile gather/withdraw (`TryTakeCorpseFromPile`,
   `FindCorpsePileUnderCursor` in `Game1.cs`).
 - [world.md](world.md) — env objects, foragables, boar belly spit-on-death.
