@@ -35,12 +35,13 @@ There is now one canonical way to sever animation↔gameplay coupling. It has tw
 compose; reach for them whenever you'd otherwise write `if (ctrl.IsAnimFinished) { …gameplay… }`
 or read an animation clock to decide *when* something happens:
 
-1. **Fire the gameplay event later** — `Necroking.Game.ScheduledEvents` (`Necroking/Game/ScheduledEvents.cs`),
-   reachable as `_sim.ScheduledEvents`. `Schedule(delaySeconds, () => …)` runs a callback on the
-   **sim clock** (ticked in `Simulation.Tick`, before the table-craft tick — deterministic, runs
-   headless). Returns a handle for `Cancel`. The callback should re-validate its target (ids can go
-   stale) and, per "direct over inject", closes over ids/indices and calls `Game1.Instance`/sim
-   methods directly rather than carrying injected delegates.
+1. **Fire the gameplay event later** — `Necroking.Game.ScheduledTasks` (`Necroking/Game/ScheduledTasks.cs`),
+   reachable as `_sim.Tasks`. Declare a named `ScheduledTask` subclass and
+   `_sim.Tasks.Schedule(new MyTask {…}, delaySeconds)` — it fires on the **sim clock** (ticked in
+   `Simulation.Tick`, before the table-craft tick — deterministic, runs headless). Returns a handle
+   for `Cancel`. `Fire()` should re-validate its target (ids can go stale) and, per "direct over
+   inject", carries ids/indices as fields and calls `Game1.Instance`/sim methods directly rather
+   than injected delegates. See the "uniform delayed execution" principle below for the full rules.
 2. **Make the animation reflect that clock** — `Necroking.Render.AnimTiming`
    (`Necroking/Render/AnimTiming.cs`). `FitOneShot(ctrl, state, targetSeconds)` returns the
    `PlaybackSpeed` that makes one play of a clip last exactly `targetSeconds`; `FitChannel(...)` fits a
@@ -53,12 +54,47 @@ clip's natural length picked once); the animation is *fitted* to it and never ad
 never waits on `IsAnimFinished`.
 
 **Worked example — necro-bench corpse drop (the fix that retired the egregious entry below):**
-`Game1.BeginCorpsePutDown` sets the visual PutDown phase and `Schedule`s the transfer+craft at the clip's
+`Game1.BeginCorpsePutDown` sets the visual PutDown phase and schedules a `CorpsePutDownTask` at the clip's
 `NaturalSeconds`; `Game1.CompleteCorpsePutDown` (fired from the sim clock) does the corpse transfer,
 `StartTableCraft`, and clears the phase — the animation returns to Idle on its own. The craft *loop* itself
 is fitted to `ProcessTime` via `AnimTiming.FitChannel` in `Game1.Animation.cs` (imbue-table block), with
 `TableCraftingSystem.Tick` completing on the same `LoopBudget`. `ChannelPlaybackSpeed` (reanimation casts)
 also delegates to `FitChannel` — one source of truth for the fit math.
+
+## Principle: Delayed execution goes through the ScheduledTask framework, not timer fields on persistent objects
+
+All "do X after N seconds" / "do X every N seconds" behavior has ONE canonical home:
+`Necroking.Game.ScheduledTasks` (`Necroking/Game/ScheduledTasks.cs`), reachable as `_sim.Tasks`
+for sim-clock work. You declare a **named `ScheduledTask` subclass** (never an anonymous
+lambda/Action) next to the domain code it serves, carrying the ids it needs as fields; its
+`Fire()` re-validates targets and calls `Game1.Instance`/sim directly. Repeating work re-arms
+itself with `Repeat(seconds)` from inside `Fire()`. Because every task is a named class, the
+active queue is inspectable — the `tasks` dev command lists them, and the `"tasks"` DebugLog
+channel traces schedule/fire/cancel. Sim tasks die with the Simulation on map reload, so no
+per-system Clear-on-restart bookkeeping.
+
+Worked examples to copy: `CorpsePutDownTask` (Game1.Crafting.cs, one-shot),
+`ReanimRiseTask` (Game1.Spells.cs, one-shot with spawn payload),
+`ProjectileVolleyTask` (Game/SpellEffectSystem.cs, repeating via `Repeat`).
+
+### **Anti Pattern**: Hand-ticked countdown fields on normal persistent objects
+A long-lived system/Game1 holding `_someTimer -= dt; if (_someTimer <= 0f) DoThing();` (or the
+accumulate-to-interval variant) and a hand-written Tick call threaded through the frame. Each one
+is an invisible mini-scheduler: unlistable, unloggable, needs its own clear-on-restart, and
+usually copy-pastes the same decrement/compare boilerplate. When you find one — or are about to
+write one — use `_sim.Tasks` with a declared task subclass instead (a repeating task via
+`Repeat` for the every-N-seconds scans). Known remaining instances are censused in
+[anti-patterns-list.md](anti-patterns-list.md).
+
+### Exception: timers that ARE the object's lifetime stay in the object
+A duration that is **thematically the object's own state** should live in the object, not the
+scheduler: a projectile's flight time, a buff's `RemainingDuration`, a poison cloud's TTL, a
+spell's channel duration, per-unit bulk timer arrays in `Simulation` (DodgeTimer, RoutTimer, …)
+ticked in tight loops. These are queryable state ("how much is left?") owned by an entity whose
+death must take the timer with it — porting them would split state from its owner (and per-task
+heap objects in hot per-unit loops would regress perf). The test: *if the object died right now,
+would the timer be meaningless?* Yes → keep it in the object. If instead the timer is "the system
+does something later/periodically", it belongs in `ScheduledTasks`.
 
 ## Principle: No dependence injection class patterns
 Call functions directly instead. Passing functions into objects should only be done when we add

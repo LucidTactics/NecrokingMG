@@ -223,7 +223,7 @@ target, slot, pending)`. AI casts pass `slot = -1` and a scratch `PendingSpellCa
 (which must survive multi-second cast anims/channels). Beam/Drain channels for AI run on
 `Unit.ChannelTimer` (armed by `SpellEffectSystem.StartChannel` when slot < 0, ticked +
 cancelled by `CasterUnitHandler`); the player's channel stays keyed to the held slot
-(`Game1._channelingSlot`). Multi-shot volleys (`Game1._pendingProjectiles`) carry
+(`Game1._channelingSlot`). Multi-shot volleys (`ProjectileVolleyTask` on `_sim.Tasks`) carry
 `CasterUid` and track that caster's hand — dropped if the caster dies. Mana regen +
 cooldown ticking for units still live ONLY in `CasterUnitHandler.Update` (the old
 single-float `Unit.SpellCooldownTimer` is gone). **Player-only remains**: cast

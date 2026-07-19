@@ -4,7 +4,7 @@ namespace Necroking.Render;
 
 /// <summary>
 /// The "make the animation fit the gameplay clock" half of the timing-vs-animation
-/// pattern (its sibling is <see cref="Necroking.Game.ScheduledEvents"/>, the "fire a
+/// pattern (its sibling is <see cref="Necroking.Game.ScheduledTasks"/>, the "fire a
 /// gameplay event later" half).
 ///
 /// The anti-pattern this exists to kill: gameplay reads <c>AnimController.IsAnimFinished</c>

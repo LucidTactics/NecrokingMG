@@ -99,6 +99,18 @@ public partial class Game1
         return true;
     }
 
+    /// <summary>Scheduled resolution of a corpse put-down: the delay is the PutDown clip's
+    /// length, the payload is <see cref="CompleteCorpsePutDown"/>. Queued by
+    /// <see cref="BeginCorpsePutDown"/> on the sim clock (<c>_sim.Tasks</c>).</summary>
+    sealed class CorpsePutDownTask : ScheduledTask
+    {
+        public int CorpseId;
+        public int TableIdx;
+        public override string Describe() => $"CorpsePutDown(corpse={CorpseId}, table={TableIdx})";
+        protected internal override void Fire()
+            => Instance.CompleteCorpsePutDown(CorpseId, TableIdx);
+    }
+
     /// <summary>Begin a corpse put-down (onto a craft table, or the ground when
     /// <paramref name="tableIdx"/> &lt; 0). Enters the visual PutDown phase AND schedules the
     /// gameplay resolution on the sim clock — the transfer/craft no longer waits on the
@@ -107,7 +119,7 @@ public partial class Game1
     /// The scheduled delay is the natural length of the PutDown clip, so the speed-1 animation
     /// lands exactly as the event fires; if the clip has no timing we fall back to a fixed
     /// duration and the animation still just reflects it. Caller sets the corpse's LerpStartPos
-    /// (table spawn slot vs. ground drop point) before calling. See ScheduledEvents /
+    /// (table spawn slot vs. ground drop point) before calling. See ScheduledTasks /
     /// Render.AnimTiming for the pattern.</summary>
     internal void BeginCorpsePutDown(int necroIdx, int tableIdx)
     {
@@ -126,11 +138,12 @@ public partial class Game1
         }
 
         // corpseId/tableIdx are stable across index churn; resolve the necromancer at fire time.
-        _sim.ScheduledEvents.Schedule(putDownSeconds, () => CompleteCorpsePutDown(corpseId, tableIdx));
+        _sim.Tasks.Schedule(new CorpsePutDownTask { CorpseId = corpseId, TableIdx = tableIdx },
+            putDownSeconds);
     }
 
     /// <summary>Resolve a scheduled corpse put-down (fired from Simulation.Tick via
-    /// ScheduledEvents): load the carried corpse into the table slot and remove it from the sim
+    /// CorpsePutDownTask): load the carried corpse into the table slot and remove it from the sim
     /// (table drop), or settle it flat at the drop point (ground drop), then clear carry state
     /// and auto-start the craft. Re-validates the necromancer is still mid-PutDown carrying this
     /// exact corpse, so a stale event (interaction cancelled, corpse gone) is a safe no-op.</summary>

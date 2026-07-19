@@ -183,7 +183,7 @@ public class Simulation
     private readonly System.Collections.Generic.List<uint> _moraleScratch = new();
     private int _nextCorpseID;
     private readonly List<PendingZombieRaise> _pendingZombieRaises = new();
-    private readonly ScheduledEvents _scheduledEvents = new();
+    private readonly ScheduledTasks _tasks = new();
     private readonly List<GameSystems.AISpellCastRequest> _pendingAISpellCasts = new();
     private readonly PlayerResources _playerResources = new() { Essence = 100, MaxEssence = 100 };
 
@@ -360,10 +360,11 @@ public class Simulation
     public EnvironmentSystem? EnvironmentSystem => _envSystem;
     public WallSystem? WallSystem => _wallSystem;
     public List<PendingZombieRaise> PendingZombieRaises => _pendingZombieRaises;
-    /// <summary>Deferred gameplay-event queue: schedule an action to fire N seconds from now
-    /// on the sim clock instead of gating it on an animation finishing. See
-    /// <see cref="ScheduledEvents"/> and its sibling <see cref="Necroking.Render.AnimTiming"/>.</summary>
-    public ScheduledEvents ScheduledEvents => _scheduledEvents;
+    /// <summary>Deferred gameplay-task queue: schedule a <see cref="ScheduledTask"/> subclass
+    /// to fire N seconds from now on the sim clock instead of gating it on an animation
+    /// finishing or hand-ticking a countdown field. See <see cref="ScheduledTasks"/> and its
+    /// sibling <see cref="Necroking.Render.AnimTiming"/>.</summary>
+    public ScheduledTasks Tasks => _tasks;
     /// <summary>Spell casts requested by AI archetype handlers this tick (via
     /// AIContext.SpellCasts). Game1.DrainAISpellCasts runs them through the shared
     /// SpellCaster + SpellEffectSystem pipeline right after the tick. Cleared at the
@@ -610,13 +611,14 @@ public class Simulation
         GameSystems.WeaponBonusEffectSystem.Tick(_units, dt);
         PhaseEnd("potions");
 
-        // Deferred gameplay events (corpse put-down → table load + craft start, etc.).
-        // Fired here, before the table-craft tick below, so a scheduled StartTableCraft is
-        // picked up the same frame. Decoupled from animation: these fire on the sim clock,
-        // never on IsAnimFinished. See ScheduledEvents / Render.AnimTiming.
+        // Deferred gameplay tasks (corpse put-down → table load + craft start, reanim
+        // rises, volley follow-up shots, etc.). Fired here, before the table-craft tick
+        // below, so a scheduled StartTableCraft is picked up the same frame. Decoupled from
+        // animation: these fire on the sim clock, never on IsAnimFinished. See
+        // ScheduledTasks / Render.AnimTiming.
         PhaseStart();
-        _scheduledEvents.Tick(dt);
-        PhaseEnd("scheduled_events");
+        _tasks.Tick(dt);
+        PhaseEnd("scheduled_tasks");
 
         // Table crafting timer + completion. Runs after AI-derived state from the
         // previous frame is visible (units' Routine/Subroutine fields drive whether

@@ -563,10 +563,10 @@ public partial class Game1
                         break;
 
                     case 5: // PutDown — VISUAL ONLY. The corpse transfer + craft start fire
-                        // from a scheduled sim event (Game1.CompleteCorpsePutDown), NOT from
+                        // from a scheduled sim task (Game1.CompleteCorpsePutDown), NOT from
                         // IsAnimFinished. Gameplay owns the clock; this just plays the clip and
                         // keeps the carried body's facing synced. See BeginCorpsePutDown /
-                        // ScheduledEvents / Render.AnimTiming.
+                        // ScheduledTasks / Render.AnimTiming.
                         if (animData.Ctrl.CurrentState != AnimState.PutDown)
                             animData.Ctrl.ForceState(AnimState.PutDown);
                         {
@@ -926,7 +926,8 @@ public partial class Game1
 
         _effectManager.Update(dt);
         _reanimFx.Update(dt);
-        TickPendingReanimRises(dt);   // spawn deferred rises in lockstep with their effect clock
+        // (Deferred reanim rises fire from _sim.Tasks — same WorldDt clock as _reanimFx,
+        // so the rise stays in lockstep with its effect.)
         _buffVisuals.Update(dt, _sim.Units, _gameData.Buffs, _gameTime);
         _foragables.Update(dt);
         Toasts.Update(dt);

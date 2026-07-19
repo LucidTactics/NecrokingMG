@@ -16,18 +16,37 @@ public partial class Game1 {
    // The composite rise effect (ReanimEffectSystem) plays at the grave the instant the
    // spell resolves, but the reanimated unit only spawns + plays its slow standup a short
    // delay later, so the smoke/clouds build up before the body actually gets up.
-   private struct PendingReanimRise
+   /// <summary>Scheduled unit spawn at the end of a composite reanimation rise: removes the
+   /// source corpse cleanly, spawns the horde minion with its slow standup, and attaches the
+   /// already-running effect's outline. Queued by <see cref="QueueReanimRise"/> on the sim
+   /// clock (<c>_sim.Tasks</c>), so pending rises die with the Simulation on map reload.</summary>
+   sealed class ReanimRiseTask : ScheduledTask
    {
       public Vec2 Pos;
       public float Facing;
-      public string DefId;
+      public string DefId = "";
       public int FxInstanceId;   // ReanimEffectSystem handle, so the outline attaches on spawn
       public int CorpseId;       // source corpse (-1 = none, e.g. table-craft) — removed cleanly when the unit rises
-      public float Timer;
       public float StandupSpeed; // Standup anim playback speed (0.5 = the default slow rise)
       public Action<int>? OnSpawned;  // runs on the freshly-spawned unit (e.g. apply crafted item bonuses)
+
+      public override string Describe() => $"ReanimRise({DefId}, corpse={CorpseId})";
+
+      protected internal override void Fire()
+      {
+         var g = Instance;
+         if (CorpseId >= 0)
+            g._sim.RemoveCorpseClean(CorpseId);   // body vanishes cleanly as the unit takes its place
+         int idx = g._sim.SpawnZombieMinion(DefId, Pos);
+         if (idx >= 0)
+         {
+            g._sim.UnitsMut[idx].FacingAngle = Facing;
+            BuffSystem.BeginReanimationRise(g._sim.UnitsMut, idx, StandupSpeed);
+            g._reanimFx.SetUnitId(FxInstanceId, g._sim.Units[idx].Id);
+            OnSpawned?.Invoke(idx);
+         }
+      }
    }
-   private readonly List<PendingReanimRise> _pendingReanimRises = new();
 
    /// <summary>Bridge for sim-layer raises (potion / on-death / table-craft): resolve the zombie
    /// type and route through the SAME composite reanimation pipeline as spells. Wired to
@@ -100,7 +119,7 @@ public partial class Game1 {
 
       // Composite effect: claim the corpse (other systems skip ConsumedBySummon) but leave
       // Dissolving=false so it stays fully visible; the renderer draws the green outline + morph on it.
-      // The unit spawns + the corpse is removed cleanly after the delay (TickPendingReanimRises).
+      // The unit spawns + the corpse is removed cleanly after the delay (ReanimRiseTask).
       if (corpseIdx >= 0) _sim.Corpses[corpseIdx].ConsumedBySummon = true;
       int fxId = _reanimFx.Begin(GameConstants.InvalidUnit, pos, scale, configId,
                                  outlineFadeIn: delay, morphHold: MathF.Max(0f, delay - 1.5f),
@@ -110,34 +129,9 @@ public partial class Game1 {
          _sim.Corpses[corpseIdx].ReanimInstanceId = fxId;
          _sim.Corpses[corpseIdx].ReanimZombieDefId = defId;   // morph targets the zombie's standup pose
       }
-      _pendingReanimRises.Add(new PendingReanimRise
+      _sim.Tasks.Schedule(new ReanimRiseTask
          { Pos = pos, Facing = facing, DefId = defId, FxInstanceId = fxId, CorpseId = corpseId,
-           Timer = spawnDelay, StandupSpeed = standupSpeed, OnSpawned = onSpawned });
-   }
-
-   /// <summary>Tick queued rises (called each sim step alongside the effect update). When a
-   /// delay elapses, spawn the horde minion, start its slow standup, and attach its outline
-   /// to the already-running effect.</summary>
-   void TickPendingReanimRises(float dt)
-   {
-      for (int i = _pendingReanimRises.Count - 1; i >= 0; i--)
-      {
-         var pr = _pendingReanimRises[i];
-         pr.Timer -= dt;
-         if (pr.Timer > 0f) { _pendingReanimRises[i] = pr; continue; }
-         _pendingReanimRises.RemoveAt(i);
-
-         if (pr.CorpseId >= 0)
-            _sim.RemoveCorpseClean(pr.CorpseId);   // body vanishes cleanly as the unit takes its place
-         int idx = _sim.SpawnZombieMinion(pr.DefId, pr.Pos);
-         if (idx >= 0)
-         {
-            _sim.UnitsMut[idx].FacingAngle = pr.Facing;
-            BuffSystem.BeginReanimationRise(_sim.UnitsMut, idx, pr.StandupSpeed);
-            _reanimFx.SetUnitId(pr.FxInstanceId, _sim.Units[idx].Id);
-            pr.OnSpawned?.Invoke(idx);
-         }
-      }
+           StandupSpeed = standupSpeed, OnSpawned = onSpawned }, spawnDelay);
    }
 
    /// <summary>
@@ -580,62 +574,8 @@ public partial class Game1 {
       DebugLog.Log("ai", $"[PoisonBerries] start: bushIdx={bushIdx} buff={buffID} item={itemID}");
    }
 
-   void TickPendingProjectiles(float dt) {
-      for (int i = _pendingProjectiles.Count - 1; i >= 0; i--) {
-         var pg = _pendingProjectiles[i];
-
-         // Follow-up shots track the group's OWN caster (player or AI) by stable
-         // id; a caster that died mid-volley stops shooting.
-         int casterIdx = _sim.ResolveUnitID(pg.CasterUid);
-         if (casterIdx < 0 || !_sim.Units[casterIdx].Alive) {
-            _pendingProjectiles.RemoveAt(i);
-            continue;
-         }
-
-         var spell = _gameData.Spells.Get(pg.SpellID);
-
-         // Player volleys chase the live cursor: each follow-up shot re-aims at the
-         // current cursor world position. The cursor only UPDATES the aim point — when
-         // it's invalid this frame (_cursorAimWorld null: unfocused window, cursor
-         // outside the viewport) the group keeps its last valid target. AI volleys
-         // share this list and must not track the player's cursor. Barrages opt out
-         // (TracksCursor=false) so the whole spread doesn't home onto the cursor.
-         if (_cursorAimWorld.HasValue && spell != null && spell.TracksCursor
-             && _sim.Units[casterIdx].AI == AIBehavior.PlayerControlled)
-            pg.Target = _cursorAimWorld.Value;
-
-         pg.Timer += dt;
-         if (pg.Timer >= pg.Interval) {
-            pg.Timer -= pg.Interval;
-            pg.Remaining--;
-
-            if (spell != null) {
-               // Re-sample the spread around the group's base target for THIS shot, so
-               // a barrage scatters evenly over its disc instead of retracing one line.
-               var shotTarget = GameSystems.SpellEffectSystem.VolleyAimPoint(spell, pg.Target, _rng);
-               // Re-resolve mastery per shot so follow-up volley shots scale the
-               // same as the first (buffs could even shift mid-volley).
-               int shotMastery = GameSystems.SpellEffectSystem.MasteryLevelsFor(
-                  spell, _gameData, _sim.UnitsMut, casterIdx);
-               // Same sprite-rig → physical conversion (+Z) as the first shot in
-               // SpellEffectSystem.Execute — follow-ups used to launch lower and
-               // to ignore an airborne caster's Z.
-               GameSystems.SpellEffectSystem.SpawnProjectile(spell, _sim.Projectiles,
-                  _sim.Units[casterIdx].EffectSpawnPos2D, shotTarget, pg.CasterUid,
-                  _sim.Units[casterIdx].EffectSpawnHeight / _camera.YRatio
-                     + _sim.Units[casterIdx].Z,
-                  _sim.Units[casterIdx].Faction, shotMastery);
-            }
-
-            if (pg.Remaining <= 0) {
-               _pendingProjectiles.RemoveAt(i);
-               continue;
-            }
-         }
-
-         _pendingProjectiles[i] = pg;
-      }
-   }
+   // (Multi-projectile follow-up shots are ProjectileVolleyTask in SpellEffectSystem.cs,
+   // scheduled on _sim.Tasks.)
 
    // Scratch targeting record for AI casts — reset by every TryStartSpellCast and
    // consumed immediately by ExecuteSpellEffect within the same drain iteration, so

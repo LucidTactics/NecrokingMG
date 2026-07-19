@@ -752,7 +752,7 @@ in `Data/Registries/` (not yet documented) — that's where you register a new e
 What lives here: a preset-driven, multi-part effect played at a grave on reanimate; it's
 handle-based (returns an `FxInstanceId`) so an outline can attach to the spawning unit.
 Look/edit here when: the reanimate/raise visual is wrong. Driven from `Game1.Spells.cs`
-(`QueueReanimRise`/`TickPendingReanimRises`) with a preset id from `SpellRegistry`.
+(`QueueReanimRise`/`ReanimRiseTask`) with a preset id from `SpellRegistry`.
 
 ### Particle systems
 - `Necroking/Render/BuffVisualSystem.cs` (`WPParticle`) — buff-aura particles.

@@ -80,6 +80,12 @@ public partial class Game1 {
                break;
             }
 
+            // List the sim's currently scheduled delayed-execution tasks (ScheduledTasks):
+            // one line per pending task with its name, seconds left, and handle.
+            case "tasks":
+               c.Complete(Necroking.Dev.DevServer.Ok(_sim.Tasks.DescribeActive()));
+               break;
+
             // Memory diagnostic: managed heap before/after a forced compacting GC, plus
             // process private/working set. If managedAfter stays high across map reloads it's
             // a managed retained-reference leak; if managed stays flat but priv climbs it's a

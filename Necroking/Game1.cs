@@ -852,12 +852,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         }
     }
 
-    // Pending projectiles (multi-projectile delay)
-    internal readonly List<GameSystems.PendingProjectileGroup> _pendingProjectiles = new();
     // Cursor aim point for player volleys, refreshed each running frame; null when the
     // cursor can't be trusted (window unfocused, cursor outside the viewport) so
-    // TickPendingProjectiles keeps each group's last valid target instead.
-    Vec2? _cursorAimWorld;
+    // ProjectileVolleyTask keeps its last valid target instead.
+    internal Vec2? _cursorAimWorld;
 
     // Editors
     internal MapEditorWindow _mapEditor = new();
@@ -954,7 +952,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal readonly UI.DebugSettingsPanel _debugPanel = new();
     // (ForagableWiggleRange moved to GameRenderer.)
 
-    // DamageNumber and PendingProjectileGroup moved to GameSystems.SpellEffectSystem
+    // DamageNumber and ProjectileVolleyTask moved to GameSystems.SpellEffectSystem
 
     /// <summary>The draw pipeline, split out of Game1 into its own class (the former
     /// Game1.Render*.cs partials). Reaches back into Game1 state via a reference to this.</summary>
@@ -1389,7 +1387,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _reanimFx.Clear();
         _buffVisuals.Clear();
         _tethers.Clear(); _tetherAnchor = null; _tetherDustAccum.Clear();
-        _pendingProjectiles.Clear();
+        // (Pending volleys / reanim rises / put-downs live in _sim.Tasks and die with
+        // the old Simulation instance — nothing to clear here.)
         // Dev camera/walk overrides are per-world: a detached camera or a stale
         // walk goal from the previous map must not survive a reload (the camera
         // would stop following the new necromancer / the necro would auto-walk
@@ -3072,7 +3071,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
 
             // Publish the cursor as a volley aim point only while it's trustworthy;
             // otherwise player volleys hold their last valid target (see
-            // TickPendingProjectiles).
+            // ProjectileVolleyTask).
             _cursorAimWorld = (!unfocused && !cursorOutside) ? mouseWorld : (Vec2?)null;
 
             if (necroIdx >= 0)
@@ -3245,11 +3244,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // TimeControlsLayer / CoreMenuButtonsLayer in the router dispatch
             // above — notably the time controls now also work while paused,
             // fixing the one-way mouse pause button.)
-
-            // --- Tick pending projectiles ---
-            // Gameplay consumes the WORLD domain (== dt inside this gate, but explicit
-            // so a future move outside the gate can't silently pick up editor-live dt).
-            TickPendingProjectiles(_clock.WorldDt);
 
             // --- Simulate ---
             _sim.Tick(_clock.WorldDt);
