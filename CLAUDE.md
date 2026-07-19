@@ -1,10 +1,5 @@
 # Necroking (MonoGame C#) - Claude Code Instructions
 
-## North Star: Satisfaction
-The project's design philosophy ("does this satisfy? — anticipation that gets
-rewarded") lives in [docs/north-star.md](docs/north-star.md). Read it when designing
-or refining a player-facing system (combat, spells, reanimation, crafting, automation).
-
 ## Git Policy
 - **Commits**: OK to commit freely when a feature is known to be working. Good initiative.
 - **Branches**: Always commit to master. User doesn't understand branch management well.
@@ -21,8 +16,6 @@ without opening it:
 - **After a working commit, offer to push** — *"committed and builds — push to origin now?"*
 - **If the branch is ahead of origin, surface it** and prompt to push (still ask permission) so the friend's clone stays in sync.
 - **Pull before fresh work**; if it won't fast-forward, stop and tell the user.
-- **Never commit `user settings/`** (gitignored per-machine `settings.json`/`weather.json`/`spellbar.json`).
-- **If a commit contains a new large file (above ~100kb), confirm with user before committing it, we probably want to gitignore it.
 
 ## Build
 ```bash
@@ -225,7 +218,3 @@ CLAUDE.md. Current contents:
 - [docs/big-refactors.md](docs/big-refactors.md) — how to run large multi-agent (ultracode/Workflow) refactors safely: what goes wrong (a stray `git stash` in the shared working tree corrupted a run), the forbid-git / verify-on-disk discipline, and a pre-flight checklist.
 - [docs/known-platform-bugs.md](docs/known-platform-bugs.md) — framework/OS bugs we've hit + the workaround in use (e.g. MonoGame's `IsActive` is stale when launched unfocused → poll `WindowChrome.IsForegroundWindow()`); check before fixing a symptom that smells like the engine lying.
 - [docs/OutOfContext_Skills/](docs/OutOfContext_Skills/README.md) — heavyweight, **explicitly-user-invoked** procedures deliberately NOT registered as skills (zero per-session context cost). When the user asks to run one (e.g. "re-run the dup review"), open that README's index and follow the procedure.
-
-## C++ Migration
-
-This project migrated from ../Necroking, refer to its files when trying to reimplement features that worked there.
