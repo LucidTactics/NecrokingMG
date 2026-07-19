@@ -187,12 +187,6 @@ public partial class Game1
             int necroIdx = FindNecromancer();
             if (necroIdx >= 0) ToggleGodMode(necroIdx);
         }, shift: ModReq.Down, name: "God mode");
-        // Cheat / debug to test the skill tree.
-        HotkeySystem.Register(HotkeyContext.Gameplay, Keys.O, () =>
-        {
-            int necroIdx = FindNecromancer();
-            if (necroIdx >= 0) CheatAddAllSkillcounters(necroIdx, 10);
-        }, shift: ModReq.Down, name: "Add skill points");
 
         // Corpse / world interaction — see Game1.WorldClicks.cs.
         HotkeySystem.Register(HotkeyContext.Gameplay, Keys.F,
