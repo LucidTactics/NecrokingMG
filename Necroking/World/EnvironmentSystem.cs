@@ -541,10 +541,16 @@ public class EnvironmentSystem
             float scaleSeed = (seed * 1337f) % 1;
             scale = (_defs[defIndex].ScaleMin + (_defs[defIndex].ScaleMax - _defs[defIndex].ScaleMin) * scaleSeed);
         }
+        else
+        {
+            seed = Random.Shared.NextSingle();
+            float scaleSeed = (seed * 1337f) % 1;
+            scale = (_defs[defIndex].ScaleMin + (_defs[defIndex].ScaleMax - _defs[defIndex].ScaleMin) * scaleSeed);
+        }
         var obj = new PlacedObject
         {
             DefIndex = defIndex, X = x, Y = y, Scale = scale,
-            Seed = seed < 0 ? Random.Shared.NextSingle() : seed,
+            Seed = seed,
             ObjectID = $"obj_{_nextObjectID++}",
             Persistent = persistent
         };
