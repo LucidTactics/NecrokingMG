@@ -243,7 +243,7 @@ when you want to know whether similar code already exists. The finder can be *as
 the query, but nothing routes to it automatically.
 
 **Declined design (kept for the record) — extend the locate-behavior finder** (would have
-edited `docs/locate-behavior/README.md` + a paragraph in the skill's SKILL.md; the finder
+edited `docs/locate-behavior/CLAUDE.md` + a paragraph in the skill's SKILL.md; the finder
 agent shim's tool list already includes Bash). Under it, when the ask involved *adding* code
 (vs. just finding existing behavior), the finder would additionally:
 1. Derives facets for the intended code from `store/taxonomy.md` — pick verb, target,
@@ -367,7 +367,7 @@ Built this session (ordered; 1–3 unlocked everything else):
 4. [x] `docs/OutOfContext_Skills/dup-review/` — `SKILL.md` (pipeline §2.2, budgets §2.3,
    user-invoked-only), `labeler-prompt.md`, `judge-prompt.md`. Plus `!docs/OutOfContext_Skills/dup-review/`
    in `.gitignore`.
-5. [ ] **DECLINED by the user** — `docs/locate-behavior/README.md` "Similar existing code"
+5. [ ] **DECLINED by the user** — `docs/locate-behavior/CLAUDE.md` "Similar existing code"
    step. Not built and not to be built; the manual `label_store.py query` CLI is the
    authoring-time path instead.
 6. [ ] `CLAUDE.md` pointer lines — **not done this build** (CLAUDE.md was out of the build

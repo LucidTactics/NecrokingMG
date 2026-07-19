@@ -43,5 +43,5 @@ The map is intentionally incomplete and self-extends on demand. The finder owns 
 workflow (read overview → open 1–3 area docs → verify with LSP/Grep → self-heal missing
 or stale docs → answer). Running it in a subagent keeps all that reading out of the main
 context; you pay only for the conclusion. Full behavior lives in
-`docs/locate-behavior/README.md` (the finder's operating manual), with the agent shim at
+`docs/locate-behavior/CLAUDE.md` (the finder's operating manual), with the agent shim at
 `.claude/agents/locate-behavior-finder.md`.

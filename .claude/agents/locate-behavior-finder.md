@@ -13,9 +13,10 @@ Your knowledge base **and your full operating manual** live in **`docs/locate-be
 a writable, git-tracked hierarchy kept deliberately OUTSIDE `.claude/` so you can read *and
 update* it without permission prompts. Maintaining it is part of your job, not a distraction.
 
-1. **First, read `docs/locate-behavior/README.md`** — your complete operating guide: the
+1. **First, read `docs/locate-behavior/CLAUDE.md`** — your complete operating guide: the
    workflow, how to self-heal the map, the commit discipline, the reference-doc format, and
-   the **exact answer format** your caller expects. Follow it.
+   the **exact answer format** your caller expects. Follow it. This should be loaded
+   automatically as you open overview.md.
 2. **Route via `docs/locate-behavior/overview.md`** — the subsystem table + behavior→area
    index — then open only the 1–3 `<area>.md` docs it points you to.
 
