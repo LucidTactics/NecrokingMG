@@ -92,4 +92,4 @@ Use delegates for map/reduce or other such functional jobs, but not for dependen
    and you leave the map better than you found it — ad-hoc grepping skips that and is the
    thing to avoid. Grep/Glob/LSP are for *verifying* a symbol the skill pointed you at, not
    for the initial "where is this" search.
-5. **Use `locate-behaviour` again after scope changed significantly!** - We always want a well grounded understanding of the code we work on.
+2. **Use `locate-behavior` again after scope changed significantly!** — we always want a well-grounded understanding of the code we work on.

@@ -146,7 +146,7 @@ Use this to pick a starting area. When the routed area isn't documented yet, doc
 - **Dev/test commands driving the running game** → game1-partials.md (`Game1.Dev.cs` → `ExecuteDevCommand`) + `Dev/`.
 - **Headless regression tests / writing or extending a `--scenario`** → [scenarios.md](scenarios.md) (`Scenario/ScenarioBase.cs` contract, `ScenarioRegistry.cs` registration, `Game1.cs` `StartScenario` run path; and `docs/testing-scenarios.md`).
 - **Balance testing / unit matchup tournaments / win-rate & casualty statistics / batch simulated fights** → [scenarios.md](scenarios.md) (`Scenario/Scenarios/BalanceMatrixScenario.cs` = the arena-duel harness: spawn-side setup, swing self-resolution at batched speed, faction-count winner detection, `log/balance_results.json`; report = `tools/balance_report/make_report.py`).
-- **networking / multiplayer** [networking.md]
+- **Multiplayer networking / packet wire format / `Necroking/Net/`** → [networking.md](networking.md) (brittle transport core — read before touching).
 
 ## When you extend the map
 

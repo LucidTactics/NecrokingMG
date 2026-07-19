@@ -1,8 +1,8 @@
 ### How to read this doc
 *anti patterns to avoid and principles to follow*
 
-*Egregious anti patterns should typically be refactored whenever found even if not asked to by the user, always, tell the main claude about these when found, and log them in [anti-patterns-list.md].*
-*Regular anti patterns should be documented in [anti-patterns-list.md] whenever found, and if its relevant to the caller claudes request bring these up as potential refactors or fixes as he goes.*
+*Egregious anti patterns should typically be refactored whenever found even if not asked to by the user, always, tell the main claude about these when found, and log them in [anti-patterns-list.md](anti-patterns-list.md).*
+*Regular anti patterns should be documented in [anti-patterns-list.md](anti-patterns-list.md) whenever found, and if its relevant to the caller claudes request bring these up as potential refactors or fixes as he goes.*
 *All anti pattern potential that the caller claude could be thought to do as it tries to solve the problem asked for should be brought up and explain what it should try to do instead in this case.*
 
 # Principle: Single Source of Truth
