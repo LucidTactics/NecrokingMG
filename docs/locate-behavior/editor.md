@@ -259,6 +259,16 @@ One ~6400-line file; single partial-free class. Structure to know when **adding 
   `MapEditorWindow.DrawGridCellTooltip(text, anchorCell)` → `Game1.Tooltips.RequestText(...)`,
   gated on `Game1.Popups.IsEmpty && !_eb.IsColorPickerOpen && !_eb.IsDropdownOpen` so the
   tooltip (which sits ABOVE the Popup band) doesn't paint over an open dropdown/color-picker.
+  **`DrawGridCellTooltip` is single-line + uncolored** (RequestText is the ONLY rect-anchored
+  path; there is NO colored rect-anchored overload) and is **shared by the Objects tab
+  (`DrawObjectsTab`) and Units tab (`DrawUnitsTab`)** — to give the Units grid a coloured
+  multi-line tooltip (e.g. a grey `UnitDef.Description` line under the name, mirroring
+  `HUDRenderer.DrawUnitTooltip`), do NOT edit `DrawGridCellTooltip` (it would break the Objects
+  tooltip). Instead, in `DrawUnitsTab`'s hover block, build a `List<(string,Color)>` and call the
+  cursor-anchored coloured overload `Game1.Tooltips.RequestLines(lines)` directly, re-copying the
+  same popup/dropdown suppression guard. Note the anchoring changes from "centred above the cell"
+  to "at the cursor" — that matches the spell/HUD tooltips. Greys = `Necroking.UI.SpellTooltip.Dim`
+  (150,150,170) / white = `.Text` (needs `using Necroking.UI;`; MapEditorWindow lacks it).
   Hover detection = `EditorBase.HitTest(rect)` (clip-aware: rect AND inside `_activeClip`, so
   a scrolled-out row won't false-trigger); cursor = `EditorBase.MousePos`. The old
   "editors hand-roll rect + `DrawText`" pattern and the private `HUDRenderer.DrawCursorTooltip`
