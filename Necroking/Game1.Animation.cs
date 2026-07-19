@@ -598,10 +598,7 @@ public partial class Game1
                                 int sw = _graphics.PreferredBackBufferWidth;
                                 int sh = _graphics.PreferredBackBufferHeight;
                                 EnsureInventoryUIsInitialized();
-                                // _tableMenuUI.OpenForTable(tableIdx, sw, sh, _camera, _renderer);
-                                StartTableCraft(tableIdx);
-
-
+                                _tableMenuUI.OpenForTable(tableIdx, sw, sh, _camera, _renderer);
                             }
                             else if (cc != null)
                             {
