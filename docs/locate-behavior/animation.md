@@ -67,7 +67,12 @@ compile-time forced through AnimResolver). Related gates: `Incap` (`IncapState`:
 ### `Necroking/Game1.Animation.cs` — the per-frame tick (`UpdateAnimations`)
 Owns `_unitAnims` (uid → `UnitAnimData{Ctrl,…}`; rebuilt by `RebuildUnitAnim`). Per unit:
 - **Corpse-interact branch** (CorpseInteractPhase != 0): drives WorkStart/Loop/End,
-  Pickup/Carry/PutDown by direct `ForceState`, bypassing both channels.
+  Pickup/Carry/PutDown by direct `ForceState`, bypassing both channels. **Anti-pattern
+  (egregious):** this branch also runs *gameplay* off `Ctrl.IsAnimFinished` — case 5
+  (PutDown) transfers the carried corpse into the table slot, removes it from the sim, and
+  fires `StartTableCraft` (spends essence + queues a zombie raise, commit `4f1e851`); cases
+  1-4 consume corpses on anim edges too. Craft start / corpse consumption should live on a
+  gameplay timer, not on `IsAnimFinished`. See anti-patterns-list.md.
 - **Archetype branch** (`Archetype > 0`): stamps the Combat override for `PendingAttack`
   (`ResolvePendingAttackAnim`, compressed to the weapon cycle), stamps the **attack
   pre-roll** override when `InCombat && AttackCooldown > 0` (so effect_time lands at
