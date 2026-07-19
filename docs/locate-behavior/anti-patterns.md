@@ -14,6 +14,10 @@ subsystem counterparts — read the relevant one before touching that layer:*
   ticking, unit-state ownership, damage/death/strike pipeline, buffable-stat coverage & buff
   expiry, spawn/despawn/session-recreate asymmetry, unit grouping/leash, order priority, AI
   behavior state machine.*
+- *[anti-patterns-init.md](anti-patterns-init.md) — initialization/startup/loading: per-session
+  state not reset/disposed on load, append-without-clear growth loops, persisting derived/foreign
+  state, destructive load→save round-trips, load-time validation, startup ordering & stringly-typed
+  asset/shader bindings.*
 
 *Egregious anti patterns should typically be refactored whenever found even if not asked to by the user, always, tell the main claude about these when found, and log them in [anti-patterns-list.md](anti-patterns-list.md).*
 *Regular anti patterns should be documented in [anti-patterns-list.md](anti-patterns-list.md) whenever found, and if its relevant to the caller claudes request bring these up as potential refactors or fixes as he goes.*
