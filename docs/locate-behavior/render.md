@@ -693,8 +693,12 @@ also scales by `Performance.ScatterGlowStrength` (float); both fields exist in
 `scatterglow` dev command (`Game1.Dev.cs`), but have **NO SettingsWindow UI row yet**.
 Current emitter call sites: `GameRenderer.World.cs` (`Effect.ScatterRadius/Rgb/Strength`
 on EffectManager effects + projectile impact bursts), `Render/LightningRenderer.cs` beam
-loop (`beam.Style.ScatterRadius…` → `AddRibbonScreen`, main path + branches), and the
-TestShape review spells inside ScatterGlowSystem itself.
+loop (`beam.Style.ScatterRadius…` → `AddRibbonScreen`, main path + branches),
+`GameRenderer.Units.cs` `DrawSingleUnit` (buff visuals: one `AddPoint` per active buff
+visual per unit — WeaponParticle glows at `weaponAttach.TipWorld` with HARDCODED radius
+1.1/strength 0.45, GroundAura/Orbital/LightningAura around the unit; colors derived from
+each visual's existing config, no scatter fields on BuffDef), and the TestShape review
+spells inside ScatterGlowSystem itself.
 
 **Scatter style mapping gap (strike/zap vs beam):** `LightningStyle` carries
 `ScatterRadius/ScatterRgb/ScatterStrength` (`Game/LightningSystem.cs`), but only
@@ -728,6 +732,14 @@ hilt→tip weapon segment, `Color` HdrColor, spawn rate/lifetime/drift), `UnitTi
   `HiltWorld`/`TipWorld` + heights) then `_buffVisuals.DrawUnit(i, renderPos, phase, …)`
   twice: phase 0 behind the sprite, phase 1 in front. Same-type buffs alternate on a
   2-second cycle (exclusive per visual type).
+- **WeaponParticle spawn semantics (the "fire trail" behavior)**: each `WPParticle`
+  captures an ABSOLUTE world position at spawn (lerp hilt→tip at random
+  t∈[RangeMin,RangeMax]) and afterwards only drifts along `MoveDirX/Y/Z` — it never
+  re-anchors to the (recomputed-per-frame) weapon attach. So while the hand sweeps
+  through a cast anim, particles with `ParticleLifetime` (0.8s on the buff_4 casting
+  buffs) stay where the hand WAS → a world-space trail of flipbooks rather than fire
+  held in the hand. Anything "attached" must store attach-relative offsets and
+  reposition from the current `WeaponAttachRuntime` each frame instead.
 - **The casting glow is just a buff**: `SpellDef.CastingBuffID` (e.g. `buff_4`, a
   WeaponParticle/glow buff) applied in `Game1.Spells.cs` `DispatchSpellCast` (player;
   removed by `RemoveCastingBuffAll` at cast end / `CancelPlayerChannel`) and in the AI
