@@ -588,17 +588,13 @@ public partial class Game1
                             int corpseId = _sim.Units[i].CarryingCorpseID;
                             var cc = _sim.FindCorpseByID(corpseId);
 
+                            bool loadedIntoTable = false;
                             if (tableIdx >= 0 && _envSystem != null && cc != null
                                 && Game.TableSystem.LoadCorpseIntoTable(_envSystem, tableIdx, cc) >= 0)
                             {
                                 int ci = _sim.FindCorpseIndexByID(corpseId);
                                 if (ci >= 0) _sim.CorpsesMut.RemoveAt(ci);
-                                // Auto-open the table menu so the player can pick items
-                                // and start crafting without an extra click.
-                                int sw = _graphics.PreferredBackBufferWidth;
-                                int sh = _graphics.PreferredBackBufferHeight;
-                                EnsureInventoryUIsInitialized();
-                                _tableMenuUI.OpenForTable(tableIdx, sw, sh, _camera, _renderer);
+                                loadedIntoTable = true;
                             }
                             else if (cc != null)
                             {
@@ -615,6 +611,19 @@ public partial class Game1
                             _sim.UnitsMut[i].CorpseInteractPhase = 0;
                             _sim.UnitsMut[i].PutDownTableIdx = -1;
                             animData.Ctrl.ForceState(AnimState.Idle);
+
+                            // Auto-start production; must run after the carry-state reset
+                            // above or the unit is still IsLockedByAction when the craft
+                            // routine starts. If refused (no essence / horde cap), fall
+                            // back to opening the menu so the drop doesn't look like it
+                            // ate the corpse for free.
+                            if (loadedIntoTable && !StartTableCraft(tableIdx))
+                            {
+                                int sw = _graphics.PreferredBackBufferWidth;
+                                int sh = _graphics.PreferredBackBufferHeight;
+                                EnsureInventoryUIsInitialized();
+                                _tableMenuUI.OpenForTable(tableIdx, sw, sh, _camera, _renderer);
+                            }
                         }
                         break;
 

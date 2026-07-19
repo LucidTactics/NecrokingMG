@@ -211,6 +211,16 @@ public partial class Game1 {
                break;
             }
 
+            // Set the player's essence (table-craft currency).
+            // devctl: cmd set_essence 100 [maxEssence]
+            case "set_essence": {
+               if (c.Args.Length < 1) { c.Complete(Necroking.Dev.DevServer.Error("need <essence> [maxEssence]")); break; }
+               if (c.Args.Length > 1) _sim.PlayerResources.MaxEssence = (int)DevFloat(c.Args[1]);
+               _sim.PlayerResources.Essence = System.Math.Min(_sim.PlayerResources.MaxEssence, (int)DevFloat(c.Args[0]));
+               c.Complete(Necroking.Dev.DevServer.Ok($"essence {_sim.PlayerResources.Essence}/{_sim.PlayerResources.MaxEssence}"));
+               break;
+            }
+
             // Toggle the HDR test bar — a plain world-anchored rectangle through the
             // beam strip+bloom pipeline, anchored at the current camera position.
             // count/gap draw parallel bars for between-beam bloom-fill tests.
@@ -2454,6 +2464,7 @@ public partial class Game1 {
                   "zombify [selector]", "set_ai <selector> <AIBehavior>", "move <selector> <x> <y>",
                   "set_hp <selector> <hp> [maxHp]", "set_mana <selector|necro> <mana> [maxMana]",
                   "set_spell <selector> <spellID>", "set_necro_type <unitDefId>", "godmode [on|off]",
+                  "set_essence <essence> [maxEssence]",
                   "walk_necro <x> <y>  (or 'clear'; cancelled by any WASD press)",
                   "mark <selector|clear>", "unmark [selector]",
                   // spells & reanimation
