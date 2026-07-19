@@ -47,9 +47,16 @@ exclusion → afford → deduct → run effect → roll back on failure) and `Le
 `GetProgress`. `InitFromDefs()` resets everything for a new game (applies `startLearned`).
 **Persisted in save games** via `ExportSave()`/`ApplySave()` ↔ `SavedSkillBook` DTO in
 `Data/SaveGameData.cs` (written in `Game1.Saves.cs` `WriteSaveGame`, restored in
-`ApplySaveToWorld`; `ApplySave` restores collections verbatim and replays only
-`grant_path` effects). **Adding a new unlock collection = 4 touches:** field here +
-`ExportSave` + `ApplySave` + a `[JsonPropertyName]` property on `SavedSkillBook`.
+`ApplySaveToWorld`). The save only stores what **can't be re-derived**: `_learned` (the
+source of truth), skill points, event tallies, passive flags, intrinsic-buff bindings,
+and the metamorphosis bonuses. The pure unlocks — `UnlockedPotions`, `UnlockedBuildings`,
+`UnlockedSummons`, `_unlockedAI`, `PotionSlotsUnlocked` — are **NOT** persisted; `ApplySave`
+re-derives them by replaying each learned talent's effect (the `DerivableOnLoad` whitelist:
+`unlock_potion`/`unlock_building`/`unlock_summon`/`unlock_ai_behavior`/`unlock_potion_slot`
++ `grant_path`). **So a new unlock that is a pure, idempotent function of the learned set
+= add the field here + add its effect id to `DerivableOnLoad` (no DTO/save touch).** A
+non-derivable state (side-effecting or earned through play) still needs the 4 touches:
+field + `ExportSave` + `ApplySave` + a `[JsonPropertyName]` property on `SavedSkillBook`.
 **Look/edit here when…** adding a new unlock-state kind, a new cost predicate, or wiring
 "was skill X learned?" queries.
 
@@ -119,12 +126,15 @@ read `Events.Get`; milestones are never consumed.
 - Unknown effect ids **soft-pass**: the skill "learns" successfully and does nothing.
 - SkillBookState **is saved** (`SavedSkillBook` in the save game, see above) — the old
   "per-run only" note is obsolete; v1 saves lacking the key load with a fresh book.
-- **`startLearned` skills never run their effect** — `InitFromDefs` only fills `_learned`
-  (and `ApplySave` replays only `grant_path`). A set-populating effect (`unlock_potion`,
-  `unlock_building`) on a `startLearned` node silently leaves the set empty —
+- **`startLearned` skills never run their effect on a *fresh* game** — `InitFromDefs` only
+  fills `_learned`. A set-populating effect (`unlock_potion`, `unlock_building`) on a
+  `startLearned` node silently leaves the set empty in the first session —
   use a zero-cost learnable node (empty `costs` passes `CanAfford`) or `LearnFree`
   (which DOES run the effect) instead. This is exactly why `construction.json`'s free
-  roots are zero-cost learnable nodes, not `startLearned`.
+  roots are zero-cost learnable nodes, not `startLearned`. (Note: on the *load* path this
+  no longer bites — `ApplySave`'s replay runs `DerivableOnLoad` effects for every learned
+  node including `startLearned` ones — but the live first game still depends on
+  `TryLearn`/`LearnFree` running the effect, so leave the construction.json structure alone.)
 - Scenario learns pass `Sim = null` — effects must (and do) soft-pass without a sim.
 - Skill defs bypass `RegistryBase`/`--roundtrip-data`; `SaveLayout` only rewrites x/y.
 

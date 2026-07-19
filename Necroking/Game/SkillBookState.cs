@@ -198,21 +198,38 @@ public class SkillBookState
                 if (s.StartLearned) _learned.Add(s.Id);
     }
 
+    /// <summary>Skill effects whose consequence is a pure, idempotent function of
+    /// *having learned* the skill — so they're re-derived from the learned set on
+    /// load (see <see cref="ApplySave"/>) instead of being persisted as separate
+    /// collections. All are order-independent set inserts / monotone bumps, or (for
+    /// grant_path) build a code-only buff the generic saved-buff restore can't
+    /// recreate; none double-apply on replay. Effects NOT listed here
+    /// (passive_stat, grant_intrinsic_buff, cap_buff, morph_necromancer,
+    /// metamorph_action, add_spell) have live side effects that must not re-run on
+    /// load — those restore via their own saved collection or the saved buff/
+    /// spellbar state.</summary>
+    private static readonly HashSet<string> DerivableOnLoad = new()
+    {
+        "grant_path",
+        "unlock_potion",
+        "unlock_building",
+        "unlock_summon",
+        "unlock_ai_behavior",
+        "unlock_potion_slot",
+    };
+
     /// <summary>Snapshot every mutable collection for a save game. Event tallies
     /// come from the (usually shared) tracker so the sim's central counts are
-    /// what's recorded.</summary>
+    /// what's recorded. The derived unlocks (potions/buildings/summons/AI/potion
+    /// slots) are deliberately NOT written — they're re-derived from the learned
+    /// set on load (see <see cref="DerivableOnLoad"/>).</summary>
     public SavedSkillBook ExportSave()
     {
         var save = new SavedSkillBook
         {
             Learned = new List<string>(_learned),
             SkillPoints = new Dictionary<string, int>(_skillPoints),
-            UnlockedPotions = new List<string>(_unlockedPotions),
-            UnlockedBuildings = new List<string>(_unlockedBuildings),
             PassiveFlags = new List<string>(_passiveFlags),
-            UnlockedSummons = new List<string>(_unlockedSummons),
-            UnlockedAI = new Dictionary<string, int>(_unlockedAI),
-            PotionSlots = PotionSlotsUnlocked,
             CorpseEatingBonus = CorpseEatingBonus,
             SoulConsumptionBonus = SoulConsumptionBonus,
         };
@@ -226,13 +243,15 @@ public class SkillBookState
         return save;
     }
 
-    /// <summary>Restore a save-game snapshot: reset to defs, refill every
-    /// collection verbatim, then replay grant_path effects from the learned set.
-    /// The replay exists because grant_path buffs are code-built (not in the
-    /// buff registry), so the save's generic player-buff restore can't recreate
-    /// them; every other skill consequence either lives in these collections or
-    /// round-trips through the saved buff list. Learned ids no longer in the
-    /// defs are dropped (logged), matching how load validates other registries.</summary>
+    /// <summary>Restore a save-game snapshot: reset to defs, refill the collections
+    /// that can't be re-derived (skill points, event tallies, passive flags,
+    /// intrinsic-buff bindings, metamorphosis bonuses), then re-derive every
+    /// unlock that IS a pure function of the learned set — potions, buildings,
+    /// summons, AI behaviors, potion slots, and grant_path — by replaying those
+    /// effects (see <see cref="DerivableOnLoad"/>). Learning a talent is the single
+    /// source of truth for those, so they aren't persisted separately. Learned ids
+    /// no longer in the defs are dropped (logged), matching how load validates
+    /// other registries.</summary>
     public void ApplySave(SavedSkillBook save, SkillEffectContext ctx)
     {
         InitFromDefs();
@@ -248,26 +267,32 @@ public class SkillBookState
         foreach (var kv in save.SkillPoints) _skillPoints[kv.Key] = kv.Value;
         Events.Reset();
         foreach (var kv in save.Events) Events.Tally(kv.Key, kv.Value);
-        foreach (var p in save.UnlockedPotions) _unlockedPotions.Add(p);
-        foreach (var b in save.UnlockedBuildings) UnlockBuilding(b);
         foreach (var f in save.PassiveFlags) _passiveFlags.Add(f);
         foreach (var b in save.IntrinsicBuffs) AddIntrinsicBuff(b.BuffId, b.Tags);
-        foreach (var s in save.UnlockedSummons) UnlockSummon(s);
-        foreach (var kv in save.UnlockedAI) UnlockAI(kv.Key, kv.Value);
-        PotionSlotsUnlocked = save.PotionSlots;
         CorpseEatingBonus = System.Math.Min(save.CorpseEatingBonus, CorpseEatingHPCap);
         SoulConsumptionBonus = System.Math.Min(save.SoulConsumptionBonus, SoulConsumptionManaCap);
 
+        // Re-derive the pure unlocks (potions/buildings/summons/AI/potion slots) and
+        // grant_path from the learned talents instead of restoring persisted copies.
         foreach (var id in _learned)
         {
             var def = FindSkill(id);
             if (def == null) continue;
-            if (def.Effect == "grant_path")
-                SkillEffectRegistry.Apply("grant_path", ctx, def.EffectArg);
-            else if (def.Effect == "compound")
+            if (def.Effect == "compound")
                 foreach (var (fx, arg) in CompoundEffect.Parse(def.EffectArg))
-                    if (fx == "grant_path") SkillEffectRegistry.Apply("grant_path", ctx, arg);
+                    ReplayDerivable(fx, arg, ctx);
+            else
+                ReplayDerivable(def.Effect, def.EffectArg, ctx);
         }
+    }
+
+    /// <summary>Re-run one skill effect on load, but only if it's a pure, idempotent
+    /// consequence of having learned the skill (<see cref="DerivableOnLoad"/>).
+    /// Anything else is skipped here — it restores via its own saved state.</summary>
+    private static void ReplayDerivable(string effect, string arg, SkillEffectContext ctx)
+    {
+        if (DerivableOnLoad.Contains(effect))
+            SkillEffectRegistry.Apply(effect, ctx, arg);
     }
 
     /// <summary>True if every Parents entry (AND) is learned AND at least one
