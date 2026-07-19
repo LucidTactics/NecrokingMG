@@ -40,6 +40,9 @@ public class RangedUnitHandler : IArchetypeHandler
     // Deliberately short: the old cooldown*0.5 lockout planted the archer for half
     // its reload, which is exactly the window kiting needs to move in.
     private const float PostShotFollowThrough = 0.6f;
+    // Slack past the anim's release frame so the SwingJanitor (which clears the
+    // pending swing at PostAttackTimer <= 0) can never race the effect-frame edge.
+    private const float EffectFrameMargin = 0.15f;
 
     private readonly byte _archetypeId;
 
@@ -205,7 +208,7 @@ public class RangedUnitHandler : IArchetypeHandler
         ctx.Units[i].PendingWeaponIsRanged = true;
         ctx.Units[i].PendingRangedTarget = ctx.Units[targetIdx].Id;
         ctx.Units[i].RangedCooldown = cooldown;
-        ctx.Units[i].PostAttackTimer = PostShotFollowThrough;
+        ctx.Units[i].PostAttackTimer = ShotWindowSec(ref ctx, chosen);
         ctx.Units[i].PreferredVel = Vec2.Zero;
         SubroutineSteps.FacePosition(ref ctx, ctx.Units[targetIdx].Position);
         if (chosen >= 0 && chosen < stats.RangedWeapons.Count)
@@ -214,6 +217,36 @@ public class RangedUnitHandler : IArchetypeHandler
             ctx.Units[i].ActionLabelTimer = cooldown * 0.5f;
         }
         return true;
+    }
+
+    /// <summary>PostAttackTimer window for a queued shot: at least the bow's
+    /// follow-through, stretched to cover the attack anim's arrow-release frame
+    /// (authored effect_time_ms, or the AnimController's 50%-of-clip fallback).
+    /// The SwingJanitor clears the pending swing at PostAttackTimer &lt;= 0, so a
+    /// window shorter than the release frame kills every shot before the arrow
+    /// spawns (archers mime firing, nothing comes out). Melee derives its window
+    /// from the anim in Simulation.UpdateCombat; this is the ranged twin.
+    /// Compression (Game1.Animation's fit-to-weapon-cycle) only ever moves the
+    /// release EARLIER, so the uncompressed time here is a safe upper bound.</summary>
+    private static float ShotWindowSec(ref AIContext ctx, int weaponIdx)
+    {
+        int i = ctx.UnitIndex;
+        var def = ctx.GameData.Units.Get(ctx.Units[i].UnitDefID);
+        if (def?.Sprite == null || ctx.AnimMeta == null) return PostShotFollowThrough;
+
+        ref var stats = ref ctx.Units[i].Stats;
+        string? animName = (weaponIdx >= 0 && weaponIdx < stats.RangedWeapons.Count)
+            ? stats.RangedWeapons[weaponIdx].AnimName : null;
+        if (string.IsNullOrEmpty(animName)) animName = "Ranged1";
+
+        string key = Render.AnimMetaLoader.MetaKey(def.Sprite.SpriteName, animName);
+        if (ctx.AnimMeta.TryGetValue(key, out var meta))
+        {
+            float effectMs = meta.EffectTimeMs > 0 ? meta.EffectTimeMs : meta.TotalDurationMs() * 0.5f;
+            if (effectMs > 0f)
+                return MathF.Max(PostShotFollowThrough, effectMs / 1000f + EffectFrameMargin);
+        }
+        return PostShotFollowThrough;
     }
 
     private static void UpdateReturn(ref AIContext ctx) => SentryTransitions.UpdateReturn(ref ctx);
