@@ -2441,6 +2441,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             }
         }
 
+        // Central hotkey table (Game1.Hotkeys.cs) — registered once here, dispatched
+        // per-phase from Update.
+        RegisterHotkeys();
+
         // Audio, foragable/worker/sim wiring, and the editor windows load as
         // steps — see BuildLoadingSteps (Game1.Loading.cs).
         LogTiming("LoadContent: core resources ready (SpriteBatch, fonts, dev server)");
@@ -2703,17 +2707,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (_devMouseOverride.HasValue)
             _input.MousePos = _devMouseOverride.Value;
 
-        // Alt+Enter: toggle between borderless "fullscreen" and a resizable window.
-        // Handled here, before the menu-state early-returns below, so it works on the
-        // main menu and scenario list too — not just in active gameplay.
-        {
-            bool textActive = (_editorUi != null && _editorUi.IsTextInputActive)
-                || (_menuState == MenuState.UIEditor && _uiEditor.IsTextInputActive);
-            if (!textActive
-                && (_input.IsKeyDown(Keys.LeftAlt) || _input.IsKeyDown(Keys.RightAlt))
-                && _input.WasKeyPressed(Keys.Enter))
-                ToggleWindowMode();
-        }
+        // Global hotkeys (Alt+Enter fullscreen toggle) — dispatched before the
+        // menu-state early-returns below so they work on the main menu and scenario
+        // list too, not just in active gameplay. Table: Game1.Hotkeys.cs.
+        HotkeySystem.Dispatch(HotkeyPhase.Always, _input);
 
         // (All modal/panel/HUD/world input routing now happens in ONE place —
         // the _uiRouter.DispatchInput call further down, after hit rects are
@@ -2843,110 +2840,13 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             return;
         }
 
-        // Check if any editor UI element owns the keyboard — active text field,
-        // open combo filter, or color-picker value box (persists from previous
-        // frame, safe to read before UpdateInput). Typing a digit into a combo
-        // filter must not trip F-key/hotkey toggles.
-        bool anyTextInputActive = (_editorUi != null && _editorUi.IsKeyboardCaptured)
-            || (_menuState == MenuState.UIEditor && _uiEditor.IsKeyboardCaptured);
-
-        // --- F2 water debug toggle ---
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F2))
-            _waterDebug = !_waterDebug;
-
-        // --- F3 toggles the bottom-left perf/zoom readout ---
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F3))
-            _showPerfReadout = !_showPerfReadout;
-
-        // --- F5 death-fog debug overlay (F9 was requested but is taken by the
-        // unit editor toggle; F5 was free) ---
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F5))
-            _deathFog.ToggleDebug();
-
-        // --- F6 wind debug toggle ---
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F6))
-            _windDebug = !_windDebug;
-
-        // --- F7 gameplay debug toggle (Off → Horde → Unit Info → Off) ---
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F7))
-            _gameplayDebugMode = (_gameplayDebugMode + 1) % 3;
-
-        // --- F8 collision debug toggle ---
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F8))
-        {
-            _collisionDebugMode = (CollisionDebugMode)(((int)_collisionDebugMode + 1) % (int)CollisionDebugMode.Count);
-        }
-
-        // --- F9-F12 editor toggles ---
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F9))
-        {
-            _menuState = _menuState == MenuState.UnitEditor ? MenuState.None : MenuState.UnitEditor;
-            _editorUi.ClearActiveField();
-        }
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F10))
-        {
-            _menuState = _menuState == MenuState.SpellEditor ? MenuState.None : MenuState.SpellEditor;
-            _editorUi.ClearActiveField();
-        }
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F11))
-            _menuState = _menuState == MenuState.MapEditor ? MenuState.None : MenuState.MapEditor;
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.F12))
-        {
-            if (_menuState == MenuState.UIEditor) _menuState = MenuState.None;
-            else { EnsureUIEditorInitialized(); _menuState = MenuState.UIEditor; }
-        }
-
-        // (Editor-launcher row clicks are handled by EditorLauncherLayer via the
-        // UI router dispatch below — see UI/Layers/HudLayers.cs.)
-
-        // 'I' key toggles inventory (lazy-inits the UI family on first open)
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.I) && _menuState == MenuState.None)
-        {
-            EnsureInventoryUIsInitialized();
-            _inventoryUI.Toggle(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
-        }
-
-        // 'O' key toggles the job board (wOrk/jObs). Shift+O is the skill-point
-        // cheat below — don't also flip the board on it.
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.O) && _menuState == MenuState.None
-            && !_input.IsKeyDown(Keys.LeftShift) && !_input.IsKeyDown(Keys.RightShift))
-        {
-            EnsureInventoryUIsInitialized();
-            if (!_jobBoardUI.IsVisible) CloseSameSidePanels(PanelSide.Left, _jobBoardUI);
-            _jobBoardUI.Toggle(GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
-        }
-
-        // 'Tab' key toggles character stats
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.Tab) && _menuState == MenuState.None)
-        {
-            if (!_characterStatsUI.IsVisible) CloseSameSidePanels(PanelSide.Left, _characterStatsUI);
-            _characterStatsUI.Toggle();
-        }
-
-        // 'K' = the Ability Upgrades skill book (tabbed school trees).
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.K) && _menuState == MenuState.None)
-            _skillBookOverlay.Toggle();
-
-        // 'J' = spell grimoire (phase 1: display only)
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.J) && _menuState == MenuState.None)
-        {
-            EnsureInventoryUIsInitialized();
-            if (!_grimoireOverlay.IsVisible) CloseSameSidePanels(PanelSide.Left, _grimoireOverlay);
-            _grimoireOverlay.Toggle();
-        }
-
-        // 'U' = character sheet for the player necromancer (current form)
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.U) && _menuState == MenuState.None)
-        {
-            EnsureInventoryUIsInitialized();
-            if (_unitInfoPanel.IsVisible)
-                _unitInfoPanel.Hide();
-            else if (_sim.NecromancerIndex >= 0)
-            {
-                CloseSameSidePanels(PanelSide.Right, _unitInfoPanel);
-                _unitInfoPanel.ShowForUnit(_sim.Units[_sim.NecromancerIndex].Id);
-            }
-        }
+        // Session + HUD hotkeys — debug toggles (F2-F8), editor toggles (F9-F12), the
+        // HUD panel keys (I/O/Tab/K/J/U/H/L), and the ~ / ? panels. Dispatched BEFORE
+        // the hit-rect rebuild + router dispatch below so a panel opened by key this
+        // frame still lands in this frame's hit-rect pass. The text-input gate (typing
+        // into a combo filter must not trip hotkeys) lives centrally in HotkeySystem.
+        // Table: Game1.Hotkeys.cs.
+        HotkeySystem.Dispatch(HotkeyPhase.PreUI, _input);
 
         // Hover-highlight is configured in Settings ▸ Tooltips (per-category shape/style). A dev
         // OVERRIDE still exists via the 'hover_variant' dev command for quick previewing; its toast
@@ -2956,50 +2856,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (_gpuWarnToastTimer > 0f) _gpuWarnToastTimer -= _rawDt;
         if (_foragerEatSoundCd > 0f) _foragerEatSoundCd -= _rawDt;
 
-        // 'H' = toggle depth-sorted reanimation fog (A/B dev switch; Performance.DepthSortedFog).
-        // ON = a risen unit can occlude its own lingering smoke; OFF = the fog always draws on top.
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.H) && _menuState == MenuState.None)
-        {
-            _gameData.Settings.Performance.DepthSortedFog = !_gameData.Settings.Performance.DepthSortedFog;
-            _depthFogToastTimer = 2.25f;   // flash the new state on screen
-        }
-
-        // 'L' = inspect ("Look at") the unit under the cursor (press-to-inspect
-        // mode; may auto-pause while open, closing restores only the pause WE set).
-        // Disabled when auto-show-on-hover is on — the hover logic below owns
-        // the panel in that mode. Both modes share the configurable pick radius.
-        var tipCfg = _gameData.Settings.Tooltips;
-        if (!tipCfg.AutoShowUnitStats
-            && !anyTextInputActive && _input.WasKeyPressed(Keys.L) && _menuState == MenuState.None)
-        {
-            EnsureInventoryUIsInitialized();
-            if (_unitInfoPanel.IsVisible)
-            {
-                _unitInfoPanel.Hide();
-            }
-            else
-            {
-                int sw = GraphicsDevice.Viewport.Width, sh = GraphicsDevice.Viewport.Height;
-                Vec2 cursorWorld = _camera.ScreenToWorld(new Vector2(mouse.X, mouse.Y), sw, sh);
-                int best = -1;
-                float pr = tipCfg.HoverPickRadius;
-                float bestD2 = pr * pr; // pick radius in world units
-                for (int i = 0; i < _sim.Units.Count; i++)
-                {
-                    var u = _sim.Units[i];
-                    if (!u.Alive) continue;
-                    // Foragers (zombie boars) never show the unit sheet — they use the belly tooltip.
-                    if (_gameData.Units.Get(u.UnitDefID)?.Tags.Contains("forager") == true) continue;
-                    float d2 = (u.Position - cursorWorld).LengthSq();
-                    if (d2 < bestD2) { bestD2 = d2; best = i; }
-                }
-                if (best >= 0)
-                {
-                    _unitInfoPanel.ShowForUnit(_sim.Units[best].Id);
-                    if (tipCfg.PauseOnManualInspect && !_paused) _clock.Pause(GameClock.PauseSource.Inspect);
-                }
-            }
-        }
+        // ('H' depth-fog toggle and 'L' press-to-inspect are Hud-context hotkeys now —
+        // Game1.Hotkeys.cs.)
         if (_menuState == MenuState.PauseMenu) _backMenuState = MenuState.PauseMenu;
 
         // --- Pause menu button clicks (UI/PauseMenuScreen.cs) ---
@@ -3093,19 +2951,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         if (_uiEditor != null) _uiEditor.AllowWasdListNav = true;
         if (_mapEditor != null) _mapEditor.CameraInputEnabled = bareMapEditor;
 
-        // --- TopRightKey ---
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.OemTilde))
-        {
-            if (!_logPanel.IsVisible)
-            {
-                // Don't toggle, since we might want to be able to see this while holding tilde.
-                CloseSameSidePanels(Game1.PanelSide.Left, _logPanel);
-                _logPanel.Toggle(screenW, screenH);
-            }
-        }
-        // --- Slash? ---
-        if (!anyTextInputActive && _input.WasKeyPressed(Keys.OemQuestion))
-            _debugPanel.Toggle();
+        // (~ log panel and ? debug panel are Session-context hotkeys now — Game1.Hotkeys.cs.)
 
         // Central UI hit-rect pass: catalogue every active UI region (popup
         // panels, HUD buttons/bars, toasts) and derive MouseOverUI from it in one
@@ -3212,24 +3058,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         _uiRouter.DispatchInput(_input,
             new Necroking.UI.UICtx(screenW, screenH, gameTime.TotalGameTime.TotalSeconds, gameTime));
 
-        // ESC while a circle-targeted spell aim is armed cancels the aim (and
-        // eats the key so the pause menu doesn't also open on the same press).
-        if (_aimingSlot >= 0 && !anyTextInputActive
-            && _input.WasKeyPressedUnhandled(Keys.Escape))
-        {
-            _aimingSlot = -1;
-            _input.ConsumeKey(Keys.Escape);
-        }
-
-        // ESC fallback: nothing above wanted the key (no popup, panel, editor,
-        // or menu consumed it) → open the pause menu.
-        if (!anyTextInputActive && _input.WasKeyPressedUnhandled(Keys.Escape)
-            && _menuState == MenuState.None)
-        {
-            _menuState = MenuState.PauseMenu;
-            _clock.Pause(GameClock.PauseSource.User);
-            _input.ConsumeKey(Keys.Escape);
-        }
+        // Post-UI hotkeys — keys that must respect the UI-layer ConsumeKey claims made
+        // during the router dispatch above: ESC (armed spell-aim cancel first, then the
+        // pause-menu fallback when nothing consumed it) and R-to-restart on the
+        // game-over screen. Table: Game1.Hotkeys.cs.
+        HotkeySystem.Dispatch(HotkeyPhase.PostUI, _input);
 
         if (_clock.WorldRunning)
         {
@@ -3309,22 +3142,6 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 }
             }
 
-            // --- Jump input (Space = Nightfall rogue momentum jump; NightfallPorts/RogueJump.cs) ---
-            // Leap in the direction the necromancer is currently moving, scaled by
-            // current speed (far + high when running, a small hop when walking) —
-            // not a cursor-targeted jump.
-            if (_input.WasKeyPressed(Keys.Space) && necroIdx >= 0)
-            {
-                var mu = _sim.UnitsMut;
-                bool canJump = mu[necroIdx].Alive && mu[necroIdx].JumpPhase == 0
-                    && !Necroking.NightfallPorts.RogueJump.IsJumping(mu[necroIdx].Id)
-                    && !mu[necroIdx].Incap.IsLocked && !_pendingSpell.Active;
-                if (canJump)
-                    // slideThrough: keep the run momentum gliding through the squat +
-                    // landing anims and don't stop dead on landing.
-                    Necroking.NightfallPorts.RogueJump.BeginMomentumJump(mu, necroIdx, slideThrough: true);
-            }
-
             // --- Beam/drain channel-hold ---
             // The channel ends when the key is released, the caster is gone/broken
             // (stun/knockdown/knockback/paralysis — mirrors LightningSystem's core
@@ -3347,90 +3164,14 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // (Spell-bar slot clicks are handled by SpellBarLayer in the router
             // dispatch above; slot assignment opens the grimoire assign flow.)
 
-            // --- Aggression bar: Shift+E raises, Shift+Q lowers. The shift guard
-            // in the cast loop stops Q/E from also casting slots 0/1 while adjusting. ---
-            bool aggrShift = _input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift);
-            if (aggrShift && _input.WasKeyPressed(Keys.E)) _sim.Horde.AggressionLevel++;
-            if (aggrShift && _input.WasKeyPressed(Keys.Q)) _sim.Horde.AggressionLevel--;
-
-            // --- Spirit walk: Q while walking roots the spirit as a scrying eye
-            // and wakes the body. Same guard pattern as Shift+Q — the flag stops
-            // the press from also casting slot 0 below. ---
-            bool spiritRooted = !aggrShift && SpiritWalkSystem.Active
-                && _input.WasKeyPressed(Keys.Q);
-            if (spiritRooted) SpiritWalkSystem.RootSpirit(this);
-
-            // --- Spell casting (keyboard-only; see SpellBarBindings for the
-            // slot→key table). Mouse buttons never cast — they belong to the
-            // world-click dispatch in Game1.WorldClicks.cs. ---
-            for (int slot = 0; slot < SpellBarBindings.SlotCount; slot++)
-            {
-                if (aggrShift && slot <= 1) continue; // Shift+Q/E = aggression, not a cast
-                if (spiritRooted && slot == 0) continue; // Q consumed by the spirit root
-                if (!SpellBarBindings.WasSlotPressed(_input, slot)) continue;
-                if (slot >= _spellBarState.Slots.Length) continue;
-                // Circle-targeted spells arm an aim mode instead of casting
-                // outright — the cast fires on the confirming left-click
-                // (Game1.WorldClicks.cs). Re-pressing the armed slot cancels.
-                var pressedDef = _gameData.Spells.Get(_spellBarState.Slots[slot].SpellID);
-                if (pressedDef != null && pressedDef.TargetingMode == "Circle")
-                {
-                    _aimingSlot = _aimingSlot == slot ? -1 : slot;
-                    continue;
-                }
-                _aimingSlot = -1; // an instant cast breaks any armed aim
-                DispatchSpellCast(_spellBarState.Slots[slot].SpellID, necroIdx, slot, mouseWorld);
-            }
-
-            // --- Ghost mode toggle (G) ---
-            if (_input.WasKeyPressed(Keys.G) && necroIdx >= 0)
-            {
-                _sim.UnitsMut[necroIdx].GhostMode = !_sim.Units[necroIdx].GhostMode;
-                ToggleGodMode(necroIdx, force_to_value: _sim.UnitsMut[necroIdx].GhostMode);
-                // Also flip the top-left debug readout (projectile counts etc).
-                _hudRenderer.ShowDebugPanel = _sim.UnitsMut[necroIdx].GhostMode;
-            }
-            // --- God mode toggle (Shift+P) ---
-            // Cheat / debug toggle. Applies/removes buff_god_mode on the
-            // necromancer; the buff's effects (path-9, +caps, +mana, +regen,
-            // 2x movement) come from data/buffs.json. Duration=0 on the def
-            // means the buff is Permanent until removed.
-            if (_input.WasKeyPressed(Keys.P) && necroIdx >= 0
-                && (_input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift)))
-            {
-                ToggleGodMode(necroIdx);
-            }
-
-            // --- Add Skillpoints ---
-            // Cheat / debug to test skill tree.
-            if (_input.WasKeyPressed(Keys.O) && necroIdx >= 0
-                                             && (_input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift)))
-            {
-                CheatAddAllSkillcounters(necroIdx, 10);
-            }
-
-            // Potions are Construction spells (assignable to any spell slot) —
-            // the old dedicated potion slots and their throw-on-click flow are
-            // gone; casting routes through CastPotionSpell.
-
-            // --- Corpse interaction (F key) — see Game1.WorldClicks.cs ---
-            if (_input.WasKeyPressed(Keys.F))
-                HandleInteractKey(necroIdx, mouseWorld);
-
-            // --- Tethers (Shift+T target, Shift+R attach/detach) ---
-            // Shift+T marks the unit/corpse under the cursor as the tether anchor; Shift+R
-            // then connects it to whatever's under the cursor (any unit↔corpse combo). With
-            // no anchor set, Shift+R detaches a tethered thing under the cursor, or quick-
-            // drags the nearest free corpse with the necromancer.
-            bool tetherShift = _input.IsKeyDown(Keys.LeftShift) || _input.IsKeyDown(Keys.RightShift);
-            if (_input.WasKeyPressed(Keys.T) && tetherShift)
-            {
-                _tetherAnchor = TryPickTetherEnd(mouseWorld, out var anchor) ? anchor : (TetherEnd?)null;
-            }
-            if (_input.WasKeyPressed(Keys.R) && tetherShift)
-            {
-                HandleRopeKey(mouseWorld, necroIdx);
-            }
+            // --- Gameplay hotkeys (central dispatch; table in Game1.Hotkeys.cs) ---
+            // Spell casts (Q/E/1-8), Shift+Q/E aggression, spirit root, Space jump,
+            // G/Shift+P/Shift+O cheats, F interact, Shift+T/R tethers, B build,
+            // C crafting, +/-/0 time scale. Dispatched AFTER the channel-hold check
+            // above — a fresh channel cast must not be release-checked on the same
+            // frame it started. Potions are Construction spells (assignable to any
+            // spell slot); casting routes through CastPotionSpell.
+            HotkeySystem.Dispatch(HotkeyPhase.World, _input);
 
             // Per-frame tether physics (haul corpses, slow the necromancer, kick up dust).
             UpdateTethers(_clock.WorldDt);
@@ -3488,22 +3229,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 }
             }
 
-            // --- Building placement toggle (B) ---
-            if (_input.WasKeyPressed(Keys.B))
-            {
-                EnsureInventoryUIsInitialized();
-                if (!_buildingMenuUI.IsVisible)
-                {
-                    CloseSameSidePanels(PanelSide.Left, _buildingMenuUI);
-                    // Building menu want to build to the map, so close center panels like inventory as well.
-                    _inventoryUI.Close();
-                }
-                _buildingMenuUI.Toggle(screenW, screenH);
-            }
-
-            // --- Crafting menu toggle (C) ---
-            if (_input.WasKeyPressed(Keys.C))
-                ToggleCraftingMenu(screenW, screenH);
+            // (B building menu and C crafting menu are Gameplay-context hotkeys now —
+            // Game1.Hotkeys.cs.)
 
             // (World mouse clicks — placement, building panels, pile gather,
             // foraging — are handled by WorldLayer in the router dispatch above;
@@ -3512,15 +3239,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             // --- Auto-pickup foragables ---
             _foragables.TickAutoPickup(_clock.WorldDt, _gameData.Settings.General.AutoPickupForagables);
 
-            // --- Time controls (keyboard) ---
-            if (_input.WasKeyPressed(Keys.OemPlus) || _input.WasKeyPressed(Keys.Add))
-                _timeScale = MathF.Min(_timeScale * 2f, 8f);
-            if (_input.WasKeyPressed(Keys.OemMinus) || _input.WasKeyPressed(Keys.Subtract))
-                _timeScale = MathF.Max(_timeScale * 0.5f, 0.25f);
-            if (_input.WasKeyPressed(Keys.D0))
-                _timeScale = 1f;
-
-            // (Time-control and core-menu button clicks are handled by
+            // (Keyboard time controls (+/-/0) are Gameplay-context hotkeys now —
+            // Game1.Hotkeys.cs. Time-control and core-menu button clicks are handled by
             // TimeControlsLayer / CoreMenuButtonsLayer in the router dispatch
             // above — notably the time controls now also work while paused,
             // fixing the one-way mouse pause button.)
@@ -3778,16 +3498,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 _damageNumbers[i] = dn;
         }
 
-        // --- Game over check ---
-        if (_gameOver)
-        {
-            if (_input.WasKeyPressed(Keys.R))
-            {
-                _gameOver = false;
-                StartGame();
-            }
-        }
-        else if (FindNecromancer() < 0 && !_paused && _gameWorldLoaded && _activeScenario == null)
+        // --- Game over check (R-to-restart is a GameOver-context hotkey now) ---
+        if (!_gameOver && FindNecromancer() < 0 && !_paused && _gameWorldLoaded && _activeScenario == null)
         {
             _gameOver = true;
         }
