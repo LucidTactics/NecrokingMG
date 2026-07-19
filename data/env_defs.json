@@ -7639,7 +7639,7 @@
     "foragableType": "Ghostcap",
     "respawnTime": 180,
     "scaleMin": 0.9,
-    "scaleMax": 0.8,
+    "scaleMax": 1.1,
     "isBerryBush": false,
     "noBerrySprite": "",
     "poisonedSprite": "",

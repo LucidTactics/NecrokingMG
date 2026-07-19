@@ -536,6 +536,11 @@ public class EnvironmentSystem
 
     public int AddObject(ushort defIndex, float x, float y, float scale = 1f, float seed = -1f, bool persistent = false)
     {
+        if (seed > 0)
+        {
+            float scaleSeed = (seed * 1337f) % 1;
+            scale = (_defs[defIndex].ScaleMin + (_defs[defIndex].ScaleMax - _defs[defIndex].ScaleMin) * scaleSeed);
+        }
         var obj = new PlacedObject
         {
             DefIndex = defIndex, X = x, Y = y, Scale = scale,
