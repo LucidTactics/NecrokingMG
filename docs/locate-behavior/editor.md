@@ -88,6 +88,21 @@ bound to the *slot id*, not the *object*, and no flush happens on selection chan
   and the caller's `if (new != old) model = new;` write-back pattern.
 - **Adding a new editable field type** → add a `DrawXField(fieldId, label, value, …)` in
   `EditorBase` following the activate-once / return-`_inputBuffer`-while-active contract.
+- **Tab / Shift+Tab focus cycling between fields** → no field-order registry exists (as of
+  2026-07); everything needed is in `EditorBase.cs`. `FieldCore(fieldId, display, inputRect)`
+  is the single per-frame chokepoint every single-line field draws through
+  (`DrawTextField`/`DrawIntField`/`DrawFloatField`/`DrawSearchField`/the slider value box) —
+  record each drawn `fieldId` (+rect) there into an ordered per-frame list; promote/clear it
+  in `EndDrawFrame` (the `_openComboDrawnThisFrame` reset is the precedent; `EndDrawFrame` is
+  menuState-gated in `GameRenderer.Draw.cs` but runs every frame an editor is open, which is
+  the only time fields exist). The Tab keypress lands in `HandleTextInput`'s
+  `key == Keys.Enter || Keys.Tab` deactivate branch (`shift` bool already computed there);
+  to move focus, set a pending-focus field id that `FieldCore` consumes on the next Draw by
+  calling `FocusTextField` (the one activation helper — it already does select-all +
+  `_textFieldLayer.Panel`), rather than activating from stale rects in Update. Commit needs
+  no extra work: callers write the returned buffer back every active frame, so Tab-away
+  commits exactly like Enter does today. Textareas (`_textarea` suffix) have a separate
+  Tab-closes branch and their own activation path (not `FocusTextField`) — separate decision.
 
 ## Map editor (`Editor/MapEditorWindow.cs`) — tabs, object brushes, map save
 
