@@ -51,3 +51,32 @@ next touched (full plan: `todos/scheduled-tasks-framework.md`):
 NOT anti-patterns (stay put per the exception): buff `RemainingDuration`, per-unit bulk timer
 arrays in `Simulation`, potion per-unit poison/paralysis timers, projectile/cloud TTLs,
 env respawn/trap timers, render-side TTLs, spell cooldown dictionaries (queryable state).
+
+# Swing-expiry window: melee and ranged stamp it from DIFFERENT sources (found 2026-07-19)
+
+The invariant "an attack's impact frame is guaranteed inside the `PostAttackTimer` window"
+(relied on by `AI/CombatTransitions.cs` + `AI/HordeMinionHandler.cs`, enforced by the
+SwingJanitor in `Game1.Animation.cs`) has TWO implementations that drifted:
+
+- **Melee** (Simulation attack-selection loop): `PostAttackTimer = min(cycle,
+  GetAttackAnimDurationSec(i, w))` — window derived from the actual attack-anim length,
+  invariant holds by construction.
+- **Ranged** (`AI/RangedUnitHandler.cs` `TryQueueShot`): `PostAttackTimer =
+  PostShotFollowThrough` (flat `0.6f`, shortened for kiting) — NOT tied to the Ranged1
+  anim's time-to-effect-frame. Any ranged anim whose effect frame lands after 600ms
+  (e.g. `NavarreLightInfantry_Archer` Ranged1: 1330ms clip, `effect_time_ms:0` → 50%
+  fallback = 665ms) has EVERY shot janitor-cleared before the arrow spawns.
+
+Same-behavior-two-implementations violation. Fix direction: single-source the window
+(a ranged-aware `GetAttackAnimDurationSec` twin, or fit the anim into the window via
+`AnimTiming`/compression like the archetype attack-override already does for cycles).
+
+# Wrong-list weapon lookup for ranged pending attacks (latent, found 2026-07-19)
+
+`Game1.Animation.cs` `ComputeWeaponCycleSeconds(unitIdx, weaponIdx)` and
+`Simulation.GetAttackAnimDurationSec(unitIdx, weaponIdx)` both index
+`Stats.MeleeWeapons[weaponIdx]` unconditionally — but when `PendingWeaponIsRanged` is
+true, `PendingWeaponIdx` indexes `Stats.RangedWeapons`. Callers pass the ranged idx in
+(archetype attack-override block, line ~606). Benign today only because the OOB/mismatch
+falls back to defaults (1 round / 1.0s); becomes a real bug for any unit with both weapon
+lists. Both helpers need an `isRanged` parameter.
