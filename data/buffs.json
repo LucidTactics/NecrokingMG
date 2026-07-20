@@ -234,9 +234,9 @@
         "flipbookID": "fire_loop",
         "fps": 15,
         "color": {
-          "r": 255,
-          "g": 247,
-          "b": 97,
+          "r": 216,
+          "g": 253,
+          "b": 248,
           "a": 58,
           "intensity": 1.8
         },
