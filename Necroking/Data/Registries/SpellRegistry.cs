@@ -37,11 +37,57 @@ public class FlipbookRef
     [EditorField(Label = "Duration", Order = 7, Step = 0.01f, Decimals = 2, Tooltip = "Seconds the effect lasts. -1 = one full playthrough.")]
     [JsonPropertyName("duration")] public float Duration { get; set; } = -1.0f;
 
+    /// <summary>Optional temperature-ramp recolor — HDR (.exr) flipbooks drawn
+    /// additive only. Presence turns the feature on: the texel's heat value
+    /// picks a hue from a 1D ramp (t = heat / Max) and drives luminance, so one
+    /// grayscale "-temperature" sheet renders as orange fire, necro-green fire,
+    /// etc. purely from data. Custom UI in the spell editor (not reflection-
+    /// rendered). Full design: todos/temperature-ramp-design.md.</summary>
+    [JsonPropertyName("temperatureRamp")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public TemperatureRamp? TemperatureRamp { get; set; }
+
     // Parsed views of the string fields above (identity-cached, never serialized).
     private CachedEnum<EffectBlendMode> _blendModeCache;
     private CachedEnum<EffectAlignment> _alignmentCache;
     [JsonIgnore] public EffectBlendMode BlendModeEnum => _blendModeCache.Get(BlendMode, EffectBlendMode.Alpha);
     [JsonIgnore] public EffectAlignment AlignmentEnum => _alignmentCache.Get(Alignment, EffectAlignment.Ground);
+}
+
+/// <summary>Recipe for temperature-ramp recoloring (<see cref="FlipbookRef.TemperatureRamp"/>).
+/// The rendered chroma ramp = built-in fire base (or <see cref="Stops"/> when
+/// set) run through the color harmonizer (<see cref="Harmonize"/>) — baked to a
+/// 256x1 LUT by Render.GradientLut and sampled by TempGradient.fx.</summary>
+public class TemperatureRamp
+{
+    /// <summary>Heat value mapped to the TOP of the ramp. Match the sheet's
+    /// hot-core values (FireBall02-temperature peaks ~2, FireBall01 ~35).</summary>
+    [JsonPropertyName("max")] public float Max { get; set; } = 2.0f;
+
+    /// <summary>Recolor recipe applied to the ramp (same schema as env-object /
+    /// UI harmonize). Null or no-effect = the base fire look.</summary>
+    [JsonPropertyName("harmonize")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(Necroking.Editor.HarmonizeSettingsJsonConverter))]
+    public Necroking.Editor.HarmonizeSettings? Harmonize { get; set; }
+
+    /// <summary>ADVANCED: replaces the built-in fire base ramp (for multi-band
+    /// exotic looks the harmonizer can't reach). Normally null.</summary>
+    [JsonPropertyName("stops")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<GradientStop>? Stops { get; set; }
+}
+
+/// <summary>One chroma stop of a temperature ramp (<see cref="TemperatureRamp.Stops"/>).
+/// T runs 0 (coolest) to 1 (hottest); colors are chroma only — luminance comes
+/// from the heat texel. Author stops as fairly bright hues; dark stops
+/// double-darken.</summary>
+public class GradientStop
+{
+    [JsonPropertyName("t")] public float T { get; set; }
+    [JsonPropertyName("r")] public byte R { get; set; } = 255;
+    [JsonPropertyName("g")] public byte G { get; set; } = 255;
+    [JsonPropertyName("b")] public byte B { get; set; } = 255;
 }
 
 /// <summary>One weighted color family for a cloud spell's smoke puffs (SpellDef.CloudPalette).

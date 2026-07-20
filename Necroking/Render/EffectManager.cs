@@ -27,6 +27,10 @@ public class Effect
     public float ScatterRadius;
     public Color ScatterRgb;
     public float ScatterStrength = 1f;
+
+    // Temperature-ramp recolor (HDR flipbooks, additive only): reference to
+    // the def's recipe (shared registry object — read-only). Null = normal.
+    public Necroking.Data.Registries.TemperatureRamp? TempRamp;
 }
 
 public class EffectManager
@@ -78,7 +82,8 @@ public class EffectManager
                                   float hdrIntensity = 1f, int blendMode = 0, int alignment = 0,
                                   float duration = -1f,
                                   float scatterRadius = 0f, Color scatterRgb = default,
-                                  float scatterStrength = 1f)
+                                  float scatterStrength = 1f,
+                                  Necroking.Data.Registries.TemperatureRamp? temperatureRamp = null)
     {
         _effects.Add(new Effect
         {
@@ -96,6 +101,7 @@ public class EffectManager
             ScatterRadius = scatterRadius,
             ScatterRgb = scatterRgb,
             ScatterStrength = scatterStrength,
+            TempRamp = temperatureRamp,
         });
     }
 

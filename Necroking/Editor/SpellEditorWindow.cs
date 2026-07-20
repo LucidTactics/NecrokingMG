@@ -171,6 +171,7 @@ public class SpellEditorWindow : EditorWindow
     {
         _gameData = gameData;
         _renderer = new ReflectionPropertyRenderer(_ui, gameData);
+        _renderer.FlipbookExtraSection = DrawTemperatureRampSection;
     }
 
     // Modal-stack adapters for the two sub-popups. PopupManager pushes/pops
@@ -659,7 +660,79 @@ public class SpellEditorWindow : EditorWindow
         if (fb.Duration < 0) _ui.DrawText("(default 0.4s)", new Vector2(x + w - 100, curY - RowH + 4), new Color(120, 120, 140));
         _ui.RowTip(x, curY - RowH, w, RowH, "Seconds the effect lasts. -1 = one full playthrough.");
 
+        DrawTemperatureRampSection(prefix, fb, x, ref curY, w);
+
         return fb;
+    }
+
+    /// <summary>Temperature-ramp recolor rows appended to every FlipbookRef
+    /// section (this manual section + the reflection-rendered ones via
+    /// ReflectionPropertyRenderer.FlipbookExtraSection). Only offered when the
+    /// selected flipbook is an HDR (.exr) sheet; the recipe recolors the ramp
+    /// LUT, never the sheet — see todos/temperature-ramp-design.md.</summary>
+    internal void DrawTemperatureRampSection(string prefix, FlipbookRef fb, int x, ref int curY, int w)
+    {
+        bool isHdr = !string.IsNullOrEmpty(fb.FlipbookID)
+            && Game1.Instance._flipbooks.TryGetValue(fb.FlipbookID, out var rtFb) && rtFb.IsHdr;
+        if (!isHdr)
+        {
+            if (fb.TemperatureRamp != null)
+            {
+                // Recipe exists but the flipbook isn't HDR — surface it rather
+                // than silently hiding a def field.
+                _ui.DrawText("Temp ramp: inactive (flipbook is not an HDR .exr sheet)",
+                    new Vector2(x, curY + 2), EditorBase.TextDim);
+                curY += RowH;
+            }
+            return;
+        }
+
+        bool on = fb.TemperatureRamp != null;
+        bool newOn = _ui.DrawCheckbox("Temperature ramp", on, x, curY);
+        _ui.RowTip(x, curY, w, RowH,
+            "Recolor the sheet's heat data through a chroma ramp (fire base + harmonize).\nAdditive blend only; luminance always comes from the heat texels.");
+        curY += RowH;
+        if (newOn != on)
+        {
+            fb.TemperatureRamp = newOn ? new TemperatureRamp() : null;
+            MarkDirty();
+        }
+        var ramp = fb.TemperatureRamp;
+        if (ramp == null) return;
+
+        float oldMax = ramp.Max;
+        ramp.Max = _ui.DrawFloatField(prefix + "_tmax", "Temp Max", ramp.Max, x, curY, w, 0.1f);
+        ramp.Max = MathF.Max(0.1f, ramp.Max);
+        if (MathF.Abs(ramp.Max - oldMax) > 0.001f) MarkDirty();
+        _ui.RowTip(x, curY, w, RowH,
+            "Heat value mapped to the ramp's hottest color.\nMatch the sheet's hot core (FireBall02-temperature peaks ~2, FireBall01 ~35).");
+        curY += RowH;
+
+        // Ramp previews: base fire (or custom stops) + harmonized result
+        var baseLut = Render.GradientLut.Get(_ui._gd, ramp.Stops, null);
+        var resultLut = Render.GradientLut.Get(_ui._gd, ramp);
+        DrawRampStrip("base", baseLut, x, ref curY, w);
+        if (resultLut != baseLut)
+            DrawRampStrip("result", resultLut, x, ref curY, w);
+
+        // Harmonize recipe. Scratch instance until the first actual change so
+        // an untouched section keeps ramp.Harmonize null (clean JSON).
+        var hz = ramp.Harmonize ?? new Necroking.Editor.HarmonizeSettings();
+        if (_ui.DrawHarmonizeSliders(prefix + "_hz", hz, x, ref curY, w, includeBakeExtras: false))
+        {
+            ramp.Harmonize = hz;
+            MarkDirty();
+        }
+    }
+
+    private void DrawRampStrip(string label, Microsoft.Xna.Framework.Graphics.Texture2D? lut,
+        int x, ref int curY, int w)
+    {
+        _ui.DrawText(label, new Vector2(x, curY + 1), EditorBase.TextDim);
+        var rect = new Rectangle(x + 60, curY + 2, w - 60, 12);
+        if (lut != null) _ui.Scope.Draw(lut, rect, Color.White);
+        _ui.DrawBorder(rect, EditorBase.InputBorder, 1);
+        curY += 18;
     }
 
     // ======================================
@@ -956,6 +1029,10 @@ public class SpellEditorWindow : EditorWindow
     internal bool DevPickFlipbookFile(string fullPath) => _fbTextureBrowser.DevSelectFile(fullPath);
 
     internal bool DevUseFlipbookFile() => _fbTextureBrowser.DevCommitSelection();
+
+    /// <summary>Dev-server hook (flipbook_ui scroll): set the detail column's
+    /// scroll offset so headless screenshots can reach lower sections.</summary>
+    internal void DevScrollDetail(float px) => _detailScroll = Math.Max(0f, px);
 
     // ======================================
     //  Buff Manager Popup

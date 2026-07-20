@@ -55,6 +55,13 @@
       "path": "assets/Effects/Flipbooks/Explosions/Explosion01_5x5.exr",
       "cols": 5,
       "rows": 5
+    },
+    {
+      "id": "fireball_temp_hdr",
+      "name": "Fireball Temp HDR (EXR)",
+      "path": "assets/Effects/Flipbooks/Fireballs/FireBall02-temperature_8x8.exr",
+      "cols": 8,
+      "rows": 8
     }
   ]
 }

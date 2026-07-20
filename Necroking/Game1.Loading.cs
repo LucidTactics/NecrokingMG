@@ -403,11 +403,19 @@ public partial class Game1
             }
             catch (Exception ex) { _hdrSpriteEffect = null; DebugLog.Log("startup", $"HdrSprite not loaded: {ex.Message}"); }
 
+            Microsoft.Xna.Framework.Graphics.Effect? tempGradientFx = null;
+            try
+            {
+                tempGradientFx = Content.Load<Microsoft.Xna.Framework.Graphics.Effect>("TempGradient");
+            }
+            catch (Exception ex) { DebugLog.Log("startup", $"TempGradient not loaded: {ex.Message}"); }
+
             // Register the effect-backed materials now that shaders are loaded
             // (Materials is the canonical pass-state registry for the render
             // pipeline — see todos/render-pipeline-design.md).
             Render.Materials.InitEffectMaterials(_wadingEffect, _dissolveTreeEffect,
-                _hdrSpriteEffect, _depthCutoutEffect, _morphSdfEffect, _outlineFlatEffect);
+                _hdrSpriteEffect, _depthCutoutEffect, _morphSdfEffect, _outlineFlatEffect,
+                tempGradientFx);
 
             {
                 Microsoft.Xna.Framework.Graphics.Effect? glyphEffect = null;

@@ -1363,8 +1363,12 @@ public class EditorBase
     /// the 3 strength sliders) bound directly to a persistent <see cref="HarmonizeSettings"/>.
     /// Returns true if any value changed this frame (caller should re-bake the texture).
     /// Canonical implementation shared by the UI editor and the env-object editor.
+    /// <paramref name="includeBakeExtras"/> false hides the gradient/outline rows —
+    /// they only make sense for whole-texture bakes (the temperature-ramp LUT
+    /// editor recolors a 1px strip where both are meaningless).
     /// </summary>
-    public bool DrawHarmonizeSliders(string id, HarmonizeSettings settings, int x, ref int curY, int w)
+    public bool DrawHarmonizeSliders(string id, HarmonizeSettings settings, int x, ref int curY, int w,
+        bool includeBakeExtras = true)
     {
         bool changed = false;
         int labelW = 80;
@@ -1404,6 +1408,8 @@ public class EditorBase
         settings.HueStrength = vals[0];
         settings.SatStrength = vals[1];
         settings.ValStrength = vals[2];
+
+        if (!includeBakeExtras) return changed;
 
         // Vertical gradient (top -> bottom blend toward GradColor; alpha = max blend)
         DrawText("Grad:", new Vector2(x, curY + 2), TextDim);

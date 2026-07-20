@@ -480,14 +480,14 @@ partial class GameRenderer
             if (!proj.Alive || !RendersInHdrPass(proj)) continue;
             if (!_g._fogOfWar.IsVisible(proj.Position)) continue;
 
+            // Def back-pointer (cheap dictionary probe) — scatter fields +
+            // the projectile flipbook's temperature ramp both come from it.
+            var projSpell = proj.SpellID.Length > 0 ? _g._gameData.Spells.Get(proj.SpellID) : null;
+
             // ScatterGlow: one point emitter per spell projectile in flight
             // (radius/color from the spell's SCATTER fields; 0 radius = no-op).
-            if (proj.SpellID.Length > 0)
-            {
-                var scatterSpell = _g._gameData.Spells.Get(proj.SpellID);
-                if (scatterSpell != null)
-                    _g._scatterGlow.AddSpellPoint(scatterSpell, proj.Position, height: proj.Height);
-            }
+            if (projSpell != null)
+                _g._scatterGlow.AddSpellPoint(projSpell, proj.Position, height: proj.Height);
 
             var sp = _g._renderer.WorldToScreen(proj.Position, proj.Height, _g._camera);
 
@@ -515,10 +515,12 @@ partial class GameRenderer
                 float faceAngle = MathF.Atan2(screenVel.Y, screenVel.X) - MathF.PI / 2f;
                 if (screenVel.LengthSquared() > 1e-6f) screenVel.Normalize();
 
-                // HDR (EXR) sheets are linear half-float — switch to the
-                // LinearTexture material variant for their draws.
-                bool hdrTex = fb.IsHdr && Materials.HdrTexAdditive != null;
-                if (hdrTex) _g.Scope.PushMaterial(Materials.HdrTexAdditive!);
+                // HDR (EXR) sheets need an override material: temperature-ramp
+                // recolor when the spell def carries a recipe, else the plain
+                // linear-texture variant.
+                var hdrMat = Materials.SelectHdrFlipbookMaterial(_g.GraphicsDevice, fb,
+                    additive: true, projSpell?.ProjectileFlipbook?.TemperatureRamp);
+                if (hdrMat != null) _g.Scope.PushMaterial(hdrMat);
 
                 // Trail: draw 2 previous frames behind with lower alpha, then main sprite
                 for (int trail = 2; trail >= 0; trail--)
@@ -537,7 +539,7 @@ partial class GameRenderer
                         faceAngle, origin, scale * trailScale, SpriteEffects.None, 0f);
                 }
 
-                if (hdrTex) _g.Scope.PopMaterial();
+                if (hdrMat != null) _g.Scope.PopMaterial();
             }
             else
             {
@@ -598,12 +600,13 @@ partial class GameRenderer
                 Color color = blendMode == 0
                     ? HdrColor.ToHdrVertexAlpha(eff.Tint, alpha, eff.HdrIntensity)
                     : HdrColor.ToHdrVertex(eff.Tint, alpha, eff.HdrIntensity);
-                // HDR (EXR) sheets need the LinearTexture material variant
-                var hdrTexMat = blendMode == 0 ? Materials.HdrTexAlpha : Materials.HdrTexAdditive;
-                bool hdrTex = fb.IsHdr && hdrTexMat != null;
-                if (hdrTex) _g.Scope.PushMaterial(hdrTexMat!);
+                // HDR (EXR) sheets need an override material (temperature ramp
+                // or plain linear-texture variant)
+                var hdrMat = Materials.SelectHdrFlipbookMaterial(_g.GraphicsDevice, fb,
+                    additive: blendMode == 1, eff.TempRamp);
+                if (hdrMat != null) _g.Scope.PushMaterial(hdrMat);
                 _g.Scope.Draw(fb.Texture, sp, srcRect, color, 0f, origin, fbScale, SpriteEffects.None, 0f);
-                if (hdrTex) _g.Scope.PopMaterial();
+                if (hdrMat != null) _g.Scope.PopMaterial();
             }
             else
             {
@@ -641,7 +644,8 @@ partial class GameRenderer
                     blendMode: impact.HitEffectBlendMode, alignment: impact.HitEffectAlignment,
                     scatterRadius: (impactSpell?.ScatterRadius ?? 0f) * 1.6f, // burst > flight orb
                     scatterRgb: impactSpell?.ScatterRgb() ?? default,
-                    scatterStrength: impactSpell?.ScatterStrength ?? 1f);
+                    scatterStrength: impactSpell?.ScatterStrength ?? 1f,
+                    temperatureRamp: impactSpell?.HitEffectFlipbook?.TemperatureRamp);
             }
             else if (impact.AoeRadius > 0)
             {

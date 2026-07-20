@@ -150,7 +150,8 @@ public partial class Game1 {
       float duration = fb.Duration >= 0f ? fb.Duration : 0.4f;
 
       _effectManager.SpawnSpellImpact(pos, fb.Scale, tint, fb.FlipbookID,
-         fb.Color.Intensity, blendMode, alignment, duration);
+         fb.Color.Intensity, blendMode, alignment, duration,
+         temperatureRamp: fb.TemperatureRamp);
    }
 
    /// <summary>

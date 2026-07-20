@@ -2379,6 +2379,10 @@ public partial class Game1 {
                         ? Necroking.Dev.DevServer.Ok("selection committed")
                         : Necroking.Dev.DevServer.Error("browser not open, nothing selected, or file outside project"));
                      break;
+                  case "scroll":
+                     _spellEditor.DevScrollDetail(c.Args.Length >= 2 ? DevFloat(c.Args[1]) : 0f);
+                     c.Complete(Necroking.Dev.DevServer.Ok("detail scrolled"));
+                     break;
                   default:
                      c.Complete(Necroking.Dev.DevServer.Error("flipbook_ui supports: manager|browse|pick <path>|use"));
                      break;

@@ -84,6 +84,7 @@ public class SpellPreview
         public float Scale;
         public string FlipbookID;
         public float GravityScale;
+        public Necroking.Data.Registries.TemperatureRamp? TempRamp;
     }
 
     // Strike state
@@ -707,10 +708,10 @@ public class SpellPreview
                 float scale = pixelSize / srcRect.Width;
                 var origin = new Vector2(srcRect.Width / 2f, srcRect.Height / 2f);
 
-                // HDR (EXR) sheets need the LinearTexture material variant
-                // (matches Game1.DrawProjectilesHdr)
-                bool hdrTex = fb.IsHdr && Render.Materials.HdrTexAdditive != null;
-                if (hdrTex) Scope.PushMaterial(Render.Materials.HdrTexAdditive!);
+                // HDR (EXR) sheets need an override material — temperature ramp
+                // or linear-texture variant (matches Game1.DrawProjectilesHdr)
+                var hdrMat = Render.Materials.SelectHdrFlipbookMaterial(_gd, fb, additive: true, p.TempRamp);
+                if (hdrMat != null) Scope.PushMaterial(hdrMat);
 
                 // Trail: 2 previous frames behind with lower alpha
                 Vec2 velDir = p.Velocity.LengthSquared() > 0.01f
@@ -733,7 +734,7 @@ public class SpellPreview
                         p.Age * 2f, origin, scale * trailScale, SpriteEffects.None, 0f);
                 }
 
-                if (hdrTex) Scope.PopMaterial();
+                if (hdrMat != null) Scope.PopMaterial();
             }
             else
             {
@@ -1023,6 +1024,7 @@ public class SpellPreview
         {
             p.ProjectileColor = spell.ProjectileFlipbook.Color;
             p.FlipbookID = spell.ProjectileFlipbook.FlipbookID ?? "";
+            p.TempRamp = spell.ProjectileFlipbook.TemperatureRamp;
         }
         else
         {

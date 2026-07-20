@@ -195,6 +195,43 @@
       }
     },
     {
+      "id": "buff_4_copy2",
+      "name": "CastingFire",
+      "duration": 4,
+      "hasWeaponParticle": true,
+      "weaponParticle": {
+        "flipbookID": "fire_loop",
+        "fps": 15,
+        "color": {
+          "r": 254,
+          "g": 213,
+          "b": 175,
+          "a": 58,
+          "intensity": 1.8
+        },
+        "spawnRate": 10,
+        "rangeMin": 0,
+        "rangeMax": 1,
+        "particleLifetime": 0.5,
+        "particleScale": 0.7,
+        "moveSpeed": 1,
+        "moveDirX": 0,
+        "moveDirY": 0,
+        "moveDirZ": 1,
+        "blendMode": 1,
+        "renderBehind": false,
+        "attachedFlame": true,
+        "scatterRadius": 1,
+        "scatterStrength": 0.6
+      },
+      "unitTint": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 0
+      }
+    },
+    {
       "id": "buff_4_copy",
       "name": "CastingEffect Green",
       "duration": 4,

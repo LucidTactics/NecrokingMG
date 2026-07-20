@@ -2562,7 +2562,7 @@
         "+3: fatigue -75%",
         "+4: fatigue -85%"
       ],
-      "castingBuffID": "buff_4",
+      "castingBuffID": "buff_4_copy2",
       "aoeType": "AOE",
       "damage": 18,
       "aoeRadius": 4,
@@ -2584,7 +2584,7 @@
       },
       "projectileSpeed": 28.3,
       "projectileFlipbook": {
-        "flipbookID": "fireball_hdr",
+        "flipbookID": "fireball_temp_hdr",
         "fps": 0,
         "scale": 1.5,
         "color": {
@@ -2597,14 +2597,29 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "temperatureRamp": {
+          "max": 2.0,
+          "harmonize": {
+            "targetColor": [
+              70,
+              255,
+              130,
+              255
+            ],
+            "hueStrength": 1.0,
+            "satStrength": 0.5,
+            "valStrength": 0.0,
+            "useHcl": true
+          }
+        }
       },
-      "scatterRadius": 2.8,
-      "scatterStrength": 0.6,
+      "scatterRadius": 1.9,
+      "scatterStrength": 0.5,
       "scatterColor": {
         "r": 255,
-        "g": 160,
-        "b": 60,
+        "g": 202,
+        "b": 147,
         "a": 255,
         "intensity": 1
       }

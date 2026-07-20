@@ -109,6 +109,11 @@
 /processor:EffectProcessor
 /build:HdrSprite.fx
 
+#begin TempGradient.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/build:TempGradient.fx
+
 #begin FogComposite.fx
 /importer:EffectImporter
 /processor:EffectProcessor

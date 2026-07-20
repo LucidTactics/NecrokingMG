@@ -554,8 +554,21 @@ public class ReflectionPropertyRenderer
         // Recursively draw nested object's annotated properties
         var (nextY, changed) = DrawAnnotatedProperties(fieldId, value, x, curY, w);
         curY = nextY;
+
+        // Type-specific custom rows reflection can't express (e.g. the spell
+        // editor's temperature-ramp block on FlipbookRef sections).
+        if (value is Data.Registries.FlipbookRef fbRef && FlipbookExtraSection != null)
+            FlipbookExtraSection(fieldId, fbRef, x, ref curY, w);
+
         return changed;
     }
+
+    /// <summary>Custom rows appended after every reflection-rendered
+    /// FlipbookRef (assigned by SpellEditorWindow → DrawTemperatureRampSection;
+    /// the manual DrawFlipbookRefSection calls the same method directly).</summary>
+    public FlipbookExtraSectionDrawer? FlipbookExtraSection;
+    public delegate void FlipbookExtraSectionDrawer(string fieldId, Data.Registries.FlipbookRef fb,
+        int x, ref int curY, int w);
 
     private bool HasAnnotatedProperties(Type type)
     {

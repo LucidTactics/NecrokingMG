@@ -191,6 +191,40 @@ public static class Materials
     /// Flipbook.IsHdr).</summary>
     public static Material? HdrTexAdditive { get; private set; }
 
+    /// <summary>Temperature-gradient flame recolor (TempGradient.fx): heat
+    /// scalar from an HDR sheet picks chroma from a baked 1D LUT (slot 1) and
+    /// drives luminance. Additive only; per-draw TempMax + LUT bind — set the
+    /// uniforms, then PushMaterial (perDrawParams keeps items unmerged).
+    /// Draw sites go through <see cref="SelectHdrFlipbookMaterial"/>.</summary>
+    public static Material? TempGradient { get; private set; }
+
+    /// <summary>Pick the override material for an HDR (EXR) flipbook draw and
+    /// set its per-draw uniforms: the temperature-ramp recolor when a recipe is
+    /// provided (additive only), else the plain linear-texture variant. Null =
+    /// LDR sheet, keep the pass material. Caller pushes the returned material
+    /// around its draw (params upload at the Push flush — MorphSdf pattern;
+    /// TempGradient registers perDrawParams).</summary>
+    public static Material? SelectHdrFlipbookMaterial(
+        Microsoft.Xna.Framework.Graphics.GraphicsDevice device, Flipbook fb,
+        bool additive, Necroking.Data.Registries.TemperatureRamp? ramp)
+    {
+        if (!fb.IsHdr) return null;
+        if (additive && ramp != null && TempGradient is { } tempMat)
+        {
+            var lut = GradientLut.Get(device, ramp);
+            if (lut != null)
+            {
+                var fx = tempMat.Effect;
+                fx.Parameters["TempMax"]?.SetValue(System.MathF.Max(0.01f, ramp.Max));
+                var pLut = fx.Parameters["GradientSampler"];
+                if (pLut != null) pLut.SetValue(lut);
+                else device.Textures[1] = lut;
+                return tempMat;
+            }
+        }
+        return additive ? HdrTexAdditive : HdrTexAlpha;
+    }
+
     /// <summary>Depth-only unit silhouette stamp (DepthCutout.fx): color write
     /// off, depth write on — the occluder pass for depth-tested fog.</summary>
     public static Material? DepthStamp { get; private set; }
@@ -216,8 +250,16 @@ public static class Materials
     /// after shader loading; any null effect leaves its material null.</summary>
     public static void InitEffectMaterials(XnaEffect? wading, XnaEffect? dissolveTree,
         XnaEffect? hdrSprite, XnaEffect? depthCutout, XnaEffect? morphSdf,
-        XnaEffect? outlineFlat)
+        XnaEffect? outlineFlat, XnaEffect? tempGradient = null)
     {
+        if (tempGradient != null)
+        {
+            tempGradient.Parameters["MaxIntensity"]?.SetValue(HdrColor.MaxHdrIntensity);
+            TempGradient = Register("TempGradient", tempGradient, BlendState.Additive,
+                SamplerState.LinearClamp,
+                extraSamplerSlots: new[] { (1, SamplerState.LinearClamp) },
+                perDrawParams: true);
+        }
         if (morphSdf != null)
             MorphSdf = Register("MorphSdf", morphSdf, BlendState.AlphaBlend,
                 SamplerState.LinearClamp,
