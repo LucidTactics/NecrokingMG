@@ -93,6 +93,19 @@ anti-patterns.md): a `?`-nullable set-once field whose loss produces no error.
 (guard for LoadContent ordering: `_animMeta` may be empty before load — call is harmless).
 Diagnostic: `[SetAnimMeta] N entries` in `log/jump.log` appears once at startup only.
 
+# GetCurrentFrame / GetCurrentFrameIndex are hand-kept twins that drifted (found 2026-07-19)
+
+`Necroking/Render/AnimController.cs`: `GetCurrentFrame` and `GetCurrentFrameIndex` each
+reimplement the reverse-playback mirror + cumulative-ms frame walk + tick fallback. They
+drifted: `GetCurrentFrame` clamps to the (unique-frame) keyframe list while
+`GetCurrentFrameIndex` returns the raw logical index — the drawn sprite freezes while
+markers/timing keep advancing (the 8-logical-vs-5-unique animationmeta `sprites` bug).
+When fixing, extract ONE shared "resolve logical frame index" helper both call. Related
+pre-existing skews in the same cluster: `UnitEditorWindow.StepAnim`'s tick fallback compares
+an ms-mode `AnimTime` against tick `Keyframe.Time`s; `AnimMetaLoader` reads
+`loop_start`/`loop_end` but the exporter writes `loop_start_index`/`loop_end_index`
+(fields never populated, zero consumers).
+
 # Wrong-list weapon lookup for ranged pending attacks (latent, found 2026-07-19)
 
 `Game1.Animation.cs` `ComputeWeaponCycleSeconds(unitIdx, weaponIdx)` and

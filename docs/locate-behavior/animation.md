@@ -221,6 +221,56 @@ wrap, applied inside the `GetEffective*` trio so total/effect math stays consist
 No fallback-mode gotcha: when NO ms data exists, playback falls back to tick counting
 (`_animTime` counts ticks, `AnimationData.TotalTicks`) and ms overrides do nothing.
 
+## Sprite-atlas keyframes — spritemeta parsing & the unique-vs-logical frame split
+
+The DRAWN frames and the TIMED frames come from two different files that do NOT agree on
+frame count; know this before touching frame lookup.
+
+- **`assets/Sprites/<Atlas>.spritemeta`** (TSV) → parsed by `SpriteAtlas.ParseMeta`
+  (`Necroking/Render/SpriteAtlas.cs`). Key format `Unit.Anim.tick.?.yaw` (parts: [0] unit,
+  [1] anim, [2] tick → `Keyframe.Time`, [4] angle; [3] unused). Builds
+  `UnitSpriteData.Animations[anim].AngleFrames[angle] : List<Keyframe>` — **one entry per
+  UNIQUE atlas frame**, sorted by Time. `AnimationData.GetAngle(angle)` is the accessor
+  every renderer/editor uses. Post-parse passes mutate the same lists in place:
+  `FixupYOrigin` (bottom-left → top-left Y flip, per-texture pending markers),
+  `RescaleAllFrames`, `ComputeFrameBoundingBoxes` (pixel-scan BodyTopV/BottomV).
+  Extension sheets (`__N`) merge in via `ParseExtensionMeta`/`LoadExtension`.
+- **`assets/Sprites/<Atlas>.animationmeta`** (JSONL) → `AnimMetaLoader.Load`
+  (`Necroking/Render/AnimationMeta.cs`) into `Game1._animMeta` keyed `"Sprite.Category"`.
+  Per-(unit,category,yaw) lines carry **LOGICAL-frame arrays**: `time_ms` (one per logical
+  frame), `markers` (`mount_pos`, one per logical frame per mount id), and `sprites`
+  (logical→unique sprite-key mapping, **repeats allowed** — e.g. Wretched.Spell1 yaw 0: 8
+  logical frames onto 5 unique sprites). **The loader DROPS `sprites` today** (never read),
+  and reads `loop_start`/`loop_end` while the exporter writes `loop_start_index`/
+  `loop_end_index` (so `LoopStartIndex`/`LoopEndIndex` are never populated — also have zero
+  consumers). `frame_ticks` is loaded into `AnimYawMeta.FrameTicks` but has zero consumers.
+- **Load order** (`Game1.Loading.cs` LoadContent steps): decode step parses ALL spritemetas
+  (base `ParseMetaOnly` + extension `ParseExtensionMeta`) → "Loading animation metadata"
+  step runs the `AnimMetaLoader.Load` loop + `ValidateEffectTimes` → per-atlas GPU-upload
+  steps call `SetTextureAndFinalize` (Y-flip/bbox) + `StrideCalibration.CalibrateAtlas` →
+  "Wiring unit sprites" sets `UnitDef.SpriteData`. The editor has a second, minimal atlas
+  path: `UnitEditorWindow.RefreshAtlases` (full `SpriteAtlas.Load`, loads NO animationmeta).
+- **The mismatch at play time**: `AnimController.GetCurrentFrame` walks
+  `GetEffectiveFrameDurations` (logical count) but indexes into `GetAngle`'s unique-frame
+  list and **clamps** `Math.Min(frameIdx, kfs.Count-1)` when counts differ — the drawn
+  sprite freezes on the last unique frame while `GetCurrentFrameIndex` (no clamp, pure
+  durations walk) keeps advancing; weapon markers (`WeaponPointResolver.TryResolve` ←
+  `AnimationMeta.TryGetMount`, fed the logical index from `Game1.Animation.cs`) keep moving.
+  Count mismatch can ALSO come from anim/meta pairing skew: `ResolveAnimForState` may fall
+  back to the Idle CLIP while `ResolveMetaForState` resolved the requested state's meta —
+  so a defensive clamp must stay even if unique-vs-logical is fixed.
+- **`Keyframe.Time` (ticks) is only read on the no-ms fallback paths**: `AnimationData.
+  TotalTicks`, the tick branches of `AnimController.Update`/`GetCurrentFrame`/
+  `GetCurrentFrameIndex`, and `UnitEditorWindow.StepAnim`'s fallback (which compares an
+  ms-mode `AnimTime` against tick Times — pre-existing skew for meta-driven anims without
+  per-unit overrides). When meta `time_ms` exists, no runtime path reads `.Time`.
+- **kfs consumers census** (things that read `GetAngle` lists directly): last-frame corpse
+  poses `GameRenderer.Corpses.cs` (`kfs[kfs.Count-1]`), first-frame thumbnails
+  (`MapEditorWindow` units tab, `GetFrameForStateStart`, editor previews),
+  `StrideCalibration.MeasureGait`/`MeasureIdleFootSpread` (min/max envelope over frames —
+  count-insensitive), `UnitEditorWindow.GetFrameCountForCurrentAnim` (sizes the per-frame
+  "Frame N ms" override editor + "Set All Frames"), `ShadowRenderer` (via GetCurrentFrame).
+
 ## Interruption / lock / cooldown mechanisms that exist
 
 - Priority lanes + same-priority "must have started" replacement gate (AnimResolver).
