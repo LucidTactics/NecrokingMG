@@ -568,6 +568,10 @@ partial class GameRenderer
     /// <summary>Draw effects matching the given blend mode (0=alpha, 1=additive).</summary>
     private void DrawEffectsFiltered(int blendMode)
     {
+        // Channel-beam hit effects are STATELESS per-frame draws off the live
+        // beam records (position tracking, looping, and kill-on-channel-end all
+        // fall out for free — no spawn/despawn lifecycle to desync).
+        DrawBeamHitEffects(blendMode);
         foreach (var eff in _g._effectManager.Effects)
         {
             if (!eff.Alive || eff.BlendMode != blendMode) continue;
@@ -590,7 +594,12 @@ partial class GameRenderer
             // Try flipbook
             if (!string.IsNullOrEmpty(eff.FlipbookKey) && _g._flipbooks.TryGetValue(eff.FlipbookKey, out var fb) && fb.IsLoaded)
             {
-                int frameIdx = fb.GetFrameAtTime(eff.Age);
+                // Loop cycles frames (FPS override honored); one-shots map the
+                // clip once onto the lifetime so it always completes exactly.
+                float fps = eff.FpsOverride > 0f ? eff.FpsOverride : fb.FPS;
+                int frameIdx = eff.LoopFrames
+                    ? (fb.TotalFrames > 0 ? (int)(eff.Age * fps) % fb.TotalFrames : 0)
+                    : fb.GetFrameAtNormalizedTime(eff.Age / MathF.Max(eff.Lifetime, 0.001f));
                 var srcRect = fb.GetFrameRect(frameIdx);
                 var origin = new Vector2(srcRect.Width * eff.AnchorX, srcRect.Height * eff.AnchorY);
                 // Scale relative to world size
@@ -622,6 +631,49 @@ partial class GameRenderer
         }
     }
 
+    /// <summary>Draw each live channel beam's hit effect at the beam end (the
+    /// target unit). Runs inside the HDR effect passes so blend mode, EXR
+    /// sheets, and temperature ramps all work; the animation clock is the
+    /// beam's own Elapsed (freezes with the sim, like the beam itself). Loop
+    /// cycles the clip; off = play once and hold the last frame.</summary>
+    private void DrawBeamHitEffects(int blendMode)
+    {
+        foreach (var beam in _g._sim.Lightning.Beams)
+        {
+            if (!beam.Alive || beam.SpellID.Length == 0) continue;
+            var spell = _g._gameData.Spells.Get(beam.SpellID);
+            if (spell?.HitEffectFlipbook is not { } fbRef || string.IsNullOrEmpty(fbRef.FlipbookID)) continue;
+            if ((fbRef.BlendMode == "Additive" ? 1 : 0) != blendMode) continue;
+            if (!_g._flipbooks.TryGetValue(fbRef.FlipbookID, out var fb) || !fb.IsLoaded) continue;
+
+            int targetIdx = UnitUtil.ResolveUnitIndex(_g._sim.Units, beam.TargetID);
+            if (targetIdx < 0) continue;
+            var targetPos = _g._sim.Units[targetIdx].Position;
+            if (!_g._fogOfWar.IsVisible(targetPos)) continue;
+
+            float fps = fbRef.FPS > 0f ? fbRef.FPS : fb.FPS;
+            int frameIdx = fbRef.Loop
+                ? (fb.TotalFrames > 0 && fps > 0f ? (int)(beam.Elapsed * fps) % fb.TotalFrames : 0)
+                : fb.GetFrameAtNormalizedTime(fps > 0f && fb.TotalFrames > 0
+                    ? beam.Elapsed * fps / fb.TotalFrames : 1f);
+            var srcRect = fb.GetFrameRect(frameIdx);
+
+            var sp = _g._renderer.WorldToScreen(targetPos, 1f, _g._camera);
+            var origin = new Vector2(srcRect.Width * 0.5f, srcRect.Height * 0.5f);
+            // Same world-size convention as DrawEffectsFiltered (scale × 2 world units)
+            float fbScale = fbRef.Scale * 2f * _g._camera.Zoom / srcRect.Width;
+            Color color = blendMode == 0
+                ? HdrColor.ToHdrVertexAlpha(fbRef.Color.ToColor(), 1f, fbRef.Color.Intensity)
+                : HdrColor.ToHdrVertex(fbRef.Color.ToColor(), 1f, fbRef.Color.Intensity);
+
+            var hdrMat = Materials.SelectHdrFlipbookMaterial(_g.GraphicsDevice, fb,
+                additive: blendMode == 1, fbRef.TemperatureRamp);
+            if (hdrMat != null) _g.Scope.PushMaterial(hdrMat);
+            _g.Scope.Draw(fb.Texture, sp, srcRect, color, 0f, origin, fbScale, SpriteEffects.None, 0f);
+            if (hdrMat != null) _g.Scope.PopMaterial();
+        }
+    }
+
     /// <summary>Spawn new effects from projectile impacts (called once per frame, blend-mode independent).</summary>
     private void SpawnImpactEffects()
     {
@@ -639,13 +691,23 @@ partial class GameRenderer
                 // Thread the firing spell's SCATTER fields into the impact effect so
                 // the explosion registers a scatter halo while it plays.
                 var impactSpell = impact.SpellID.Length > 0 ? _g._gameData.Spells.Get(impact.SpellID) : null;
-                _g._effectManager.SpawnSpellImpact(impact.Position, impact.HitEffectScale,
-                    impact.HitEffectColor.ToColor(), fbId, hdrIntensity: impact.HitEffectColor.Intensity,
-                    blendMode: impact.HitEffectBlendMode, alignment: impact.HitEffectAlignment,
-                    scatterRadius: (impactSpell?.ScatterRadius ?? 0f) * 1.6f, // burst > flight orb
-                    scatterRgb: impactSpell?.ScatterRgb() ?? default,
-                    scatterStrength: impactSpell?.ScatterStrength ?? 1f,
-                    temperatureRamp: impactSpell?.HitEffectFlipbook?.TemperatureRamp);
+                if (impactSpell?.HitEffectFlipbook is { } fbRef)
+                {
+                    // Spell projectile: the def is authoritative — full FlipbookRef
+                    // contract (duration/loop/fps/ramp) via the canonical spawn.
+                    _g.SpawnFlipbookEffect(fbRef, impact.Position,
+                        scatterRadius: impactSpell.ScatterRadius * 1.6f, // burst > flight orb
+                        scatterRgb: impactSpell.ScatterRgb(),
+                        scatterStrength: impactSpell.ScatterStrength);
+                }
+                else
+                {
+                    // No spell def (potion bottles copy their visual onto the
+                    // projectile) — legacy field-by-field path.
+                    _g._effectManager.SpawnSpellImpact(impact.Position, impact.HitEffectScale,
+                        impact.HitEffectColor.ToColor(), fbId, hdrIntensity: impact.HitEffectColor.Intensity,
+                        blendMode: impact.HitEffectBlendMode, alignment: impact.HitEffectAlignment);
+                }
             }
             else if (impact.AoeRadius > 0)
             {

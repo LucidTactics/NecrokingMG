@@ -31,6 +31,12 @@ public class Effect
     // Temperature-ramp recolor (HDR flipbooks, additive only): reference to
     // the def's recipe (shared registry object — read-only). Null = normal.
     public Necroking.Data.Registries.TemperatureRamp? TempRamp;
+
+    // Frame playback: LoopFrames cycles the clip for the whole Lifetime;
+    // otherwise the clip maps once onto the Lifetime (normalized time).
+    // FpsOverride > 0 replaces the flipbook's own rate for looping playback.
+    public bool LoopFrames;
+    public float FpsOverride;
 }
 
 public class EffectManager
@@ -83,7 +89,8 @@ public class EffectManager
                                   float duration = -1f,
                                   float scatterRadius = 0f, Color scatterRgb = default,
                                   float scatterStrength = 1f,
-                                  Necroking.Data.Registries.TemperatureRamp? temperatureRamp = null)
+                                  Necroking.Data.Registries.TemperatureRamp? temperatureRamp = null,
+                                  bool loop = false, float fpsOverride = 0f)
     {
         _effects.Add(new Effect
         {
@@ -102,6 +109,8 @@ public class EffectManager
             ScatterRgb = scatterRgb,
             ScatterStrength = scatterStrength,
             TempRamp = temperatureRamp,
+            LoopFrames = loop,
+            FpsOverride = fpsOverride,
         });
     }
 

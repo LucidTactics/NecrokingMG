@@ -563,11 +563,9 @@ public class SpellEditorWindow : EditorWindow
             if (MathF.Abs(def.AoeRadius - oldAoeR) > 0.001f) MarkDirty();
         }
 
-        // HitEffectFlipbook — shown in Projectile (via reflection) and Strike ground
-        if (def.Category == "Strike" && !def.StrikeTargetUnit)
-        {
-            def.HitEffectFlipbook = DrawFlipbookRefSection("sp_st_hitfb", "Hit Effect", def.HitEffectFlipbook, x + 8, ref curY, fieldW);
-        }
+        // (HitEffectFlipbook renders via reflection for EVERY category — see the
+        // [EditorField] on SpellDef.HitEffectFlipbook. The old manual Strike
+        // block here was deleted with it.)
 
         // RS22: End scissor clipping
         _ui.EndClip();
@@ -580,90 +578,15 @@ public class SpellEditorWindow : EditorWindow
     }
 
     // Draw*Fields methods removed — all fields now rendered via reflection attributes on SpellDef.
-    // Only DrawFlipbookRefSection kept below for manual HitEffectFlipbook in Strike.
+    // (DrawFlipbookRefSection deleted too: HitEffectFlipbook is a reflection
+    // section now, and FlipbookRef custom rows ride ReflectionPropertyRenderer's
+    // FlipbookExtraSection hook — DrawTemperatureRampSection below.)
 
     // ===========================
     //  DELETED: DrawProjectileFields, DrawBuffDebuffFields, DrawSummonFields,
     //           DrawStrikeFields, DrawBeamFields, DrawDrainFields
     //  (replaced by [EditorField] attributes on SpellDef properties)
     // ===========================
-
-    //  FlipbookRef sub-editor (reusable)
-    //  Returns the (possibly created) ref
-    // ======================================
-    private FlipbookRef? DrawFlipbookRefSection(string prefix, string sectionLabel,
-        FlipbookRef? fbRef, int x, ref int curY, int w)
-    {
-        curY += 6;
-        _ui.DrawText(sectionLabel, new Vector2(x, curY), new Color(200, 180, 255));
-        curY += 18;
-
-        // Create button if null
-        if (fbRef == null)
-        {
-            if (_ui.DrawButton("Create " + sectionLabel, x, curY, 160, 22))
-            {
-                fbRef = new FlipbookRef();
-                MarkDirty();
-            }
-            curY += RowH;
-            return fbRef;
-        }
-
-        var fb = fbRef;
-
-        // Flipbook dropdown
-        fb.FlipbookID = DrawFlipbookDropdown(prefix + "_fb", "Flipbook", fb.FlipbookID, x, ref curY, w);
-        _ui.RowTip(x, curY - RowH, w, RowH, "Which effect animation plays.");
-
-        // FPS
-        fb.FPS = DrawFloatField10x(prefix + "_fps", "FPS", fb.FPS, x, ref curY, w);
-        if (fb.FPS < 0) _ui.DrawText("(default)", new Vector2(x + w - 70, curY - RowH + 4), new Color(120, 120, 140));
-        _ui.RowTip(x, curY - RowH, w, RowH,
-            "Playback speed (frames/sec). -1 = the flipbook's own rate.");
-
-        // Scale
-        fb.Scale = DrawFloatField100x(prefix + "_scl", "Scale", fb.Scale, x, ref curY, w);
-        _ui.RowTip(x, curY - RowH, w, RowH, "Size multiplier for the effect.");
-
-        // Rotation
-        float oldRot = fb.Rotation;
-        fb.Rotation = _ui.DrawFloatField(prefix + "_rot", "Rotation", fb.Rotation, x, curY, w, 1f);
-        if (MathF.Abs(fb.Rotation - oldRot) > 0.01f) MarkDirty();
-        _ui.RowTip(x, curY, w, RowH, "Rotates the effect sprite (degrees).");
-        curY += RowH;
-
-        // Color swatch
-        var c = fb.Color;
-        c = DrawHdrColorSwatch(prefix + "_col", "Color", c, x, ref curY, w);
-        fb.Color = c;
-        _ui.RowTip(x, curY - RowH, w, RowH, "Tint color; intensity above 1 makes it glow.");
-
-        // Blend Mode toggle
-        string oldBlend = fb.BlendMode;
-        fb.BlendMode = _ui.DrawCombo(prefix + "_blend", "Blend", fb.BlendMode, BlendOptions, x, curY, w,
-            optionTooltips: BlendTips);
-        if (fb.BlendMode != oldBlend) MarkDirty();
-        _ui.RowTip(x, curY, w, RowH, "Alpha = solid/smoky look; Additive = glowing light look.");
-        curY += RowH;
-
-        // Alignment toggle
-        string oldAlign = fb.Alignment;
-        fb.Alignment = _ui.DrawCombo(prefix + "_align", "Alignment", fb.Alignment, AlignOptions, x, curY, w,
-            optionTooltips: AlignTips);
-        if (fb.Alignment != oldAlign) MarkDirty();
-        _ui.RowTip(x, curY, w, RowH, "Ground = flat on the terrain; Upright = stands facing the camera.");
-        curY += RowH;
-
-        // Duration
-        fb.Duration = DrawFloatField100x(prefix + "_dur", "Duration", fb.Duration, x, ref curY, w);
-        if (fb.Duration < 0) _ui.DrawText("(default 0.4s)", new Vector2(x + w - 100, curY - RowH + 4), new Color(120, 120, 140));
-        _ui.RowTip(x, curY - RowH, w, RowH, "Seconds the effect lasts. -1 = one full playthrough.");
-
-        DrawTemperatureRampSection(prefix, fb, x, ref curY, w);
-
-        return fb;
-    }
 
     /// <summary>Temperature-ramp recolor rows appended to every FlipbookRef
     /// section (this manual section + the reflection-rendered ones via

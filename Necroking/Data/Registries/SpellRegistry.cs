@@ -34,8 +34,17 @@ public class FlipbookRef
     [EditorCombo("Ground", "Upright")]
     [JsonPropertyName("alignment")] public string Alignment { get; set; } = "Ground";
 
-    [EditorField(Label = "Duration", Order = 7, Step = 0.01f, Decimals = 2, Tooltip = "Seconds the effect lasts. -1 = one full playthrough.")]
+    [EditorField(Label = "Duration", Order = 7, Step = 0.01f, Decimals = 2, Tooltip = "Seconds the effect lasts. -1 = one full playthrough\n(0.4s when Loop is on). Ignored on channel beams (they\nshow it while channeling).")]
     [JsonPropertyName("duration")] public float Duration { get; set; } = -1.0f;
+
+    /// <summary>Loop the frames instead of playing the clip once. One-shots:
+    /// off = play through once and end; on = cycle for Duration seconds.
+    /// Channel beams always show the hit effect while channeling — Loop picks
+    /// cycling vs play-once-and-hold-last-frame.</summary>
+    [EditorField(Label = "Loop", Order = 8, Tooltip = "Repeat the animation. Off = play once and end.\nOn = cycle frames (channel beams, persistent effects).")]
+    [JsonPropertyName("loop")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Loop { get; set; }
 
     /// <summary>Optional temperature-ramp recolor — HDR (.exr) flipbooks drawn
     /// additive only. Presence turns the feature on: the texel's heat value
@@ -392,8 +401,12 @@ public class SpellDef : INamedDef
     [EditorVisible("Category", "WolfHunt")]
     [JsonPropertyName("wolfHuntDuration")] public float WolfHuntDuration { get; set; } = 0;
 
-    // HitEffectFlipbook — shown in Projectile and Strike(!target), handled manually for Strike
-    [EditorHide]
+    // HitEffectFlipbook — the standard splash at the spell's hit moment, editable
+    // for EVERY category (no [EditorVisible]): projectile impact, strike/zap land,
+    // cloud burst, beam end while channeling. Null = none (creatable in-editor).
+    [EditorField(Label = "Hit Effect", Group = "HIT EFFECT", Order = 260,
+        GroupColorR = 255, GroupColorG = 140, GroupColorB = 90,
+        Tooltip = "Splash effect at the spell's hit moment (impact, strike land,\ncloud burst, beam end while channeling). Empty = none.")]
     [JsonPropertyName("hitEffectFlipbook")] public FlipbookRef? HitEffectFlipbook { get; set; }
 
     // ============ PROJECTILE ============

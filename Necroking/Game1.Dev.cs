@@ -2416,6 +2416,34 @@ public partial class Game1 {
                break;
             }
 
+            // Spawn a channel beam directly (no cast anim / held-button channel —
+            // dev casts can't hold a channel, so beams die instantly through the
+            // normal pipeline). Lives until MaxDuration/target death.
+            // devctl: cmd beam <spellID> <selector>
+            case "beam": {
+               if (c.Args.Length < 2) {
+                  c.Complete(Necroking.Dev.DevServer.Error("beam needs: <spellID> <targetSelector>"));
+                  break;
+               }
+               var beamSpell = _gameData.Spells.Get(c.Args[0]);
+               if (beamSpell == null) {
+                  c.Complete(Necroking.Dev.DevServer.Error($"unknown spell '{c.Args[0]}'"));
+                  break;
+               }
+               var beamTargets = DevResolveUnits(string.Join(" ", c.Args.Skip(1)));
+               int beamNi = _sim.NecromancerIndex;
+               if (beamNi < 0 || beamTargets.Count == 0) {
+                  c.Complete(Necroking.Dev.DevServer.Error("need a necromancer and a matching target"));
+                  break;
+               }
+               _sim.Lightning.SpawnBeam(_sim.Units[beamNi].Id, _sim.Units[beamTargets[0]].Id,
+                  beamSpell.Id, beamSpell.ScaledDamage(0), beamSpell.BeamTickRate,
+                  beamSpell.BeamRetargetRadius, beamSpell.BuildBeamStyle());
+               c.Complete(Necroking.Dev.DevServer.Ok(
+                  $"beam '{beamSpell.Id}' -> unit idx {beamTargets[0]}"));
+               break;
+            }
+
             // Spawn a fireball projectile directly (deterministic, no mana/anim
             // gating). From the necromancer if present, else from offset of target.
             case "fireball": {

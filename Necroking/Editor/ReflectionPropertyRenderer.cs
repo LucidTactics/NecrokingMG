@@ -530,8 +530,15 @@ public class ReflectionPropertyRenderer
         var prop = entry.Property;
         var value = prop.GetValue(obj);
 
-        // Section label
+        // Section label + Remove (nested refs are nullable — "empty" is a
+        // first-class state, so authored sub-objects must be clearable too)
         _ui.DrawText(entry.Label, new Vector2(x, curY + 2), EditorBase.AccentColor);
+        if (value != null && _ui.DrawButton("Remove", x + w - 70, curY, 70, 20, EditorBase.DangerColor))
+        {
+            prop.SetValue(obj, null);
+            curY += RowH;
+            return true;
+        }
         curY += RowH;
 
         if (value == null)

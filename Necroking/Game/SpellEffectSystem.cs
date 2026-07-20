@@ -811,6 +811,12 @@ public static class SpellEffectSystem
                 sim.Lightning.SpawnZap(origin, targetPos,
                     spell.ZapDuration > 0 ? spell.ZapDuration : spell.StrikeDuration,
                     style, originHeight, targetH);
+                // Zaps land instantly — fire the hit effect at the struck unit now.
+                if (spell.HitEffectFlipbook != null)
+                    Game1.Instance?.SpawnFlipbookEffect(spell.HitEffectFlipbook, targetPos,
+                        scatterRadius: spell.ScatterRadius * 1.6f,
+                        scatterRgb: spell.ScatterRgb(),
+                        scatterStrength: spell.ScatterStrength);
                 // Standard spell pipeline: MR gate + opposed DRN damage roll. The
                 // damage event it emits already surfaces the floating number (the
                 // old flat path double-printed via an extra FloatingText here).
@@ -836,6 +842,13 @@ public static class SpellEffectSystem
         uint casterUid = casterIdx >= 0 && casterIdx < units.Count
             ? units[casterIdx].Id : GameConstants.InvalidUnit;
         sim.PoisonClouds.SpawnCloud(target, spell, casterFaction, casterUid);
+
+        // Cloud burst moment — the spell's hit effect fires at the cloud center.
+        if (spell.HitEffectFlipbook != null)
+            Game1.Instance?.SpawnFlipbookEffect(spell.HitEffectFlipbook, target,
+                scatterRadius: spell.ScatterRadius * 1.6f,
+                scatterRgb: spell.ScatterRgb(),
+                scatterStrength: spell.ScatterStrength);
 
         // Mastery "aoe" bonuses widen the initial burst (the lingering cloud
         // itself still uses the def's radii — its growth is corpse-driven).

@@ -306,6 +306,19 @@ public class LightningSystem
                 {
                     s.DamageApplied = true;
 
+                    // The strike LANDS this frame (telegraph elapsed) — fire the
+                    // spell's hit effect at the impact point. Cosmetic, so the
+                    // direct Game1 call is fine (project convention).
+                    if (s.SpellID.Length > 0)
+                    {
+                        var hitSpell = Game1.Instance?._gameData.Spells.Get(s.SpellID);
+                        if (hitSpell?.HitEffectFlipbook != null)
+                            Game1.Instance!.SpawnFlipbookEffect(hitSpell.HitEffectFlipbook, s.TargetPos,
+                                scatterRadius: hitSpell.ScatterRadius * 1.6f,
+                                scatterRgb: hitSpell.ScatterRgb(),
+                                scatterStrength: hitSpell.ScatterStrength);
+                    }
+
                     // AOE damage: query quadtree for units in radius
                     if (quadtree != null && units != null && s.AoeRadius > 0f)
                     {
