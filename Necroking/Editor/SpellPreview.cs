@@ -717,6 +717,12 @@ public class SpellPreview
                 Vec2 velDir = p.Velocity.LengthSquared() > 0.01f
                     ? new Vec2(p.Velocity.X, p.Velocity.Y).Normalized()
                     : new Vec2(1f, 0f);
+                // Face the travel direction like the in-game path (screen-space
+                // velocity incl. the height component; flame art is nose-down,
+                // rotate onto travel) — the old constant spin misrepresented
+                // oriented projectile art in the preview.
+                var screenVel = new Vector2(p.Velocity.X, (p.Velocity.Y - p.VelocityZ) * CameraYRatio);
+                float faceAngle = MathF.Atan2(screenVel.Y, screenVel.X) - MathF.PI / 2f;
                 for (int trail = 2; trail >= 0; trail--)
                 {
                     float trailOffset = trail * 0.4f * CameraZoom;
@@ -731,7 +737,7 @@ public class SpellPreview
 
                     var color = HdrColor.ToHdrVertex(p.ProjectileColor.ToColor(), trailAlpha, p.ProjectileColor.Intensity);
                     Scope.Draw(fb.Texture, trailPos, trailSrc, color,
-                        p.Age * 2f, origin, scale * trailScale, SpriteEffects.None, 0f);
+                        faceAngle, origin, scale * trailScale, SpriteEffects.None, 0f);
                 }
 
                 if (hdrMat != null) Scope.PopMaterial();

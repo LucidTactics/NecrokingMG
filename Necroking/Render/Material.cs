@@ -101,6 +101,7 @@ public sealed class Material
 public static class Materials
 {
     private static readonly List<Material> All = new();
+    private static bool _lutParamWarned;
 
     /// <summary>The material whose batch was opened most recently (rendering is
     /// single-threaded, so this IS the open batch's material as long as every
@@ -212,13 +213,20 @@ public static class Materials
         if (additive && ramp != null && TempGradient is { } tempMat)
         {
             var lut = GradientLut.Get(device, ramp);
-            if (lut != null)
+            var pLut = tempMat.Effect.Parameters["GradientSampler"];
+            if (pLut == null && !_lutParamWarned)
             {
-                var fx = tempMat.Effect;
-                fx.Parameters["TempMax"]?.SetValue(System.MathF.Max(0.01f, ramp.Max));
-                var pLut = fx.Parameters["GradientSampler"];
-                if (pLut != null) pLut.SetValue(lut);
-                else device.Textures[1] = lut;
+                // MGFX didn't expose the sampler parameter — a manual
+                // device.Textures[1] bind would be clobbered to null at
+                // Effect.Apply anyway, so fail LOUDLY to the plain HDR
+                // material instead of silently sampling black.
+                _lutParamWarned = true;
+                DebugLog.Log("startup", "TempGradient: GradientSampler parameter missing — temperature ramps disabled");
+            }
+            if (lut != null && pLut != null)
+            {
+                tempMat.Effect.Parameters["TempMax"]?.SetValue(System.MathF.Max(0.01f, ramp.Max));
+                pLut.SetValue(lut);
                 return tempMat;
             }
         }

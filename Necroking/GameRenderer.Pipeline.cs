@@ -244,7 +244,7 @@ partial class GameRenderer
         }));
 
         // Spawn new effects from impacts (once per frame, before drawing)
-        scene.Add(new CustomPass("SpawnImpactEffects", ctx => SpawnImpactEffects()));
+        // (impact-effect spawning happens tick-side now — Game1.SpawnProjectileImpactEffects)
 
         // HDR / additive effects queue: alpha HDR clouds → additive HDR
         // (fireballs, effects, reanim, lightning) → plain additive shapes.

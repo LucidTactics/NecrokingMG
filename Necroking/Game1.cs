@@ -3267,6 +3267,7 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             DrainAISpellCasts();
             _workerSystem.Update(_clock.WorldDt);
             ApplyBlightBombImpacts();
+            SpawnProjectileImpactEffects();
             FinalizeBushWorkIfPending();
             // Spirit-walk countdown (possession swap + snap-back live in the system).
             SpiritWalkSystem.Update(this, _clock.WorldDt);

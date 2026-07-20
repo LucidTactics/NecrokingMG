@@ -617,6 +617,10 @@ public class SpellEditorWindow : EditorWindow
         curY += RowH;
         if (newOn != on)
         {
+            // Kill any in-progress ramp-field edit: the field ids are keyed to
+            // the FlipbookRef property, not the ramp instance, so a stale
+            // buffer would live-write into a freshly recreated ramp.
+            _ui.ClearActiveField();
             fb.TemperatureRamp = newOn ? new TemperatureRamp() : null;
             MarkDirty();
         }
@@ -663,6 +667,9 @@ public class SpellEditorWindow : EditorWindow
     // ======================================
     private void DrawFlipbookManagerPopup(int screenW, int screenH)
     {
+        // Debounced runtime reload from MarkDirty (see there)
+        FlushPendingFlipbookReload(force: false);
+
         // Update texture file browser input
         _fbTextureBrowser.Update(_ui, _ui._mouse, _ui._prevMouse, _ui._kb, _ui._prevKb);
 
@@ -912,6 +919,7 @@ public class SpellEditorWindow : EditorWindow
     /// textures (all close paths route here: X, Apply &amp; Close, ESC).</summary>
     private void CloseFlipbookManager()
     {
+        FlushPendingFlipbookReload(force: true); // apply any debounced edits now
         _flipbookManagerOpen = false;
         _fbPreviewCache.DisposeAll();
         _fbPreviewKey = "";
@@ -1832,9 +1840,24 @@ public class SpellEditorWindow : EditorWindow
             _spellPreview?.MarkDirty();
         // Flipbook grid/path edits must also reach the RUNTIME flipbook
         // dictionary the previews (and the game) render from — without this,
-        // "Apply & Close" applied nothing until a map reload.
+        // "Apply & Close" applied nothing until a map reload. DEBOUNCED: the
+        // reload disposes and re-decodes EVERY sheet (multi-MB EXRs included),
+        // and manager text fields commit per keystroke — reloading 400ms after
+        // the last edit (or at manager close) keeps typing smooth.
         if (_flipbookManagerOpen)
-            Necroking.Game1.Instance?.ReloadFlipbooksFromRegistry();
+            _fbReloadDueAt = Environment.TickCount64 + 400;
+    }
+
+    /// <summary>Pending debounced flipbook-registry reload (0 = none) — see
+    /// MarkDirty. Flushed by DrawFlipbookManagerPopup / CloseFlipbookManager.</summary>
+    private long _fbReloadDueAt;
+
+    private void FlushPendingFlipbookReload(bool force)
+    {
+        if (_fbReloadDueAt == 0) return;
+        if (!force && Environment.TickCount64 < _fbReloadDueAt) return;
+        _fbReloadDueAt = 0;
+        Necroking.Game1.Instance?.ReloadFlipbooksFromRegistry();
     }
 
     // Set by MarkDirty while the buff manager is open; consumed by

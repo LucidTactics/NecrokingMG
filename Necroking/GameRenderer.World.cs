@@ -575,7 +575,13 @@ partial class GameRenderer
         foreach (var eff in _g._effectManager.Effects)
         {
             if (!eff.Alive || eff.BlendMode != blendMode) continue;
-            float t = eff.Age / eff.Lifetime;
+            // Fog of war: enemy/trap strikes and clouds land in fogged territory
+            // too — their hit effects must not flash through (same rule as
+            // projectiles, beams, damage numbers).
+            if (!_g._fogOfWar.IsVisible(eff.Position)) continue;
+            // Max guard: a data Duration of 0 gives Lifetime 0, and this draw can
+            // run before the first Update culls it — 0/0 NaN otherwise.
+            float t = eff.Age / MathF.Max(eff.Lifetime, 0.001f);
             float alpha = eff.AlphaCurve.Evaluate(t);
 
             // ScatterGlow: impact explosions light the air, breathing with the
@@ -674,47 +680,11 @@ partial class GameRenderer
         }
     }
 
-    /// <summary>Spawn new effects from projectile impacts (called once per frame, blend-mode independent).</summary>
-    private void SpawnImpactEffects()
-    {
-        // Impacts is a sim-owned queue cleared at the start of the next sim step.
-        // When the world is frozen (pause / editor) that step never comes, so
-        // consuming here every rendered frame would spawn a duplicate effect per
-        // frame from the same stale impact (they pile up additively into solid
-        // scatter/HDR balls). Only consume on frames where the sim advanced.
-        if (!_g._clock.WorldRunning) return;
-        foreach (var impact in _g._sim.Projectiles.Impacts)
-        {
-            string fbId = impact.HitEffectFlipbookID;
-            if (!string.IsNullOrEmpty(fbId))
-            {
-                // Thread the firing spell's SCATTER fields into the impact effect so
-                // the explosion registers a scatter halo while it plays.
-                var impactSpell = impact.SpellID.Length > 0 ? _g._gameData.Spells.Get(impact.SpellID) : null;
-                if (impactSpell?.HitEffectFlipbook is { } fbRef)
-                {
-                    // Spell projectile: the def is authoritative — full FlipbookRef
-                    // contract (duration/loop/fps/ramp) via the canonical spawn.
-                    _g.SpawnFlipbookEffect(fbRef, impact.Position,
-                        scatterRadius: impactSpell.ScatterRadius * 1.6f, // burst > flight orb
-                        scatterRgb: impactSpell.ScatterRgb(),
-                        scatterStrength: impactSpell.ScatterStrength);
-                }
-                else
-                {
-                    // No spell def (potion bottles copy their visual onto the
-                    // projectile) — legacy field-by-field path.
-                    _g._effectManager.SpawnSpellImpact(impact.Position, impact.HitEffectScale,
-                        impact.HitEffectColor.ToColor(), fbId, hdrIntensity: impact.HitEffectColor.Intensity,
-                        blendMode: impact.HitEffectBlendMode, alignment: impact.HitEffectAlignment);
-                }
-            }
-            else if (impact.AoeRadius > 0)
-            {
-                _g._effectManager.SpawnExplosion(impact.Position, impact.AoeRadius);
-            }
-        }
-    }
+    // (SpawnImpactEffects moved to Game1.Spells.cs SpawnProjectileImpactEffects,
+    // consumed once per TICK right after _sim.Tick — consuming the sim-owned
+    // Impacts queue from a Draw pass dropped impacts whenever fixed-timestep
+    // catch-up ran multiple Updates per Draw, since each Update clears the
+    // previous tick's queue. 2026-07 review find.)
 
     private void DrawDamageNumbers()
     {

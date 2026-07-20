@@ -83,6 +83,10 @@ public static class ExrTgaTextures
             string name = ReadCString(data, ref off);
             string type = ReadCString(data, ref off);
             int size = BitConverter.ToInt32(data, off); off += 4;
+            // A negative size would move `off` BACKWARD and loop this attribute
+            // forever (a hang no try/catch can save) — validate before use.
+            if (size < 0 || off + size > data.Length)
+                throw new InvalidDataException($"EXR attribute '{name}' has bad size {size}");
 
             if (type == "chlist")
             {
@@ -126,12 +130,19 @@ public static class ExrTgaTextures
         if (compression != 0)
             throw new InvalidDataException($"unsupported EXR compression {compression} (need uncompressed)");
         int w = xMax - xMin + 1, h = yMax - yMin + 1;
-        if (w <= 0 || h <= 0 || channels.Length == 0)
-            throw new InvalidDataException("bad EXR dimensions/channels");
+        if (w <= 0 || h <= 0 || w > 16384 || h > 16384 || channels.Length == 0)
+            throw new InvalidDataException($"bad EXR dimensions {w}x{h} / channels");
         int r = Array.IndexOf(channels, "R"), g = Array.IndexOf(channels, "G"),
             b = Array.IndexOf(channels, "B"), a = Array.IndexOf(channels, "A");
         if (r < 0 || g < 0 || b < 0)
             throw new InvalidDataException("EXR lacks RGB channels");
+
+        // Fail fast on truncated files BEFORE the pixel allocation — the
+        // dimensions came from file data and could otherwise commit us to a
+        // multi-GB allocation that only faults deep in the scanline loop.
+        long required = off + (long)h * (8 + (long)channels.Length * w * 2);
+        if (required > data.Length)
+            throw new InvalidDataException($"EXR truncated: need {required} bytes, have {data.Length}");
 
         off += h * 8; // scanline offset table — blocks follow sequentially
 
@@ -162,6 +173,8 @@ public static class ExrTgaTextures
         byte[] data = File.ReadAllBytes(path);
         if (data.Length < 18) throw new InvalidDataException("truncated TGA");
         int idLen = data[0];
+        if (data[1] != 0)
+            throw new InvalidDataException("unsupported TGA: color-mapped file");
         int imageType = data[2];
         if (imageType != 2)
             throw new InvalidDataException($"unsupported TGA type {imageType} (need 2, uncompressed truecolor)");
@@ -170,10 +183,15 @@ public static class ExrTgaTextures
         int bpp = data[16];
         if (bpp != 24 && bpp != 32)
             throw new InvalidDataException($"unsupported TGA depth {bpp}");
+        if ((data[17] & 0x10) != 0)
+            throw new InvalidDataException("unsupported TGA: right-to-left pixel order");
         bool topDown = (data[17] & 0x20) != 0;
 
         int bytesPer = bpp / 8;
         int src = 18 + idLen;
+        // Fail fast on truncated files before allocating w*h pixels.
+        if (w <= 0 || h <= 0 || src + (long)w * h * bytesPer > data.Length)
+            throw new InvalidDataException($"TGA truncated or bad dimensions {w}x{h}");
         var pixels = new Color[w * h];
         for (int row = 0; row < h; row++)
         {

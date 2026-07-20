@@ -224,14 +224,17 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
 
         int curY = py + TitleBarH + 2;
 
-        // Path bar: show current directory
-        ui.DrawRect(new Rectangle(px + 2, curY, PopupW - 4, PathBarH), EditorBase.InputBg);
+        // Path bar: show current directory. Clamp to the LIST column — the
+        // preview panel starts at this row and draws later, so a full-width bar
+        // would be overpainted while its hidden part still hit-tests
+        // (draw-vs-click divergence).
+        ui.DrawRect(new Rectangle(px + 2, curY, listW - 4, PathBarH), EditorBase.InputBg);
         string displayDir = _currentDir.Replace('\\', '/');
         ui.DrawText(displayDir, new Vector2(px + Padding, curY + 4), EditorBase.TextDim);
         curY += PathBarH + 2;
 
-        // Filter text field
-        _filterText = ui.DrawSearchField("texbrowser_filter", _filterText, px + Padding, curY, PopupW - Padding * 2);
+        // Filter text field (list column only — see path bar note)
+        _filterText = ui.DrawSearchField("texbrowser_filter", _filterText, px + Padding, curY, listW - Padding * 2);
         curY += FilterBarH + 2;
 
         // Content area — the list occupies only the left column; the preview
@@ -261,8 +264,11 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
         // the Enter that commits the field from also committing a file.
         bool typing = ui.IsTextInputActive || _textInputWasActive;
         _textInputWasActive = ui.IsTextInputActive;
+        // Stand down when a HIGHER overlay owns input (house convention —
+        // DrawScrollableList gates its keyboard nav the same way).
+        bool kbBlocked = ui.IsInputBlocked(ui.EffectiveLayer(0));
         if (_keyboardIndex >= displayEntries.Count) _keyboardIndex = displayEntries.Count - 1;
-        if (!typing && displayEntries.Count > 0)
+        if (!typing && !kbBlocked && displayEntries.Count > 0)
         {
             var kb = ui._kb; var prevKb = ui._prevKb;
             bool navUp = kb.IsKeyDown(Keys.Up) && prevKb.IsKeyUp(Keys.Up);

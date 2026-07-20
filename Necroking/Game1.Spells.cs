@@ -197,6 +197,38 @@ public partial class Game1 {
    /// projectile impacts (from <see cref="_sim"/>.Tick) and applies the fog at each
    /// explosion point. Called once per tick right after the sim, before the impacts
    /// are cleared by the next tick's projectile update.</summary>
+   /// <summary>Spawn hit-effect visuals from this tick's projectile impacts.
+   /// Called once per tick right after _sim.Tick (like ApplyBlightBombImpacts)
+   /// — the sim-owned Impacts queue is cleared at the start of the NEXT tick,
+   /// so consuming it from a Draw pass dropped impacts whenever fixed-timestep
+   /// catch-up ran several Updates per Draw.</summary>
+   void SpawnProjectileImpactEffects() {
+      foreach (var impact in _sim.Projectiles.Impacts) {
+         string fbId = impact.HitEffectFlipbookID;
+         if (!string.IsNullOrEmpty(fbId)) {
+            // Thread the firing spell's SCATTER fields into the impact effect so
+            // the explosion registers a scatter halo while it plays.
+            var impactSpell = impact.SpellID.Length > 0 ? _gameData.Spells.Get(impact.SpellID) : null;
+            if (impactSpell?.HitEffectFlipbook is { } fbRef) {
+               // Spell projectile: the def is authoritative — full FlipbookRef
+               // contract (duration/loop/fps/ramp) via the canonical spawn.
+               SpawnFlipbookEffect(fbRef, impact.Position,
+                  scatterRadius: impactSpell.ScatterRadius * 1.6f, // burst > flight orb
+                  scatterRgb: impactSpell.ScatterRgb(),
+                  scatterStrength: impactSpell.ScatterStrength);
+            } else {
+               // No spell def (potion bottles copy their visual onto the
+               // projectile) — legacy field-by-field path.
+               _effectManager.SpawnSpellImpact(impact.Position, impact.HitEffectScale,
+                  impact.HitEffectColor.ToColor(), fbId, hdrIntensity: impact.HitEffectColor.Intensity,
+                  blendMode: impact.HitEffectBlendMode, alignment: impact.HitEffectAlignment);
+            }
+         } else if (impact.AoeRadius > 0) {
+            _effectManager.SpawnExplosion(impact.Position, impact.AoeRadius);
+         }
+      }
+   }
+
    void ApplyBlightBombImpacts() {
       var impacts = _sim.Projectiles.Impacts;
       if (impacts.Count == 0) return;

@@ -535,6 +535,9 @@ public class ReflectionPropertyRenderer
         _ui.DrawText(entry.Label, new Vector2(x, curY + 2), EditorBase.AccentColor);
         if (value != null && _ui.DrawButton("Remove", x + w - 70, curY, 70, 20, EditorBase.DangerColor))
         {
+            // A child field of the removed object may hold an active buffer —
+            // abandon it or keyboard capture sticks to a dead instance.
+            _ui.ClearActiveField();
             prop.SetValue(obj, null);
             curY += RowH;
             return true;
@@ -550,6 +553,8 @@ public class ReflectionPropertyRenderer
                 {
                     var instance = Activator.CreateInstance(prop.PropertyType);
                     prop.SetValue(obj, instance);
+                    _ui.ClearActiveField();
+                    curY += RowH + 4;
                     return true;
                 }
                 catch (Exception ex) { DebugLog.Log("error", $"Failed to create instance of {prop.PropertyType.Name}: {ex.Message}"); }
