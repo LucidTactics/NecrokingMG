@@ -823,7 +823,15 @@ and disables the wake bake with a startup log.
   `Materials.HdrAdditive` (HdrSprite.fx, Additive), tint `HdrColor.ToHdrVertex` (true HDR).
 - `GameRenderer.World.cs` `DrawEffectsFiltered` — EffectManager one-shots (`eff.FlipbookKey`:
   spell impacts, cast flares, summon effects), `Materials.HdrAlpha`/`HdrAdditive` per
-  `BlendMode`, `ToHdrVertexAlpha`/`ToHdrVertex` (true HDR).
+  `BlendMode`, `ToHdrVertexAlpha`/`ToHdrVertex` (true HDR). NOTE `SpellDef.HitEffectFlipbook`
+  is consumed ONLY by the projectile/potion impact path (`SpawnProjectile`/`PotionSystem`
+  copy → `ImpactEvent` → `SpawnImpactEffects`); Strike/Beam/Drain "hit" visuals are the
+  LightningSystem's own fields (`DrainImpactFlipbook`→`ImpactFlipbookID`, endpoint flares
+  drawn statelessly per frame in `LightningRenderer` while the beam lives — the
+  pattern for a looping channel-end effect); Buff/Summon/Cloud ignore HitEffectFlipbook.
+  EffectManager has NO loop/kill-early/follow semantics — `Lifetime` only (duration -1 =
+  0.4s fallback in `SpawnSpellImpact`/`SpawnFlipbookEffect`, NOT "one full playthrough"
+  despite the FlipbookRef tooltip), frames via looping `GetFrameAtTime(Age)`.
 - `Render/BuffVisualSystem.cs` — ground auras / orbitals / unit-effect flipbooks via the raw
   Scene batch (AlphaBlend, `EncodeColor` LDR island); EXCEPTION `DrawAttachedFlames` →
   `Materials.HdrAdditive` YSort items (true HDR).
