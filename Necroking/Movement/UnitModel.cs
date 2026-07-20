@@ -287,9 +287,6 @@ public class Unit
 
     // Incapacitation (knockdown, stun, freeze, etc.) — managed by buff system
     public IncapState Incap;
-    // AI-driven sleep→standup timer (DeerHerd / WolfPack). Separate from Incap,
-    // which is combat/debuff driven; the two don't overlap in practice.
-    public float StandupTimer;
     // RatPack fear: seconds of "panic" remaining (set when a nearby packmate dies).
     // While >0 the rat's reflexive skitter retreats farther. Decays in the handler.
     public float PanicTimer;

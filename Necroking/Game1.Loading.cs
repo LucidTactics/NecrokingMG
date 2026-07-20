@@ -237,10 +237,15 @@ public partial class Game1
             // Rebuild atlas keyframe lists to logical frame order (meta 'sprites'
             // mapping, repeats allowed) — must run after ALL spritemeta parsing
             // and before GPU upload/finalize so duplicated keyframes get the
-            // same Y-flip/bbox treatment as originals.
+            // same Y-flip/bbox treatment as originals. Then stitch split-export
+            // clip pairs (Standup+Standup2) into single clips — stitch runs
+            // AFTER expansion so both halves are already in logical order.
             foreach (var atlas in _atlases)
                 if (atlas != null)
+                {
                     AnimMetaLoader.ExpandAtlasKeyframes(atlas, _animMeta);
+                    AnimMetaLoader.StitchSplitClips(atlas, _animMeta);
+                }
             LogTiming($"Animation metadata: {_animMeta.Count} entries");
             _sim.SetAnimMeta(_animMeta);
         });

@@ -272,11 +272,15 @@ public class UnitEditorWindow
                 // Attach overflow __N sheets, if any.
                 foreach (var (extPng, extMeta) in AtlasDefs.FindExtensionSheets(name))
                     _atlases[i].LoadExtension(_graphicsDevice, extPng, extMeta);
-                // Logical-frame expansion (meta 'sprites' mapping) — mirrors the
-                // main load path; mostly a no-op here since this path loads no
-                // new animationmeta, but keeps any matching meta consistent.
+                // Logical-frame expansion + split-clip stitch (meta-driven) —
+                // mirrors the main load path; mostly a no-op here since this
+                // path loads no new animationmeta, but keeps any matching meta
+                // consistent.
                 if (_animMeta != null)
+                {
                     AnimMetaLoader.ExpandAtlasKeyframes(_atlases[i], _animMeta);
+                    AnimMetaLoader.StitchSplitClips(_atlases[i], _animMeta);
+                }
             }
             DebugLog.Log("editor", $"Refreshed atlases: {AtlasDefs.TotalCount} total ({AtlasDefs.TotalCount - oldCount} new)");
         }

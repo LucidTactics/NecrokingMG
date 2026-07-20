@@ -260,6 +260,144 @@ public static class AnimMetaLoader
         }
     }
 
+    /// <summary>Split-export clips that are really ONE animation: the sprite
+    /// export tool can only emit the motion as two clips, played back-to-back
+    /// (standup = lie→sit + sit→idle). Explicit pairs ONLY — a trailing "2" is
+    /// NOT a convention (Attack2 is a different attack, not a continuation).</summary>
+    private static readonly (string Base, string Cont)[] SplitClipPairs =
+    {
+        ("Standup", "Standup2"),
+    };
+
+    /// <summary>
+    /// Merge split-export continuation clips into their base clip so the rest
+    /// of the engine only ever sees one animation: appends the continuation's
+    /// keyframes/durations/sprite-keys/markers onto the base per yaw, then
+    /// DELETES the continuation clip and its meta — the split becomes invisible
+    /// to the state machine, duration-waiters, and editors alike.
+    ///
+    /// Call AFTER ExpandAtlasKeyframes (both clips first normalized to logical
+    /// frame order) in the same load step. Merged Keyframe.Time is rewritten to
+    /// cumulative start-ms across the combined clip — unexpanded clips still
+    /// carry source ticks, and the two halves' tick ranges overlap, so times
+    /// are renormalized from the merged duration list (only tick-fallback paths
+    /// read .Time, and those are unreachable while meta durations exist).
+    ///
+    /// All-or-nothing per unit: any yaw mismatch (missing on one side, frame
+    /// count disagreeing with its duration list) skips the whole unit with an
+    /// asset-log line — a half-stitched unit's yaws would disagree on length.
+    /// Idempotent: once the continuation clip is deleted, the pair no longer
+    /// matches and the pass is a no-op.
+    /// </summary>
+    public static void StitchSplitClips(SpriteAtlas atlas, Dictionary<string, AnimationMeta> animMeta)
+    {
+        foreach (var (unitName, usd) in atlas.Units)
+        {
+            foreach (var (baseName, contName) in SplitClipPairs)
+            {
+                var animA = usd.GetAnim(baseName);
+                var animB = usd.GetAnim(contName);
+                if (animA == null || animB == null) continue;
+
+                string keyB = MetaKey(unitName, contName);
+                if (!animMeta.TryGetValue(MetaKey(unitName, baseName), out var metaA)
+                    || !animMeta.TryGetValue(keyB, out var metaB))
+                {
+                    Core.DebugLog.Log("asset",
+                        $"StitchSplitClips: {unitName} has {baseName}+{contName} clips but incomplete animationmeta — left unstitched");
+                    continue;
+                }
+
+                // Validate every continuation yaw up front (all-or-nothing).
+                bool ok = true;
+                foreach (var (yaw, ymB) in metaB.YawData)
+                {
+                    if (!metaA.YawData.TryGetValue(yaw, out var ymA)
+                        || animA.GetAngle(yaw) is not { } kfsA
+                        || animB.GetAngle(yaw) is not { } kfsB
+                        || kfsA.Count != ymA.FrameDurationsMs.Count
+                        || kfsB.Count != ymB.FrameDurationsMs.Count)
+                    {
+                        Core.DebugLog.Log("asset",
+                            $"StitchSplitClips: {unitName}.{baseName}+{contName} yaw {yaw}: yaw/frame-count mismatch — unit left unstitched");
+                        ok = false;
+                        break;
+                    }
+                }
+                if (!ok) continue;
+
+                // Base-only length, captured BEFORE the merge appends to the
+                // duration lists (first yaw — totals are uniform per export).
+                int baseOnlyMs = 0;
+                foreach (var (_, ymFirst) in metaA.YawData)
+                {
+                    foreach (var ms in ymFirst.FrameDurationsMs) baseOnlyMs += ms;
+                    break;
+                }
+
+                foreach (var (yaw, ymB) in metaB.YawData)
+                {
+                    var ymA = metaA.YawData[yaw];
+                    var kfsA = animA.AngleFrames[yaw];
+                    var kfsB = animB.AngleFrames[yaw];
+
+                    var merged = new List<Keyframe>(kfsA.Count + kfsB.Count);
+                    int cum = 0;
+                    for (int i = 0; i < kfsA.Count; i++)
+                    {
+                        merged.Add(new Keyframe { Time = cum, Frame = kfsA[i].Frame });
+                        cum += ymA.FrameDurationsMs[i];
+                    }
+                    for (int i = 0; i < kfsB.Count; i++)
+                    {
+                        merged.Add(new Keyframe { Time = cum, Frame = kfsB[i].Frame });
+                        cum += ymB.FrameDurationsMs[i];
+                    }
+                    animA.AngleFrames[yaw] = merged;
+
+                    ymA.FrameDurationsMs.AddRange(ymB.FrameDurationsMs);
+
+                    // SpriteKeys only stay meaningful if both halves carry them
+                    // (they feed ExpandAtlasKeyframes, which already ran; a
+                    // mixed merge would just leave a lying length behind).
+                    if (ymA.SpriteKeys.Count > 0 && ymB.SpriteKeys.Count > 0)
+                        ymA.SpriteKeys.AddRange(ymB.SpriteKeys);
+                    else
+                        ymA.SpriteKeys.Clear();
+
+                    // Markers: append per mount id present in BOTH halves;
+                    // one-sided mounts would desync from the frame count — drop.
+                    if (ymA.Mounts.Count > 0 || ymB.Mounts.Count > 0)
+                    {
+                        var dropIds = new List<string>();
+                        foreach (var (id, listA) in ymA.Mounts)
+                        {
+                            if (ymB.Mounts.TryGetValue(id, out var listB))
+                                listA.AddRange(listB);
+                            else
+                                dropIds.Add(id);
+                        }
+                        foreach (var id in dropIds)
+                        {
+                            ymA.Mounts.Remove(id);
+                            Core.DebugLog.Log("asset",
+                                $"StitchSplitClips: {unitName}.{baseName} yaw {yaw}: mount '{id}' only on the base half — dropped");
+                        }
+                    }
+                }
+
+                // A continuation-half effect time fires after the base's length.
+                if (metaA.EffectTimeMs == 0 && metaB.EffectTimeMs > 0)
+                    metaA.EffectTimeMs = baseOnlyMs + metaB.EffectTimeMs;
+
+                usd.Animations.Remove(contName);
+                animMeta.Remove(keyB);
+                Core.DebugLog.Log("asset",
+                    $"StitchSplitClips: {unitName}.{baseName} += {contName} ({metaA.TotalDurationMs()} ms total)");
+            }
+        }
+    }
+
     /// <summary>Warn about categories where effect_time is critical but missing. Call ONCE
     /// after all meta files are loaded — never per-file inside Load(). Load() is invoked in a
     /// loop (one call per sprite meta file), and scanning the whole accumulated dict on every

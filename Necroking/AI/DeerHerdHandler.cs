@@ -59,7 +59,6 @@ public class DeerHerdHandler : IArchetypeHandler
 
     private const float SitDuration = 10f;          // Seconds in sit before sleep
     private const float SleepDetectionScale = 0.6f;  // 40% reduction in detection range
-    private const float StandupDuration = 1.0f;      // Standup animation time
 
     private const float RoamRadius = 10f;
     private const float HerdCohesionRadius = 12f; // straggler leash from the herd centroid (see TryHerdCohesion)
@@ -242,8 +241,7 @@ public class DeerHerdHandler : IArchetypeHandler
             {
                 DebugLog.Log("ai", $"[Deer#{ctx.UnitIndex}] sleeping, starting wakeup first");
                 ctx.Subroutine = SleepWaking;
-                ctx.SubroutineTimer = StandupDuration;
-                ctx.Units[ctx.UnitIndex].StandupTimer = StandupDuration;
+                ctx.SubroutineTimer = SubroutineSteps.StandupSeconds(ref ctx);
                 RestoreDetectionRange(ref ctx);
                 return;
             }
@@ -290,8 +288,7 @@ public class DeerHerdHandler : IArchetypeHandler
                         SubroutineSteps.FacePosition(ref ctx, ctx.Units[threatIdx].Position);
                 }
                 ctx.Subroutine = SleepWaking;
-                ctx.SubroutineTimer = StandupDuration;
-                ctx.Units[ctx.UnitIndex].StandupTimer = StandupDuration;
+                ctx.SubroutineTimer = SubroutineSteps.StandupSeconds(ref ctx);
                 // Restore detection range
                 RestoreDetectionRange(ref ctx);
                 return;
@@ -362,8 +359,7 @@ public class DeerHerdHandler : IArchetypeHandler
                 if (ctx.Routine == RoutineSleeping && ctx.Subroutine <= SleepAsleep && !ctx.IsNight)
                 {
                     ctx.Subroutine = SleepWaking;
-                    ctx.SubroutineTimer = StandupDuration;
-                    ctx.Units[ctx.UnitIndex].StandupTimer = StandupDuration;
+                    ctx.SubroutineTimer = SubroutineSteps.StandupSeconds(ref ctx);
                     RestoreDetectionRange(ref ctx);
                     return;
                 }

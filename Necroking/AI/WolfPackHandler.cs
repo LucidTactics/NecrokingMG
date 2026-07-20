@@ -51,7 +51,6 @@ public class WolfPackHandler : IArchetypeHandler
     private const float IdleRoamRadius = 10f;
     private const float SitDuration = 10f;
     private const float SleepDetectionScale = 0.6f;
-    private const float StandupDuration = 1.0f;
 
     // Pounce is no longer AI-driven — it's weapon-archetype-driven and handled
     // centrally in Simulation.TryInitiatePounce for any unit whose primary weapon
@@ -167,8 +166,7 @@ public class WolfPackHandler : IArchetypeHandler
             if (ctx.Routine == RoutineSleeping && ctx.Subroutine <= SleepAsleep)
             {
                 ctx.Subroutine = SleepWaking;
-                ctx.SubroutineTimer = StandupDuration;
-                ctx.Units[ctx.UnitIndex].StandupTimer = StandupDuration;
+                ctx.SubroutineTimer = SubroutineSteps.StandupSeconds(ref ctx);
                 RestoreDetectionRange(ref ctx);
                 return;
             }
@@ -211,8 +209,7 @@ public class WolfPackHandler : IArchetypeHandler
                         SubroutineSteps.FacePosition(ref ctx, ctx.Units[threatIdx].Position);
                 }
                 ctx.Subroutine = SleepWaking;
-                ctx.SubroutineTimer = StandupDuration;
-                ctx.Units[ctx.UnitIndex].StandupTimer = StandupDuration;
+                ctx.SubroutineTimer = SubroutineSteps.StandupSeconds(ref ctx);
                 RestoreDetectionRange(ref ctx);
                 return;
             }
@@ -266,8 +263,7 @@ public class WolfPackHandler : IArchetypeHandler
             if (ctx.Routine == RoutineSleeping && ctx.Subroutine <= SleepAsleep && !ctx.IsNight)
             {
                 ctx.Subroutine = SleepWaking;
-                ctx.SubroutineTimer = StandupDuration;
-                ctx.Units[ctx.UnitIndex].StandupTimer = StandupDuration;
+                ctx.SubroutineTimer = SubroutineSteps.StandupSeconds(ref ctx);
                 RestoreDetectionRange(ref ctx);
                 return;
             }

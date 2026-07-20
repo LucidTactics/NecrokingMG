@@ -1554,6 +1554,9 @@ public partial class Game1 {
             case "reanim_at": {   // window.dev('reanim_at',[x,y,'skeleton',riseSpeed,fogSpeed])
                if (c.Args.Length < 2) { c.Complete(Necroking.Dev.DevServer.Error("reanim_at needs: <x> <y> [defId] [riseSpeed] [fogSpeed]")); break; }
                string rdef = c.Args.Length > 2 ? c.Args[2] : "skeleton";
+               // Unknown def used to slip through and attach a half-initialized
+               // husk (no sprite/anim data, "?" in the units dump) — fail loud.
+               if (_gameData.Units.Get(rdef) == null) { c.Complete(Necroking.Dev.DevServer.Error($"unknown unit def: {rdef}")); break; }
                float rspeed = c.Args.Length > 3 ? DevFloat(c.Args[3]) : 1f;
                float fspeed = c.Args.Length > 4 ? DevFloat(c.Args[4]) : 1f;
                QueueReanimRise(rdef, -1, "",   // "" → the raised unit's own effect (else reanim_smoke)

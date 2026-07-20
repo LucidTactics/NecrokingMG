@@ -28,6 +28,25 @@ namespace Necroking.AI;
 /// </summary>
 public static class SubroutineSteps
 {
+    /// <summary>Wall-clock seconds of this unit's Standup clip, from the anim
+    /// metadata (post-stitch, so a split Standup+Standup2 export reports the
+    /// combined length). Falls back to 1 s — the old hardcoded value — when the
+    /// sprite has no standup timing. The deer/wolf sleep-wake waits on this;
+    /// the previous divorced per-handler constants froze the wake at 1 s while
+    /// the real clips run 3-5 s (see anti-patterns-list).</summary>
+    public static float StandupSeconds(ref AIContext ctx)
+    {
+        var def = ctx.GameData.Units.Get(ctx.Units[ctx.UnitIndex].UnitDefID);
+        if (def?.Sprite != null && ctx.AnimMeta != null
+            && ctx.AnimMeta.TryGetValue(
+                AnimMetaLoader.MetaKey(def.Sprite.SpriteName, "Standup"), out var meta))
+        {
+            float ms = meta.TotalDurationMs();
+            if (ms > 0f) return ms / 1000f;
+        }
+        return 1.0f;
+    }
+
     // ═══════════════════════════════════════
     //  Movement
     // ═══════════════════════════════════════
