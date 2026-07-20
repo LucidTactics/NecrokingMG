@@ -44,13 +44,6 @@ internal sealed partial class GameRenderer
 
     private const float ForagableWiggleRange = 3f;
 
-    // 8-direction offsets: N, NE, E, SE, S, SW, W, NW
-    private static readonly float[][] _outlineDirs =
-    {
-        new[] { 0f, -1f }, new[] { 1f, -1f }, new[] { 1f, 0f }, new[] { 1f, 1f },
-        new[] { 0f,  1f }, new[] {-1f,  1f }, new[] {-1f, 0f }, new[] {-1f,-1f }
-    };
-
     // Hardcoded ghost outline params matching C++
     private static readonly HdrColor _ghostColor1 = new(140, 200, 255, 45, 1.0f);
     private static readonly HdrColor _ghostColor2 = new(170, 215, 255, 60, 1.1f);

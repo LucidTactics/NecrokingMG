@@ -1752,8 +1752,37 @@ partial class GameRenderer
         float colA = MathHelper.Lerp(color1.A / 255f, color2.A / 255f, t);
         float intensity = MathHelper.Lerp(color1.Intensity, color2.Intensity, t);
 
-        _g._outlineFlatEffect.Parameters["OutlineColor"]?.SetValue(
+        // Outline widths (buff/reanim/ghost/aim data) are px authored at zoom 32 —
+        // scale so the rim hugs the sprite proportionally at every zoom, with a
+        // hairline floor for MinZoom legibility. (Round-2 sweep: was constant px.)
+        offset = MathF.Max(0.6f, offset * _g._camera.Zoom / 32f);
+
+        // Single dilated draw: the shader takes the max over 16+8 offset taps
+        // (union of shifted silhouettes), so the outline composites into the
+        // scene exactly once — no self-stacking between direction layers, no
+        // faceted "multiple shadows" at large radii (the old 8-stamp loop had
+        // both). The quad/source rect grow by the radius so the rim isn't
+        // clipped at the frame edge; the shader clamps sampling to the
+        // original rect so atlas neighbors can't bleed in.
+        float radiusTexels = offset / MathF.Max(scale, 1e-4f);
+        int e = (int)MathF.Ceiling(radiusTexels);
+
+        var fx = _g._outlineFlatEffect;
+        // Tap-count tier from the effect's MAX screen radius (pulse peak, not the
+        // current frame's offset) so the tap pattern never pops mid-pulse: thin
+        // borders stay on the cheap 8-tap ring; >3px upgrades to 16+8 taps.
+        float maxOffset = MathF.Max(0.6f,
+            MathF.Max(outlineWidth, pulseWidth) * _g._camera.Zoom / 32f);
+        var tech = fx.Techniques[maxOffset > 3f ? "Outline24" : "Outline8"];
+        if (tech != null) fx.CurrentTechnique = tech;
+        fx.Parameters["OutlineColor"]?.SetValue(
             new Vector4(colR * intensity, colG * intensity, colB * intensity, colA));
+        fx.Parameters["FrameUvMin"]?.SetValue(new Vector2(
+            (float)frame.Rect.X / tex.Width, (float)frame.Rect.Y / tex.Height));
+        fx.Parameters["FrameUvMax"]?.SetValue(new Vector2(
+            (float)frame.Rect.Right / tex.Width, (float)frame.Rect.Bottom / tex.Height));
+        fx.Parameters["RadiusUv"]?.SetValue(new Vector2(
+            radiusTexels / tex.Width, radiusTexels / tex.Height));
 
         // OutlineFlat outputs STRAIGHT alpha — the material picks the
         // NonPremultiplied/Additive blend variant (see the .fx header).
@@ -1761,20 +1790,13 @@ partial class GameRenderer
 
         float pivotX = flipX ? (1f - frame.PivotX) : frame.PivotX;
         float pivotY = 1f - frame.PivotY;
-        var origin = new Vector2(pivotX * frame.Rect.Width, pivotY * frame.Rect.Height);
+        // Origin shifts by the expansion so the expanded quad stays anchored
+        // on the same screen pivot as the sprite it outlines.
+        var origin = new Vector2(pivotX * frame.Rect.Width + e, pivotY * frame.Rect.Height + e);
         var effects = flipX ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-
-        // Outline widths (buff/reanim/ghost/aim data) are px authored at zoom 32 —
-        // scale so the rim hugs the sprite proportionally at every zoom, with a
-        // hairline floor for MinZoom legibility. (Round-2 sweep: was constant px.)
-        offset = MathF.Max(0.6f, offset * _g._camera.Zoom / 32f);
-        for (int d = 0; d < 8; d++)
-        {
-            float dx = _outlineDirs[d][0] * offset;
-            float dy = _outlineDirs[d][1] * offset;
-            scope.Draw(tex, new Vector2(screenPos.X + dx, screenPos.Y + dy),
-                frame.Rect, Color.White, 0f, origin, scale, effects, 0f);
-        }
+        var src = new Rectangle(frame.Rect.X - e, frame.Rect.Y - e,
+            frame.Rect.Width + 2 * e, frame.Rect.Height + 2 * e);
+        scope.Draw(tex, screenPos, src, Color.White, 0f, origin, scale, effects, 0f);
 
         scope.PopMaterial();
     }
