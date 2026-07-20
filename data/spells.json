@@ -2586,11 +2586,11 @@
       "projectileFlipbook": {
         "flipbookID": "fireball_temp_hdr",
         "fps": 0,
-        "scale": 1.5,
+        "scale": 0.6,
         "color": {
-          "r": 255,
-          "g": 255,
-          "b": 255,
+          "r": 203,
+          "g": 97,
+          "b": 222,
           "a": 255,
           "intensity": 1
         },
@@ -2599,27 +2599,27 @@
         "alignment": "Ground",
         "duration": -1,
         "temperatureRamp": {
-          "max": 2.0,
+          "max": 35,
           "harmonize": {
             "targetColor": [
-              70,
-              255,
-              130,
+              191,
+              96,
+              212,
               255
             ],
-            "hueStrength": 1.0,
-            "satStrength": 0.5,
-            "valStrength": 0.0,
+            "hueStrength": 1,
+            "satStrength": 0.4793492,
+            "valStrength": 0.21276596,
             "useHcl": true
           }
         }
       },
-      "scatterRadius": 1.9,
-      "scatterStrength": 0.5,
+      "scatterRadius": 1.4,
+      "scatterStrength": 0.7,
       "scatterColor": {
-        "r": 255,
-        "g": 202,
-        "b": 147,
+        "r": 188,
+        "g": 103,
+        "b": 201,
         "a": 255,
         "intensity": 1
       }
