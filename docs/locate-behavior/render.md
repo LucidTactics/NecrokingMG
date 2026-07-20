@@ -804,14 +804,19 @@ a new effect's art. Runtime store = `Game1._flipbooks` (id→`Flipbook`), rebuil
 `Game1.ReloadFlipbooksFromRegistry()` (StartGame + spell-editor `MarkDirty` live-reload);
 the dictionary INSTANCE is stable so holders keep working across reloads.
 
-**Loader gotcha**: `Flipbook.Load` opens the file itself and calls the STREAM overload
-`TextureUtil.LoadPremultiplied(device, stream)` = raw `Texture2D.FromStream` — it BYPASSES
-the extension dispatch in the PATH overload (`LoadPremultiplied(device, path)` routes
-`.exr`/`.tga` → `Render/ExrTgaTextures.cs`, added for the HDR flipbook library in
-`assets/Effects/Flipbooks`). A non-PNG `FlipbookDef.Path` therefore throws inside
-`ReloadFlipbooksFromRegistry` (no try/catch) and kills StartGame. `ExrTgaTextures.
-LoadExrPremultiplied` decodes uncompressed half-float EXR but **clamps to LDR + sRGB-encodes
-into a `SurfaceFormat.Color` texture** — HDR texel data is currently discarded at load.
+**HDR (EXR) flipbooks — the load + draw contract (2026-07-20)**: `Flipbook.Load` routes
+`.exr` → `ExrTgaTextures.LoadExrHdr` (a **`SurfaceFormat.HalfVector4`** texture with LINEAR
+premultiplied HDR texels, >1 preserved for bloom) and sets **`Flipbook.IsHdr`**; other
+extensions go through the PATH overload `TextureUtil.LoadPremultiplied(device, path)`
+(dispatches `.tga`/LDR-`.exr` → `Render/ExrTgaTextures.cs`; the LDR
+`LoadExrPremultiplied` clamp path remains for previews/TextureCache). Draw sites MUST
+switch HDR sheets to the **`LinearTexture=1` HdrSprite clones `Materials.HdrTexAlpha` /
+`HdrTexAdditive`** (`scope.PushMaterial`/`PopMaterial` around the draw — precedents:
+`GameRenderer.World.cs` `DrawProjectilesHdr` + `DrawEffectsFiltered`,
+`BuffVisualSystem.DrawAttachedFlames`, `Editor/SpellPreview.cs`) — the plain material
+renders them washed out. **Never `GetData<Color>` an IsHdr texture** (throws);
+`WadingWakeSystem.BakeGradientTexture` guards on `Texture.Format != SurfaceFormat.Color`
+and disables the wake bake with a startup log.
 
 **Runtime flipbook consumer census** (who draws `Game1._flipbooks` entries, and how):
 - `GameRenderer.World.cs` `DrawProjectilesHdr` — `proj.FlipbookID` magic darts/fireballs,
