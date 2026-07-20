@@ -19,9 +19,54 @@ namespace Necroking.Render;
 /// </summary>
 public static class ExrTgaTextures
 {
+    /// <summary>Decode an EXR to LDR: linear values clamped + sRGB-encoded into
+    /// premultiplied Color — matches the .tga twin. Used by editor previews and
+    /// as the plain-texture fallback.</summary>
     public static Texture2D LoadExrPremultiplied(GraphicsDevice device, string path)
     {
-        byte[] data = File.ReadAllBytes(path);
+        DecodeExr(File.ReadAllBytes(path), out int w, out int h, out float[] rgba);
+        var pixels = new Color[w * h];
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            float af = rgba[i * 4 + 3];
+            pixels[i] = new Color(
+                (byte)(LinearToSrgb(rgba[i * 4]) * af * 255f + 0.5f),
+                (byte)(LinearToSrgb(rgba[i * 4 + 1]) * af * 255f + 0.5f),
+                (byte)(LinearToSrgb(rgba[i * 4 + 2]) * af * 255f + 0.5f),
+                (byte)(af * 255f + 0.5f));
+        }
+        var tex = new Texture2D(device, w, h);
+        tex.SetData(pixels);
+        return tex;
+    }
+
+    /// <summary>Decode an EXR keeping its full HDR range: a HalfVector4 texture
+    /// holding LINEAR premultiplied data (values above 1.0 preserved). Must be
+    /// drawn through a LinearTexture=1 HdrSprite material (Materials.HdrTex*) —
+    /// the ordinary sprite path expects sRGB-encoded LDR texels and would render
+    /// this washed out.</summary>
+    public static Texture2D LoadExrHdr(GraphicsDevice device, string path)
+    {
+        DecodeExr(File.ReadAllBytes(path), out int w, out int h, out float[] rgba);
+        var pixels = new Microsoft.Xna.Framework.Graphics.PackedVector.HalfVector4[w * h];
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            float af = rgba[i * 4 + 3];
+            pixels[i] = new Microsoft.Xna.Framework.Graphics.PackedVector.HalfVector4(
+                MathF.Max(rgba[i * 4], 0f) * af,
+                MathF.Max(rgba[i * 4 + 1], 0f) * af,
+                MathF.Max(rgba[i * 4 + 2], 0f) * af,
+                af);
+        }
+        var tex = new Texture2D(device, w, h, false, SurfaceFormat.HalfVector4);
+        tex.SetData(pixels);
+        return tex;
+    }
+
+    /// <summary>Parse the supported EXR shape into straight (un-premultiplied)
+    /// linear RGBA floats, alpha clamped to [0,1] (1 for BGR-only files).</summary>
+    private static void DecodeExr(byte[] data, out int width, out int height, out float[] rgba)
+    {
         if (data.Length < 8 || BitConverter.ToInt32(data, 0) != 0x01312f76)
             throw new InvalidDataException("not an EXR file");
         int version = data[4];
@@ -91,7 +136,7 @@ public static class ExrTgaTextures
         off += h * 8; // scanline offset table — blocks follow sequentially
 
         // --- Scanline blocks: y, byte count, then planar half rows per channel ---
-        var pixels = new Color[w * h];
+        rgba = new float[w * h * 4];
         int rowBytes = w * 2;
         for (int line = 0; line < h; line++)
         {
@@ -100,22 +145,16 @@ public static class ExrTgaTextures
             int rowBase = off;
             for (int x = 0; x < w; x++)
             {
-                float rf = ReadHalf(data, rowBase + r * rowBytes + x * 2);
-                float gf = ReadHalf(data, rowBase + g * rowBytes + x * 2);
-                float bf = ReadHalf(data, rowBase + b * rowBytes + x * 2);
-                float af = a >= 0 ? Math.Clamp(ReadHalf(data, rowBase + a * rowBytes + x * 2), 0f, 1f) : 1f;
-                pixels[y * w + x] = new Color(
-                    (byte)(LinearToSrgb(rf) * af * 255f + 0.5f),
-                    (byte)(LinearToSrgb(gf) * af * 255f + 0.5f),
-                    (byte)(LinearToSrgb(bf) * af * 255f + 0.5f),
-                    (byte)(af * 255f + 0.5f));
+                int p = (y * w + x) * 4;
+                rgba[p] = ReadHalf(data, rowBase + r * rowBytes + x * 2);
+                rgba[p + 1] = ReadHalf(data, rowBase + g * rowBytes + x * 2);
+                rgba[p + 2] = ReadHalf(data, rowBase + b * rowBytes + x * 2);
+                rgba[p + 3] = a >= 0 ? Math.Clamp(ReadHalf(data, rowBase + a * rowBytes + x * 2), 0f, 1f) : 1f;
             }
             off += channels.Length * rowBytes;
         }
-
-        var tex = new Texture2D(device, w, h);
-        tex.SetData(pixels);
-        return tex;
+        width = w;
+        height = h;
     }
 
     public static Texture2D LoadTgaPremultiplied(GraphicsDevice device, string path)

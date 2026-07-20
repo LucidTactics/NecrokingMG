@@ -23,18 +23,44 @@
 //   alpha — without the multiply, fading effects keep 100% brightness and turn
 //   into a lingering additive glow instead of dimming out.
 //
-// IMPORTANT: MaxIntensity, MaxAlphaIntensity, and AlphaMode must be set
-// explicitly from C# — MGFX on OpenGL does not honor default uniform values.
+// LinearTexture = 1: the bound texture holds LINEAR half-float HDR data
+//   (EXR flipbooks, premultiplied in linear space) instead of the usual
+//   sRGB-encoded LDR. The sample is converted to scene units first:
+//   sRGB-encode the [0,1] part (so it matches its LDR .tga twin exactly)
+//   and pass overbright (>1) values through linearly (the same way vertex
+//   intensity scales LDR sprites) so per-texel energy reaches bloom.
+//   The encode runs on UN-premultiplied color (enc(p/a)*a), matching how
+//   LDR sheets are encoded before premultiplication at load.
+//
+// IMPORTANT: MaxIntensity, MaxAlphaIntensity, AlphaMode, and LinearTexture
+// must be set explicitly from C# — MGFX on OpenGL does not honor default
+// uniform values.
 
 float MaxIntensity;
 float MaxAlphaIntensity;
 float AlphaMode;
+float LinearTexture;
 
 sampler2D TextureSampler : register(s0);
+
+float3 EncodeSceneUnits(float3 v)
+{
+    v = max(v, 0.0);
+    float3 srgb = min(v, 1.0) <= 0.0031308
+        ? min(v, 1.0) * 12.92
+        : 1.055 * pow(min(v, 1.0), 1.0 / 2.4) - 0.055;
+    // Overbright: keep the linear value (srgb(1)=1, so this is continuous).
+    return v > 1.0 ? v : srgb;
+}
 
 float4 PixelShaderFunction(float4 color : COLOR0, float2 texCoord : TEXCOORD0) : COLOR0
 {
     float4 tex = tex2D(TextureSampler, texCoord);
+
+    // Linear HDR texture -> scene units (un-premultiply, encode, re-premultiply)
+    float linA = max(tex.a, 1e-5);
+    float4 linTex = float4(EncodeSceneUnits(tex.rgb / linA) * linA, tex.a);
+    tex = lerp(tex, linTex, LinearTexture);
 
     // Additive path: alpha carries sqrt-encoded intensity — square to decode.
     float addIntensity = color.a * color.a * MaxIntensity;

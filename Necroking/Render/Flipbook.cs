@@ -40,13 +40,29 @@ public class Flipbook
     public float FPS { get; private set; } = 30f;
     public bool IsLoaded { get; private set; }
 
+    /// <summary>True for .exr sheets: Texture is HalfVector4 with LINEAR
+    /// premultiplied HDR data. Draw sites must switch to a LinearTexture=1
+    /// material (Materials.HdrTexAdditive/HdrTexAlpha) — the plain sprite path
+    /// renders it washed out — and must NOT GetData&lt;Color&gt; it.</summary>
+    public bool IsHdr { get; private set; }
+
     public bool Load(GraphicsDevice device, string path, int cols, int rows, float fps = 30f)
     {
         string resolved = Path.IsPathRooted(path) ? path : Core.GamePaths.Resolve(path);
         if (!File.Exists(resolved)) return false;
 
-        using var stream = File.OpenRead(resolved);
-        Texture = TextureUtil.LoadPremultiplied(device, stream);
+        if (Path.GetExtension(resolved).ToLowerInvariant() == ".exr")
+        {
+            // HDR path: keep the full float range for the bloom pipeline.
+            Texture = ExrTgaTextures.LoadExrHdr(device, resolved);
+            IsHdr = true;
+        }
+        else
+        {
+            // Path-based overload: routes .tga (and any future format) too.
+            Texture = TextureUtil.LoadPremultiplied(device, resolved);
+            IsHdr = false;
+        }
         if (Texture == null) return false;
 
         Cols = cols;

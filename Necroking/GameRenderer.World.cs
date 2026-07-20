@@ -515,6 +515,11 @@ partial class GameRenderer
                 float faceAngle = MathF.Atan2(screenVel.Y, screenVel.X) - MathF.PI / 2f;
                 if (screenVel.LengthSquared() > 1e-6f) screenVel.Normalize();
 
+                // HDR (EXR) sheets are linear half-float — switch to the
+                // LinearTexture material variant for their draws.
+                bool hdrTex = fb.IsHdr && Materials.HdrTexAdditive != null;
+                if (hdrTex) _g.Scope.PushMaterial(Materials.HdrTexAdditive!);
+
                 // Trail: draw 2 previous frames behind with lower alpha, then main sprite
                 for (int trail = 2; trail >= 0; trail--)
                 {
@@ -531,6 +536,8 @@ partial class GameRenderer
                     _g.Scope.Draw(fb.Texture, trailPos, trailSrc, color,
                         faceAngle, origin, scale * trailScale, SpriteEffects.None, 0f);
                 }
+
+                if (hdrTex) _g.Scope.PopMaterial();
             }
             else
             {
@@ -591,7 +598,12 @@ partial class GameRenderer
                 Color color = blendMode == 0
                     ? HdrColor.ToHdrVertexAlpha(eff.Tint, alpha, eff.HdrIntensity)
                     : HdrColor.ToHdrVertex(eff.Tint, alpha, eff.HdrIntensity);
+                // HDR (EXR) sheets need the LinearTexture material variant
+                var hdrTexMat = blendMode == 0 ? Materials.HdrTexAlpha : Materials.HdrTexAdditive;
+                bool hdrTex = fb.IsHdr && hdrTexMat != null;
+                if (hdrTex) _g.Scope.PushMaterial(hdrTexMat!);
                 _g.Scope.Draw(fb.Texture, sp, srcRect, color, 0f, origin, fbScale, SpriteEffects.None, 0f);
+                if (hdrTex) _g.Scope.PopMaterial();
             }
             else
             {

@@ -398,6 +398,7 @@ public partial class Game1
                     _hdrSpriteEffect.Parameters["MaxIntensity"]?.SetValue(HdrColor.MaxHdrIntensity);
                     _hdrSpriteEffect.Parameters["MaxAlphaIntensity"]?.SetValue(HdrColor.MaxHdrAlphaIntensity);
                     _hdrSpriteEffect.Parameters["AlphaMode"]?.SetValue(0f);
+                    _hdrSpriteEffect.Parameters["LinearTexture"]?.SetValue(0f);
                 }
             }
             catch (Exception ex) { _hdrSpriteEffect = null; DebugLog.Log("startup", $"HdrSprite not loaded: {ex.Message}"); }

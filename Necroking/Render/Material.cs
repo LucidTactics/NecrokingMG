@@ -182,6 +182,15 @@ public static class Materials
     /// <summary>HDR sprites, additive sub-pass (HdrSprite.fx clone, AlphaMode=0).</summary>
     public static Material? HdrAdditive { get; private set; }
 
+    /// <summary>Alpha-blended variant for LINEAR half-float textures (EXR
+    /// flipbooks, Flipbook.IsHdr) — LinearTexture=1 encodes the sample to
+    /// scene units in-shader, preserving &gt;1 texels for bloom.</summary>
+    public static Material? HdrTexAlpha { get; private set; }
+
+    /// <summary>Additive variant for LINEAR half-float textures (EXR flipbooks,
+    /// Flipbook.IsHdr).</summary>
+    public static Material? HdrTexAdditive { get; private set; }
+
     /// <summary>Depth-only unit silhouette stamp (DepthCutout.fx): color write
     /// off, depth write on — the occluder pass for depth-tested fog.</summary>
     public static Material? DepthStamp { get; private set; }
@@ -244,6 +253,7 @@ public static class Materials
             alphaFx.Parameters["MaxIntensity"]?.SetValue(HdrColor.MaxHdrIntensity);
             alphaFx.Parameters["MaxAlphaIntensity"]?.SetValue(HdrColor.MaxHdrAlphaIntensity);
             alphaFx.Parameters["AlphaMode"]?.SetValue(1f);
+            alphaFx.Parameters["LinearTexture"]?.SetValue(0f);
             // premultiplyTint: false — HDR vertex colors are a special encoding
             // (HdrColor.ToHdrVertex* packs intensity into the channels); the
             // shader does its own premultiply. Never auto-convert them.
@@ -254,7 +264,26 @@ public static class Materials
             addFx.Parameters["MaxIntensity"]?.SetValue(HdrColor.MaxHdrIntensity);
             addFx.Parameters["MaxAlphaIntensity"]?.SetValue(HdrColor.MaxHdrAlphaIntensity);
             addFx.Parameters["AlphaMode"]?.SetValue(0f);
+            addFx.Parameters["LinearTexture"]?.SetValue(0f);
             HdrAdditive = Register("HdrAdditive", addFx, BlendState.Additive, SamplerState.LinearClamp);
+
+            // LinearTexture=1 clones for HDR (EXR) flipbook textures — same
+            // vertex encoding, but the sample is linear half-float and gets
+            // encoded to scene units in-shader (Flipbook.IsHdr picks these).
+            var alphaTexFx = hdrSprite.Clone();
+            alphaTexFx.Parameters["MaxIntensity"]?.SetValue(HdrColor.MaxHdrIntensity);
+            alphaTexFx.Parameters["MaxAlphaIntensity"]?.SetValue(HdrColor.MaxHdrAlphaIntensity);
+            alphaTexFx.Parameters["AlphaMode"]?.SetValue(1f);
+            alphaTexFx.Parameters["LinearTexture"]?.SetValue(1f);
+            HdrTexAlpha = Register("HdrTexAlpha", alphaTexFx, BlendState.AlphaBlend, SamplerState.LinearClamp,
+                premultiplyTint: false);
+
+            var addTexFx = hdrSprite.Clone();
+            addTexFx.Parameters["MaxIntensity"]?.SetValue(HdrColor.MaxHdrIntensity);
+            addTexFx.Parameters["MaxAlphaIntensity"]?.SetValue(HdrColor.MaxHdrAlphaIntensity);
+            addTexFx.Parameters["AlphaMode"]?.SetValue(0f);
+            addTexFx.Parameters["LinearTexture"]?.SetValue(1f);
+            HdrTexAdditive = Register("HdrTexAdditive", addTexFx, BlendState.Additive, SamplerState.LinearClamp);
         }
 
         if (depthCutout != null)

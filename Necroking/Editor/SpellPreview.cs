@@ -707,6 +707,11 @@ public class SpellPreview
                 float scale = pixelSize / srcRect.Width;
                 var origin = new Vector2(srcRect.Width / 2f, srcRect.Height / 2f);
 
+                // HDR (EXR) sheets need the LinearTexture material variant
+                // (matches Game1.DrawProjectilesHdr)
+                bool hdrTex = fb.IsHdr && Render.Materials.HdrTexAdditive != null;
+                if (hdrTex) Scope.PushMaterial(Render.Materials.HdrTexAdditive!);
+
                 // Trail: 2 previous frames behind with lower alpha
                 Vec2 velDir = p.Velocity.LengthSquared() > 0.01f
                     ? new Vec2(p.Velocity.X, p.Velocity.Y).Normalized()
@@ -727,6 +732,8 @@ public class SpellPreview
                     Scope.Draw(fb.Texture, trailPos, trailSrc, color,
                         p.Age * 2f, origin, scale * trailScale, SpriteEffects.None, 0f);
                 }
+
+                if (hdrTex) Scope.PopMaterial();
             }
             else
             {

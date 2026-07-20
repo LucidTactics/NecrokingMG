@@ -821,6 +821,15 @@ public class WadingWakeSystem
     private static Texture2D? BakeGradientTexture(Flipbook? fb, Color shadowColor, Color foamColor)
     {
         if (fb == null || fb.Texture == null) return null;
+        // GetData<Color> below throws on a HalfVector4 (EXR/HDR) texture — the
+        // wake flipbooks must stay LDR. Refuse loudly instead of crashing init.
+        if (fb.Texture.Format != SurfaceFormat.Color)
+        {
+            DebugLog.Log("startup", "WadingWake: flipbook texture is not LDR Color " +
+                $"(format {fb.Texture.Format}) — gradient bake skipped, wake particles disabled for it. " +
+                "Point the wake flipbook defs at .png sheets, not .exr.");
+            return null;
+        }
         var src = fb.Texture;
         var pixels = new Color[src.Width * src.Height];
         src.GetData(pixels);

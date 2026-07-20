@@ -2545,6 +2545,69 @@
         "alignment": "Ground",
         "duration": -1
       }
+    },
+    {
+      "name": "Fireball (HDR test)",
+      "id": "fireball_hdr_test",
+      "description": "Pilot spell for HDR EXR flipbooks - white tint, intensity 1, texture is authoritative.",
+      "school": "Evocation",
+      "tileTemplate": "evocation",
+      "icon": "assets/UI/Icons/Spells/fireball.png",
+      "range": 40,
+      "primaryPath": "death",
+      "primaryLevel": 1,
+      "masteryBonuses": [
+        "+1: fatigue -30%",
+        "+2: fatigue -50%",
+        "+3: fatigue -75%",
+        "+4: fatigue -85%"
+      ],
+      "castingBuffID": "buff_4",
+      "aoeType": "AOE",
+      "damage": 18,
+      "aoeRadius": 4,
+      "hitEffectFlipbook": {
+        "flipbookID": "explosion01_hdr",
+        "fps": 30,
+        "scale": 2.5,
+        "color": {
+          "r": 255,
+          "g": 255,
+          "b": 255,
+          "a": 255,
+          "intensity": 1
+        },
+        "rotation": 0,
+        "blendMode": "Additive",
+        "alignment": "Ground",
+        "duration": -1
+      },
+      "projectileSpeed": 28.3,
+      "projectileFlipbook": {
+        "flipbookID": "fireball_hdr",
+        "fps": 0,
+        "scale": 1.5,
+        "color": {
+          "r": 255,
+          "g": 255,
+          "b": 255,
+          "a": 255,
+          "intensity": 1
+        },
+        "rotation": 0,
+        "blendMode": "Alpha",
+        "alignment": "Ground",
+        "duration": -1
+      },
+      "scatterRadius": 2.8,
+      "scatterStrength": 0.6,
+      "scatterColor": {
+        "r": 255,
+        "g": 160,
+        "b": 60,
+        "a": 255,
+        "intensity": 1
+      }
     }
   ]
 }

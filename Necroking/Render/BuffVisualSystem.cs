@@ -711,7 +711,11 @@ public class BuffVisualSystem
             // (A=255, fade=1) so existing data reads the same, just brighter.
             var color = HdrColor.ToHdrVertex(
                 new Color(vis.Color.R, vis.Color.G, vis.Color.B), 1f, vis.Color.Intensity);
+            // HDR (EXR) sheets need the LinearTexture material variant
+            bool hdrTex = fb.IsHdr && Materials.HdrTexAdditive != null;
+            if (hdrTex) scope.PushMaterial(Materials.HdrTexAdditive!);
             scope.Draw(fb.Texture, sp, src, color, 0f, origin, scale, SpriteEffects.None, 0f);
+            if (hdrTex) scope.PopMaterial();
         }
     }
 

@@ -41,6 +41,20 @@
       "path": "assets/Effects/Flipbooks/Water/FX_TX_RainSplash_03_3x3_Grayscale.png",
       "cols": 3,
       "rows": 3
+    },
+    {
+      "id": "fireball_hdr",
+      "name": "Fireball HDR (EXR)",
+      "path": "assets/Effects/Flipbooks/Fireballs/FireBall02_8x8.exr",
+      "cols": 8,
+      "rows": 8
+    },
+    {
+      "id": "explosion01_hdr",
+      "name": "Explosion 01 HDR (EXR)",
+      "path": "assets/Effects/Flipbooks/Explosions/Explosion01_5x5.exr",
+      "cols": 5,
+      "rows": 5
     }
   ]
 }

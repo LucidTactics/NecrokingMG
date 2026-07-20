@@ -570,8 +570,17 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             var resolvedPath = GamePaths.Resolve(fbDef.Path);
             if (!File.Exists(resolvedPath)) continue;
             var fb = new Flipbook();
-            if (fb.Load(GraphicsDevice, resolvedPath, fbDef.Cols, fbDef.Rows, fbDef.DefaultFPS))
-                _flipbooks[fbId] = fb;
+            // A malformed file (e.g. an unsupported .exr shape) must not kill
+            // StartGame — skip the one def and log, the rest keep loading.
+            try
+            {
+                if (fb.Load(GraphicsDevice, resolvedPath, fbDef.Cols, fbDef.Rows, fbDef.DefaultFPS))
+                    _flipbooks[fbId] = fb;
+            }
+            catch (Exception ex)
+            {
+                DebugLog.Log("startup", $"flipbook '{fbId}' failed to load ({fbDef.Path}): {ex.Message}");
+            }
         }
         // Systems holding flipbook lookups keep working: the dictionary
         // INSTANCE is stable (cleared + repopulated in place).
