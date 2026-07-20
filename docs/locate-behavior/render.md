@@ -795,10 +795,47 @@ What lives here: `class Flipbook` — loads a sprite-sheet texture (cols×rows, 
 maps a frame index to a source `Rectangle`. `LoadFromDef(device, FlipbookDef)` builds one
 from a registry def; `GetFrameRect(i)` returns the frame. A `flipbookKey` on an `Effect`
 resolves to one of these.
-Key members: `Load`, `LoadFromDef`, `GetFrameRect`, `Texture`, `Cols`/`Rows`/`TotalFrames`/`FPS`.
+Key members: `Load`, `LoadFromDef`, `GetFrameRect`, `Texture`, `Cols`/`Rows`/`TotalFrames`/`FPS`,
+`GetFrameAtTime` (looping) / `GetFrameAtNormalizedTime` (play-once).
 Look/edit here when: a flipbook plays the wrong frames/speed, or you're wiring up new
 flipbook **art**. The flipbook **data** (id → sheet path, cols/rows/fps) is a `FlipbookDef`
-in `Data/Registries/` (not yet documented) — that's where you register a new effect's art.
+in `Data/Registries/FlipbookRegistry.cs` → `data/flipbooks.json` — that's where you register
+a new effect's art. Runtime store = `Game1._flipbooks` (id→`Flipbook`), rebuilt by
+`Game1.ReloadFlipbooksFromRegistry()` (StartGame + spell-editor `MarkDirty` live-reload);
+the dictionary INSTANCE is stable so holders keep working across reloads.
+
+**Loader gotcha**: `Flipbook.Load` opens the file itself and calls the STREAM overload
+`TextureUtil.LoadPremultiplied(device, stream)` = raw `Texture2D.FromStream` — it BYPASSES
+the extension dispatch in the PATH overload (`LoadPremultiplied(device, path)` routes
+`.exr`/`.tga` → `Render/ExrTgaTextures.cs`, added for the HDR flipbook library in
+`assets/Effects/Flipbooks`). A non-PNG `FlipbookDef.Path` therefore throws inside
+`ReloadFlipbooksFromRegistry` (no try/catch) and kills StartGame. `ExrTgaTextures.
+LoadExrPremultiplied` decodes uncompressed half-float EXR but **clamps to LDR + sRGB-encodes
+into a `SurfaceFormat.Color` texture** — HDR texel data is currently discarded at load.
+
+**Runtime flipbook consumer census** (who draws `Game1._flipbooks` entries, and how):
+- `GameRenderer.World.cs` `DrawProjectilesHdr` — `proj.FlipbookID` magic darts/fireballs,
+  `Materials.HdrAdditive` (HdrSprite.fx, Additive), tint `HdrColor.ToHdrVertex` (true HDR).
+- `GameRenderer.World.cs` `DrawEffectsFiltered` — EffectManager one-shots (`eff.FlipbookKey`:
+  spell impacts, cast flares, summon effects), `Materials.HdrAlpha`/`HdrAdditive` per
+  `BlendMode`, `ToHdrVertexAlpha`/`ToHdrVertex` (true HDR).
+- `Render/BuffVisualSystem.cs` — ground auras / orbitals / unit-effect flipbooks via the raw
+  Scene batch (AlphaBlend, `EncodeColor` LDR island); EXCEPTION `DrawAttachedFlames` →
+  `Materials.HdrAdditive` YSort items (true HDR).
+- `Render/PoisonCloudRenderer.cs`, `Render/DeathFogRenderer.cs`, `Render/LightningRenderer.cs`,
+  `Render/ReanimEffectSystem.cs`, `Render/GroundFogSystem.cs` — all consume the hardcoded
+  `"cloud03"` (+ `ImpactFlipbookID` for lightning) as puff sprites; native-encoding islands,
+  AlphaBlend batches with the A=0 premult-additive trick (LDR-capped), GroundFog via
+  `Materials.FogWisp` (AlphaBlend+DepthRead).
+- `Render/WadingWakeSystem.cs` — mini-splash/bubble/rain-splash flipbooks for frame LAYOUT
+  only; actual draws use recolored `BakeGradientTexture` copies (Scene AlphaBlend).
+- `Render/MagicGlyphRenderer.cs` — receives the dictionary in `SetContext` but no frame
+  draw exists (latent).
+- Editors: `Editor/SpellPreview.cs` (own RTs incl. HalfVector4 + HdrSprite passes),
+  `Editor/SpellEditorWindow.cs` (`SetFlipbooks`), `Editor/FlipbookPreviewPanel.cs` +
+  `Editor/TextureFileBrowser.cs` (LDR preview via `TextureCache`).
+Sprite-sheet animation OUTSIDE the registry: unit anims = `Render/SpriteAtlas.cs` (own
+atlas/keyframe system, not flipbooks).
 
 ### `Necroking/Render/ReanimEffectSystem.cs` — composite reanimation "rise" effect
 What lives here: a preset-driven, multi-part effect played at a grave on reanimate; it's
