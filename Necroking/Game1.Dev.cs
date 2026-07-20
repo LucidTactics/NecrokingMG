@@ -1350,6 +1350,50 @@ public partial class Game1 {
                break;
             }
 
+            // Weapon-attach diagnostics: everything ComputeWeaponAttach feeds on,
+            // for correlating the drawn sprite frame vs the resolved hilt/tip
+            // (casting-flame desync repro). devctl: cmd weapon_attach necro
+            case "weapon_attach": {
+               var widxs = DevResolveUnits(c.Args.Length > 0 ? string.Join(" ", c.Args) : "necro");
+               if (widxs.Count == 0) { c.Complete(Necroking.Dev.DevServer.Error("no unit matched")); break; }
+               int wi = widxs[0];
+               var wu = _sim.Units[wi];
+               var wdef = _gameData.Units.Get(wu.UnitDefID);
+               if (wdef?.Sprite == null || !_unitAnims.TryGetValue(wu.Id, out var wad)) {
+                  c.Complete(Necroking.Dev.DevServer.Error("unit has no sprite/anim data"));
+                  break;
+               }
+               var ci4 = System.Globalization.CultureInfo.InvariantCulture;
+               string wAnim = Render.AnimController.StateToAnimName(wad.Ctrl.CurrentState);
+               int wAngle = wad.Ctrl.ResolveAngle(wu.FacingAngle, out bool wFlip);
+               int wFrameIdx = wad.Ctrl.GetCurrentFrameIndex(wu.FacingAngle);
+               var wFr = wad.Ctrl.GetCurrentFrame(wu.FacingAngle);
+               var wRect = wFr.Frame?.Rect ?? default;
+               Render.AnimationMeta? wMeta = null;
+               _animMeta.TryGetValue(Render.AnimMetaLoader.MetaKey(wdef.Sprite.SpriteName, wAnim), out wMeta);
+               int mountBaseN = -1, mountTipN = -1, durN = -1;
+               if (wMeta != null && wMeta.YawData.TryGetValue(wAngle, out var wym)) {
+                  durN = wym.FrameDurationsMs.Count;
+                  if (wym.Mounts.TryGetValue("WeaponBase", out var mb)) mountBaseN = mb.Count;
+                  if (wym.Mounts.TryGetValue("WeaponTip", out var mt)) mountTipN = mt.Count;
+               }
+               bool wOk = Render.WeaponPointResolver.TryResolve(wdef, wMeta, wAnim, wAngle, wFrameIdx,
+                  wad.RefFrameHeight, out var wpfD, out bool wFromMeta);
+               c.Complete(Necroking.Dev.DevServer.OkRaw("{" +
+                  $"\"def\":{System.Text.Json.JsonSerializer.Serialize(wu.UnitDefID)}," +
+                  $"\"state\":\"{wad.Ctrl.CurrentState}\",\"anim\":\"{wAnim}\"," +
+                  $"\"facing\":{wu.FacingAngle.ToString("F1", ci4)},\"spriteAngle\":{wAngle},\"flipX\":{(wFlip ? "true" : "false")}," +
+                  $"\"frameIdx\":{wFrameIdx}," +
+                  $"\"drawnRect\":[{wRect.X},{wRect.Y},{wRect.Width},{wRect.Height}]," +
+                  $"\"metaLoaded\":{(wMeta != null ? "true" : "false")},\"metaDurFrames\":{durN},\"metaMountBaseFrames\":{mountBaseN},\"metaMountTipFrames\":{mountTipN}," +
+                  $"\"resolved\":{(wOk ? "true" : "false")},\"fromMeta\":{(wFromMeta ? "true" : "false")}," +
+                  $"\"hiltPx\":[{wpfD.Hilt.X.ToString("F2", ci4)},{wpfD.Hilt.Y.ToString("F2", ci4)}],\"tipPx\":[{wpfD.Tip.X.ToString("F2", ci4)},{wpfD.Tip.Y.ToString("F2", ci4)}]," +
+                  $"\"hiltBehind\":{(wpfD.Hilt.Behind ? "true" : "false")},\"tipBehind\":{(wpfD.Tip.Behind ? "true" : "false")}," +
+                  $"\"renderPos\":[{wu.RenderPos.X.ToString("F3", ci4)},{wu.RenderPos.Y.ToString("F3", ci4)}]" +
+                  "}"));
+               break;
+            }
+
             // Follow/locomotion state dump for diagnosing horde-follow issues:
             // effort intent + ramp, speed cap, intent vs actual velocity, slot
             // position/distance, horde state, stuck accrual.
