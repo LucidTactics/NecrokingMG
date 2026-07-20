@@ -1344,6 +1344,12 @@ public class SpellEditorWindow : EditorWindow
             wp.RenderBehind = _ui.DrawCheckbox("Render Behind", wp.RenderBehind, contentX, cy);
             if (wp.RenderBehind != oldRB) MarkDirty();
             cy += RowH;
+            bool oldAF = wp.AttachedFlame;
+            wp.AttachedFlame = _ui.DrawCheckbox("Attached Flame", wp.AttachedFlame, contentX, cy);
+            if (wp.AttachedFlame != oldAF) MarkDirty();
+            cy += RowH;
+            wp.ScatterRadius = DrawFloatField100x("bf_wp_scr", "Scatter Radius", wp.ScatterRadius, contentX, ref cy, fieldW);
+            wp.ScatterStrength = DrawFloatField100x("bf_wp_scs", "Scatter Str", wp.ScatterStrength, contentX, ref cy, fieldW);
         });
 
         // Unit Tint

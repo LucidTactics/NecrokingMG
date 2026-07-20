@@ -99,6 +99,14 @@ public class WeaponParticleVisual
     [JsonPropertyName("moveDirZ")] public float MoveDirZ { get; set; } = 1.0f;
     [JsonPropertyName("blendMode")] public int BlendMode { get; set; } = 1;
     [JsonPropertyName("renderBehind")] public bool RenderBehind { get; set; }
+    /// <summary>Single persistent looping flame pinned to the weapon attach at
+    /// RangeMax (1 = tip/hand) instead of spawned drifting particles — no world
+    /// trail. SpawnRate/Lifetime/MoveSpeed/MoveDir are ignored in this mode.</summary>
+    [JsonPropertyName("attachedFlame")] public bool AttachedFlame { get; set; }
+    /// <summary>ScatterGlow halo at the weapon tip. Defaults match the values
+    /// previously hardcoded in DrawSingleUnit. Radius is world units.</summary>
+    [JsonPropertyName("scatterRadius")] public float ScatterRadius { get; set; } = 1.1f;
+    [JsonPropertyName("scatterStrength")] public float ScatterStrength { get; set; } = 0.45f;
 }
 
 public class ColorJson

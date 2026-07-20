@@ -75,7 +75,7 @@ partial class GameRenderer
     // item kind, created lazily; per-item payload rides in the item's CbA/CbB
     // ints so submission never allocates.
     private SpriteDrawCallback? _cbUnit, _cbEnvObject, _cbCloudPuff, _cbGrassTuft,
-        _cbDeathFogPuff, _cbReanimDust;
+        _cbDeathFogPuff, _cbReanimDust, _cbFlameBehind, _cbFlameFront;
     private SpriteDrawCallback? _cbRoads, _cbTraps, _cbGlyphs, _cbWalls, _cbShadows,
         _cbHoverMarkers, _cbCorpses, _cbProjectilesRope, _cbRain;
 
@@ -153,6 +153,8 @@ partial class GameRenderer
     private void CollectYSortItems(RenderContext ctx)
     {
         _cbUnit ??= (SpriteScope s, int a, int _) => DrawSingleUnit(s, a);
+        _cbFlameBehind ??= (SpriteScope _, int a, int _) => DrawUnitAttachedFlames(a, behind: true);
+        _cbFlameFront ??= (SpriteScope _, int a, int _) => DrawUnitAttachedFlames(a, behind: false);
         _cbEnvObject ??= (SpriteScope s, int a, int _) => DrawSingleEnvObject(s, a);
         _cbCloudPuff ??= (SpriteScope _, int a, int b) => _g._poisonCloudRenderer.DrawSinglePuff(a, b);
         // no_ground dev screenshots suppress grass too, for the clean
@@ -184,6 +186,14 @@ partial class GameRenderer
         // Drop wake state of units that died mid-splash (id-keyed store, once per frame).
         _g._wakeSystem.PruneDead(_g._sim.Units);
 
+        // Attached-flame buffs (the casting hand fire) draw as their own YSort
+        // items carrying the HdrAdditive material: the flame gets the real HDR
+        // intensity ceiling (16, feeds bloom) that the unit's LDR Scene batch
+        // can't express, while still Y-sorting against other units. Two items
+        // bracket the unit (±0.05 worldY) so the flame can render behind the
+        // body on away-facing frames (WPParticle.Behind picks the side at draw).
+        var matFlame = Materials.HdrAdditive ?? Materials.AdditiveShapes;
+
         for (int i = 0; i < _g._sim.Units.Count; i++)
         {
             if (!_g._sim.Units[i].Alive) continue;
@@ -191,6 +201,15 @@ partial class GameRenderer
             if (rp.X < viewLeft || rp.X > viewRight || rp.Y < viewTop || rp.Y > viewBottom)
                 continue;
             queue.SubmitCallback(WorldLayer.YSort, rp.Y, _cbUnit, i, 0);
+
+            foreach (var ab in _g._sim.Units[i].ActiveBuffs)
+            {
+                var bd = _g._gameData.Buffs.Get(ab.BuffDefID);
+                if (bd?.WeaponParticle?.AttachedFlame != true) continue;
+                queue.SubmitCallback(WorldLayer.YSort, rp.Y - 0.05f, _cbFlameBehind, i, 0, matFlame);
+                queue.SubmitCallback(WorldLayer.YSort, rp.Y + 0.05f, _cbFlameFront, i, 0, matFlame);
+                break; // one behind/front pair covers all of the unit's flames
+            }
         }
 
         // Occlusion fade: precompute a screen box for every alive player-owned
@@ -343,6 +362,21 @@ partial class GameRenderer
         else _occlusionFade[i] = fade;
     }
 
+    /// <summary>Queue-item entry for a unit's attached-flame buff visuals (the
+    /// HdrAdditive items submitted in CollectYSortItems). The behind item sorts
+    /// before the unit's own item, so it draws the flame state written by LAST
+    /// frame's UpdateWeaponParticles — a one-frame lag on away-facing frames,
+    /// imperceptible next to the hand motion itself.</summary>
+    private void DrawUnitAttachedFlames(int i, bool behind)
+    {
+        if (i < 0 || i >= _g._sim.Units.Count || !_g._sim.Units[i].Alive) return;
+        // Same fog-of-war gate as DrawSingleUnit: hidden enemies hide their fire.
+        if (_g._sim.Units[i].Faction != Faction.Undead && !_g._fogOfWar.IsVisible(_g._sim.Units[i].Position))
+            return;
+        _g._buffVisuals.DrawAttachedFlames(_g._sim.Units[i].Id, behind, _g.Scope,
+            _g._camera, _g._renderer, _g._flipbooks, _g._gameData.Buffs);
+    }
+
     private void DrawSingleUnit(SpriteScope scope, int i)
     {
         // Fog of war: hide non-undead units (and their buffs, which draw inside
@@ -451,10 +485,11 @@ partial class GameRenderer
             {
                 var bd = _g._gameData.Buffs.Get(ab.BuffDefID);
                 if (bd == null) continue;
-                if (bd.HasWeaponParticle && bd.WeaponParticle != null)
-                    _g._scatterGlow.AddPoint(weaponAttach.TipWorld, 1.1f,
+                if (bd.HasWeaponParticle && bd.WeaponParticle != null
+                    && bd.WeaponParticle.ScatterStrength > 0f && bd.WeaponParticle.ScatterRadius > 0f)
+                    _g._scatterGlow.AddPoint(weaponAttach.TipWorld, bd.WeaponParticle.ScatterRadius,
                         new Color(bd.WeaponParticle.Color.R, bd.WeaponParticle.Color.G, bd.WeaponParticle.Color.B),
-                        0.45f, weaponAttach.TipHeight);
+                        bd.WeaponParticle.ScatterStrength, weaponAttach.TipHeight);
                 if (bd.HasGroundAura && bd.GroundAura != null)
                     _g._scatterGlow.AddPoint(renderPos, MathF.Max(bd.GroundAura.Scale * 0.7f, 0.8f),
                         new Color(bd.GroundAura.Color.R, bd.GroundAura.Color.G, bd.GroundAura.Color.B),

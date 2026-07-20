@@ -215,6 +215,22 @@ public class BuffVisualSystem
             }
             var vis = def.WeaponParticle;
 
+            if (vis.AttachedFlame)
+            {
+                // Persistent flame: positioned in the spawn loop below (needs the
+                // current attach). Here only handle the buff expiring — the flame
+                // vanishes with the buff instead of fading out world-space litter.
+                bool flameActive = false;
+                foreach (var d in wpDefs)
+                    if (d.Id == buffId) { flameActive = true; break; }
+                if (!flameActive)
+                {
+                    state.Particles.Clear();
+                    toRemove.Add(buffId);
+                }
+                continue;
+            }
+
             // Normalize move direction
             float dirLen = MathF.Sqrt(vis.MoveDirX * vis.MoveDirX + vis.MoveDirY * vis.MoveDirY + vis.MoveDirZ * vis.MoveDirZ);
             float ndx = 0, ndy = 0, ndz = 0;
@@ -262,6 +278,27 @@ public class BuffVisualSystem
             {
                 state = new WPEmitterState();
                 emitters[def.Id] = state;
+            }
+
+            if (vis.AttachedFlame)
+            {
+                // Single looping flame re-anchored to the weapon attach every
+                // frame — reads as fire held in the hand, never a world trail.
+                // Age only drives the flipbook frame loop (draw ignores lifetime).
+                if (!weaponAttach.Valid) { state.Particles.Clear(); continue; }
+                float ft = vis.RangeMax;
+                var flame = state.Particles.Count > 0 ? state.Particles[0] : new WPParticle();
+                flame.Age += clampedDt;
+                flame.Pos = new Vec2(
+                    weaponAttach.HiltWorld.X + (weaponAttach.TipWorld.X - weaponAttach.HiltWorld.X) * ft,
+                    weaponAttach.HiltWorld.Y + (weaponAttach.TipWorld.Y - weaponAttach.HiltWorld.Y) * ft);
+                flame.Height = weaponAttach.HiltHeight + (weaponAttach.TipHeight - weaponAttach.HiltHeight) * ft;
+                flame.Behind = ft < 0.5f ? weaponAttach.HiltBehind : weaponAttach.TipBehind;
+                if (state.Particles.Count == 0) state.Particles.Add(flame);
+                else state.Particles[0] = flame;
+                if (state.Particles.Count > 1) // leftovers from a live mode switch in the editor
+                    state.Particles.RemoveRange(1, state.Particles.Count - 1);
+                continue;
             }
 
             if (weaponAttach.Valid && vis.SpawnRate > 0f)
@@ -360,14 +397,15 @@ public class BuffVisualSystem
             DrawMergedOrbs(uid, unitPos, 0, spriteBatch, camera, renderer,
                 flipbooks, buffReg, globalTime);
 
-            // Weapon particles behind
+            // Weapon particles behind (attached flames draw via their own
+            // HdrAdditive queue items — see DrawAttachedFlames — not here)
             if (_wpEmitters.TryGetValue(uid, out var emittersBehind))
             {
                 foreach (var (buffId, state) in emittersBehind)
                 {
                     if (state.Particles.Count == 0) continue;
                     var def = buffReg.Get(buffId);
-                    if (def?.WeaponParticle == null) continue;
+                    if (def?.WeaponParticle == null || def.WeaponParticle.AttachedFlame) continue;
                     DrawWeaponParticles(def.WeaponParticle, state.Particles, true,
                         spriteBatch, camera, renderer, flipbooks);
                 }
@@ -397,14 +435,14 @@ public class BuffVisualSystem
                     camera, renderer, globalTime);
             }
 
-            // Weapon particles front
+            // Weapon particles front (attached flames excluded — HdrAdditive items)
             if (_wpEmitters.TryGetValue(uid, out var emittersFront))
             {
                 foreach (var (buffId, state) in emittersFront)
                 {
                     if (state.Particles.Count == 0) continue;
                     var def = buffReg.Get(buffId);
-                    if (def?.WeaponParticle == null) continue;
+                    if (def?.WeaponParticle == null || def.WeaponParticle.AttachedFlame) continue;
                     DrawWeaponParticles(def.WeaponParticle, state.Particles, false,
                         spriteBatch, camera, renderer, flipbooks);
                 }
@@ -628,6 +666,52 @@ public class BuffVisualSystem
             var color = EncodeColor(vis.Color, alpha, vis.BlendMode);
             batch.Draw(fb.Texture, sp, src, color, 0f, origin,
                 new Vector2(scale, scale), SpriteEffects.None, 0f);
+        }
+    }
+
+    /// <summary>
+    /// Draw a unit's attached-flame weapon particles (the persistent hand fire).
+    /// Runs inside its own YSort queue item carrying Materials.HdrAdditive, so
+    /// colors use the HdrSprite.fx sqrt-alpha encode — real intensity ceiling 16,
+    /// feeds bloom — instead of the Scene batch's LDR min(I,4) clamp. Drawn via
+    /// the scope (HDR materials register premultiplyTint:false, so the vertex
+    /// encoding passes through untouched).
+    /// </summary>
+    public void DrawAttachedFlames(uint unitId, bool behind, SpriteScope scope,
+        Camera25D cam, Renderer renderer, Dictionary<string, Flipbook> flipbooks,
+        BuffRegistry buffReg)
+    {
+        if (!_wpEmitters.TryGetValue(unitId, out var emitters)) return;
+
+        foreach (var (buffId, state) in emitters)
+        {
+            var vis = buffReg.Get(buffId)?.WeaponParticle;
+            if (vis == null || !vis.AttachedFlame || state.Particles.Count == 0) continue;
+
+            var p = state.Particles[0];
+            if (p.Behind != behind) continue;
+
+            if (!flipbooks.TryGetValue(vis.FlipbookID, out var fb) || !fb.IsLoaded
+                || fb.Texture == null || fb.TotalFrames <= 0) continue;
+
+            // Same sprite-rig height convention as DrawWeaponParticles: h × Zoom,
+            // no YRatio foreshortening (see comment there).
+            var sp = renderer.WorldToScreenPx(p.Pos, p.Height * cam.Zoom, cam);
+
+            float effectiveFps = vis.FPS > 0f ? vis.FPS : fb.FPS;
+            int frameIdx = ((int)(p.Age * effectiveFps)) % fb.TotalFrames;
+            if (frameIdx < 0) frameIdx = 0;
+            var src = fb.GetFrameRect(frameIdx);
+
+            float pixelSize = vis.ParticleScale * cam.Zoom;
+            var origin = new Vector2(src.Width * 0.5f, src.Height * 0.5f);
+            float scale = pixelSize / src.Width;
+
+            // Additive mode ignored the color's A byte in the LDR path; keep that
+            // (A=255, fade=1) so existing data reads the same, just brighter.
+            var color = HdrColor.ToHdrVertex(
+                new Color(vis.Color.R, vis.Color.G, vis.Color.B), 1f, vis.Color.Intensity);
+            scope.Draw(fb.Texture, sp, src, color, 0f, origin, scale, SpriteEffects.None, 0f);
         }
     }
 
