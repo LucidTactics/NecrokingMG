@@ -731,20 +731,7 @@ public class AnimController
         int spriteAngle = ResolveAngle(facingAngleDeg, out bool flipX);
         result.FlipX = flipX;
 
-        float effectiveTime = _animTime;
-
-        // Reverse playback for walking backward
-        if (_reversePlayback && (_currentState == AnimState.Walk || _currentState == AnimState.Jog || _currentState == AnimState.Run))
-        {
-            int totalMs = GetEffectiveTotalDurationMs();
-            if (totalMs > 0)
-                effectiveTime = MathF.Max(0f, totalMs - _animTime);
-            else
-            {
-                int totalT = _resolvedAnim.TotalTicks();
-                if (totalT > 0) effectiveTime = MathF.Max(0f, totalT - _animTime);
-            }
-        }
+        float effectiveTime = EffectiveAnimTime();
 
         // Try ms-based frame lookup
         var durations = GetEffectiveFrameDurations(spriteAngle);
@@ -778,15 +765,7 @@ public class AnimController
             tickKfs = _resolvedAnim.GetAngle(_resolvedFallbackAngle);
 
         if (tickKfs != null && tickKfs.Count > 0)
-        {
-            // Floor lookup
-            SpriteFrame frame = tickKfs[0].Frame;
-            for (int i = tickKfs.Count - 1; i >= 0; i--)
-            {
-                if (effectiveTime >= tickKfs[i].Time) { frame = tickKfs[i].Frame; break; }
-            }
-            result.Frame = frame;
-        }
+            result.Frame = tickKfs[TickFrameIndex(tickKfs, effectiveTime)].Frame;
 
         return result;
     }
@@ -807,18 +786,7 @@ public class AnimController
 
         int spriteAngle = ResolveAngle(facingAngleDeg, out _);
 
-        float effectiveTime = _animTime;
-        if (_reversePlayback && (_currentState == AnimState.Walk || _currentState == AnimState.Jog || _currentState == AnimState.Run))
-        {
-            int totalMs = GetEffectiveTotalDurationMs();
-            if (totalMs > 0)
-                effectiveTime = MathF.Max(0f, totalMs - _animTime);
-            else
-            {
-                int totalT = _resolvedAnim.TotalTicks();
-                if (totalT > 0) effectiveTime = MathF.Max(0f, totalT - _animTime);
-            }
-        }
+        float effectiveTime = EffectiveAnimTime();
 
         // ms-based
         var durations = GetEffectiveFrameDurations(spriteAngle);
@@ -830,12 +798,38 @@ public class AnimController
         if (tickKfs == null || tickKfs.Count == 0)
             tickKfs = _resolvedAnim.GetAngle(_resolvedFallbackAngle);
         if (tickKfs != null && tickKfs.Count > 0)
+            return TickFrameIndex(tickKfs, effectiveTime);
+        return 0;
+    }
+
+    /// <summary>_animTime with the reverse-playback mirror applied (Walk/Jog/Run
+    /// backpedal plays the same asset backward). Shared by GetCurrentFrame and
+    /// GetCurrentFrameIndex — was a hand-kept copy in each (the same twin-drift
+    /// family as the duration walk).</summary>
+    private float EffectiveAnimTime()
+    {
+        float t = _animTime;
+        if (_reversePlayback && (_currentState == AnimState.Walk || _currentState == AnimState.Jog || _currentState == AnimState.Run))
         {
-            for (int i = tickKfs.Count - 1; i >= 0; i--)
+            int totalMs = GetEffectiveTotalDurationMs();
+            if (totalMs > 0)
+                t = MathF.Max(0f, totalMs - _animTime);
+            else
             {
-                if (effectiveTime >= tickKfs[i].Time) return i;
+                int totalT = _resolvedAnim?.TotalTicks() ?? 0;
+                if (totalT > 0) t = MathF.Max(0f, totalT - _animTime);
             }
         }
+        return t;
+    }
+
+    /// <summary>Tick-path floor lookup: index of the last keyframe whose Time is
+    /// &lt;= the elapsed time (0 when before the first). Shared by GetCurrentFrame
+    /// and GetCurrentFrameIndex.</summary>
+    private static int TickFrameIndex(List<Keyframe> kfs, float effectiveTime)
+    {
+        for (int i = kfs.Count - 1; i >= 0; i--)
+            if (effectiveTime >= kfs[i].Time) return i;
         return 0;
     }
 

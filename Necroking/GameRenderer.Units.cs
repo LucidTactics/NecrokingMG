@@ -32,15 +32,9 @@ partial class GameRenderer
         var result = new WeaponAttachRuntime();
         if (unitDef.Sprite == null || animData.RefFrameHeight <= 0f) return result;
 
-        string animName = AnimController.StateToAnimName(animData.Ctrl.CurrentState);
-        int spriteAngle = animData.Ctrl.ResolveAngle(_g._sim.Units[unitIdx].FacingAngle, out bool flipX);
-        int frameIdx = animData.Ctrl.GetCurrentFrameIndex(_g._sim.Units[unitIdx].FacingAngle);
-
-        AnimationMeta? meta = null;
-        _g._animMeta.TryGetValue(AnimMetaLoader.MetaKey(unitDef.Sprite.SpriteName, animName), out meta);
-
-        if (!WeaponPointResolver.TryResolve(unitDef, meta, animName, spriteAngle, frameIdx,
-                animData.RefFrameHeight, out var wpf, out _)) return result;
+        if (!WeaponPointResolver.TryResolveCurrent(unitDef, animData.Ctrl, animData.RefFrameHeight,
+                _g._sim.Units[unitIdx].FacingAngle, _g._animMeta,
+                out var wpf, out _, out _, out _, out bool flipX, out _, out _)) return result;
 
         bool hiltSet = wpf.Hilt.X != 0f || wpf.Hilt.Y != 0f;
         bool tipSet = wpf.Tip.X != 0f || wpf.Tip.Y != 0f;
@@ -516,7 +510,7 @@ partial class GameRenderer
             atlas, fr.Frame.Value, scale, fr.FlipX,
             _g._sim.Units[i].EffectSpawnPos2D, _g._sim.Units[i].EffectSpawnHeight);
 
-        // Pulsing outline: draw sprite 8 times at directional offsets behind the unit
+        // Pulsing outline: dilated silhouette behind the unit (OutlineFlat.fx)
         DrawUnitPulsingOutline(scope, i, atlas, fr.Frame.Value, sp, scale, fr.FlipX);
 
         // Reanimation rise outline — blinks undead-green and fades out over the effect.
@@ -1727,8 +1721,9 @@ partial class GameRenderer
     }
 
     /// <summary>
-    /// Draw a pulsing outline around a sprite using the OutlineFlat shader.
-    /// Renders the sprite 8 times at directional offsets with a flat color.
+    /// Draw a pulsing outline around a sprite: one draw of an expanded quad
+    /// through OutlineFlat.fx, which dilates the silhouette in-shader (max
+    /// union over tap rings — see the .fx header for the tier rules).
     /// </summary>
     private void DrawSpriteOutline(SpriteScope scope, SpriteAtlas atlas, SpriteFrame frame,
                                     Vector2 screenPos,
@@ -1741,16 +1736,10 @@ partial class GameRenderer
         var material = blendMode == 1 ? Materials.OutlineAdditive : Materials.OutlineAlpha;
         if (material == null) return;
 
-        float t = 0.5f + 0.5f * MathF.Sin(_g._gameTime * pulseSpeed * 2f * MathF.PI);
-
-        float offset = outlineWidth + (pulseWidth - outlineWidth) * t;
+        OutlinePulse.Evaluate(color1, color2, outlineWidth, pulseWidth, pulseSpeed, _g._gameTime,
+            out float offset, out float colR, out float colG, out float colB, out float colA,
+            out float intensity);
         if (offset < 0.5f) return;
-
-        float colR = MathHelper.Lerp(color1.R / 255f, color2.R / 255f, t);
-        float colG = MathHelper.Lerp(color1.G / 255f, color2.G / 255f, t);
-        float colB = MathHelper.Lerp(color1.B / 255f, color2.B / 255f, t);
-        float colA = MathHelper.Lerp(color1.A / 255f, color2.A / 255f, t);
-        float intensity = MathHelper.Lerp(color1.Intensity, color2.Intensity, t);
 
         // Outline widths (buff/reanim/ghost/aim data) are px authored at zoom 32 —
         // scale so the rim hugs the sprite proportionally at every zoom, with a

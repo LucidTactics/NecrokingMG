@@ -443,19 +443,14 @@ public class BuffPreview
         if (_cachedBuff == null || !_cachedBuff.HasPulsingOutline || _cachedBuff.PulsingOutline == null) return;
         var po = _cachedBuff.PulsingOutline;
 
-        // Pulse t: 0..1 oscillation (matches C++ implementation)
-        float t = 0.5f + 0.5f * MathF.Sin(_elapsed * po.PulseSpeed * 2f * PI);
-
-        // Interpolate width between base and pulse
-        float offset = po.OutlineWidth + (po.PulseWidth - po.OutlineWidth) * t;
+        // Shared pulse envelope (OutlinePulse) — same width/color math as the
+        // in-game DrawSpriteOutline; only the silhouette rendering differs
+        // (stick-figure stamps here — there's no sprite texture to dilate).
+        Render.OutlinePulse.Evaluate(po.Color, po.PulseColor, po.OutlineWidth, po.PulseWidth,
+            po.PulseSpeed, _elapsed,
+            out float offset, out float colR, out float colG, out float colB, out float colA,
+            out float intensity);
         if (offset < 0.5f) return;
-
-        // Lerp color components with HDR intensity
-        float colR = MathHelper.Lerp(po.Color.R / 255f, po.PulseColor.R / 255f, t);
-        float colG = MathHelper.Lerp(po.Color.G / 255f, po.PulseColor.G / 255f, t);
-        float colB = MathHelper.Lerp(po.Color.B / 255f, po.PulseColor.B / 255f, t);
-        float colA = MathHelper.Lerp(po.Color.A / 255f, po.PulseColor.A / 255f, t);
-        float intensity = MathHelper.Lerp(po.Color.Intensity, po.PulseColor.Intensity, t);
 
         var outlineColor = new Color(
             (byte)Math.Min(255f, colR * intensity * 255f),

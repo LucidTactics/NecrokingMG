@@ -1364,21 +1364,21 @@ public partial class Game1 {
                   break;
                }
                var ci4 = System.Globalization.CultureInfo.InvariantCulture;
-               string wAnim = Render.AnimController.StateToAnimName(wad.Ctrl.CurrentState);
-               int wAngle = wad.Ctrl.ResolveAngle(wu.FacingAngle, out bool wFlip);
-               int wFrameIdx = wad.Ctrl.GetCurrentFrameIndex(wu.FacingAngle);
+               // Same resolution chain the renderer uses (shared helper) — the
+               // diagnostic can't drift from ComputeWeaponAttach's real inputs.
+               bool wOk = Render.WeaponPointResolver.TryResolveCurrent(wdef, wad.Ctrl,
+                  wad.RefFrameHeight, wu.FacingAngle, _animMeta,
+                  out var wpfD, out bool wFromMeta,
+                  out string wAnim, out int wAngle, out bool wFlip, out int wFrameIdx,
+                  out Render.AnimationMeta? wMeta);
                var wFr = wad.Ctrl.GetCurrentFrame(wu.FacingAngle);
                var wRect = wFr.Frame?.Rect ?? default;
-               Render.AnimationMeta? wMeta = null;
-               _animMeta.TryGetValue(Render.AnimMetaLoader.MetaKey(wdef.Sprite.SpriteName, wAnim), out wMeta);
                int mountBaseN = -1, mountTipN = -1, durN = -1;
                if (wMeta != null && wMeta.YawData.TryGetValue(wAngle, out var wym)) {
                   durN = wym.FrameDurationsMs.Count;
                   if (wym.Mounts.TryGetValue("WeaponBase", out var mb)) mountBaseN = mb.Count;
                   if (wym.Mounts.TryGetValue("WeaponTip", out var mt)) mountTipN = mt.Count;
                }
-               bool wOk = Render.WeaponPointResolver.TryResolve(wdef, wMeta, wAnim, wAngle, wFrameIdx,
-                  wad.RefFrameHeight, out var wpfD, out bool wFromMeta);
                c.Complete(Necroking.Dev.DevServer.OkRaw("{" +
                   $"\"def\":{System.Text.Json.JsonSerializer.Serialize(wu.UnitDefID)}," +
                   $"\"state\":\"{wad.Ctrl.CurrentState}\",\"anim\":\"{wAnim}\"," +

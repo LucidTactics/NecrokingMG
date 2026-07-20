@@ -1328,26 +1328,37 @@ public class SpellEditorWindow : EditorWindow
             wp.FlipbookID = DrawFlipbookDropdown("bf_wp_fb", "Flipbook", wp.FlipbookID, contentX, ref cy, fieldW);
             wp.FPS = DrawFloatField10x("bf_wp_fps", "FPS", wp.FPS, contentX, ref cy, fieldW);
             wp.Color = DrawHdrColorSwatch("bf_wp_col", "Color", wp.Color, contentX, ref cy, fieldW);
-            wp.SpawnRate = DrawFloatField10x("bf_wp_sr", "Spawn Rate", wp.SpawnRate, contentX, ref cy, fieldW);
-            wp.RangeMin = DrawFloatField100x("bf_wp_rmin", "Range Min", wp.RangeMin, contentX, ref cy, fieldW);
-            wp.RangeMax = DrawFloatField100x("bf_wp_rmax", "Range Max", wp.RangeMax, contentX, ref cy, fieldW);
-            wp.ParticleLifetime = DrawFloatField100x("bf_wp_lt", "Lifetime", wp.ParticleLifetime, contentX, ref cy, fieldW);
-            wp.ParticleScale = DrawFloatField100x("bf_wp_pscl", "Part Scale", wp.ParticleScale, contentX, ref cy, fieldW);
-            wp.MoveSpeed = DrawFloatField100x("bf_wp_mspd", "Move Speed", wp.MoveSpeed, contentX, ref cy, fieldW);
-            wp.MoveDirX = DrawFloatField100x("bf_wp_mdx", "Move Dir X", wp.MoveDirX, contentX, ref cy, fieldW);
-            wp.MoveDirY = DrawFloatField100x("bf_wp_mdy", "Move Dir Y", wp.MoveDirY, contentX, ref cy, fieldW);
-            wp.MoveDirZ = DrawFloatField100x("bf_wp_mdz", "Move Dir Z", wp.MoveDirZ, contentX, ref cy, fieldW);
-            int oldBm = wp.BlendMode;
-            wp.BlendMode = DrawIntBlendMode("bf_wp_bm", wp.BlendMode, contentX, ref cy, fieldW);
-            if (wp.BlendMode != oldBm) MarkDirty();
-            bool oldRB = wp.RenderBehind;
-            wp.RenderBehind = _ui.DrawCheckbox("Render Behind", wp.RenderBehind, contentX, cy);
-            if (wp.RenderBehind != oldRB) MarkDirty();
-            cy += RowH;
             bool oldAF = wp.AttachedFlame;
             wp.AttachedFlame = _ui.DrawCheckbox("Attached Flame", wp.AttachedFlame, contentX, cy);
             if (wp.AttachedFlame != oldAF) MarkDirty();
             cy += RowH;
+            if (wp.AttachedFlame)
+            {
+                // Attached mode: one persistent flame pinned at RangeMax along
+                // hilt→tip; the spawn/lifetime/drift machinery is inert, so its
+                // rows are hidden (their stored values survive unchecking).
+                wp.RangeMax = DrawFloatField100x("bf_wp_rmax", "Flame Pos", wp.RangeMax, contentX, ref cy, fieldW);
+                wp.ParticleScale = DrawFloatField100x("bf_wp_pscl", "Part Scale", wp.ParticleScale, contentX, ref cy, fieldW);
+            }
+            else
+            {
+                wp.SpawnRate = DrawFloatField10x("bf_wp_sr", "Spawn Rate", wp.SpawnRate, contentX, ref cy, fieldW);
+                wp.RangeMin = DrawFloatField100x("bf_wp_rmin", "Range Min", wp.RangeMin, contentX, ref cy, fieldW);
+                wp.RangeMax = DrawFloatField100x("bf_wp_rmax", "Range Max", wp.RangeMax, contentX, ref cy, fieldW);
+                wp.ParticleLifetime = DrawFloatField100x("bf_wp_lt", "Lifetime", wp.ParticleLifetime, contentX, ref cy, fieldW);
+                wp.ParticleScale = DrawFloatField100x("bf_wp_pscl", "Part Scale", wp.ParticleScale, contentX, ref cy, fieldW);
+                wp.MoveSpeed = DrawFloatField100x("bf_wp_mspd", "Move Speed", wp.MoveSpeed, contentX, ref cy, fieldW);
+                wp.MoveDirX = DrawFloatField100x("bf_wp_mdx", "Move Dir X", wp.MoveDirX, contentX, ref cy, fieldW);
+                wp.MoveDirY = DrawFloatField100x("bf_wp_mdy", "Move Dir Y", wp.MoveDirY, contentX, ref cy, fieldW);
+                wp.MoveDirZ = DrawFloatField100x("bf_wp_mdz", "Move Dir Z", wp.MoveDirZ, contentX, ref cy, fieldW);
+                int oldBm = wp.BlendMode;
+                wp.BlendMode = DrawIntBlendMode("bf_wp_bm", wp.BlendMode, contentX, ref cy, fieldW);
+                if (wp.BlendMode != oldBm) MarkDirty();
+                bool oldRB = wp.RenderBehind;
+                wp.RenderBehind = _ui.DrawCheckbox("Render Behind", wp.RenderBehind, contentX, cy);
+                if (wp.RenderBehind != oldRB) MarkDirty();
+                cy += RowH;
+            }
             wp.ScatterRadius = DrawFloatField100x("bf_wp_scr", "Scatter Radius", wp.ScatterRadius, contentX, ref cy, fieldW);
             wp.ScatterStrength = DrawFloatField100x("bf_wp_scs", "Scatter Str", wp.ScatterStrength, contentX, ref cy, fieldW);
         });

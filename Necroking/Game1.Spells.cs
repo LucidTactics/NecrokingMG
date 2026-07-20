@@ -234,10 +234,24 @@ public partial class Game1 {
    void RemoveCastingBuffAll(int unitIdx) {
       var buffs = _sim.UnitsMut[unitIdx].ActiveBuffs;
       for (int b = buffs.Count - 1; b >= 0; b--) {
-         var def = _gameData.Buffs.Get(buffs[b].BuffDefID);
-         if (def != null && def.HasWeaponParticle)
+         if (IsCastingBuff(buffs[b].BuffDefID))
             buffs.RemoveAt(b);
       }
+   }
+
+   /// <summary>A buff is a "casting effect" iff some spell references it as its
+   /// CastingBuffID (or it's the table-channel glow). HasWeaponParticle is NOT
+   /// the test — that only held by accident while the buff_4 variants were the
+   /// sole weapon-particle buffs; a flaming-sword-style buff must survive cast
+   /// end. Linear scan of the spell registry: runs once per active buff at cast
+   /// end/cancel over a few dozen spells — not worth a cache that could go
+   /// stale when the spell editor edits defs live.</summary>
+   bool IsCastingBuff(string buffId) {
+      if (string.IsNullOrEmpty(buffId)) return false;
+      if (buffId == TableChannelBuffId) return true;
+      foreach (var spell in _gameData.Spells.All())
+         if (spell.CastingBuffID == buffId) return true;
+      return false;
    }
 
    internal void SpawnSummonEffect(SpellDef spell, Vec2 pos) {

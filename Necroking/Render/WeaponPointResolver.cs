@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Necroking.Data.Registries;
 
@@ -27,6 +28,33 @@ public static class WeaponPointResolver
     /// refFrameHeight is the unit's idle-anim frame height in pixels — same
     /// value the runtime caches as UnitAnimData.RefFrameHeight.
     /// </summary>
+    /// <summary>
+    /// One-stop resolution of a unit's CURRENT weapon frame: derives anim name,
+    /// sprite angle/flip, and logical frame index from the controller, looks up
+    /// the animation meta, and resolves hilt/tip. The single source shared by
+    /// GameRenderer.ComputeWeaponAttach and the weapon_attach dev command —
+    /// previously each hand-copied this chain, and a drifted diagnostic lies.
+    /// The intermediates come back as outs so the dev command can report them.
+    /// </summary>
+    public static bool TryResolveCurrent(
+        UnitDef def, AnimController ctrl, float refFrameHeight, float facingAngle,
+        Dictionary<string, AnimationMeta> animMeta,
+        out WeaponFrameData frame, out bool fromMeta,
+        out string animName, out int spriteAngle, out bool flipX, out int frameIdx,
+        out AnimationMeta? meta)
+    {
+        animName = AnimController.StateToAnimName(ctrl.CurrentState);
+        spriteAngle = ctrl.ResolveAngle(facingAngle, out flipX);
+        frameIdx = ctrl.GetCurrentFrameIndex(facingAngle);
+        meta = null;
+        frame = new WeaponFrameData();
+        fromMeta = false;
+        if (def.Sprite == null) return false;
+        animMeta.TryGetValue(AnimMetaLoader.MetaKey(def.Sprite.SpriteName, animName), out meta);
+        return TryResolve(def, meta, animName, spriteAngle, frameIdx, refFrameHeight,
+            out frame, out fromMeta);
+    }
+
     public static bool TryResolve(
         UnitDef def, AnimationMeta? meta,
         string animName, int spriteAngle, int frameIdx,
