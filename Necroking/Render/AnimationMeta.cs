@@ -15,6 +15,16 @@ public class AnimYawMeta
     public List<int> FrameTicks = new();
 
     /// <summary>
+    /// Exporter's logical-frame → atlas-sprite mapping: one sprite KEY per
+    /// logical animation frame, repeats allowed (an 8-frame anim may reuse 5
+    /// unique atlas frames, e.g. an arm pumping through the same poses twice).
+    /// FrameDurationsMs and Mounts are indexed in THIS timeline. Consumed by
+    /// AnimMetaLoader.ExpandAtlasKeyframes, which rebuilds the atlas keyframe
+    /// lists to match. Empty for metas from exporters that predate the field.
+    /// </summary>
+    public List<string> SpriteKeys = new();
+
+    /// <summary>
     /// Per-frame 3D mount markers exported from the source sprite rig. Key is
     /// the mount id (e.g. "WeaponBase", "WeaponTip", "Main_Hand", "Off_Hand",
     /// "Mouth"). Each list has one Vector3 per animation frame, in world units
@@ -142,6 +152,10 @@ public static class AnimMetaLoader
                 if (root.TryGetProperty("time_ms", out var tms) && tms.ValueKind == JsonValueKind.Array)
                     foreach (var v in tms.EnumerateArray()) ym.FrameDurationsMs.Add((int)Math.Round(v.GetDouble()));
 
+                if (root.TryGetProperty("sprites", out var sk) && sk.ValueKind == JsonValueKind.Array)
+                    foreach (var v in sk.EnumerateArray())
+                        if (v.GetString() is { Length: > 0 } skey) ym.SpriteKeys.Add(skey);
+
                 if (root.TryGetProperty("frame_ticks", out var ft) && ft.ValueKind == JsonValueKind.Array)
                     foreach (var v in ft.EnumerateArray()) ym.FrameTicks.Add((int)Math.Round(v.GetDouble()));
 
@@ -176,6 +190,74 @@ public static class AnimMetaLoader
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Rebuild the atlas keyframe lists to LOGICAL frame order using the meta's
+    /// SpriteKeys mapping (one key per logical frame, repeats allowed). The
+    /// spritemeta stores only UNIQUE frames, so an 8-logical-frame anim may sit
+    /// on 5 atlas entries — before this pass, AnimController paired logical
+    /// frame i with unique keyframe i and clamped the overflow, freezing the
+    /// drawn sprite on its last pose while GetCurrentFrameIndex (weapon
+    /// markers, effect frames) kept counting logical frames. After expansion
+    /// kfs.Count == FrameDurationsMs.Count == marker count, so drawn frames
+    /// and markers share one timeline by construction.
+    ///
+    /// Expanded Keyframe.Time is the cumulative start-ms of each logical frame
+    /// (NOT the source tick — ticks repeat non-monotonically under the mapping
+    /// and would break the tick-path floor lookups). Those tick paths only run
+    /// when the meta has no durations, which can't happen for an expanded anim
+    /// (SpriteKeys and time_ms come from the same exporter line).
+    ///
+    /// Idempotent (skips lists already at logical length); call after ALL
+    /// spritemeta parsing (base + extensions) and animationmeta loading, before
+    /// texture finalize — the copied Keyframe structs then get Y-flip/bbox
+    /// treatment exactly like originals. Unresolvable keys skip the row with an
+    /// asset-log line rather than half-expanding.
+    /// </summary>
+    public static void ExpandAtlasKeyframes(SpriteAtlas atlas, Dictionary<string, AnimationMeta> animMeta)
+    {
+        foreach (var (unitName, usd) in atlas.Units)
+        {
+            foreach (var (animName, anim) in usd.Animations)
+            {
+                if (!animMeta.TryGetValue(MetaKey(unitName, animName), out var meta)) continue;
+
+                foreach (var (angle, ym) in meta.YawData)
+                {
+                    var keys = ym.SpriteKeys;
+                    if (keys.Count == 0) continue;
+                    var kfs = anim.GetAngle(angle);
+                    if (kfs == null || kfs.Count == 0 || kfs.Count == keys.Count) continue;
+
+                    // Unique keyframes are keyed by their source tick — parse it
+                    // back out of each sprite key (unit.anim.tick.?.yaw; index
+                    // from the END so dotted unit/anim names can't shift it).
+                    var byTick = new Dictionary<int, Keyframe>(kfs.Count);
+                    foreach (var kf in kfs) byTick[kf.Time] = kf;
+
+                    var expanded = new List<Keyframe>(keys.Count);
+                    int cumMs = 0;
+                    bool ok = true;
+                    for (int i = 0; i < keys.Count; i++)
+                    {
+                        var parts = keys[i].Split('.');
+                        if (parts.Length < 5 || !int.TryParse(parts[^3], out int tick)
+                            || !byTick.TryGetValue(tick, out var src))
+                        {
+                            Core.DebugLog.Log("asset",
+                                $"ExpandAtlasKeyframes: {unitName}.{animName} yaw {angle}: can't resolve sprite key '{keys[i]}' — row left unexpanded");
+                            ok = false;
+                            break;
+                        }
+                        expanded.Add(new Keyframe { Time = cumMs, Frame = src.Frame });
+                        cumMs += i < ym.FrameDurationsMs.Count ? ym.FrameDurationsMs[i] : 0;
+                    }
+                    if (ok)
+                        anim.AngleFrames[angle] = expanded;
+                }
+            }
+        }
     }
 
     /// <summary>Warn about categories where effect_time is critical but missing. Call ONCE

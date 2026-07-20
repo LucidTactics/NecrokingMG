@@ -234,6 +234,13 @@ public partial class Game1
             // Validate effect_time ONCE over the fully-loaded dict (not per-file inside Load — that
             // was O(files × keys) and dumped tens of thousands of duplicate warnings into asset.log).
             AnimMetaLoader.ValidateEffectTimes(_animMeta);
+            // Rebuild atlas keyframe lists to logical frame order (meta 'sprites'
+            // mapping, repeats allowed) — must run after ALL spritemeta parsing
+            // and before GPU upload/finalize so duplicated keyframes get the
+            // same Y-flip/bbox treatment as originals.
+            foreach (var atlas in _atlases)
+                if (atlas != null)
+                    AnimMetaLoader.ExpandAtlasKeyframes(atlas, _animMeta);
             LogTiming($"Animation metadata: {_animMeta.Count} entries");
             _sim.SetAnimMeta(_animMeta);
         });

@@ -756,13 +756,7 @@ public class AnimController
 
             // Find frame index from cumulative ms
             int numDurFrames = durations.Count;
-            float cumMs = 0;
-            int frameIdx = numDurFrames - 1;
-            for (int f = 0; f < numDurFrames; f++)
-            {
-                cumMs += durations[f];
-                if (effectiveTime < cumMs) { frameIdx = f; break; }
-            }
+            int frameIdx = LogicalFrameFromDurations(durations, effectiveTime);
 
             if (kfs != null && kfs.Count > 0)
             {
@@ -829,15 +823,7 @@ public class AnimController
         // ms-based
         var durations = GetEffectiveFrameDurations(spriteAngle);
         if (durations != null && durations.Count > 0)
-        {
-            float cumMs = 0;
-            for (int f = 0; f < durations.Count; f++)
-            {
-                cumMs += durations[f];
-                if (effectiveTime < cumMs) return f;
-            }
-            return durations.Count - 1;
-        }
+            return LogicalFrameFromDurations(durations, effectiveTime);
 
         // tick-based fallback
         var tickKfs = _resolvedAnim.GetAngle(spriteAngle);
@@ -851,6 +837,21 @@ public class AnimController
             }
         }
         return 0;
+    }
+
+    /// <summary>Logical frame index for an elapsed ms within a duration list
+    /// (cumulative walk, clamped to the last frame). The single source of truth
+    /// shared by GetCurrentFrame and GetCurrentFrameIndex — these were hand-kept
+    /// twins whose drift caused the drawn-sprite-vs-weapon-marker desync.</summary>
+    private static int LogicalFrameFromDurations(List<int> durations, float effectiveTime)
+    {
+        float cumMs = 0;
+        for (int f = 0; f < durations.Count; f++)
+        {
+            cumMs += durations[f];
+            if (effectiveTime < cumMs) return f;
+        }
+        return durations.Count - 1;
     }
 
     // --- Angle resolution ---
