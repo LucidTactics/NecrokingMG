@@ -481,11 +481,13 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
             }
             _dirs.Sort(StringComparer.OrdinalIgnoreCase);
 
-            // Get PNG files
-            foreach (var f in Directory.GetFiles(_currentDir, "*.png"))
-            {
-                _files.Add(f.Replace('\\', '/'));
-            }
+            // Image files the preview pipeline can decode (png natively;
+            // tga/exr via ExrTgaTextures — the flipbook library's formats)
+            foreach (var pattern in new[] { "*.png", "*.tga", "*.exr" })
+                foreach (var f in Directory.GetFiles(_currentDir, pattern))
+                {
+                    _files.Add(f.Replace('\\', '/'));
+                }
             _files.Sort(StringComparer.OrdinalIgnoreCase);
         }
         catch

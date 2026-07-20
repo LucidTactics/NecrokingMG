@@ -20,6 +20,15 @@ public static class TextureUtil
     {
         // Resolve relative asset paths through GamePaths
         string resolved = Path.IsPathRooted(path) ? path : Core.GamePaths.Resolve(path);
+
+        // The flipbook library ships .exr (HDR) and .tga alongside .png;
+        // Texture2D.FromStream can't read those, so route by extension.
+        switch (Path.GetExtension(resolved).ToLowerInvariant())
+        {
+            case ".exr": return ExrTgaTextures.LoadExrPremultiplied(device, resolved);
+            case ".tga": return ExrTgaTextures.LoadTgaPremultiplied(device, resolved);
+        }
+
         using var stream = File.OpenRead(resolved);
         return LoadPremultiplied(device, stream);
     }
