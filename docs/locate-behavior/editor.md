@@ -481,6 +481,65 @@ per-field UI (tooltips, validation):
 `SpellRegistry.cs`), adding a unit-editor field (the section method in `UnitEditorWindow.cs`),
 adding per-field hover help (the `DrawField` chokepoint / `RowTip` precedent above).
 
+## Flipbook Manager popup & the Texture File Browser
+
+### Flipbook Manager (`Editor/SpellEditorWindow.cs` `DrawFlipbookManagerPopup`)
+- Opened by the "Flipbooks" button in the spell editor's header (`_flipbookManagerOpen`
+  flag); drawn as an overlay (`_ui.BeginOverlay(1)`), 700×500 centered popup.
+- Left column = flipbook list from `_gameData.Flipbooks` (the `FlipbookDef` registry,
+  `Data/Registries/FlipbookRegistry.cs` → `data/flipbooks.json`; fields `Id`,
+  `DisplayName("name")`, `Path`, `Cols`, `Rows`, `DefaultFPS`). +New/Copy/Del + "Apply &
+  Close" buttons at the bottom.
+- Right column = the detail fields, all direct `_ui.DrawTextField/DrawIntField/DrawFloatField`
+  calls with **selection-agnostic field ids** `fb_name`/`fb_path`/`fb_cols`/`fb_rows`/`fb_fps`
+  (list-click handler calls `_ui.ClearActiveField()` on selection change to stop buffer bleed).
+  "Total frames" label = `Cols * Rows` computed inline.
+- **Browse button** → `_fbTextureBrowser.Open(GamePaths.Resolve("assets/Effects"), fd.Path,
+  path => { fd.Path = path; MarkDirty(); })` — the callback is where a picked texture lands.
+- **Live-reload seam**: `SpellEditorWindow.MarkDirty()` override calls
+  `Game1.Instance.ReloadFlipbooksFromRegistry()` while `_flipbookManagerOpen` — rebuilds the
+  runtime `Game1._flipbooks` dictionary (`Dictionary<string, Flipbook>`, keyed by id) so
+  grid/path edits take effect without a map reload. Any programmatic def edit must call
+  `MarkDirty()` for the same reason.
+
+### Texture File Browser (`Editor/TextureFileBrowser.cs`) — reusable modal PNG picker
+- `class TextureFileBrowser : UI.IModalLayer`; instances owned per-editor (spell editor's
+  `_fbTextureBrowser`, also used by UIEditorWindow/EnvObjectEditorWindow/MapEditorWindow/
+  WallEditorWindow). `Open(rootDir, currentPath, onSelect, defaultDir)` pushes itself on
+  `Game1.Popups`; host must call `Update(...)` + `Draw(ui, screenW, screenH)` each frame.
+- **Window size** = consts `PopupW=660`/`PopupH=520`/`PreviewW=160` at the top of the file;
+  centered in `Draw`. List = left `PopupW-PreviewW` column; preview panel owns the right
+  `PreviewW` px ("No preview" text when `_previewTexture == null`).
+- **Selection model**: single left-click on a file row (raw `mouse.LeftButton` press edge in
+  the row loop) sets `_selectedFile` + `_previewTexture = LoadPreviewTexture(...)` — it does
+  NOT commit. Commit = the footer **"Use"** button → `GamePaths.MakeRelative` (refuses
+  absolute/outside-project paths via `_statusMsg`) → `_onSelect?.Invoke(rel)` → `Close()`.
+  No double-click handling exists. Directory click navigates (`NavigateTo`).
+- **Preview loading**: `Render/TextureCache` instance (`GetOrLoad(device,path)` →
+  `TextureUtil.LoadPremultiplied`, negative-caching); `SetGraphicsDevice` must have been
+  called. `Close()` calls `_textureCache.DisposeAll()` — preview textures are
+  session-scoped.
+- Static preview draw = `ui.Scope.Draw(_previewTexture, destRect, Color.White)` over a
+  hand-drawn checkerboard; `SpriteScope` (`Render/SpriteQueue.cs`) has
+  `Draw(tex, destRect, srcRect, color)` overloads, so a sub-rect (flipbook frame) preview
+  is the same call + a source `Rectangle`.
+- Gotcha: `Draw`/`Update` receive no dt — an animated preview needs its own clock
+  (`Environment.TickCount64` or a Stopwatch; `GameClock.VisualTime` freezes while paused).
+
+### Flipbook runtime (`Render/Flipbook.cs` + `Game1._flipbooks`)
+- `class Flipbook`: `Load(device, path, cols, rows, fps)` / `LoadFromDef(device, FlipbookDef)`
+  loads the sheet premultiplied; `GetFrameRect(frameIndex)` = the cols×rows source-rect math;
+  `GetFrameAtTime(time)` (looping, uses FPS) / `GetFrameAtNormalizedTime(t)` (play-once).
+- Runtime dictionary = `Game1._flipbooks`, rebuilt by `Game1.ReloadFlipbooksFromRegistry()`
+  (called at `StartGame` and from the flipbook-manager `MarkDirty`). Consumers:
+  `EffectManager`, `WadingWakeSystem.Init(_flipbooks)`, projectile draw, etc. — see
+  [render.md](render.md) "Flipbook".
+
+**Look/edit here when…** changing the flipbook manager fields (cols/rows/fps parsing,
+auto-fill from filename), changing texture-picker behavior (preview, selection, window
+size), reusing the PNG browser in another editor, or wiring an animated preview
+(reuse `Flipbook.GetFrameRect`-style math on the cached preview texture).
+
 ## UI / widget editor
 
 ### `Editor/UIEditorWindow.cs` — main window + all data models + clone logic
