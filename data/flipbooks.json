@@ -3,14 +3,14 @@
     {
       "id": "fire_loop",
       "name": "Fire Loop",
-      "path": "assets/Effects/FX_TX_Fire_Fireloop_01_4x4.png",
+      "path": "assets/Effects/Flipbooks/Fire/FX_TX_Fire_Fireloop_01_4x4.png",
       "cols": 4,
       "rows": 4
     },
     {
       "id": "cloud03",
       "name": "Cloud 03",
-      "path": "assets/Effects/Cloud03_8x8.png",
+      "path": "assets/Effects/Flipbooks/Clouds/Cloud03_8x8.png",
       "cols": 8,
       "rows": 8,
       "defaultFPS": 60
@@ -24,21 +24,21 @@
     {
       "id": "mini_splash",
       "name": "Mini Splash (trail)",
-      "path": "assets/Effects/FX_TX_MiniSplash_2x6_01_Grayscale.png",
+      "path": "assets/Effects/Flipbooks/Water/FX_TX_MiniSplash_2x6_01_Grayscale.png",
       "cols": 2,
       "rows": 6
     },
     {
       "id": "bubble_magic",
       "name": "Bubble Magic (airborne splash)",
-      "path": "assets/Effects/FX_TX_BubbleMagic_5x5_01.png",
+      "path": "assets/Effects/Flipbooks/Water/FX_TX_BubbleMagic_5x5_01.png",
       "cols": 5,
       "rows": 5
     },
     {
       "id": "rain_splash",
       "name": "Rain Splash (landed splash)",
-      "path": "assets/Effects/FX_TX_RainSplash_03_Grayscale.png",
+      "path": "assets/Effects/Flipbooks/Water/FX_TX_RainSplash_03_3x3_Grayscale.png",
       "cols": 3,
       "rows": 3
     }
