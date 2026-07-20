@@ -92,6 +92,12 @@ public class SpellEditorWindow : EditorWindow
     private string _fbParseMsg = "";
     private readonly TextureFileBrowser _fbTextureBrowser = new();
 
+    // Flipbook manager live preview (drawing shared with the texture browser).
+    // Cache is manager-session-scoped: disposed in CloseFlipbookManager.
+    private readonly Necroking.Render.TextureCache _fbPreviewCache = new();
+    private string _fbPreviewKey = "";
+    private long _fbPreviewAnimStart;
+
     // Buff manager popup
     private bool _buffManagerOpen;
     private int _buffSelectedIdx;
@@ -179,7 +185,7 @@ public class SpellEditorWindow : EditorWindow
         if (!_modalLayersWired)
         {
             _buffManagerLayer.OnCancelAction = () => _buffManagerOpen = false;
-            _flipbookManagerLayer.OnCancelAction = () => _flipbookManagerOpen = false;
+            _flipbookManagerLayer.OnCancelAction = CloseFlipbookManager;
             _modalLayersWired = true;
         }
         // Whole-screen rect — these popups are full-overlay so any click
@@ -687,7 +693,7 @@ public class SpellEditorWindow : EditorWindow
         // Close button
         if (_ui.DrawButton("X", px + pw - 40, py + 5, 30, 30))
         {
-            _flipbookManagerOpen = false;
+            CloseFlipbookManager();
             _ui.EndOverlay();
             return;
         }
@@ -800,7 +806,7 @@ public class SpellEditorWindow : EditorWindow
         // Apply & Close
         if (_ui.DrawButton("Apply & Close", px + pw - 160, btnRowY, 150, 32))
         {
-            _flipbookManagerOpen = false;
+            CloseFlipbookManager();
             _ui.EndOverlay();
             return;
         }
@@ -873,8 +879,29 @@ public class SpellEditorWindow : EditorWindow
                         _fbParseMsg = "No <cols>x<rows> token in filename";
                     }
                 }
+                cy += 30;
                 if (!string.IsNullOrEmpty(_fbParseMsg))
-                    _ui.DrawText(_fbParseMsg, new Vector2(contentX, cy + 30), EditorBase.DangerColor);
+                {
+                    _ui.DrawText(_fbParseMsg, new Vector2(contentX, cy), EditorBase.DangerColor);
+                    cy += 20;
+                }
+
+                // Live animated preview of the selected flipbook — uses the
+                // def's CURRENT Cols/Rows, so grid edits show immediately.
+                int pvH = btnRowY - 12 - cy;
+                if (pvH > 60)
+                {
+                    string pvKey = fd.Id + "|" + fd.Path;
+                    if (pvKey != _fbPreviewKey)
+                    {
+                        _fbPreviewKey = pvKey;
+                        _fbPreviewAnimStart = Environment.TickCount64;
+                    }
+                    var pvTex = _fbPreviewCache.GetOrLoad(_ui._gd, fd.Path);
+                    FlipbookPreviewPanel.Draw(_ui, new Rectangle(contentX, cy, fieldW, pvH),
+                        pvTex, fd.Cols, fd.Rows, _fbPreviewAnimStart,
+                        System.IO.Path.GetFileName(fd.Path));
+                }
             }
         }
 
@@ -883,6 +910,15 @@ public class SpellEditorWindow : EditorWindow
         _fbTextureBrowser.Draw(_ui, screenW, screenH);
 
         _ui.EndOverlay();
+    }
+
+    /// <summary>Close the Flipbook Manager popup and release its preview
+    /// textures (all close paths route here: X, Apply &amp; Close, ESC).</summary>
+    private void CloseFlipbookManager()
+    {
+        _flipbookManagerOpen = false;
+        _fbPreviewCache.DisposeAll();
+        _fbPreviewKey = "";
     }
 
     private void OpenFlipbookTextureBrowser(FlipbookDef fd)

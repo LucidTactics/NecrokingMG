@@ -33,15 +33,20 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
     private readonly Necroking.Render.TextureCache _textureCache = new();
 
     // Flipbook preview: grid parsed from the selected filename (0 = plain
-    // image, static preview). Animation clock is wall time — the browser
-    // gets no dt and editors often run with the game clock paused.
+    // image, static preview). Drawing/animation lives in FlipbookPreviewPanel.
     private int _previewCols;
     private int _previewRows;
     private long _previewAnimStart;
-    private const int PreviewFrameMs = 200;
 
     // Scroll state
     private float _scrollOffset;
+
+    // Keyboard navigation: cursor into the filtered display-entry list
+    // (-1 = none). Rebuilt-every-frame entries are re-clamped in Draw.
+    private int _keyboardIndex = -1;
+    // Latch so the Enter that commits the search field doesn't also commit
+    // the file selection the same frame (the field deactivates on Enter).
+    private bool _textInputWasActive;
 
     // Overlay layer for the editor widget system: above sub-editor/manager
     // popups (1), below confirm dialogs (3).
@@ -88,6 +93,7 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
         _previewTexture = null;
         _previewCols = 0;
         _previewRows = 0;
+        _keyboardIndex = -1;
 
         Necroking.Game1.Popups.Push(this);
 
@@ -246,6 +252,49 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
         ui.HandlePanelScroll(contentRect, ref _scrollOffset, maxScroll, 0.15f);
         _scrollOffset = Math.Clamp(_scrollOffset, 0, maxScroll);
 
+        // --- Keyboard navigation: Up/Down move the cursor (files preview as
+        // they're passed), Enter opens a directory / commits the selected file.
+        // Raw press edges per editor convention — no consumption needed: the
+        // overlay input-blocks the host's widgets, editors suppress camera
+        // panning, and ESC stays with PopupManager (OnCancel). Stands down
+        // while the search field is being typed in; the one-frame latch keeps
+        // the Enter that commits the field from also committing a file.
+        bool typing = ui.IsTextInputActive || _textInputWasActive;
+        _textInputWasActive = ui.IsTextInputActive;
+        if (_keyboardIndex >= displayEntries.Count) _keyboardIndex = displayEntries.Count - 1;
+        if (!typing && displayEntries.Count > 0)
+        {
+            var kb = ui._kb; var prevKb = ui._prevKb;
+            bool navUp = kb.IsKeyDown(Keys.Up) && prevKb.IsKeyUp(Keys.Up);
+            bool navDown = kb.IsKeyDown(Keys.Down) && prevKb.IsKeyUp(Keys.Down);
+            if (navUp ^ navDown)
+            {
+                _keyboardIndex = _keyboardIndex < 0
+                    ? (navDown ? 0 : displayEntries.Count - 1)
+                    : Math.Clamp(_keyboardIndex + (navDown ? 1 : -1), 0, displayEntries.Count - 1);
+                var focused = displayEntries[_keyboardIndex];
+                if (!focused.IsDirectory) SelectFile(focused.FullPath);
+
+                // Scroll the focused row into view
+                float itemTop = _keyboardIndex * ItemH;
+                if (itemTop < _scrollOffset) _scrollOffset = itemTop;
+                else if (itemTop + ItemH > _scrollOffset + contentH) _scrollOffset = itemTop + ItemH - contentH;
+                _scrollOffset = Math.Clamp(_scrollOffset, 0, maxScroll);
+            }
+            if (kb.IsKeyDown(Keys.Enter) && prevKb.IsKeyUp(Keys.Enter))
+            {
+                if (_keyboardIndex >= 0 && displayEntries[_keyboardIndex].IsDirectory)
+                {
+                    NavigateTo(displayEntries[_keyboardIndex].FullPath);
+                }
+                else if (!string.IsNullOrEmpty(_selectedFile) && CommitSelection())
+                {
+                    ui.EndOverlay();
+                    return;
+                }
+            }
+        }
+
         bool blocked = ui.IsInputBlocked(ui.EffectiveLayer(0));
 
         // Rows under the scrollbar column must not react to clicks meant for the bar.
@@ -271,6 +320,10 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
             bool isSelected = !entry.IsDirectory && entry.FullPath.Replace('\\', '/') == _selectedFile;
             if (isSelected)
                 ui.DrawRect(itemRect, SelectedBg);
+            // Keyboard cursor (matters mostly on directories, which have no
+            // selection background of their own)
+            if (i == _keyboardIndex)
+                ui.DrawBorder(itemRect, EditorBase.AccentColor, 1);
             if (hovered)
             {
                 if (!isSelected) ui.DrawRect(itemRect, HoverBg);
@@ -286,6 +339,7 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
                     {
                         // File clicked — select for preview (don't commit yet)
                         SelectFile(entry.FullPath);
+                        _keyboardIndex = i;   // keep arrow keys continuing from here
                     }
                 }
             }
@@ -318,62 +372,10 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
         ui.DrawRect(new Rectangle(previewX, previewY, PreviewW, previewH), new Color(15, 15, 25, 240));
         ui.DrawRect(new Rectangle(previewX, previewY, 1, previewH), BorderColor);
 
-        if (_previewTexture != null)
-        {
-            // Flipbook mode: preview a single animated frame; else the whole image.
-            bool isFlipbook = _previewCols > 0 && _previewRows > 0;
-            int srcW = isFlipbook ? _previewTexture.Width / _previewCols : _previewTexture.Width;
-            int srcH = isFlipbook ? _previewTexture.Height / _previewRows : _previewTexture.Height;
-            Rectangle srcRect;
-            if (isFlipbook)
-            {
-                int total = _previewCols * _previewRows;
-                int frame = (int)((Environment.TickCount64 - _previewAnimStart) / PreviewFrameMs) % total;
-                srcRect = new Rectangle(frame % _previewCols * srcW, frame / _previewCols * srcH, srcW, srcH);
-            }
-            else
-            {
-                srcRect = new Rectangle(0, 0, srcW, srcH);
-            }
-
-            // Scale to fit preview area with padding
-            int padded = PreviewW - 16;
-            float scale = Math.Min((float)padded / srcW, (float)(previewH - 76) / srcH);
-            scale = Math.Min(scale, 1f);
-            int drawW = (int)(srcW * scale);
-            int drawH = (int)(srcH * scale);
-            int drawX = previewX + (PreviewW - drawW) / 2;
-            int pvDrawY = previewY + 8;
-
-            // Checkerboard background for transparency
-            for (int cy2 = pvDrawY; cy2 < pvDrawY + drawH; cy2 += 8)
-                for (int cx2 = drawX; cx2 < drawX + drawW; cx2 += 8)
-                {
-                    bool dark = ((cx2 - drawX) / 8 + (cy2 - pvDrawY) / 8) % 2 == 0;
-                    ui.DrawRect(new Rectangle(cx2, cy2,
-                        Math.Min(8, drawX + drawW - cx2), Math.Min(8, pvDrawY + drawH - cy2)),
-                        dark ? new Color(35, 35, 35) : new Color(55, 55, 55));
-                }
-
-            ui.Scope.Draw(_previewTexture, new Rectangle(drawX, pvDrawY, drawW, drawH), srcRect, Color.White);
-
-            int infoY = pvDrawY + drawH + 4;
-            ui.DrawText($"{_previewTexture.Width}x{_previewTexture.Height}", new Vector2(previewX + 8, infoY), EditorBase.TextDim);
-            if (isFlipbook)
-            {
-                ui.DrawText($"Flipbook {_previewCols}x{_previewRows} ({_previewCols * _previewRows} frames)",
-                    new Vector2(previewX + 8, infoY + 16), EditorBase.AccentColor);
-                infoY += 16;
-            }
-
-            // Show filename
-            string fname = Path.GetFileName(_selectedFile);
-            ui.DrawText(fname, new Vector2(previewX + 8, infoY + 16), EditorBase.TextBright);
-        }
-        else
-        {
-            ui.DrawText("No preview", new Vector2(previewX + 8, previewY + 8), EditorBase.TextDim);
-        }
+        FlipbookPreviewPanel.Draw(ui,
+            new Rectangle(previewX + 1, previewY, PreviewW - 1, previewH),
+            _previewTexture, _previewCols, _previewRows, _previewAnimStart,
+            _previewTexture != null ? Path.GetFileName(_selectedFile) : null);
 
         // Footer: Use + Cancel buttons
         int footerY = py + PopupH - FooterH + 4;
@@ -382,23 +384,11 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
         if (!string.IsNullOrEmpty(_statusMsg))
             ui.DrawText(_statusMsg, new Vector2(px + Padding, footerY + 4), EditorBase.DangerColor);
 
-        if (hasSelection && ui.DrawButton("Use", px + totalW - 170, footerY, 70, 24, EditorBase.AccentColor))
+        if (hasSelection && ui.DrawButton("Use", px + totalW - 170, footerY, 70, 24, EditorBase.AccentColor)
+            && CommitSelection())
         {
-            // Never persist an absolute path: asset paths in JSON must be
-            // project-relative. MakeRelative returns its input unchanged when
-            // the file is outside the project root — refuse instead of committing.
-            string rel = Necroking.Core.GamePaths.MakeRelative(_selectedFile);
-            if (Path.IsPathRooted(rel))
-            {
-                _statusMsg = "File is outside the project — pick one under assets/";
-            }
-            else
-            {
-                _onSelect?.Invoke(rel);
-                Close();
-                ui.EndOverlay();
-                return;
-            }
+            ui.EndOverlay();
+            return;
         }
         if (ui.DrawButton("Cancel", px + totalW - 80, footerY, 70, 24, EditorBase.DangerColor))
         {
@@ -418,7 +408,27 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
     {
         _currentDir = dir.Replace('\\', '/');
         _scrollOffset = 0;
+        _keyboardIndex = -1;
         RefreshListing();
+    }
+
+    /// <summary>Commit the current selection (Use button / Enter / dev hook).
+    /// Returns true when the browser closed; false leaves it open with the
+    /// outside-project warning in the footer.</summary>
+    private bool CommitSelection()
+    {
+        // Never persist an absolute path: asset paths in JSON must be
+        // project-relative. MakeRelative returns its input unchanged when
+        // the file is outside the project root — refuse instead of committing.
+        string rel = Necroking.Core.GamePaths.MakeRelative(_selectedFile);
+        if (Path.IsPathRooted(rel))
+        {
+            _statusMsg = "File is outside the project — pick one under assets/";
+            return false;
+        }
+        _onSelect?.Invoke(rel);
+        Close();
+        return true;
     }
 
     /// <summary>Select a file for preview (not yet committed). If its filename
@@ -447,14 +457,7 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
     /// <summary>Dev-server hook (flipbook_ui use): commit the current selection
     /// exactly as the Use button would (same relative-path guard).</summary>
     internal bool DevCommitSelection()
-    {
-        if (!_isOpen || string.IsNullOrEmpty(_selectedFile)) return false;
-        string rel = Necroking.Core.GamePaths.MakeRelative(_selectedFile);
-        if (Path.IsPathRooted(rel)) return false;
-        _onSelect?.Invoke(rel);
-        Close();
-        return true;
-    }
+        => _isOpen && !string.IsNullOrEmpty(_selectedFile) && CommitSelection();
 
     // Fall back to the game's device directly — most host editors never call
     // SetGraphicsDevice, which silently left their preview panel dead.
