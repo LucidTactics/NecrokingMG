@@ -32,6 +32,14 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
     private GraphicsDevice? _graphicsDevice;
     private readonly Necroking.Render.TextureCache _textureCache = new();
 
+    // Flipbook preview: grid parsed from the selected filename (0 = plain
+    // image, static preview). Animation clock is wall time — the browser
+    // gets no dt and editors often run with the game clock paused.
+    private int _previewCols;
+    private int _previewRows;
+    private long _previewAnimStart;
+    private const int PreviewFrameMs = 200;
+
     // Scroll state
     private float _scrollOffset;
 
@@ -42,10 +50,10 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
     // Footer warning (e.g. picking a file outside the project root)
     private string _statusMsg = "";
 
-    // Layout constants
-    private const int PopupW = 660;
-    private const int PopupH = 520;
-    private const int PreviewW = 160;
+    // Layout constants (preview column sized so a flipbook frame reads clearly)
+    private const int PopupW = 780;
+    private const int PopupH = 560;
+    private const int PreviewW = 280;
     private const int TitleBarH = 28;
     private const int PathBarH = 24;
     private const int FilterBarH = 26;
@@ -78,6 +86,8 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
         _scrollOffset = 0;
         _selectedFile = "";
         _previewTexture = null;
+        _previewCols = 0;
+        _previewRows = 0;
 
         Necroking.Game1.Popups.Push(this);
 
@@ -275,9 +285,7 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
                     else
                     {
                         // File clicked — select for preview (don't commit yet)
-                        _selectedFile = entry.FullPath.Replace('\\', '/');
-                        _previewTexture = LoadPreviewTexture(_selectedFile);
-                        _statusMsg = "";
+                        SelectFile(entry.FullPath);
                     }
                 }
             }
@@ -312,12 +320,28 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
 
         if (_previewTexture != null)
         {
+            // Flipbook mode: preview a single animated frame; else the whole image.
+            bool isFlipbook = _previewCols > 0 && _previewRows > 0;
+            int srcW = isFlipbook ? _previewTexture.Width / _previewCols : _previewTexture.Width;
+            int srcH = isFlipbook ? _previewTexture.Height / _previewRows : _previewTexture.Height;
+            Rectangle srcRect;
+            if (isFlipbook)
+            {
+                int total = _previewCols * _previewRows;
+                int frame = (int)((Environment.TickCount64 - _previewAnimStart) / PreviewFrameMs) % total;
+                srcRect = new Rectangle(frame % _previewCols * srcW, frame / _previewCols * srcH, srcW, srcH);
+            }
+            else
+            {
+                srcRect = new Rectangle(0, 0, srcW, srcH);
+            }
+
             // Scale to fit preview area with padding
             int padded = PreviewW - 16;
-            float scale = Math.Min((float)padded / _previewTexture.Width, (float)(previewH - 60) / _previewTexture.Height);
+            float scale = Math.Min((float)padded / srcW, (float)(previewH - 76) / srcH);
             scale = Math.Min(scale, 1f);
-            int drawW = (int)(_previewTexture.Width * scale);
-            int drawH = (int)(_previewTexture.Height * scale);
+            int drawW = (int)(srcW * scale);
+            int drawH = (int)(srcH * scale);
             int drawX = previewX + (PreviewW - drawW) / 2;
             int pvDrawY = previewY + 8;
 
@@ -331,12 +355,20 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
                         dark ? new Color(35, 35, 35) : new Color(55, 55, 55));
                 }
 
-            ui.Scope.Draw(_previewTexture, new Rectangle(drawX, pvDrawY, drawW, drawH), Color.White);
-            ui.DrawText($"{_previewTexture.Width}x{_previewTexture.Height}", new Vector2(previewX + 8, pvDrawY + drawH + 4), EditorBase.TextDim);
+            ui.Scope.Draw(_previewTexture, new Rectangle(drawX, pvDrawY, drawW, drawH), srcRect, Color.White);
+
+            int infoY = pvDrawY + drawH + 4;
+            ui.DrawText($"{_previewTexture.Width}x{_previewTexture.Height}", new Vector2(previewX + 8, infoY), EditorBase.TextDim);
+            if (isFlipbook)
+            {
+                ui.DrawText($"Flipbook {_previewCols}x{_previewRows} ({_previewCols * _previewRows} frames)",
+                    new Vector2(previewX + 8, infoY + 16), EditorBase.AccentColor);
+                infoY += 16;
+            }
 
             // Show filename
             string fname = Path.GetFileName(_selectedFile);
-            ui.DrawText(fname, new Vector2(previewX + 8, pvDrawY + drawH + 20), EditorBase.TextBright);
+            ui.DrawText(fname, new Vector2(previewX + 8, infoY + 16), EditorBase.TextBright);
         }
         else
         {
@@ -389,7 +421,45 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
         RefreshListing();
     }
 
-    private Texture2D? LoadPreviewTexture(string path) => _textureCache.GetOrLoad(_graphicsDevice, path);
+    /// <summary>Select a file for preview (not yet committed). If its filename
+    /// carries a flipbook grid token, the preview panel animates it.</summary>
+    private void SelectFile(string fullPath)
+    {
+        _selectedFile = fullPath.Replace('\\', '/');
+        _previewTexture = LoadPreviewTexture(_selectedFile);
+        _statusMsg = "";
+        if (!Necroking.Render.Flipbook.TryParseGridFromFileName(_selectedFile, out _previewCols, out _previewRows))
+        { _previewCols = 0; _previewRows = 0; }
+        _previewAnimStart = Environment.TickCount64;
+    }
+
+    /// <summary>Dev-server hook (flipbook_ui pick): navigate to a file's folder
+    /// and select it exactly as a row click would.</summary>
+    internal bool DevSelectFile(string fullPath)
+    {
+        if (!_isOpen || !File.Exists(fullPath)) return false;
+        string dir = Path.GetDirectoryName(fullPath)?.Replace('\\', '/') ?? "";
+        if (!string.IsNullOrEmpty(dir)) NavigateTo(dir);
+        SelectFile(fullPath);
+        return true;
+    }
+
+    /// <summary>Dev-server hook (flipbook_ui use): commit the current selection
+    /// exactly as the Use button would (same relative-path guard).</summary>
+    internal bool DevCommitSelection()
+    {
+        if (!_isOpen || string.IsNullOrEmpty(_selectedFile)) return false;
+        string rel = Necroking.Core.GamePaths.MakeRelative(_selectedFile);
+        if (Path.IsPathRooted(rel)) return false;
+        _onSelect?.Invoke(rel);
+        Close();
+        return true;
+    }
+
+    // Fall back to the game's device directly — most host editors never call
+    // SetGraphicsDevice, which silently left their preview panel dead.
+    private Texture2D? LoadPreviewTexture(string path)
+        => _textureCache.GetOrLoad(_graphicsDevice ?? Necroking.Game1.Instance?.GraphicsDevice, path);
 
     private void RefreshListing()
     {

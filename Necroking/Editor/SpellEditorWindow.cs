@@ -89,6 +89,7 @@ public class SpellEditorWindow : EditorWindow
     private bool _flipbookManagerOpen;
     private int _fbSelectedIdx;
     private float _fbManagerScroll;
+    private string _fbParseMsg = "";
     private readonly TextureFileBrowser _fbTextureBrowser = new();
 
     // Buff manager popup
@@ -739,7 +740,7 @@ public class SpellEditorWindow : EditorWindow
                 // Abandon any in-progress field edit — the fb_* field ids are
                 // selection-agnostic, so an active buffer would otherwise be
                 // committed into the newly selected flipbook.
-                if (i != _fbSelectedIdx) _ui.ClearActiveField();
+                if (i != _fbSelectedIdx) { _ui.ClearActiveField(); _fbParseMsg = ""; }
                 _fbSelectedIdx = i;
             }
 
@@ -826,13 +827,7 @@ public class SpellEditorWindow : EditorWindow
                 fd.Path = _ui.DrawTextField("fb_path", "Path", fd.Path, contentX, cy, fieldW - browseBtnW - 4);
                 if (fd.Path != oldPath) MarkDirty();
                 if (_ui.DrawButton("Browse", contentX + fieldW - browseBtnW, cy, browseBtnW, 20))
-                {
-                    _fbTextureBrowser.Open(GamePaths.Resolve("assets/Effects"), fd.Path, path =>
-                    {
-                        fd.Path = path;
-                        MarkDirty();
-                    });
-                }
+                    OpenFlipbookTextureBrowser(fd);
                 cy += rowH + 4;
 
                 // Cols
@@ -856,8 +851,30 @@ public class SpellEditorWindow : EditorWindow
                 if (MathF.Abs(fd.DefaultFPS - oldFps) > 0.01f) MarkDirty();
                 cy += rowH + 2;
 
-                // Total frames info
+                // Total frames info + explicit grid-from-filename parse
                 _ui.DrawText($"Total frames: {fd.Cols * fd.Rows}", new Vector2(contentX, cy + 6), new Color(120, 120, 140));
+                if (_ui.DrawButton("Grid from name", contentX + fieldW - 120, cy + 2, 120, 22))
+                {
+                    if (Render.Flipbook.TryParseGridFromFileName(fd.Path, out int pc, out int pr))
+                    {
+                        if (pc != fd.Cols || pr != fd.Rows)
+                        {
+                            // Kill any in-progress fb_cols/fb_rows edit so the
+                            // stale buffer can't re-commit over the parsed value.
+                            _ui.ClearActiveField();
+                            fd.Cols = pc;
+                            fd.Rows = pr;
+                            MarkDirty();
+                        }
+                        _fbParseMsg = "";
+                    }
+                    else
+                    {
+                        _fbParseMsg = "No <cols>x<rows> token in filename";
+                    }
+                }
+                if (!string.IsNullOrEmpty(_fbParseMsg))
+                    _ui.DrawText(_fbParseMsg, new Vector2(contentX, cy + 30), EditorBase.DangerColor);
             }
         }
 
@@ -867,6 +884,42 @@ public class SpellEditorWindow : EditorWindow
 
         _ui.EndOverlay();
     }
+
+    private void OpenFlipbookTextureBrowser(FlipbookDef fd)
+    {
+        _fbTextureBrowser.Open(GamePaths.Resolve("assets/Effects"), fd.Path, path =>
+        {
+            fd.Path = path;
+            // A newly picked texture is fresh intent — auto-fill the grid from
+            // its filename. Manual Cols/Rows edits are otherwise never overridden.
+            if (Render.Flipbook.TryParseGridFromFileName(path, out int pc, out int pr))
+            {
+                fd.Cols = pc;
+                fd.Rows = pr;
+            }
+            MarkDirty();
+        });
+    }
+
+    // === Dev-server hooks (flipbook_ui) — drive the manager headlessly ===
+    internal void DevOpenFlipbookManager() => _flipbookManagerOpen = true;
+
+    /// <summary>Open the texture browser for the currently selected flipbook,
+    /// exactly as the Browse button would. Returns false with no selection.</summary>
+    internal bool DevOpenFlipbookBrowser()
+    {
+        var ids = _gameData.Flipbooks.GetIDs();
+        if (_fbSelectedIdx < 0 || _fbSelectedIdx >= ids.Count) return false;
+        var fd = _gameData.Flipbooks.Get(ids[_fbSelectedIdx]);
+        if (fd == null) return false;
+        _flipbookManagerOpen = true;
+        OpenFlipbookTextureBrowser(fd);
+        return true;
+    }
+
+    internal bool DevPickFlipbookFile(string fullPath) => _fbTextureBrowser.DevSelectFile(fullPath);
+
+    internal bool DevUseFlipbookFile() => _fbTextureBrowser.DevCommitSelection();
 
     // ======================================
     //  Buff Manager Popup

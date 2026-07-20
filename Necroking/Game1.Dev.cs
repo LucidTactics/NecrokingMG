@@ -2347,6 +2347,45 @@ public partial class Game1 {
                break;
             }
 
+            // Drive the spell editor's Flipbook Manager + texture browser
+            // headlessly (immediate-mode buttons don't see synthetic clicks).
+            // devctl: cmd flipbook_ui manager | browse | pick <path>
+            case "flipbook_ui": {
+               if (_spellEditor == null) { c.Complete(Necroking.Dev.DevServer.Error("spell editor not loaded")); break; }
+               string fbSub = c.Args.Length >= 1 ? c.Args[0].ToLowerInvariant() : "manager";
+               switch (fbSub) {
+                  case "manager":
+                     SetUiPanel("SpellEditor");
+                     _spellEditor.DevOpenFlipbookManager();
+                     c.Complete(Necroking.Dev.DevServer.Ok("flipbook manager open"));
+                     break;
+                  case "browse":
+                     SetUiPanel("SpellEditor");
+                     c.Complete(_spellEditor.DevOpenFlipbookBrowser()
+                        ? Necroking.Dev.DevServer.Ok("texture browser open")
+                        : Necroking.Dev.DevServer.Error("no flipbook selected"));
+                     break;
+                  case "pick": {
+                     if (c.Args.Length < 2) { c.Complete(Necroking.Dev.DevServer.Error("pick needs <path>")); break; }
+                     string fbPath = c.Args[1];
+                     if (!System.IO.Path.IsPathRooted(fbPath)) fbPath = Core.GamePaths.Resolve(fbPath);
+                     c.Complete(_spellEditor.DevPickFlipbookFile(fbPath)
+                        ? Necroking.Dev.DevServer.Ok($"picked {fbPath}")
+                        : Necroking.Dev.DevServer.Error("browser not open or file missing"));
+                     break;
+                  }
+                  case "use":
+                     c.Complete(_spellEditor.DevUseFlipbookFile()
+                        ? Necroking.Dev.DevServer.Ok("selection committed")
+                        : Necroking.Dev.DevServer.Error("browser not open, nothing selected, or file outside project"));
+                     break;
+                  default:
+                     c.Complete(Necroking.Dev.DevServer.Error("flipbook_ui supports: manager|browse|pick <path>|use"));
+                     break;
+               }
+               break;
+            }
+
             // Inject a key press through the router dispatch (currently ESC
             // only) — verifies the Closable-walk ESC routing headlessly: the
             // topmost closable layer cancels, the key is consumed, nothing

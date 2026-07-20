@@ -9,6 +9,30 @@ namespace Necroking.Render;
 
 public class Flipbook
 {
+    /// <summary>Parse a flipbook grid token ("&lt;cols&gt;x&lt;rows&gt;", e.g.
+    /// "FX_TX_Fire_Fireloop_01_4x4.png" → 4x4) out of a texture filename.
+    /// Digit runs are capped at 2 and values at 64 so resolution suffixes
+    /// like "_512x512" don't read as a grid; a lone "1x1" is rejected since
+    /// it describes a plain image. When several tokens appear the LAST one
+    /// wins (the grid conventionally trails the name).</summary>
+    public static bool TryParseGridFromFileName(string path, out int cols, out int rows)
+    {
+        cols = 0; rows = 0;
+        if (string.IsNullOrEmpty(path)) return false;
+        string name = Path.GetFileNameWithoutExtension(path);
+        var matches = System.Text.RegularExpressions.Regex.Matches(
+            name, @"(?<![0-9])([0-9]{1,2})x([0-9]{1,2})(?![0-9])");
+        for (int i = matches.Count - 1; i >= 0; i--)
+        {
+            int c = int.Parse(matches[i].Groups[1].Value);
+            int r = int.Parse(matches[i].Groups[2].Value);
+            if (c < 1 || r < 1 || c > 64 || r > 64 || c * r < 2) continue;
+            cols = c; rows = r;
+            return true;
+        }
+        return false;
+    }
+
     public Texture2D? Texture { get; private set; }
     public int Cols { get; private set; } = 1;
     public int Rows { get; private set; } = 1;
