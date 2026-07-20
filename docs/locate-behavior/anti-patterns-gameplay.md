@@ -161,10 +161,11 @@ defer removal to a post-loop sweep. Horde enrollment has exactly three spawn-tim
 ### **Anti Pattern**: per-session state / back-references re-initialized in only one world-entry path
 `StartGame`/`StartScenario` recreate the `GameSession` (and its `Simulation`), so anything wired
 once at startup is lost on the next world entry.
-- The `SetAnimMeta` bug (logged in [anti-patterns-list.md](anti-patterns-list.md)):
-  `_sim.SetAnimMeta` is called once at startup; `WireSimCallbacks` re-wires ReanimHandler/Workers
-  after a session recreate but **not** AnimMeta — so every fresh `Simulation` runs with null
-  AnimMeta and archer shot-windows silently fall back and expire.
+- The `SetAnimMeta` bug (logged in [anti-patterns-list.md](anti-patterns-list.md), since
+  FIXED): `_sim.SetAnimMeta` was called once at startup; `WireSimCallbacks` re-wired
+  ReanimHandler/Workers after a session recreate but **not** AnimMeta — so every fresh
+  `Simulation` ran with null AnimMeta and archer shot-windows silently fell back and
+  expired. `WireSimCallbacks` now re-installs it; the lesson stands.
 - `9a07708`: `StartGame` vs `StartScenario` reset **asymmetry** — scenario reuses the session
   without recreating Road, StartGame-only resets diverge.
 **Instead:** `WireSimCallbacks` (the designated re-wire hook) must re-install **everything** a

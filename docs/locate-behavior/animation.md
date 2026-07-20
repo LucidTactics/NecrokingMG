@@ -240,25 +240,44 @@ frame count; know this before touching frame lookup.
   Per-(unit,category,yaw) lines carry **LOGICAL-frame arrays**: `time_ms` (one per logical
   frame), `markers` (`mount_pos`, one per logical frame per mount id), and `sprites`
   (logical→unique sprite-key mapping, **repeats allowed** — e.g. Wretched.Spell1 yaw 0: 8
-  logical frames onto 5 unique sprites). **The loader DROPS `sprites` today** (never read),
-  and reads `loop_start`/`loop_end` while the exporter writes `loop_start_index`/
+  logical frames onto 5 unique sprites). `sprites` is loaded into `AnimYawMeta.SpriteKeys`
+  and honored via the expansion pass below (commit `b4d9872`). Still-dead fields: the
+  loader reads `loop_start`/`loop_end` while the exporter writes `loop_start_index`/
   `loop_end_index` (so `LoopStartIndex`/`LoopEndIndex` are never populated — also have zero
-  consumers). `frame_ticks` is loaded into `AnimYawMeta.FrameTicks` but has zero consumers.
+  consumers), and `frame_ticks` loads into `AnimYawMeta.FrameTicks` with zero consumers.
+- **Logical-frame keyframe expansion** — `AnimMetaLoader.ExpandAtlasKeyframes(atlas,
+  animMeta)` rebuilds each anim's `AngleFrames` list to LOGICAL order using `SpriteKeys`
+  (repeats duplicate the unique `Keyframe`), so post-expansion `kfs.Count ==
+  FrameDurationsMs.Count == marker count` — drawn frames and weapon markers share one
+  timeline by construction. Expanded `Keyframe.Time` = **cumulative start-ms** (NOT the
+  source tick — ticks repeat non-monotonically under the mapping); non-expanded rows keep
+  tick Times, so `.Time` semantics are mixed across anims (harmless: ms-mode playback
+  never reads `.Time`). Idempotent (skips lists already at logical length); unresolvable
+  sprite keys skip the whole row with an `asset`-log line rather than half-expanding.
+  Call sites: the "Loading animation metadata" step in `Game1.Loading.cs` (after ALL
+  spritemeta parsing incl. extensions + animationmeta load, BEFORE `SetTextureAndFinalize`
+  so copies get the same Y-flip/bbox treatment) and `UnitEditorWindow.RefreshAtlases`
+  (newly-scanned atlases only). Atlases + `_animMeta` are process-lifetime assets loaded
+  once in LoadContent — NOT part of `GameSession` — so the expansion correctly does NOT
+  re-run on StartGame/StartScenario/map reload. Migration gotcha: per-unit
+  `UnitDef.AnimTimings.FrameDurationsMs` overrides authored against the OLD unique-frame
+  count now mismatch the logical keyframe count and fall into the defensive clamp path.
 - **Load order** (`Game1.Loading.cs` LoadContent steps): decode step parses ALL spritemetas
   (base `ParseMetaOnly` + extension `ParseExtensionMeta`) → "Loading animation metadata"
   step runs the `AnimMetaLoader.Load` loop + `ValidateEffectTimes` → per-atlas GPU-upload
   steps call `SetTextureAndFinalize` (Y-flip/bbox) + `StrideCalibration.CalibrateAtlas` →
   "Wiring unit sprites" sets `UnitDef.SpriteData`. The editor has a second, minimal atlas
   path: `UnitEditorWindow.RefreshAtlases` (full `SpriteAtlas.Load`, loads NO animationmeta).
-- **The mismatch at play time**: `AnimController.GetCurrentFrame` walks
-  `GetEffectiveFrameDurations` (logical count) but indexes into `GetAngle`'s unique-frame
-  list and **clamps** `Math.Min(frameIdx, kfs.Count-1)` when counts differ — the drawn
-  sprite freezes on the last unique frame while `GetCurrentFrameIndex` (no clamp, pure
-  durations walk) keeps advancing; weapon markers (`WeaponPointResolver.TryResolve` ←
-  `AnimationMeta.TryGetMount`, fed the logical index from `Game1.Animation.cs`) keep moving.
-  Count mismatch can ALSO come from anim/meta pairing skew: `ResolveAnimForState` may fall
-  back to the Idle CLIP while `ResolveMetaForState` resolved the requested state's meta —
-  so a defensive clamp must stay even if unique-vs-logical is fixed.
+- **Frame lookup at play time**: `AnimController.GetCurrentFrame` and
+  `GetCurrentFrameIndex` now share ONE cumulative-ms walk —
+  `LogicalFrameFromDurations(durations, effectiveTime)` (the fix for their historical
+  hand-kept-twin drift; the reverse-playback time-mirror block is still duplicated
+  between them). With expansion in place, counts match and drawn frame == marker frame.
+  The defensive clamp `Math.Min(frameIdx, kfs.Count-1)` in `GetCurrentFrame` REMAINS and
+  must stay: count mismatch can still come from anim/meta pairing skew
+  (`ResolveAnimForState` may fall back to the Idle CLIP while `ResolveMetaForState`
+  resolved the requested state's meta), rows without a `sprites` mapping, failed
+  expansion, or stale per-unit `AnimTimings` override lengths.
 - **`Keyframe.Time` (ticks) is only read on the no-ms fallback paths**: `AnimationData.
   TotalTicks`, the tick branches of `AnimController.Update`/`GetCurrentFrame`/
   `GetCurrentFrameIndex`, and `UnitEditorWindow.StepAnim`'s fallback (which compares an

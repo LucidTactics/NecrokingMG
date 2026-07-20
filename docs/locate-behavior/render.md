@@ -337,8 +337,20 @@ of 2026-07-03; the deferred-issue list behind several of them is
   current animation frame as silhouette); per-env-def `ShadowType`/scales, crops to
   wading waterline, crossfades reanimating corpses and corrupting trees. Wall shadows
   live in `WallSystem.DrawWalls`, not here.
-- **Outlines** — WORKING. `OutlineFlat.fx` + `DrawSpriteOutline` (8 offset redraws):
-  buff pulsing outlines, ghost outlines, reanim-rise attachment.
+- **Outlines** — WORKING. `OutlineFlat.fx` + `GameRenderer.Units.cs` `DrawSpriteOutline`
+  — **single-pass in-shader dilation union** (commit `5d11baa`; replaced the old 8-stamp
+  redraw loop, which self-stacked additively and split into discrete ghost silhouettes at
+  wide radii). Two techniques chosen from the effect's MAX screen radius (pulse peak, so
+  the tap pattern never pops mid-pulse): `Outline8` (radii ≤3px) / `Outline24` (16+8
+  taps, round rim). Per-draw uniforms `OutlineColor`/`FrameUvMin`/`FrameUvMax`/`RadiusUv`
+  set every call before `PushMaterial` (Push/Pop = End/Begin, so each outline flushes with
+  its own params); quad + source rect expand by ceil(radius/scale) texels and the origin
+  shifts by the expansion so the rim isn't clipped at the frame edge; `FrameUvMin/Max`
+  clamp sampling so atlas neighbors can't bleed in. Consumers: buff pulsing outlines,
+  ghost outlines, reanim-rise attachment, spell-aim highlight. Widths are px@32, scaled
+  `*Zoom/32` with a 0.6px floor. Divergence: `Editor/BuffPreview.cs` `DrawPulsingOutline`
+  still 8-stamps its hand-drawn stick-figure silhouette (no texture to dilate) — the
+  editor preview shows the faceted look the game no longer has.
 - **Magic glyphs** — WORKING, known-weak AA. `MagicCircle.fx` — fully procedural rings
   /runes/pentagram/energy; edge widths in normalized UV so it blurs large and aliases
   small; activation flare LDR-capped. Highest-payoff deferred shader rework.
@@ -431,6 +443,11 @@ The scene→bloom→screen chain, concrete files:
   (`hdr.R * min(Intensity,4) * alpha`). So buff glows are LDR-capped and only bloom if their
   clamped RGB clears `threshold` — they cannot overflow the HalfVector4 RT the way
   `HdrSprite` effects do (relevant if you want buff glows to bloom like spell effects).
+  **Exception: attached-flame weapon particles** (`WeaponParticleVisual.AttachedFlame`)
+  escape the LDR island — they draw via their own `Materials.HdrAdditive` YSort queue
+  items (`DrawAttachedFlames`, colors packed with `HdrColor.ToHdrVertex` through
+  `scope.Draw` — safe because HDR materials register `premultiplyTint:false`, so `Tint`
+  is identity), getting the real intensity ceiling 16 and feeding bloom.
 
 ### Layered-additive intensity — how stacking is tamed (updated 2026-07-11)
 Overlapping additive layers from one spell each add independently into the scene RT
@@ -695,10 +712,15 @@ Current emitter call sites: `GameRenderer.World.cs` (`Effect.ScatterRadius/Rgb/S
 on EffectManager effects + projectile impact bursts), `Render/LightningRenderer.cs` beam
 loop (`beam.Style.ScatterRadius…` → `AddRibbonScreen`, main path + branches),
 `GameRenderer.Units.cs` `DrawSingleUnit` (buff visuals: one `AddPoint` per active buff
-visual per unit — WeaponParticle glows at `weaponAttach.TipWorld` with HARDCODED radius
-1.1/strength 0.45, GroundAura/Orbital/LightningAura around the unit; colors derived from
-each visual's existing config, no scatter fields on BuffDef), and the TestShape review
-spells inside ScatterGlowSystem itself.
+visual per unit — WeaponParticle glows at `weaponAttach.TipWorld` with **data-driven**
+`WeaponParticleVisual.ScatterRadius/ScatterStrength` (defaults 1.1/0.45; casting buffs
+author 1.3/0.8; 0 disables), GroundAura/Orbital/LightningAura around the unit with
+hardcoded radii/strengths derived from each visual's existing config), and the TestShape
+review spells inside ScatterGlowSystem itself. **Height-convention trap at this call
+site** (commit `258bc6e`): `WeaponAttachRuntime` heights are sprite-rig convention
+(screen lift = h×Zoom, no YRatio) but `AddPoint`'s height contract is the world
+convention (h×Zoom×YRatio) — convert at the boundary (`TipHeight / camera.YRatio`) or
+the halo sits at exactly half the flame's lift, a gap that grows with zoom.
 
 **Scatter style mapping gap (strike/zap vs beam):** `LightningStyle` carries
 `ScatterRadius/ScatterRgb/ScatterStrength` (`Game/LightningSystem.cs`), but only
@@ -732,23 +754,41 @@ hilt→tip weapon segment, `Color` HdrColor, spawn rate/lifetime/drift), `UnitTi
   `HiltWorld`/`TipWorld` + heights) then `_buffVisuals.DrawUnit(i, renderPos, phase, …)`
   twice: phase 0 behind the sprite, phase 1 in front. Same-type buffs alternate on a
   2-second cycle (exclusive per visual type).
-- **WeaponParticle spawn semantics (the "fire trail" behavior)**: each `WPParticle`
-  captures an ABSOLUTE world position at spawn (lerp hilt→tip at random
-  t∈[RangeMin,RangeMax]) and afterwards only drifts along `MoveDirX/Y/Z` — it never
-  re-anchors to the (recomputed-per-frame) weapon attach. So while the hand sweeps
-  through a cast anim, particles with `ParticleLifetime` (0.8s on the buff_4 casting
-  buffs) stay where the hand WAS → a world-space trail of flipbooks rather than fire
-  held in the hand. Anything "attached" must store attach-relative offsets and
-  reposition from the current `WeaponAttachRuntime` each frame instead.
-- **The casting glow is just a buff**: `SpellDef.CastingBuffID` (e.g. `buff_4`, a
-  WeaponParticle/glow buff) applied in `Game1.Spells.cs` `DispatchSpellCast` (player;
-  removed by `RemoveCastingBuffAll` at cast end / `CancelPlayerChannel`) and in the AI
-  cast path (expires by duration); the craft-table channel glow is
-  `Game1.Animation.cs` `UpdateTableChannelBuff` (`TableChannelBuffId`). The glow's hand
-  anchor = the weapon-attach TIP, projected with the sprite height convention
-  (height × Zoom, no YRatio) — same anchor comment in `LightningRenderer.Draw`'s beam loop.
+- **WeaponParticle has TWO modes** (`WeaponParticleVisual` in `BuffRegistry.cs`):
+  - **Spawn/trail mode (default)**: each `WPParticle` captures an ABSOLUTE world
+    position at spawn (lerp hilt→tip at random t∈[RangeMin,RangeMax]) and afterwards
+    only drifts along `MoveDirX/Y/Z` — it never re-anchors to the (recomputed-per-frame)
+    weapon attach. While the hand sweeps through a cast anim, particles stay where the
+    hand WAS → a world-space trail of flipbooks.
+  - **Attached-flame mode (`attachedFlame:true`, commit `236dd28`)**: ONE persistent
+    looping flame (`state.Particles[0]`) repositioned from the live `WeaponAttachRuntime`
+    every frame in `UpdateWeaponParticles`, pinned at t=`RangeMax` along hilt→tip —
+    fire held in the hand, no trail. `Age` only drives the flipbook loop. In this mode
+    `SpawnRate`/`ParticleLifetime`/`MoveSpeed`/`MoveDir*`/`RangeMin`/`RenderBehind`/
+    `Color.A` are ALL IGNORED (`RangeMax` is repurposed as the flame's 0..1 position —
+    the SpellEditor still shows every spawn-mode field regardless, and buffs.json's
+    buff_4* copies still carry the dead values). Draw is EXCLUDED from the legacy
+    phase-0/1 `DrawUnit` paths; instead `CollectYSortItems` submits a behind/front
+    `Materials.HdrAdditive` queue-item pair per flame-carrying unit (`rp.Y ∓ 0.05`,
+    one pair covers all of a unit's flames) → `DrawUnitAttachedFlames` (mirrors
+    `DrawSingleUnit`'s fog-of-war gate) → `DrawAttachedFlames`. `WPParticle.Behind`
+    picks the side at draw; the behind item draws BEFORE the unit's own item ran
+    `UpdateWeaponParticles`, so away-facing frames render last frame's flame state
+    (one-frame lag, imperceptible). The flame vanishes with the buff (no world-space
+    fade-out litter).
+- **The casting glow is just a buff**: `SpellDef.CastingBuffID` (`buff_4` purple /
+  `buff_4_copy` green / `buff_4_copy_copy` yellow — three color-only clones, all
+  `attachedFlame:true`, intensity 1.8 tuned for the real HDR ceiling) applied in
+  `Game1.Spells.cs` `DispatchSpellCast` (player; removed by `RemoveCastingBuffAll` at
+  cast end / `CancelPlayerChannel` — NOTE its predicate removes ANY `HasWeaponParticle`
+  buff, not just casting ones) and in the AI cast path (expires by duration); the
+  craft-table channel glow is `Game1.Animation.cs` `UpdateTableChannelBuff`
+  (`TableChannelBuffId` = `buff_4_copy`). The glow's hand anchor = the weapon-attach
+  TIP, projected with the sprite height convention (height × Zoom, no YRatio) — same
+  anchor comment in `LightningRenderer.Draw`'s beam loop.
 - BuffVisualSystem is a **native-encoding island** (raw Scene batch, `EncodeColor`
-  CPU-clamps to LDR — see "Where each spell/buff glow layer is drawn" above).
+  CPU-clamps to LDR — see "Where each spell/buff glow layer is drawn" above), EXCEPT
+  attached flames, which draw HDR through their own queue items (same section).
 
 ### `Necroking/Render/Flipbook.cs` — flipbook (sprite-sheet frame sequence)
 What lives here: `class Flipbook` — loads a sprite-sheet texture (cols×rows, FPS) and
