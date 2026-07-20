@@ -525,6 +525,17 @@ adding per-field hover help (the `DrawField` chokepoint / `RowTip` precedent abo
   is the same call + a source `Rectangle`.
 - Gotcha: `Draw`/`Update` receive no dt — an animated preview needs its own clock
   (`Environment.TickCount64` or a Stopwatch; `GameClock.VisualTime` freezes while paused).
+- **Keyboard in editor popups**: editor-land keys are OUTSIDE the HotkeySystem/InputState
+  consumption flow — the pattern is raw press edges `_kb.IsKeyDown(K) && _prevKb.IsKeyUp(K)`
+  guarded by `!ui.IsTextInputActive` (`EditorBase.IsTextInputActive` = `_activeFieldId != null`
+  minus combos; `IsKeyboardCaptured` adds dropdown/color-picker) and by the overlay-layer
+  block (`NotifyOverlay`/`IsInputBlocked`) that already stops the host editor reacting.
+  ESC is centrally routed: `PopupManager.RouteInput` → top `IModalLayer.OnCancel()` +
+  `input.ConsumeKey(Keys.Escape)`. Canonical list Up/Down nav + scroll-into-view =
+  `EditorBase.DrawScrollableList` (~line 1006: `_focusedListId` focus-follows-click gate,
+  `NextVisibleListIndex`, itemTop/scroll clamp); dropdown option nav = `DrawCombo`'s
+  open-state arrow/Enter block. Camera arrow-pan is already disabled while editors are open
+  (`Game1.cs` `editorOpen` branch no-ops).
 
 ### Flipbook runtime (`Render/Flipbook.cs` + `Game1._flipbooks`)
 - `class Flipbook`: `Load(device, path, cols, rows, fps)` / `LoadFromDef(device, FlipbookDef)`
