@@ -152,6 +152,9 @@ property as the serialized form + a `[JsonIgnore]` parsed cache populated at loa
 
 ## Related
 
+- [anti-patterns-init.md](anti-patterns-init.md) — data-load/round-trip anti patterns (saving over
+  a partial/failed load, persisting derived/foreign/default state, silent use-time fallback vs
+  load-time `ValidateDef`). Read before touching registry Load/Save.
 - [editor.md](editor.md) — the in-game editors whose Save buttons call `GameData.Save()`.
 - [game1-partials.md](game1-partials.md) — `Game1` owns the `GameData` instance and calls
   `Load()` at startup.

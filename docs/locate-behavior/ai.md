@@ -489,6 +489,11 @@ Gotchas:
   see "Shared transition logic").
 
 ## Related areas
+- [anti-patterns-gameplay.md](anti-patterns-gameplay.md) — the AI/behavior anti patterns as
+  don't-do entries (anim-timed swing transitions & phantom swings, spawn-path asymmetry,
+  session re-wire staleness, pin/gate flags without a clear, routine written raw vs the
+  transition choke point, per-frame per-unit scans, player-only globals a second actor can't
+  reuse). Read before AI/behavior work.
 - [jobs-workers.md](jobs-workers.md) — `WorkerSystem` (the deposit/pile/stockpile brain) and
   `WorkerHandler` (the FSM template).
 - [corpses.md](corpses.md) — `Corpse` data model; note a "pile" of loose corpses ≠ the

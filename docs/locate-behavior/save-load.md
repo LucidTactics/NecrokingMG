@@ -154,6 +154,9 @@ The pipeline is already almost file-free — the file I/O is confined to two lin
   because `StartGame` recreates + clears `_inventory`.
 
 ## Cross-links
+- [anti-patterns-init.md](anti-patterns-init.md) — load/save anti patterns (append-without-clear
+  growth loops, GPU/state not reset per load, persisting derived/foreign state, saving over a
+  partial load, load-time validation). Read before touching load/save code.
 - [game1-partials.md](game1-partials.md) — StartGame/GameSession per-game reset; `_spellBarState`.
 - [ui.md](ui.md) — inventory panel (`UI/InventoryUI.cs`) and other consumers of `_inventory`.
 - [data-registries.md](data-registries.md) — `JsonFile.Save`/`JsonDefaults`, `ItemRegistry`/`ItemDef.MaxStack`.
