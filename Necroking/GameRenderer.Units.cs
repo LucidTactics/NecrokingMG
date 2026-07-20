@@ -487,9 +487,14 @@ partial class GameRenderer
                 if (bd == null) continue;
                 if (bd.HasWeaponParticle && bd.WeaponParticle != null
                     && bd.WeaponParticle.ScatterStrength > 0f && bd.WeaponParticle.ScatterRadius > 0f)
+                    // TipHeight is a sprite-rig height (renders at h×Zoom, no YRatio —
+                    // how the flame projects it via WorldToScreenPx), but AddPoint's
+                    // height contract is the WORLD convention (h×Zoom×YRatio). Divide
+                    // by YRatio so the halo lands at the same screen lift as the flame
+                    // instead of half a hand-height below it.
                     _g._scatterGlow.AddPoint(weaponAttach.TipWorld, bd.WeaponParticle.ScatterRadius,
                         new Color(bd.WeaponParticle.Color.R, bd.WeaponParticle.Color.G, bd.WeaponParticle.Color.B),
-                        bd.WeaponParticle.ScatterStrength, weaponAttach.TipHeight);
+                        bd.WeaponParticle.ScatterStrength, weaponAttach.TipHeight / _g._camera.YRatio);
                 if (bd.HasGroundAura && bd.GroundAura != null)
                     _g._scatterGlow.AddPoint(renderPos, MathF.Max(bd.GroundAura.Scale * 0.7f, 0.8f),
                         new Color(bd.GroundAura.Color.R, bd.GroundAura.Color.G, bd.GroundAura.Color.B),
