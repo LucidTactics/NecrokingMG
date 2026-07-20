@@ -290,6 +290,50 @@ frame count; know this before touching frame lookup.
   count-insensitive), `UnitEditorWindow.GetFrameCountForCurrentAnim` (sizes the per-frame
   "Frame N ms" override editor + "Set All Frames"), `ShadowRenderer` (via GetCurrentFrame).
 
+## Standup — the census of players & duration-waiters (two-clip export survey, 2026-07-20)
+
+`AnimState.Standup` maps to clip name `"Standup"` (`StateToAnimName`), fallback `Standup→Idle`
+(`GetFallbackAnimName`), play mode PlayOnceTransition (on finish `AnimController.Update` does
+`SwitchState(_pendingState != _currentState ? _pendingState : Idle)` — `_pendingState` is a
+*preemption queue* filled by `RequestState` while locked, NOT a chaining mechanism; there is
+**no data- or code-driven "then play X" follow-up anim feature anywhere**).
+
+Who plays Standup:
+- **Reanimation rise** — `BuffSystem.BeginReanimationRise` (called from `ReanimRiseTask` in
+  `Game1.Spells.cs` and `Simulation`): stamps `Forced(Standup, playbackSpeed)` + an Incap
+  recovery lock whose `RecoverTimer = -1` sentinel is filled by `AnimResolver.Resolve` (and the
+  legacy twin in `Game1.Animation.cs`) from `ctrl.GetTotalDurationSeconds(RecoverAnim) / speed`
+  — i.e. the movement/AI lock length IS the clip length ÷ speed, read from meta at runtime.
+- **Incap/knockdown recovery** — `BuffSystem.TickBuffs` (`RecoverAnim`, buff field
+  `incapRecoverAnim` in `Data/Registries/BuffRegistry.cs`), fatigue collapse in `Simulation`.
+- **Sleep-wake** — `AI/DeerHerdHandler.cs` `SleepWaking` (re-stamps `Combat(Standup)` every
+  frame; gates the AI transition on hardcoded `StandupDuration = 1.0f` consts, duplicated in
+  `AI/WolfPackHandler.cs` — divorced from the real clip length).
+- **Jump abuse** — `NightfallPorts/RogueJump.cs` uses Standup **seeked to its MIDPOINT** as the
+  takeoff spring (`SeekToMidpoint` = `CurrentAnimDurationMs * 0.5`) and Standup-from-frame-0 as
+  the landing, and detects takeoff via the PlayOnceTransition exit edge. Any change to Standup's
+  length/shape changes jump feel for units without dedicated jump clips.
+- **Corpse rendering** — `GameRenderer.Corpses.cs`/`Render/ReanimMorph.cs`/`ShadowRenderer`
+  morph the death pose to `GetFrameForStateStart(AnimState.Standup, yaw)` = **frame 0 only**.
+- `Game1.Dev.cs` weapon_attach diag reports `HasAnim(Standup)`.
+
+**Two-clip exports ("Standup" + "Standup2")**: the sprite exporter may split one motion into
+two clips. A `Standup2` row would parse fine into `Animations["Standup2"]` + meta key
+`"Unit.Standup2"` but be **unreachable at runtime** (no AnimState maps to it); it would only
+show up in `UnitEditorWindow.GetAnimNamesForSprite` dropdowns. The agreed direction is a
+**load-time stitch pass** next to `AnimMetaLoader.ExpandAtlasKeyframes` (run AFTER expansion,
+in the same `Game1.Loading.cs` "Loading animation metadata" step): append Standup2's expanded
+keyframes/durations/markers onto Standup per yaw (offset appended `Keyframe.Time` by the base
+total ms), then REMOVE the Standup2 anim + meta entries so no consumer ever sees the split.
+Every duration-waiter above then follows automatically because they all read
+`GetTotalDurationSeconds`/meta totals — EXCEPT the hardcoded deer/wolf `StandupDuration` consts
+and the RogueJump midpoint (both change meaning under a longer clip). Per-unit
+`UnitDef.AnimTimings["Standup"]` overrides authored pre-stitch will mismatch the combined frame
+count and fall into the defensive clamp. A runtime chain (play Standup2 on Standup finish) was
+surveyed and rejected: it needs a new AnimState + AnimResolver awareness (the OneShot
+auto-expire clears the override when CurrentState moves off it, letting the routine channel
+yank the unit), and every waiter would end its lock one clip early.
+
 ## Interruption / lock / cooldown mechanisms that exist
 
 - Priority lanes + same-priority "must have started" replacement gate (AnimResolver).

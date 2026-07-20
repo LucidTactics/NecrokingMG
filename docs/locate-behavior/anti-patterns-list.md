@@ -52,6 +52,19 @@ NOT anti-patterns (stay put per the exception): buff `RemainingDuration`, per-un
 arrays in `Simulation`, potion per-unit poison/paralysis timers, projectile/cloud TTLs,
 env respawn/trap timers, render-side TTLs, spell cooldown dictionaries (queryable state).
 
+# Standup duration hardcoded + dead field (found 2026-07-20)
+
+- **`Unit.StandupTimer` (`Movement/UnitModel.cs`) is write-only dead state** — set in 6 places
+  (`AI/DeerHerdHandler.cs`, `AI/WolfPackHandler.cs`, always to the local `StandupDuration`
+  const) and read by NOTHING. Remove it (or the writes) when next in those handlers.
+- **`StandupDuration = 1.0f` is duplicated as a private const in BOTH `DeerHerdHandler` and
+  `WolfPackHandler`** and is divorced from the real Standup clip length (the reanimation path
+  correctly derives its lock from `ctrl.GetTotalDurationSeconds(Standup)`). If the Standup clip
+  ever gets longer (e.g. the planned Standup+Standup2 stitch), the AI transitions out mid-anim.
+  Canonical fix direction: derive the timer from the clip (`AnimTiming.NaturalSeconds`) or fit
+  the anim to a designer duration (`AnimTiming.FitOneShot`) per the anti-patterns.md canonical
+  resolution — don't add a third copy of the const.
+
 # Swing-expiry window: melee and ranged stamp it from DIFFERENT sources (found 2026-07-19)
 
 The invariant "an attack's impact frame is guaranteed inside the `PostAttackTimer` window"
