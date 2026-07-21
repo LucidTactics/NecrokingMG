@@ -152,7 +152,7 @@
       "drn": -1,
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
-        "fps": 3,
+        "fps": 60,
         "scale": 0.4,
         "color": {
           "r": 255,
@@ -202,7 +202,7 @@
       "damage": 3,
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
-        "fps": 3,
+        "fps": 60,
         "scale": 0.4,
         "color": {
           "r": 255,
@@ -247,7 +247,7 @@
       "damage": 3,
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
-        "fps": 3,
+        "fps": 60,
         "scale": 0.6,
         "color": {
           "r": 179,
@@ -314,7 +314,7 @@
       "damage": 3,
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
-        "fps": 3,
+        "fps": 60,
         "scale": 0.6,
         "color": {
           "r": 179,
@@ -2322,7 +2322,7 @@
       "aoeRadius": 1,
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
-        "fps": 3,
+        "fps": 60,
         "scale": 0.6,
         "color": {
           "r": 179,
@@ -2392,7 +2392,7 @@
       "aoeRadius": 1,
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
-        "fps": 3,
+        "fps": 60,
         "scale": 0.6,
         "color": {
           "r": 179,
