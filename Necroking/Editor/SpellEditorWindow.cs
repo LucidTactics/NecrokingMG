@@ -775,6 +775,7 @@ public class SpellEditorWindow : EditorWindow
                 Path = "assets/Effects/"
             };
             _gameData.Flipbooks.Add(nf);
+            _fbDirtyIds.Add(newId); // MarkDirty attributes to the SELECTED def
             MarkDirty();
         }
         if (_ui.DrawButton("Copy", px + 10 + btnW, btnRowY, btnW, 32))
@@ -791,6 +792,7 @@ public class SpellEditorWindow : EditorWindow
                     var copy = _gameData.Flipbooks.CloneDef(src, newId) ?? new FlipbookDef { Id = newId };
                     copy.DisplayName = src.DisplayName + " (Copy)";
                     _gameData.Flipbooks.AddAfter(copy, src.Id);
+                    _fbDirtyIds.Add(newId); // MarkDirty attributes to the SELECTED def
                     MarkDirty();
                 }
             }
@@ -1670,6 +1672,9 @@ public class SpellEditorWindow : EditorWindow
                     _gameData.Flipbooks.Remove(_deleteConfirmId);
                     if (_fbSelectedIdx >= _gameData.Flipbooks.Count)
                         _fbSelectedIdx = Math.Max(0, _gameData.Flipbooks.Count - 1);
+                    // Reload the DELETED id too (drops its runtime entry) — the
+                    // selection has already shifted to a different def.
+                    _fbDirtyIds.Add(_deleteConfirmId);
                     MarkDirty();
                     SetStatus("Deleted flipbook: " + _deleteConfirmId);
                 }
@@ -1843,24 +1848,50 @@ public class SpellEditorWindow : EditorWindow
             _spellPreview?.MarkDirty();
         // Flipbook grid/path edits must also reach the RUNTIME flipbook
         // dictionary the previews (and the game) render from — without this,
-        // "Apply & Close" applied nothing until a map reload. DEBOUNCED: the
-        // reload disposes and re-decodes EVERY sheet (multi-MB EXRs included),
-        // and manager text fields commit per keystroke — reloading 400ms after
-        // the last edit (or at manager close) keeps typing smooth.
+        // "Apply & Close" applied nothing until a map reload. DEBOUNCED, and
+        // scoped to the edited def: manager fields commit per keystroke, and a
+        // full-registry reload (every multi-MB EXR re-decoded) firing at the
+        // first 400ms typing pause froze frames mid-sentence — the catch-up
+        // Update burst then machine-gunned key repeats (2026-07 typing-lag fix).
         if (_flipbookManagerOpen)
+        {
             _fbReloadDueAt = Environment.TickCount64 + 400;
+            var fbIds = _gameData.Flipbooks.GetIDs();
+            if (_fbSelectedIdx >= 0 && _fbSelectedIdx < fbIds.Count)
+                _fbDirtyIds.Add(fbIds[_fbSelectedIdx]);
+            else
+                _fbReloadAll = true; // can't attribute the edit — stay correct
+        }
     }
 
-    /// <summary>Pending debounced flipbook-registry reload (0 = none) — see
-    /// MarkDirty. Flushed by DrawFlipbookManagerPopup / CloseFlipbookManager.</summary>
+    /// <summary>Pending debounced flipbook reload (0 = none) — see MarkDirty.
+    /// Flushed by DrawFlipbookManagerPopup / CloseFlipbookManager. Dirty ids
+    /// scope the reload to the defs actually edited; _fbReloadAll falls back
+    /// to the full-registry reload when attribution wasn't possible.</summary>
     private long _fbReloadDueAt;
+    private readonly HashSet<string> _fbDirtyIds = new();
+    private bool _fbReloadAll;
 
     private void FlushPendingFlipbookReload(bool force)
     {
         if (_fbReloadDueAt == 0) return;
         if (!force && Environment.TickCount64 < _fbReloadDueAt) return;
+        // A typing PAUSE is not "done editing" — never stall the frame out from
+        // under an active text field. The reload runs when the field deactivates
+        // (next flush call) or on the manager's force-flush close path.
+        if (!force && _ui.IsTextInputActive) return;
         _fbReloadDueAt = 0;
-        Necroking.Game1.Instance?.ReloadFlipbooksFromRegistry();
+        var g1 = Necroking.Game1.Instance;
+        if (g1 != null)
+        {
+            if (_fbReloadAll)
+                g1.ReloadFlipbooksFromRegistry();
+            else
+                foreach (var id in _fbDirtyIds)
+                    g1.ReloadFlipbookFromRegistry(id);
+        }
+        _fbDirtyIds.Clear();
+        _fbReloadAll = false;
     }
 
     // Set by MarkDirty while the buff manager is open; consumed by

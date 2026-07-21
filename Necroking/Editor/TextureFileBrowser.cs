@@ -91,6 +91,7 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
         _scrollOffset = 0;
         _selectedFile = "";
         _previewTexture = null;
+        _pendingPreviewPath = "";
         _previewCols = 0;
         _previewRows = 0;
         _keyboardIndex = -1;
@@ -148,6 +149,7 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
         // doesn't grow unboundedly across sessions.
         _textureCache.DisposeAll();
         _previewTexture = null;
+        _pendingPreviewPath = "";
         Necroking.Game1.Popups.Pop(this);
     }
 
@@ -182,6 +184,10 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
     public void Draw(EditorBase ui, int screenW, int screenH)
     {
         if (!_isOpen) return;
+
+        // Deferred preview decode fires once the selection has rested — see
+        // SelectFile (arrow-nav must not decode an EXR per keypress).
+        FlushPendingPreviewLoad();
 
         var mouse = ui.GetMouseState();
         var prevMouse = ui.GetPrevMouseState();
@@ -437,16 +443,44 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
         return true;
     }
 
+    // Deferred preview decode: selection changes (esp. arrow-key nav) must not
+    // synchronously decode a multi-MB EXR per keypress — the texture loads once
+    // the selection has rested PreviewSettleMs. Cached files still show instantly.
+    private string _pendingPreviewPath = "";
+    private long _pendingPreviewAt;
+    private const int PreviewSettleMs = 150;
+
     /// <summary>Select a file for preview (not yet committed). If its filename
     /// carries a flipbook grid token, the preview panel animates it.</summary>
     private void SelectFile(string fullPath)
     {
         _selectedFile = fullPath.Replace('\\', '/');
-        _previewTexture = LoadPreviewTexture(_selectedFile);
         _statusMsg = "";
         if (!Necroking.Render.Flipbook.TryParseGridFromFileName(_selectedFile, out _previewCols, out _previewRows))
         { _previewCols = 0; _previewRows = 0; }
         _previewAnimStart = Environment.TickCount64;
+
+        if (_textureCache.TryGetCached(_selectedFile, out var cached))
+        {
+            _previewTexture = cached;
+            _pendingPreviewPath = "";
+        }
+        else
+        {
+            _previewTexture = null; // panel shows nothing for the settle beat
+            _pendingPreviewPath = _selectedFile;
+            _pendingPreviewAt = Environment.TickCount64 + PreviewSettleMs;
+        }
+    }
+
+    /// <summary>Run the deferred preview decode once the selection rested (or
+    /// immediately with force=true — the dev hook needs deterministic state).</summary>
+    private void FlushPendingPreviewLoad(bool force = false)
+    {
+        if (_pendingPreviewPath.Length == 0) return;
+        if (!force && Environment.TickCount64 < _pendingPreviewAt) return;
+        _previewTexture = LoadPreviewTexture(_pendingPreviewPath);
+        _pendingPreviewPath = "";
     }
 
     /// <summary>Dev-server hook (flipbook_ui pick): navigate to a file's folder
@@ -457,6 +491,7 @@ public class TextureFileBrowser : Necroking.UI.IModalLayer
         string dir = Path.GetDirectoryName(fullPath)?.Replace('\\', '/') ?? "";
         if (!string.IsNullOrEmpty(dir)) NavigateTo(dir);
         SelectFile(fullPath);
+        FlushPendingPreviewLoad(force: true); // deterministic for screenshots
         return true;
     }
 

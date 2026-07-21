@@ -197,7 +197,13 @@ public class EditorBase
     public IReadOnlyList<string> DevFieldTabOrder => _fieldTabOrderPrev;
     public void DevFocusField(string fieldId) => _pendingFocusFieldId = fieldId;
     private float _cursorBlink;
-    private double _keyRepeatTimer;
+    // Key repeat runs on the WALL CLOCK, not accumulated update dt: after a slow
+    // frame (e.g. a synchronous flipbook reload), fixed-timestep catch-up runs a
+    // burst of Updates back-to-back — a dt-accumulated timer crosses the repeat
+    // threshold inside the burst and one keytap types ~10 characters. With a
+    // wall-clock schedule the whole burst spans ~0 real ms, so at most one
+    // repeat fires. (2026-07 flipbook-manager typing-lag fix.)
+    private long _keyRepeatNextAt;
     private Keys _lastRepeatingKey;
 
     // Cursor and selection state (shared by single-line and text area fields)
@@ -2288,7 +2294,7 @@ public class EditorBase
         bool isTextArea = _activeFieldId.EndsWith("_textarea");
 
         var pressed = _kb.GetPressedKeys();
-        double dt = gameTime.ElapsedGameTime.TotalSeconds;
+        long nowMs = Environment.TickCount64;
         bool shift = _kb.IsKeyDown(Keys.LeftShift) || _kb.IsKeyDown(Keys.RightShift);
         bool ctrl = _kb.IsKeyDown(Keys.LeftControl) || _kb.IsKeyDown(Keys.RightControl);
 
@@ -2297,14 +2303,13 @@ public class EditorBase
             bool justPressed = _prevKb.IsKeyUp(key);
             bool repeat = false;
 
-            if (!justPressed && key == _lastRepeatingKey)
+            // Wall-clock repeat: 400ms initial delay, then 30ms cadence — and
+            // inherently at most one repeat per real elapsed window, so
+            // fixed-timestep catch-up bursts can't machine-gun characters.
+            if (!justPressed && key == _lastRepeatingKey && nowMs >= _keyRepeatNextAt)
             {
-                _keyRepeatTimer += dt;
-                if (_keyRepeatTimer > 0.4)
-                {
-                    _keyRepeatTimer -= 0.03;
-                    repeat = true;
-                }
+                _keyRepeatNextAt = nowMs + 30;
+                repeat = true;
             }
 
             if (!justPressed && !repeat) continue;
@@ -2312,7 +2317,7 @@ public class EditorBase
             if (justPressed)
             {
                 _lastRepeatingKey = key;
-                _keyRepeatTimer = 0;
+                _keyRepeatNextAt = nowMs + 400;
             }
 
             if (isTextArea)

@@ -20,8 +20,10 @@ public class Flipbook
         cols = 0; rows = 0;
         if (string.IsNullOrEmpty(path)) return false;
         string name = Path.GetFileNameWithoutExtension(path);
+        // IgnoreCase: "3X4" tokens are as valid as "3x4" (exporter naming varies).
         var matches = System.Text.RegularExpressions.Regex.Matches(
-            name, @"(?<![0-9])([0-9]{1,2})x([0-9]{1,2})(?![0-9])");
+            name, @"(?<![0-9])([0-9]{1,2})x([0-9]{1,2})(?![0-9])",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         for (int i = matches.Count - 1; i >= 0; i--)
         {
             int c = int.Parse(matches[i].Groups[1].Value);

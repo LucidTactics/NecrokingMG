@@ -587,6 +587,41 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // INSTANCE is stable (cleared + repopulated in place).
         _wakeSystem.Init(_flipbooks);
     }
+
+    /// <summary>Reload ONE flipbook def in place — the spell editor's flipbook
+    /// manager edits a single def at a time, and re-decoding the whole library
+    /// (multi-MB EXRs included) per debounce flush stalled typing for hundreds
+    /// of ms. Removes the runtime entry when the def is gone/pathless/missing.
+    /// The dictionary instance stays stable; only the wake system caches
+    /// Flipbook OBJECT refs, so re-Init it when one of its sheets reloads.</summary>
+    internal void ReloadFlipbookFromRegistry(string fbId)
+    {
+        if (_flipbooks.TryGetValue(fbId, out var oldFb))
+        {
+            oldFb.Unload();
+            _flipbooks.Remove(fbId);
+        }
+        var fbDef = _gameData.Flipbooks.Get(fbId);
+        if (fbDef != null && !string.IsNullOrEmpty(fbDef.Path))
+        {
+            var resolvedPath = GamePaths.Resolve(fbDef.Path);
+            if (File.Exists(resolvedPath))
+            {
+                var fb = new Flipbook();
+                try
+                {
+                    if (fb.Load(GraphicsDevice, resolvedPath, fbDef.Cols, fbDef.Rows, fbDef.DefaultFPS))
+                        _flipbooks[fbId] = fb;
+                }
+                catch (Exception ex)
+                {
+                    DebugLog.Log("startup", $"flipbook '{fbId}' failed to load ({fbDef.Path}): {ex.Message}");
+                }
+            }
+        }
+        if (fbId is "mini_splash" or "bubble_magic" or "rain_splash")
+            _wakeSystem.Init(_flipbooks); // it holds the old (now disposed) object
+    }
     internal Dictionary<string, AnimationMeta> _animMeta = new(); // animation metadata
     internal Microsoft.Xna.Framework.Graphics.Effect? _groundEffect;
     internal Microsoft.Xna.Framework.Graphics.Effect? _dissolveTreeEffect;
