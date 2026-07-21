@@ -56,6 +56,14 @@
       "path": "assets/Effects/Flipbooks/Fireballs/FireBall02-temperature_8x8.exr",
       "cols": 8,
       "rows": 8
+    },
+    {
+      "id": "flipbook_8",
+      "name": "DrainImpact",
+      "path": "assets/Effects/Flipbooks/Water/FX_TX_WaterLoop_01_5x5.png",
+      "cols": 5,
+      "rows": 5,
+      "defaultFPS": 15
     }
   ]
 }

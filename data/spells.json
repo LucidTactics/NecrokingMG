@@ -995,11 +995,11 @@
       "hitEffectFlipbook": {
         "flipbookID": "cloud03",
         "fps": -1,
-        "scale": 0.9,
+        "scale": 1,
         "color": {
-          "r": 220,
-          "g": 255,
-          "b": 120,
+          "r": 233,
+          "g": 252,
+          "b": 178,
           "a": 255,
           "intensity": 4
         },
