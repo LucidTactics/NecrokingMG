@@ -303,7 +303,7 @@
         "renderBehind": false,
         "attachedFlame": true,
         "scatterRadius": 0.7,
-        "scatterStrength": 0.4
+        "scatterStrength": 0.7
       },
       "unitTint": {
         "r": 0,

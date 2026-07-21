@@ -80,6 +80,14 @@
       "cols": 4,
       "rows": 5,
       "defaultFPS": 24
+    },
+    {
+      "id": "curly_lightning_03_copy",
+      "name": "LightningCircle",
+      "path": "assets/Effects/Flipbooks/Electricity/FX_TX_AroundLightning_01_4x4.png",
+      "cols": 4,
+      "rows": 4,
+      "defaultFPS": 24
     }
   ]
 }
