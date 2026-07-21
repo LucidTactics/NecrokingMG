@@ -28,8 +28,11 @@ executed by `GameRenderer.Draw.cs::Draw()`. Full design + rationale:
   baked at load — the per-frame flip is gone), `DepthStamp`, `MorphSdf`, `OutlineAlpha`/
   `OutlineAdditive`; `MagicGlyph` (Immediate sort mode — per-glyph uniforms in one batch) and
   `WeatherFog` register themselves in their renderers.
-- **`SpriteQueue.cs`** — `WorldLayer` enum (the layer bands: Roads…Corpses, FogBack, YSort,
-  Projectiles, Rain, FogWisps, EffectsHdrAlpha/Additive, AdditiveShapes…), packed ulong
+- **`SpriteQueue.cs`** — `WorldLayer : byte` enum (numeric bands with insertion gaps:
+  Roads=10, Traps=20, Glyphs=30, Walls=40, Shadows=50, HoverMarkers=60, Corpses=70,
+  FogBack=75, YSort=80, Projectiles=90, Rope=100, Rain=110, FogWisps=115,
+  EffectsHdrAlpha=120, EffectsHdrAdditive=130, AdditiveShapes=140, Foragables=200,
+  DamageNumbers=210 — new layers slot into the numeric gaps, no renumbering), packed ulong
   `SortKey` (`[layer 8|depth24|materialId 16|seq 16]`, camera-relative quantized worldY),
   `RenderItem` (sprite args or cached-delegate callback with int payloads + optional
   `SetParams` + `LayerDepth`), `SpriteScope` (**`PushMaterial`/`PopMaterial`/`Suspend`/
