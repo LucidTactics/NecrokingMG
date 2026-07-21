@@ -213,11 +213,13 @@ public class PoisonCloudSystem
 
             // Electricity arcs: spawn a one-shot flipbook arc between two random
             // points inside the cloud. Spawned here on the sim tick (never from
-            // the renderer — draw code also runs on paused frames). Spread phase
-            // only — the full-intensity plateau: no crackle while the cloud is
-            // still erupting, none over the decay fade-out.
+            // the renderer — draw code also runs on paused frames). Window: from
+            // HALFWAY through the eruption (the cloud body is ~75% grown by then
+            // — waiting for the full eruption read as the crackle arriving late)
+            // until the decay fade-out starts.
             if (lightning != null && cloud.ArcFlipbookID.Length > 0 && cloud.ArcInterval > 0.01f
-                && cloud.Phase == CloudPhase.Spread)
+                && cloud.Phase != CloudPhase.Decay
+                && cloud.Age >= cloud.EruptionDuration * 0.5f)
             {
                 cloud.ArcTimer -= dt;
                 if (cloud.ArcTimer <= 0f)
