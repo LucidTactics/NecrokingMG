@@ -61,6 +61,8 @@ public class PoisonCloud
     // Electricity arcs between random points inside the live radius (spawned as
     // LightningSystem ArcFx records on a repeating timer; empty flipbook = off).
     public string ArcFlipbookID = "";
+    public string ArcFlipbookID2 = "";   // optional second sheet; spawns alternate
+    public bool ArcUseSecond;            // alternation toggle, flips per spawn
     public float ArcInterval = 0.5f;
     public float ArcDuration = 0.45f;
     public float ArcWidthScale = 1f;
@@ -157,6 +159,7 @@ public class PoisonCloudSystem
             GlowB = spell.CloudGlowColor.B,
             Palette = spell.CloudPalette,
             ArcFlipbookID = spell.CloudArcFlipbookID,
+            ArcFlipbookID2 = spell.CloudArcFlipbookID2,
             ArcInterval = spell.CloudArcInterval,
             ArcDuration = spell.CloudArcDuration,
             ArcWidthScale = spell.CloudArcWidthScale,
@@ -245,7 +248,11 @@ public class PoisonCloudSystem
                         // random lift per end so they aren't all glued to the ground.
                         float hA = 0.2f + (float)_rng.NextDouble() * 0.8f;
                         float hB = 0.2f + (float)_rng.NextDouble() * 0.8f;
-                        lightning.SpawnArcFx(a, b, cloud.ArcDuration, cloud.ArcFlipbookID,
+                        // Alternate between the two sheets when a second is set.
+                        string fbId = cloud.ArcUseSecond && cloud.ArcFlipbookID2.Length > 0
+                            ? cloud.ArcFlipbookID2 : cloud.ArcFlipbookID;
+                        cloud.ArcUseSecond = !cloud.ArcUseSecond;
+                        lightning.SpawnArcFx(a, b, cloud.ArcDuration, fbId,
                             cloud.ArcColor, cloud.ArcWidthScale, flipV: _rng.Next(2) == 0,
                             startHeight: hA, endHeight: hB,
                             sortYBias: cloud.CurrentRadius * 0.9f,

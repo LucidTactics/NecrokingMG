@@ -1050,29 +1050,34 @@ public class SpellDef : INamedDef
     [JsonPropertyName("cloudArcFlipbookID")] public string CloudArcFlipbookID { get; set; } = "";
 
     [EditorVisible("Category", "Cloud")]
-    [EditorField(Label = "Arc Interval", Group = "CLOUD", Order = 846, Step = 0.05f, Decimals = 2, Tooltip = "Seconds between arc spawns.")]
+    [EditorField(Label = "Arc Flipbook 2", Group = "CLOUD", Order = 846, Tooltip = "Optional second sheet — spawns alternate between the two\nfor visual variety. Empty = only the first is used.")]
+    [EditorRegistryDropdown("Flipbooks")]
+    [JsonPropertyName("cloudArcFlipbookID2")] public string CloudArcFlipbookID2 { get; set; } = "";
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Arc Interval", Group = "CLOUD", Order = 847, Step = 0.05f, Decimals = 2, Tooltip = "Seconds between arc spawns.")]
     [JsonPropertyName("cloudArcInterval")] public float CloudArcInterval { get; set; } = 0.5f;
 
     [EditorVisible("Category", "Cloud")]
-    [EditorField(Label = "Arc Duration", Group = "CLOUD", Order = 847, Step = 0.05f, Decimals = 2, Tooltip = "Lifetime of one arc — the flipbook plays exactly once over this.")]
+    [EditorField(Label = "Arc Duration", Group = "CLOUD", Order = 848, Step = 0.05f, Decimals = 2, Tooltip = "Lifetime of one arc — the flipbook plays exactly once over this.")]
     [JsonPropertyName("cloudArcDuration")] public float CloudArcDuration { get; set; } = 0.45f;
 
     [EditorVisible("Category", "Cloud")]
-    [EditorField(Label = "Arc Color", Group = "CLOUD", Order = 848, Compact = true, Tooltip = "Arc tint; HDR intensity feeds bloom.")]
+    [EditorField(Label = "Arc Color", Group = "CLOUD", Order = 849, Compact = true, Tooltip = "Arc tint; HDR intensity feeds bloom.")]
     [JsonPropertyName("cloudArcColor")]
     [JsonConverter(typeof(HdrColorJsonConverter))]
     public HdrColor CloudArcColor { get; set; } = new(255, 255, 255, 255, 3f);
 
     [EditorVisible("Category", "Cloud")]
-    [EditorField(Label = "Arc Width x", Group = "CLOUD", Order = 849, Step = 0.05f, Decimals = 2, Tooltip = "Width multiplier on the frame's natural aspect ratio.")]
+    [EditorField(Label = "Arc Width x", Group = "CLOUD", Order = 850, Step = 0.05f, Decimals = 2, Tooltip = "Width multiplier on the frame's natural aspect ratio.")]
     [JsonPropertyName("cloudArcWidthScale")] public float CloudArcWidthScale { get; set; } = 1.0f;
 
     [EditorVisible("Category", "Cloud")]
-    [EditorField(Label = "Arc Scatter R", Group = "CLOUD", Order = 850, Step = 0.1f, Decimals = 1, Tooltip = "Lit-air sheath radius around each arc, world units. 0 = off.")]
+    [EditorField(Label = "Arc Scatter R", Group = "CLOUD", Order = 851, Step = 0.1f, Decimals = 1, Tooltip = "Lit-air sheath radius around each arc, world units. 0 = off.")]
     [JsonPropertyName("cloudArcScatterRadius")] public float CloudArcScatterRadius { get; set; }
 
     [EditorVisible("Category", "Cloud")]
-    [EditorField(Label = "Arc Scatter Str", Group = "CLOUD", Order = 851, Step = 0.05f, Decimals = 2, Tooltip = "Lit-air sheath strength (tinted from Arc Color).")]
+    [EditorField(Label = "Arc Scatter Str", Group = "CLOUD", Order = 852, Step = 0.05f, Decimals = 2, Tooltip = "Lit-air sheath strength (tinted from Arc Color).")]
     [JsonPropertyName("cloudArcScatterStrength")] public float CloudArcScatterStrength { get; set; } = 0.7f;
 
     // ============ SACRIFICE ============
