@@ -849,7 +849,7 @@ public class Simulation
         // (PotionSystem.TickPotionEffects) — the roll already happened here.
         PhaseStart();
         var cloudDmg = new List<CloudDamageEvent>();
-        _poisonClouds.Update(dt, _units, _quadtree, _corpses, _gameData.Buffs, cloudDmg);
+        _poisonClouds.Update(dt, _units, _quadtree, _corpses, _gameData.Buffs, cloudDmg, _lightning);
         foreach (var cd in cloudDmg)
             Combat.AttackResolver.ResolveCloudDamage(this, cd);
         PhaseEnd("clouds");

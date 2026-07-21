@@ -141,6 +141,24 @@ public class LightningRenderer
                 zap.StartPos.Y, zap.EndPos.Y);
         }
 
+        // Draw active flipbook arcs (stretched-sprite A→B effects). The frame
+        // index rides the arc's normalized age — the sheet's own dissipation
+        // frames carry the fade-out, so alpha stays flat.
+        foreach (var arc in _sim.Lightning.ArcFx)
+        {
+            if (string.IsNullOrEmpty(arc.FlipbookID)) continue;
+            Flipbook? arcFb = null;
+            _game._flipbooks?.TryGetValue(arc.FlipbookID, out arcFb);
+            if (arcFb == null) continue;
+            // Both ends are physical world heights (points in the air over the
+            // area), not sprite-rig anchors — WorldToScreen convention.
+            var arcStartSp = _renderer.WorldToScreen(arc.StartPos, arc.StartHeight, _camera);
+            var arcEndSp = _renderer.WorldToScreen(arc.EndPos, arc.EndHeight, _camera);
+            int frame = arcFb.GetFrameAtNormalizedTime(arc.Timer / MathF.Max(arc.Duration, 0.001f));
+            AddStretchedFlipbookStrips(_strips, arcFb, frame, arcStartSp, arcEndSp,
+                arc.Color, 1f, arc.WidthScale, arc.FlipV);
+        }
+
         // Draw active beams
         foreach (var beam in _sim.Lightning.Beams)
         {
@@ -521,6 +539,56 @@ public class LightningRenderer
 
     // Scratch for tendril polylines (render thread only).
     private static readonly List<Vector2> _tendrilPts = new();
+
+    // Scratch for stretched-flipbook arc endpoints (render thread only).
+    private static readonly List<Vector2> _arcPts = new();
+
+    /// <summary>
+    /// Stretch one flipbook frame from screen point A to screen point B as a
+    /// textured ribbon — the oriented-sprite primitive (electricity arcs etc.).
+    /// The ART carries the shape: the geometry is a straight strip whose width
+    /// preserves the frame's aspect ratio (widthScale on top of that), rotated
+    /// and stretched purely by where the endpoints land. THE single stretched-
+    /// flipbook rasterizer — in-game renderer and previews share it.
+    /// Brightness: tint.rgb * frame.rgb * intensity via the per-bucket uniform;
+    /// pass alpha pre-faded. flipV mirrors the frame across the arc's axis for
+    /// variety between instances.
+    /// </summary>
+    public static void AddStretchedFlipbookStrips(HdrStripBatch strips, Flipbook fb,
+        int frame, Vector2 start, Vector2 end, HdrColor color, float alpha,
+        float widthScale = 1f, bool flipV = false)
+    {
+        if (!fb.IsLoaded || fb.Texture == null || alpha <= 0.003f) return;
+        var src = fb.GetFrameRect(frame);
+        if (src.Width <= 0 || src.Height <= 0) return;
+        float len = Vector2.Distance(start, end);
+        if (len < 1f) return;
+
+        var tex = fb.Texture;
+        // Half-texel inset so linear filtering at the frame border can't bleed
+        // the neighboring frame's pixels into the strip.
+        float uvMinX = (src.Left + 0.5f) / tex.Width;
+        float uvMaxX = (src.Right - 0.5f) / tex.Width;
+        float uvMinY = (src.Top + 0.5f) / tex.Height;
+        float uvMaxY = (src.Bottom - 0.5f) / tex.Height;
+        var uvMin = new Vector2(uvMinX, flipV ? uvMaxY : uvMinY);
+        var uvMax = new Vector2(uvMaxX, flipV ? uvMinY : uvMaxY);
+
+        // Aspect-preserving width: the frame stretched A→B keeps its authored
+        // proportions, so the art never distorts as arc length varies... within
+        // reason — widthScale is the author's deliberate override.
+        float width = len * (src.Height / (float)src.Width) * widthScale;
+
+        float intensity = MathF.Min(color.Intensity, HdrColor.MaxHdrIntensity);
+        var verts = strips.GetTexturedBucket(intensity, tex);
+        _arcPts.Clear();
+        _arcPts.Add(start);
+        _arcPts.Add(end);
+        // edgeSoft 0: the frame's own alpha carries the edges — a vertex tent
+        // profile on top would double-fade the art.
+        PolylineStrip.BuildTexturedStretch(verts, _arcPts, color.ToColor(), color.ToColor(),
+            alpha, alpha, width, width, 0f, uvMin, uvMax);
+    }
 
     /// <summary>Perpendicular displacement of the tendril path at parameter t
     /// (arc + travelling wave), in authored pixels — callers multiply by their

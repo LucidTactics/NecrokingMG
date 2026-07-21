@@ -1041,6 +1041,32 @@ public class SpellDef : INamedDef
     // JSON-only for now — not surfaced in the spell editor.
     [JsonPropertyName("cloudPalette")] public List<CloudPaletteEntry>? CloudPalette { get; set; }
 
+    // Electricity arcs: a flipbook frame stretched between two random points
+    // inside the cloud's live radius (the oriented-sprite ribbon path), spawned
+    // on a repeating timer while the cloud lives. Empty flipbook = off.
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Arc Flipbook", Group = "CLOUD", Order = 845, Tooltip = "Flipbook stretched between random points inside the cloud.\nPlays once per arc. Empty = no arcs.")]
+    [EditorRegistryDropdown("Flipbooks")]
+    [JsonPropertyName("cloudArcFlipbookID")] public string CloudArcFlipbookID { get; set; } = "";
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Arc Interval", Group = "CLOUD", Order = 846, Step = 0.05f, Decimals = 2, Tooltip = "Seconds between arc spawns.")]
+    [JsonPropertyName("cloudArcInterval")] public float CloudArcInterval { get; set; } = 0.5f;
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Arc Duration", Group = "CLOUD", Order = 847, Step = 0.05f, Decimals = 2, Tooltip = "Lifetime of one arc — the flipbook plays exactly once over this.")]
+    [JsonPropertyName("cloudArcDuration")] public float CloudArcDuration { get; set; } = 0.45f;
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Arc Color", Group = "CLOUD", Order = 848, Compact = true, Tooltip = "Arc tint; HDR intensity feeds bloom.")]
+    [JsonPropertyName("cloudArcColor")]
+    [JsonConverter(typeof(HdrColorJsonConverter))]
+    public HdrColor CloudArcColor { get; set; } = new(255, 255, 255, 255, 3f);
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Arc Width x", Group = "CLOUD", Order = 849, Step = 0.05f, Decimals = 2, Tooltip = "Width multiplier on the frame's natural aspect ratio.")]
+    [JsonPropertyName("cloudArcWidthScale")] public float CloudArcWidthScale { get; set; } = 1.0f;
+
     // ============ SACRIFICE ============
     // Sacrifice the friendly undead nearest the cursor: it dies (crumbles into a
     // corpse) and the caster is healed by HealFlat + HealPercent × the victim's

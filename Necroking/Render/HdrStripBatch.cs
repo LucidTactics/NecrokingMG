@@ -34,9 +34,12 @@ public class HdrStripBatch
     private readonly List<float> _intensities = new();
     private readonly List<List<VertexPositionColor>> _buckets = new();
 
-    // Textured buckets (drain-beam scroll layers): same intensity keying, one
-    // shared wrap-sampled texture (the streak noise) for the whole batch.
+    // Textured buckets keyed by (intensity, texture). Texture null = the shared
+    // wrap-sampled streak noise (drain-beam scroll layers); non-null = an
+    // arbitrary sheet (stretched-flipbook arcs sample a frame sub-rect, which
+    // keeps UVs inside the frame so wrap addressing never shows).
     private readonly List<float> _texIntensities = new();
+    private readonly List<Texture2D?> _texTextures = new();
     private readonly List<List<VertexPositionColorTexture>> _texBuckets = new();
     private Texture2D? _scrollTexture;
 
@@ -81,10 +84,18 @@ public class HdrStripBatch
     /// shared streak-noise scroll texture (wrap-sampled, so arc-length U can
     /// scroll unbounded). PolylineStrip.BuildTextured appends here.</summary>
     public List<VertexPositionColorTexture> GetTexturedBucket(float intensity)
+        => GetTexturedBucket(intensity, null);
+
+    /// <summary>Textured vertex list drawn with the given HDR intensity and a
+    /// specific texture (a flipbook sheet for stretched-arc strips). Null texture
+    /// = the shared streak noise. PolylineStrip.BuildTexturedStretch appends
+    /// frame-sub-rect UVs here.</summary>
+    public List<VertexPositionColorTexture> GetTexturedBucket(float intensity, Texture2D? texture)
     {
         for (int i = 0; i < _texIntensities.Count; i++)
-            if (_texIntensities[i] == intensity) return _texBuckets[i];
+            if (_texIntensities[i] == intensity && _texTextures[i] == texture) return _texBuckets[i];
         _texIntensities.Add(intensity);
+        _texTextures.Add(texture);
         var list = new List<VertexPositionColorTexture>();
         _texBuckets.Add(list);
         return list;
@@ -159,11 +170,6 @@ public class HdrStripBatch
         if (_hdrEffect != null && texTechnique != null)
         {
             _hdrEffect.CurrentTechnique = texTechnique;
-            _hdrEffect.Parameters["ScrollTexture"]?.SetValue(_scrollTexture);
-        }
-        else if (_hdrEffect == null)
-        {
-            _basicEffectTex!.Texture = _scrollTexture;
         }
         // HdrIntensity loaded but predates the textured technique: draw nothing
         // rather than crash (texTechnique null while _hdrEffect set).
@@ -183,6 +189,12 @@ public class HdrStripBatch
                 _flushScratchTex = new VertexPositionColorTexture[Math.Max(count, _flushScratchTex.Length * 2)];
             verts.CopyTo(0, _flushScratchTex, 0, count);
             verts.Clear();
+
+            // Per-bucket texture bind (MGFX-on-GL zeroes uniforms per draw anyway,
+            // so setting ScrollTexture every bucket costs nothing extra).
+            var tex = _texTextures[i] ?? _scrollTexture;
+            _hdrEffect?.Parameters["ScrollTexture"]?.SetValue(tex);
+            if (_hdrEffect == null) _basicEffectTex!.Texture = tex;
 
             _hdrEffect?.Parameters["Intensity"]?.SetValue(_texIntensities[i]);
             var effect = _hdrEffect ?? (Microsoft.Xna.Framework.Graphics.Effect?)_basicEffectTex;
@@ -415,6 +427,91 @@ public static class PolylineStrip
             curV[1] = 0.5f - vInner;
             curV[2] = 0.5f + vInner;
             curV[3] = 1f;
+
+            if (i > 0)
+            {
+                for (int r = 0; r < 3; r++)
+                {
+                    Color pc0 = (r == 0) ? prevEdgeColor : prevInnerColor;
+                    Color pc1 = (r == 2) ? prevEdgeColor : prevInnerColor;
+                    Color cc0 = (r == 0) ? edgeColor : innerColor;
+                    Color cc1 = (r == 2) ? edgeColor : innerColor;
+                    outVerts.Add(new VertexPositionColorTexture(new Vector3(prev[r], 0f), pc0, new Vector2(prevU, prevV[r])));
+                    outVerts.Add(new VertexPositionColorTexture(new Vector3(cur[r], 0f), cc0, new Vector2(u, curV[r])));
+                    outVerts.Add(new VertexPositionColorTexture(new Vector3(prev[r + 1], 0f), pc1, new Vector2(prevU, prevV[r + 1])));
+                    outVerts.Add(new VertexPositionColorTexture(new Vector3(cur[r], 0f), cc0, new Vector2(u, curV[r])));
+                    outVerts.Add(new VertexPositionColorTexture(new Vector3(cur[r + 1], 0f), cc1, new Vector2(u, curV[r + 1])));
+                    outVerts.Add(new VertexPositionColorTexture(new Vector3(prev[r + 1], 0f), pc1, new Vector2(prevU, prevV[r + 1])));
+                }
+            }
+
+            cur.CopyTo(prev);
+            curV.CopyTo(prevV);
+            prevInnerColor = innerColor;
+            prevEdgeColor = edgeColor;
+            prevU = u;
+        }
+    }
+
+    /// <summary>
+    /// Stretch variant for oriented flipbook arcs: instead of arc-length pixel
+    /// tiling, U maps 0→1 over the TOTAL arc length into <paramref name="uvMin"/>..
+    /// <paramref name="uvMax"/> (an atlas frame sub-rect), and V spans the same
+    /// rect across the ribbon width — the whole frame is stretched once from the
+    /// first point to the last. UVs never leave the rect, so wrap sampling can't
+    /// pull in neighboring frames. Swap uvMin/uvMax components to mirror.
+    /// edgeSoft still shapes the vertex-alpha cross-section; pass 0 when the
+    /// frame's own alpha should carry the edges.
+    /// </summary>
+    public static void BuildTexturedStretch(List<VertexPositionColorTexture> outVerts,
+        IReadOnlyList<Vector2> points, Color tintStart, Color tintEnd,
+        float alphaStart, float alphaEnd, float widthStart, float widthEnd,
+        float edgeSoft, Vector2 uvMin, Vector2 uvMax)
+    {
+        float total = Prepare(points, widthStart, widthEnd, edgeSoft);
+        if (total <= 0f) return;
+        int n = _pts.Count;
+
+        float soft = Math.Clamp(edgeSoft, 0f, 1f);
+
+        Span<Vector2> prev = stackalloc Vector2[4];
+        Span<Vector2> cur = stackalloc Vector2[4];
+        Span<float> prevV = stackalloc float[4];
+        Span<float> curV = stackalloc float[4];
+        Color prevInnerColor = default;
+        Color prevEdgeColor = default;
+        float prevU = 0f;
+
+        for (int i = 0; i < n; i++)
+        {
+            float t = _arc[i] / total;
+            float half = MathHelper.Lerp(widthStart, widthEnd, t) * 0.5f;
+            float inner = half * (1f - soft);
+            float outer = half * (1f + soft);
+            float r8 = MathHelper.Lerp(tintStart.R, tintEnd.R, t);
+            float g8 = MathHelper.Lerp(tintStart.G, tintEnd.G, t);
+            float b8 = MathHelper.Lerp(tintStart.B, tintEnd.B, t);
+            float aTint = MathHelper.Lerp(tintStart.A, tintEnd.A, t) / 255f;
+            float a = MathHelper.Lerp(alphaStart, alphaEnd, t) * aTint;
+            var innerColor = new Color((byte)r8, (byte)g8, (byte)b8,
+                (byte)Math.Clamp((int)(a * 255f + 0.5f), 0, 255));
+            var edgeColor = new Color((byte)r8, (byte)g8, (byte)b8, (byte)0);
+
+            var p = _pts[i];
+            var mtr = _miter[i];
+            cur[0] = p - mtr * outer;
+            cur[1] = p - mtr * inner;
+            cur[2] = p + mtr * inner;
+            cur[3] = p + mtr * outer;
+
+            float u = MathHelper.Lerp(uvMin.X, uvMax.X, t);
+            // Cross-section rows by physical offset, mapped into the frame's V
+            // range (outer edges at the rect's V extremes).
+            float vInner = outer > 0.001f ? inner / (outer * 2f) : 0f;
+            curV[0] = uvMin.Y;
+            curV[1] = MathHelper.Lerp(uvMin.Y, uvMax.Y, 0.5f - vInner);
+            curV[2] = MathHelper.Lerp(uvMin.Y, uvMax.Y, 0.5f + vInner);
+            curV[3] = uvMax.Y;
 
             if (i > 0)
             {
