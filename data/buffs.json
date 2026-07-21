@@ -302,8 +302,8 @@
         "blendMode": 1,
         "renderBehind": false,
         "attachedFlame": true,
-        "scatterRadius": 0.7,
-        "scatterStrength": 0.7
+        "scatterRadius": 0.6,
+        "scatterStrength": 1
       },
       "unitTint": {
         "r": 0,

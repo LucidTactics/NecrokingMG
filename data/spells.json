@@ -296,8 +296,8 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0,
-        "scatterStrength": 0.6
+        "scatterRadius": 0.9,
+        "scatterStrength": 0.5
       },
       "scatterRadius": 1.6,
       "scatterStrength": 0.5,
@@ -333,18 +333,18 @@
         "fps": 60,
         "scale": 0.6,
         "color": {
-          "r": 179,
-          "g": 79,
-          "b": 255,
+          "r": 201,
+          "g": 131,
+          "b": 254,
           "a": 255,
-          "intensity": 4.0384617
+          "intensity": 3.3454545
         },
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0.7,
-        "scatterStrength": 0.5
+        "scatterRadius": 1.5,
+        "scatterStrength": 0.9
       },
       "quantity": 10,
       "trajectory": "HomingSwirly",
@@ -2449,8 +2449,8 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0.7,
-        "scatterStrength": 0.5
+        "scatterRadius": 2,
+        "scatterStrength": 1
       },
       "quantity": 10,
       "trajectory": "HighLob",
@@ -2523,8 +2523,8 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0.7,
-        "scatterStrength": 0.5
+        "scatterRadius": 0.9,
+        "scatterStrength": 5
       },
       "quantity": 10,
       "trajectory": "HighLob",
@@ -2550,8 +2550,8 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0,
-        "scatterStrength": 0.6
+        "scatterRadius": 2,
+        "scatterStrength": 1
       },
       "scatterRadius": 1.8,
       "scatterStrength": 0.55,
