@@ -123,9 +123,13 @@ public static class SpellVfxDraw
         // ScatterGlow halo while the loop plays (lit air around the channel hit
         // point). Registered here — after the blend-pass and fog gates — so it
         // fires exactly once per frame (a ref matches only one blend pass).
+        // Height matters: without it the halo renders at GROUND level while the
+        // effect sprite draws at worldHeight — a glow pooled at the target's
+        // feet instead of centered on the hit.
         if (fbRef.ScatterRadius > 0f)
             v.Scatter?.AddPoint(worldPos, fbRef.ScatterRadius,
-                new Color(fbRef.Color.R, fbRef.Color.G, fbRef.Color.B), fbRef.ScatterStrength);
+                new Color(fbRef.Color.R, fbRef.Color.G, fbRef.Color.B), fbRef.ScatterStrength,
+                height: worldHeight);
 
         float fps = fbRef.FPS > 0f ? fbRef.FPS : fb.FPS;
         int frameIdx = fbRef.Loop
