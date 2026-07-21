@@ -212,20 +212,24 @@ public class PoisonCloudSystem
             }
 
             // Electricity arcs: spawn a one-shot flipbook arc between two random
-            // points inside the LIVE radius. Spawned here on the sim tick (never
-            // from the renderer — draw code also runs on paused frames).
-            if (lightning != null && cloud.ArcFlipbookID.Length > 0 && cloud.ArcInterval > 0.01f)
+            // points inside the cloud. Spawned here on the sim tick (never from
+            // the renderer — draw code also runs on paused frames). Spread phase
+            // only — the full-intensity plateau: no crackle while the cloud is
+            // still erupting, none over the decay fade-out.
+            if (lightning != null && cloud.ArcFlipbookID.Length > 0 && cloud.ArcInterval > 0.01f
+                && cloud.Phase == CloudPhase.Spread)
             {
                 cloud.ArcTimer -= dt;
                 if (cloud.ArcTimer <= 0f)
                 {
                     cloud.ArcTimer += cloud.ArcInterval;
-                    // 0.65: the rendered gas body sits well inside CurrentRadius
-                    // (the damage edge) — full-radius arcs visibly crackle in
-                    // clear air outside the smoke. Re-roll short pairs (a
-                    // near-coincident pair smears the frame into a dot; sub-1.5
-                    // arcs read as stray specks) so a beat rarely goes empty.
-                    float arcR = cloud.CurrentRadius * 0.65f;
+                    // 0.4: sample the MIDDLE puff ring only (the body ring sits at
+                    // ~0.25R with fat puffs over it) — the gas thins toward
+                    // CurrentRadius (the damage edge), and arcs out there crackle
+                    // in clear air. Re-roll short pairs (a near-coincident pair
+                    // smears the frame into a dot; sub-1.5 arcs read as stray
+                    // specks) so a beat rarely goes empty.
+                    float arcR = cloud.CurrentRadius * 0.4f;
                     for (int attempt = 0; attempt < 4; attempt++)
                     {
                         var a = RandomPointInDisc(cloud.Position, arcR);
