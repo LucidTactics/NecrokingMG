@@ -2588,11 +2588,11 @@
         "fps": 0,
         "scale": 0.6,
         "color": {
-          "r": 203,
-          "g": 97,
-          "b": 222,
+          "r": 255,
+          "g": 215,
+          "b": 184,
           "a": 255,
-          "intensity": 1
+          "intensity": 0.5
         },
         "rotation": 0,
         "blendMode": "Alpha",
@@ -2607,15 +2607,15 @@
               212,
               255
             ],
-            "hueStrength": 1,
-            "satStrength": 0.4793492,
-            "valStrength": 0.21276596,
+            "hueStrength": 0.94493115,
+            "satStrength": 0.31914893,
+            "valStrength": 0,
             "useHcl": true
           }
         }
       },
       "scatterRadius": 1.4,
-      "scatterStrength": 0.7,
+      "scatterStrength": 0.6,
       "scatterColor": {
         "r": 188,
         "g": 103,

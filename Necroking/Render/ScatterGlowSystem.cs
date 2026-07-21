@@ -106,6 +106,21 @@ public sealed class ScatterGlowSystem
         _effect = effect;
     }
 
+    // ─── Preview support (SpellPreview owns a second instance) ───
+    // When set, this camera + view size replace Game1's camera/screen for
+    // registration AND mist anchoring, and the weather fog-density term is
+    // skipped (a preview has no weather). The game's own instance leaves these
+    // null/zero — its path is bit-identical to before the seam existed.
+    public Camera25D? CameraOverride;
+    public int ViewW, ViewH;
+
+    private Camera25D Cam => CameraOverride ?? _g._camera;
+
+    private Vector2 ToScreen(Vec2 worldPos, float height)
+        => CameraOverride != null
+            ? CameraOverride.WorldToScreen(worldPos, height, ViewW, ViewH)
+            : _g._renderer.WorldToScreen(worldPos, height, _g._camera);
+
     /// <summary>Feature is on and drawable this frame.</summary>
     public bool Active => _effect != null && _g._gameData.Settings.Performance.ScatterGlow;
 
@@ -133,8 +148,8 @@ public sealed class ScatterGlowSystem
     public void AddPoint(Vec2 worldPos, float radius, Color rgb, float strength = 1f, float height = 0f)
     {
         if (!Active || radius <= 0f || strength <= 0f) return;
-        var cam = _g._camera;
-        AddScreenHalo(_g._renderer.WorldToScreen(worldPos, height, cam),
+        var cam = Cam;
+        AddScreenHalo(ToScreen(worldPos, height),
             radius * cam.Zoom, rgb, strength,
             GameRenderer.FogDepthForY(worldPos.Y, cam.Position.Y));
     }
@@ -199,7 +214,7 @@ public sealed class ScatterGlowSystem
         Color rgb, float strength, float worldYStart, float worldYEnd)
     {
         if (!Active || worldRadius <= 0f || strength <= 0f || screenPts.Count < 2) return;
-        var cam = _g._camera;
+        var cam = Cam;
         float radiusPx = worldRadius * cam.Zoom;
 
         // Simplify to sheath resolution (keep first + last always).
@@ -305,7 +320,7 @@ public sealed class ScatterGlowSystem
 
         if (_halos.Count == 0 && _shapes.Count == 0) return;
 
-        var cam = _g._camera;
+        var cam = Cam;
         float camY = cam.Position.Y;
         _haloVerts.Clear();
         _solidVerts.Clear();
@@ -343,7 +358,8 @@ public sealed class ScatterGlowSystem
         device.RasterizerState = RasterizerState.CullNone;
 
         // MGFX on GL zeroes uniforms — set every one, every frame.
-        float fogDensity = _g._weatherRenderer.GetEffectiveEffects()?.FogDensity ?? 0f;
+        float fogDensity = CameraOverride != null ? 0f
+            : _g._weatherRenderer.GetEffectiveEffects()?.FogDensity ?? 0f;
         float density = _g._gameData.Settings.Performance.ScatterGlowStrength
             * (0.7f + 0.9f * MathHelper.Clamp(fogDensity, 0f, 1f));
         _effect!.Parameters["WorldViewProjection"]?.SetValue(wvp);

@@ -345,17 +345,26 @@ public class LightningRenderer
     /// glow (real channels brighten below a fork as the branch current joins).</summary>
     private void AddBoltScatter(Vector2 startSp, Vector2 endSp, LightningStyle style,
         float fade, float fxScale, uint seed, float worldYStart, float worldYEnd)
+        => AddBoltScatterStatic(_game._scatterGlow, startSp, endSp, style, fade, fxScale,
+            seed, worldYStart, worldYEnd, _gameTime);
+
+    /// <summary>Static variant (same pattern as AddBoltStripsStatic) so
+    /// SpellPreview's own ScatterGlowSystem instance registers the SAME bolt
+    /// sheath the game does — one bolt-shape/scatter conversion for both.</summary>
+    public static void AddBoltScatterStatic(ScatterGlowSystem scatter, Vector2 startSp,
+        Vector2 endSp, LightningStyle style, float fade, float fxScale, uint seed,
+        float worldYStart, float worldYEnd, float gameTime)
     {
-        if (style.ScatterRadius <= 0f || fade <= 0.01f || !_game._scatterGlow.Active) return;
-        float flicker = ComputeBoltShape(startSp, endSp, style, _gameTime,
+        if (style.ScatterRadius <= 0f || fade <= 0.01f || !scatter.Active) return;
+        float flicker = ComputeBoltShape(startSp, endSp, style, gameTime,
             out var pts, out var branches, seed, fxScale);
         float s = style.ScatterStrength * flicker * fade;
-        _game._scatterGlow.AddRibbonScreen(pts, style.ScatterRadius, style.ScatterRgb,
+        scatter.AddRibbonScreen(pts, style.ScatterRadius, style.ScatterRgb,
             s, worldYStart, worldYEnd);
         // Branch depth: branches are short, a flat mid-bolt Y is indistinguishable.
         float branchY = (worldYStart + worldYEnd) * 0.5f;
         foreach (var branch in branches)
-            _game._scatterGlow.AddRibbonScreen(branch, style.ScatterRadius * style.BranchDecay,
+            scatter.AddRibbonScreen(branch, style.ScatterRadius * style.BranchDecay,
                 style.ScatterRgb, s * 0.5f, branchY, branchY);
     }
 

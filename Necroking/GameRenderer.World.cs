@@ -565,119 +565,50 @@ partial class GameRenderer
         }
     }
 
-    /// <summary>Draw effects matching the given blend mode (0=alpha, 1=additive).</summary>
-    private void DrawEffectsFiltered(int blendMode)
+    /// <summary>The game's VfxView for SpellVfxDraw (shared with the spell
+    /// preview's own view) — built lazily once; camera/scope are stable refs
+    /// and the delegates capture only _g.</summary>
+    private VfxView? _vfxView;
+    private VfxView GameVfxView()
     {
-        // Channel-beam hit effects are STATELESS per-frame draws off the live
-        // beam records (position tracking, looping, and kill-on-channel-end all
-        // fall out for free — no spawn/despawn lifecycle to desync).
-        DrawBeamHitEffects(blendMode);
-        foreach (var eff in _g._effectManager.Effects)
+        _vfxView ??= new VfxView
         {
-            if (!eff.Alive || eff.BlendMode != blendMode) continue;
-            // Fog of war: enemy/trap strikes and clouds land in fogged territory
-            // too — their hit effects must not flash through (same rule as
-            // projectiles, beams, damage numbers).
-            if (!_g._fogOfWar.IsVisible(eff.Position)) continue;
-            // Max guard: a data Duration of 0 gives Lifetime 0, and this draw can
-            // run before the first Update culls it — 0/0 NaN otherwise.
-            float t = eff.Age / MathF.Max(eff.Lifetime, 0.001f);
-            float alpha = eff.AlphaCurve.Evaluate(t);
-
-            // ScatterGlow: impact explosions light the air, breathing with the
-            // effect's alpha envelope. (Each effect matches exactly one blendMode,
-            // so this registers once per frame despite the two filtered calls.)
-            if (eff.ScatterRadius > 0f)
-                _g._scatterGlow.AddPoint(eff.Position, eff.ScatterRadius, eff.ScatterRgb,
-                    eff.ScatterStrength * alpha);
-            // ScaleCurve is WORLD units — the world→px multiply happens once below.
-            // (A stray extra *Zoom/32 here made every impact flipbook scale ∝ Zoom²:
-            // right at 32, 2x too big at 64, 4x too small at 8. Round-2 sweep find.)
-            float scale = eff.ScaleCurve.Evaluate(t);
-
-            var sp = _g._renderer.WorldToScreen(eff.Position, 0f, _g._camera);
-
-            // Try flipbook
-            if (!string.IsNullOrEmpty(eff.FlipbookKey) && _g._flipbooks.TryGetValue(eff.FlipbookKey, out var fb) && fb.IsLoaded)
-            {
-                // Loop cycles frames (FPS override honored); one-shots map the
-                // clip once onto the lifetime so it always completes exactly.
-                float fps = eff.FpsOverride > 0f ? eff.FpsOverride : fb.FPS;
-                int frameIdx = eff.LoopFrames
-                    ? (fb.TotalFrames > 0 ? (int)(eff.Age * fps) % fb.TotalFrames : 0)
-                    : fb.GetFrameAtNormalizedTime(eff.Age / MathF.Max(eff.Lifetime, 0.001f));
-                var srcRect = fb.GetFrameRect(frameIdx);
-                var origin = new Vector2(srcRect.Width * eff.AnchorX, srcRect.Height * eff.AnchorY);
-                // Scale relative to world size
-                float worldSize = scale * 2f; // scale curve gives world units
-                float pixelSize = worldSize * _g._camera.Zoom;
-                float fbScale = pixelSize / srcRect.Width;
-                Color color = blendMode == 0
-                    ? HdrColor.ToHdrVertexAlpha(eff.Tint, alpha, eff.HdrIntensity)
-                    : HdrColor.ToHdrVertex(eff.Tint, alpha, eff.HdrIntensity);
-                // HDR (EXR) sheets need an override material (temperature ramp
-                // or plain linear-texture variant)
-                var hdrMat = Materials.SelectHdrFlipbookMaterial(_g.GraphicsDevice, fb,
-                    additive: blendMode == 1, eff.TempRamp);
-                if (hdrMat != null) _g.Scope.PushMaterial(hdrMat);
-                _g.Scope.Draw(fb.Texture, sp, srcRect, color, 0f, origin, fbScale, SpriteEffects.None, 0f);
-                if (hdrMat != null) _g.Scope.PopMaterial();
-            }
-            else
-            {
-                // Fallback glow (radial gradient circle)
-                float glowAlpha = alpha * (200f / 255f);
-                Color color = blendMode == 0
-                    ? HdrColor.ToHdrVertexAlpha(eff.Tint, glowAlpha, eff.HdrIntensity)
-                    : HdrColor.ToHdrVertex(eff.Tint, glowAlpha, eff.HdrIntensity);
-                float glowSize = scale * _g._camera.Zoom * 0.5f / 32f;
-                _g.Scope.Draw(_g._glowTex, sp, null, color,
-                    0f, new Vector2(32f, 32f), glowSize, SpriteEffects.None, 0f);
-            }
-        }
+            WorldToScreen = (pos, h) => _g._renderer.WorldToScreen(pos, h, _g._camera),
+            Visible = pos => _g._fogOfWar.IsVisible(pos),
+        };
+        // Refresh the per-frame bits (cheap; device/zoom can change)
+        _vfxView.Scope = _g.Scope;
+        _vfxView.Device = _g.GraphicsDevice;
+        _vfxView.Flipbooks = _g._flipbooks;
+        _vfxView.GlowTex = _g._glowTex;
+        _vfxView.Zoom = _g._camera.Zoom;
+        _vfxView.Scatter = _g._scatterGlow;
+        return _vfxView;
     }
 
-    /// <summary>Draw each live channel beam's hit effect at the beam end (the
-    /// target unit). Runs inside the HDR effect passes so blend mode, EXR
-    /// sheets, and temperature ramps all work; the animation clock is the
-    /// beam's own Elapsed (freezes with the sim, like the beam itself). Loop
-    /// cycles the clip; off = play once and hold the last frame.</summary>
-    private void DrawBeamHitEffects(int blendMode)
+    /// <summary>Draw effects matching the given blend mode (0=alpha, 1=additive).
+    /// The actual drawing lives in SpellVfxDraw — shared verbatim with the
+    /// spell editor's preview so the two can't drift.</summary>
+    private void DrawEffectsFiltered(int blendMode)
     {
+        var view = GameVfxView();
+
+        // Channel-beam hit effects are STATELESS per-frame draws off the live
+        // beam records (position tracking, looping, and kill-on-channel-end all
+        // fall out for free — no spawn/despawn lifecycle to desync). Animation
+        // clock = beam.Elapsed (freezes with the sim, like the beam itself).
         foreach (var beam in _g._sim.Lightning.Beams)
         {
             if (!beam.Alive || beam.SpellID.Length == 0) continue;
             var spell = _g._gameData.Spells.Get(beam.SpellID);
-            if (spell?.HitEffectFlipbook is not { } fbRef || string.IsNullOrEmpty(fbRef.FlipbookID)) continue;
-            if ((fbRef.BlendMode == "Additive" ? 1 : 0) != blendMode) continue;
-            if (!_g._flipbooks.TryGetValue(fbRef.FlipbookID, out var fb) || !fb.IsLoaded) continue;
-
+            if (spell?.HitEffectFlipbook is not { } fbRef) continue;
             int targetIdx = UnitUtil.ResolveUnitIndex(_g._sim.Units, beam.TargetID);
             if (targetIdx < 0) continue;
-            var targetPos = _g._sim.Units[targetIdx].Position;
-            if (!_g._fogOfWar.IsVisible(targetPos)) continue;
-
-            float fps = fbRef.FPS > 0f ? fbRef.FPS : fb.FPS;
-            int frameIdx = fbRef.Loop
-                ? (fb.TotalFrames > 0 && fps > 0f ? (int)(beam.Elapsed * fps) % fb.TotalFrames : 0)
-                : fb.GetFrameAtNormalizedTime(fps > 0f && fb.TotalFrames > 0
-                    ? beam.Elapsed * fps / fb.TotalFrames : 1f);
-            var srcRect = fb.GetFrameRect(frameIdx);
-
-            var sp = _g._renderer.WorldToScreen(targetPos, 1f, _g._camera);
-            var origin = new Vector2(srcRect.Width * 0.5f, srcRect.Height * 0.5f);
-            // Same world-size convention as DrawEffectsFiltered (scale × 2 world units)
-            float fbScale = fbRef.Scale * 2f * _g._camera.Zoom / srcRect.Width;
-            Color color = blendMode == 0
-                ? HdrColor.ToHdrVertexAlpha(fbRef.Color.ToColor(), 1f, fbRef.Color.Intensity)
-                : HdrColor.ToHdrVertex(fbRef.Color.ToColor(), 1f, fbRef.Color.Intensity);
-
-            var hdrMat = Materials.SelectHdrFlipbookMaterial(_g.GraphicsDevice, fb,
-                additive: blendMode == 1, fbRef.TemperatureRamp);
-            if (hdrMat != null) _g.Scope.PushMaterial(hdrMat);
-            _g.Scope.Draw(fb.Texture, sp, srcRect, color, 0f, origin, fbScale, SpriteEffects.None, 0f);
-            if (hdrMat != null) _g.Scope.PopMaterial();
+            SpellVfxDraw.DrawFlipbookRefLoop(view, fbRef, _g._sim.Units[targetIdx].Position,
+                worldHeight: 1f, beam.Elapsed, blendMode);
         }
+
+        SpellVfxDraw.DrawEffects(view, _g._effectManager.Effects, blendMode);
     }
 
     // (SpawnImpactEffects moved to Game1.Spells.cs SpawnProjectileImpactEffects,

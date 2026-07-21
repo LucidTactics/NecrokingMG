@@ -141,38 +141,14 @@ public partial class Game1 {
       SpawnFlipbookEffect(spell.CastFlipbook, pos);
    }
 
-   /// <summary>Canonical FlipbookRef -> one-shot effect spawn (cast flares,
-   /// summon poofs, and every category's hit effect). Honors the ref's full
-   /// contract: Duration -1 = one playthrough at the effective FPS (or 0.4s
-   /// when looping — a loop has no natural length), Loop cycles frames for
-   /// the lifetime, FPS overrides the flipbook's own rate, temperature ramp
-   /// passes through. Scatter args come from the owning spell when the effect
-   /// should light the air.</summary>
+   /// <summary>Game entry for the canonical FlipbookRef spawn — the logic
+   /// lives in EffectManager.SpawnFromRef so the spell-editor preview's own
+   /// EffectManager spawns identically. Scatter args come from the owning
+   /// spell when the effect should light the air.</summary>
    internal void SpawnFlipbookEffect(FlipbookRef? fb, Vec2 pos,
       float scatterRadius = 0f, Microsoft.Xna.Framework.Color scatterRgb = default,
-      float scatterStrength = 1f) {
-      if (fb == null || string.IsNullOrEmpty(fb.FlipbookID)) return;
-
-      var tint = fb.Color.ToColor();
-      int blendMode = fb.BlendMode == "Additive" ? 1 : 0;
-      int alignment = fb.Alignment == "Upright" ? 1 : 0;
-
-      float duration = fb.Duration;
-      if (duration < 0f) {
-         // One playthrough of the clip; loops fall back to the classic 0.4s.
-         duration = 0.4f;
-         if (!fb.Loop && _flipbooks.TryGetValue(fb.FlipbookID, out var rtFb) && rtFb.IsLoaded) {
-            float fps = fb.FPS > 0f ? fb.FPS : rtFb.FPS;
-            if (fps > 0f) duration = rtFb.TotalFrames / fps;
-         }
-      }
-
-      _effectManager.SpawnSpellImpact(pos, fb.Scale, tint, fb.FlipbookID,
-         fb.Color.Intensity, blendMode, alignment, duration,
-         scatterRadius, scatterRgb, scatterStrength,
-         temperatureRamp: fb.TemperatureRamp,
-         loop: fb.Loop, fpsOverride: fb.FPS);
-   }
+      float scatterStrength = 1f)
+      => _effectManager.SpawnFromRef(fb, pos, _flipbooks, scatterRadius, scatterRgb, scatterStrength);
 
    /// <summary>
    /// Execute a spell's effect (projectile, buff, strike, etc.) for any caster. Called

@@ -2383,6 +2383,9 @@ public partial class Game1 {
                      _spellEditor.DevScrollDetail(c.Args.Length >= 2 ? DevFloat(c.Args[1]) : 0f);
                      c.Complete(Necroking.Dev.DevServer.Ok("detail scrolled"));
                      break;
+                  case "preview_state":
+                     c.Complete(Necroking.Dev.DevServer.OkRaw(_spellEditor.DevPreviewState()));
+                     break;
                   default:
                      c.Complete(Necroking.Dev.DevServer.Error("flipbook_ui supports: manager|browse|pick <path>|use"));
                      break;

@@ -965,6 +965,9 @@ public class SpellEditorWindow : EditorWindow
     /// scroll offset so headless screenshots can reach lower sections.</summary>
     internal void DevScrollDetail(float px) => _detailScroll = Math.Max(0f, px);
 
+    internal string DevPreviewState()
+        => _spellPreview?.DevStateDump() ?? "{\"error\":\"no preview\"}";
+
     // ======================================
     //  Buff Manager Popup
     // ======================================

@@ -84,6 +84,41 @@ public class EffectManager
         });
     }
 
+    /// <summary>Canonical FlipbookRef -> one-shot effect spawn (cast flares,
+    /// summon poofs, every category's hit effect — game AND spell-editor
+    /// preview). Honors the ref's full contract: Duration -1 = one playthrough
+    /// at the effective FPS (or 0.4s when looping — a loop has no natural
+    /// length), Loop cycles frames for the lifetime, FPS overrides the
+    /// flipbook's own rate, temperature ramp passes through.</summary>
+    public void SpawnFromRef(Necroking.Data.Registries.FlipbookRef? fb, Vec2 pos,
+        Dictionary<string, Flipbook> flipbooks,
+        float scatterRadius = 0f, Color scatterRgb = default, float scatterStrength = 1f)
+    {
+        if (fb == null || string.IsNullOrEmpty(fb.FlipbookID)) return;
+
+        var tint = fb.Color.ToColor();
+        int blendMode = fb.BlendMode == "Additive" ? 1 : 0;
+        int alignment = fb.Alignment == "Upright" ? 1 : 0;
+
+        float duration = fb.Duration;
+        if (duration < 0f)
+        {
+            // One playthrough of the clip; loops fall back to the classic 0.4s.
+            duration = 0.4f;
+            if (!fb.Loop && flipbooks.TryGetValue(fb.FlipbookID, out var rtFb) && rtFb.IsLoaded)
+            {
+                float fps = fb.FPS > 0f ? fb.FPS : rtFb.FPS;
+                if (fps > 0f) duration = rtFb.TotalFrames / fps;
+            }
+        }
+
+        SpawnSpellImpact(pos, fb.Scale, tint, fb.FlipbookID,
+            fb.Color.Intensity, blendMode, alignment, duration,
+            scatterRadius, scatterRgb, scatterStrength,
+            temperatureRamp: fb.TemperatureRamp,
+            loop: fb.Loop, fpsOverride: fb.FPS);
+    }
+
     public void SpawnSpellImpact(Vec2 pos, float scale, Color tint, string flipbookKey,
                                   float hdrIntensity = 1f, int blendMode = 0, int alignment = 0,
                                   float duration = -1f,

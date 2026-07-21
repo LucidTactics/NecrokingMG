@@ -101,6 +101,8 @@ public class SpellPreview
         public LightningStyle Style;
         public bool IsGodRay;
         public GodRayParams? GodRay;
+        public bool HitFired;   // real hit effect fires once, at telegraph elapse
+        public uint Seed;       // stable bolt shape (game convention)
     }
 
     // Zap state (unit-targeted strike)
@@ -112,6 +114,7 @@ public class SpellPreview
         public float Duration;
         public bool Alive;
         public LightningStyle Style;
+        public uint Seed;
     }
 
     // Beam state
@@ -123,6 +126,7 @@ public class SpellPreview
         public float MaxDuration;
         public bool Alive;
         public LightningStyle Style;
+        public uint Seed;
     }
 
     // Drain state. Caster/target order matches the in-game renderer; the flow
@@ -149,16 +153,8 @@ public class SpellPreview
         public bool IsExpanding; // for ring/burst effects
     }
 
-    // Hit effect state
-    private struct PreviewHitEffect
-    {
-        public Vector2 Position;
-        public float Timer;
-        public float Duration;
-        public bool Alive;
-        public Color EffectColor;
-        public float Scale;
-    }
+    // (PreviewHitEffect deleted — hit effects are REAL EffectManager effects
+    // now, spawned via SpawnRealEffect and drawn by SpellVfxDraw.)
 
     private readonly List<PreviewProjectile> _projectiles = new();
     private readonly List<PreviewStrike> _strikes = new();
@@ -166,7 +162,22 @@ public class SpellPreview
     private readonly List<PreviewBeam> _beams = new();
     private readonly List<PreviewDrain> _drains = new();
     private readonly List<PreviewEffect> _effects = new();
-    private readonly List<PreviewHitEffect> _hitEffects = new();
+
+    // REAL effect machinery — the same EffectManager/SpellVfxDraw the game
+    // renders with, so hit/cast/summon flipbooks (loop, duration, ramps, HDR)
+    // are the genuine article, not preview approximations.
+    private readonly EffectManager _fx = new();
+    private ScatterGlowSystem? _scatter;
+    private VfxView? _vfxView;
+    // A real Camera25D at a fixed frame — same projection math as the game.
+    private readonly Camera25D _cam = new() { Position = Vec2.Zero, Zoom = CameraZoom, YRatio = CameraYRatio };
+    private float _totalTime;
+    private float _lastDt = 1f / 60f;
+    // Bolt width/displacement zoom coupling — identical to LightningRenderer.FxScale().
+    private static float FxScale => Math.Clamp(CameraZoom / 32f, 0f, 4f);
+    // Average in-game daytime grass (sampled from a live frame) so additive
+    // effects composite against the same base the game gives them.
+    private static readonly Color GrassBg = new(85, 106, 41);
 
     private int _remainingProjectiles;
     private float _projectileTimer;
@@ -191,6 +202,7 @@ public class SpellPreview
             try { using var test = new RenderTarget2D(_gd, 4, 4, false, SurfaceFormat.HalfVector4, DepthFormat.None); rtFormat = SurfaceFormat.HalfVector4; }
             catch { }
             _rt = new RenderTarget2D(_gd, w, h, false, rtFormat, DepthFormat.None, 0, RenderTargetUsage.PreserveContents);
+            if (_scatter != null) { _scatter.ViewW = w; _scatter.ViewH = h; }
             // Reinit bloom at new dimensions if we have content manager access
             // (bloom creates its own internal RTs sized to the scene)
             _bloom?.Unload();
@@ -253,6 +265,24 @@ public class SpellPreview
         _godRays = new GodRayRenderer();
         _godRays.Init(gd, hdrIntensity);
 
+        // Own ScatterGlow instance (same class/shader as the game) — camera
+        // override points it at the preview's fixed frame. Honors the user's
+        // Performance.ScatterGlow toggle via Game1's settings.
+        if (content != null && Necroking.Game1.Instance != null)
+        {
+            Microsoft.Xna.Framework.Graphics.Effect? scatterFx = null;
+            try { scatterFx = content.Load<Microsoft.Xna.Framework.Graphics.Effect>("ScatterGlow"); }
+            catch { }
+            if (scatterFx != null)
+            {
+                _scatter = new ScatterGlowSystem();
+                _scatter.Init(Necroking.Game1.Instance, scatterFx);
+                _scatter.CameraOverride = _cam;
+                _scatter.ViewW = _previewWidth;
+                _scatter.ViewH = _previewHeight;
+            }
+        }
+
         _initialized = true;
     }
 
@@ -287,6 +317,10 @@ public class SpellPreview
         _currentSpellId = spell.Id;
         _playing = true;
 
+        // Cast flipbook at the caster — every category gets it in the game
+        // (ExecuteSpellEffect -> SpawnCastEffect).
+        SpawnRealEffect(spell.CastFlipbook, new Vector2(CasterX, 0));
+
         switch (spell.Category)
         {
             case "Projectile":
@@ -300,43 +334,46 @@ public class SpellPreview
             case "Buff":
             case "Debuff":
             {
-                Color effColor;
-                if (spell.CastFlipbook != null)
-                    effColor = spell.CastFlipbook.Color.ToColor();
-                else
-                    effColor = spell.Category == "Buff"
-                        ? new Color(80, 255, 120, 200)
-                        : new Color(200, 80, 255, 200);
-                _effects.Add(new PreviewEffect
+                // The real CastFlipbook already spawned above; the ring is only
+                // a fallback cue for spells with no cast visual at all.
+                if (spell.CastFlipbook == null)
                 {
-                    Position = new Vector2(CasterX, 0),
-                    Timer = 0f,
-                    Duration = 1.2f,
-                    Alive = true,
-                    EffectColor = effColor,
-                    Scale = 1.0f,
-                    IsExpanding = true,
-                });
+                    _effects.Add(new PreviewEffect
+                    {
+                        Position = new Vector2(CasterX, 0),
+                        Timer = 0f,
+                        Duration = 1.2f,
+                        Alive = true,
+                        EffectColor = spell.Category == "Buff"
+                            ? new Color(80, 255, 120, 200)
+                            : new Color(200, 80, 255, 200),
+                        Scale = 1.0f,
+                        IsExpanding = true,
+                    });
+                }
                 break;
             }
 
             case "Summon":
             {
-                Color summonColor;
                 if (spell.SummonFlipbook != null)
-                    summonColor = spell.SummonFlipbook.Color.ToColor();
-                else
-                    summonColor = new Color(80, 180, 255, 200);
-                _effects.Add(new PreviewEffect
                 {
-                    Position = new Vector2(TargetX, 0),
-                    Timer = 0f,
-                    Duration = 1.5f,
-                    Alive = true,
-                    EffectColor = summonColor,
-                    Scale = 1.2f,
-                    IsExpanding = true,
-                });
+                    // The REAL summon flipbook, exactly like the game's summon path
+                    SpawnRealEffect(spell.SummonFlipbook, new Vector2(TargetX, 0));
+                }
+                else
+                {
+                    _effects.Add(new PreviewEffect
+                    {
+                        Position = new Vector2(TargetX, 0),
+                        Timer = 0f,
+                        Duration = 1.5f,
+                        Alive = true,
+                        EffectColor = new Color(80, 180, 255, 200),
+                        Scale = 1.2f,
+                        IsExpanding = true,
+                    });
+                }
                 break;
             }
 
@@ -355,7 +392,10 @@ public class SpellPreview
                         Duration = Math.Max(0.1f, spell.ZapDuration),
                         Alive = true,
                         Style = style,
+                        Seed = (uint)_rand.Next(),
                     });
+                    // Zaps land instantly — hit effect fires now (ExecuteStrikeFrom)
+                    SpawnRealEffect(spell.HitEffectFlipbook, new Vector2(TargetX, 0), impactScatter: true);
                 }
                 else
                 {
@@ -372,6 +412,7 @@ public class SpellPreview
                         Style = style,
                         IsGodRay = isGodRay,
                         GodRay = isGodRay ? spell.BuildGodRayParams() : null,
+                        Seed = (uint)_rand.Next(),
                     });
                 }
                 break;
@@ -389,6 +430,7 @@ public class SpellPreview
                         ? Math.Min(spell.BeamMaxDuration, 3f) : 2f,
                     Alive = true,
                     Style = style,
+                    Seed = (uint)_rand.Next(),
                 });
                 break;
             }
@@ -410,7 +452,10 @@ public class SpellPreview
 
             case "Cloud":
             {
-                // Show expanding cloud as a pulsing circle at the target position
+                // Cloud burst hit effect fires at spawn (ExecuteCloud parity)
+                SpawnRealEffect(spell.HitEffectFlipbook, new Vector2(TargetX, 0), impactScatter: true);
+                // The lingering cloud body is PoisonCloudRenderer in-game —
+                // approximated here as an expanding circle (known preview gap).
                 Color cloudColor = spell.CloudColor.ToColor();
                 _effects.Add(new PreviewEffect
                 {
@@ -430,6 +475,8 @@ public class SpellPreview
     public void Update(float dt)
     {
         if (!_initialized) return;
+        _totalTime = (_totalTime + dt) % 3600f;
+        _lastDt = dt;
 
         if (_dirty)
         {
@@ -470,7 +517,7 @@ public class SpellPreview
         UpdateBeams(dt);
         UpdateDrains(dt);
         UpdateEffects(dt);
-        UpdateHitEffects(dt);
+        _fx.Update(dt);
 
         if (!IsSceneActive())
         {
@@ -489,28 +536,54 @@ public class SpellPreview
         if (!_initialized || _rt == null) return;
 
         var prevTargets = _gd.GetRenderTargets();
-        bool useBloom = BloomEnabled && _bloom != null;
+        // Fidelity: the preview blooms/tonemaps with the USER'S live settings —
+        // the game reads the same object per frame, so tuning Settings > Bloom
+        // affects both identically. (The old hardcoded 0.4/2.0 "juiced" knobs
+        // made every preview ~2x brighter than reality.)
+        var bloomSettings = Necroking.Game1.Instance?._gameData?.Settings?.Bloom
+            ?? new Data.Registries.BloomSettings();
+        bool useBloom = BloomEnabled && _bloom != null && bloomSettings.Enabled;
 
         // When bloom is enabled, render into bloom's scene RT; otherwise directly to preview RT
         if (useBloom)
             _bloom!.BeginScene(_gd);
         else
-        {
             _gd.SetRenderTarget(_rt);
-            _gd.Clear(new Color(18, 18, 28));
-        }
+        // In-game grass base color — additive effects composite against the
+        // same background brightness they get in the world.
+        _gd.Clear(GrassBg);
 
-        // Alpha blend pass: ground, markers, projectiles, effects
+        var view = PreviewVfxView();
+
+        // Alpha blend pass: ground, markers, projectile shadows/fallbacks
         Render.Materials.Hud.Begin(_sb);
         DrawGround();
         DrawMarkers();
         DrawProjectiles();
         DrawEffects();
-        DrawHitEffects();
         _sb.End();
 
+        // Alpha-mode SPELL effects (hit/cast/summon flipbooks with Blend=Alpha)
+        // run through the same HdrAlpha material as the game — plain AlphaBlend
+        // would ignore their HDR intensity encoding.
+        if (Render.Materials.HdrAlpha != null)
+        {
+            Render.Materials.HdrAlpha.Begin(_sb);
+            // Re-capture the scope NOW: PushMaterial/PopMaterial inside the
+            // shared draw must resume THIS pass's material, not whatever was
+            // open before RenderToTarget.
+            view.Scope = _sb;
+            DrawRealEffects(view, blendMode: 0);
+            _sb.End();
+        }
+
         // Additive HDR blend pass: lightning, beams, drains, projectile flipbooks
-        if (_hdrSpriteEffect != null)
+        if (Render.Materials.HdrAdditive != null)
+        {
+            Render.Materials.HdrAdditive.Begin(_sb);
+            view.Scope = _sb; // resume material for Push/Pop = this pass
+        }
+        else if (_hdrSpriteEffect != null)
         {
             _hdrSpriteEffect.Parameters["AlphaMode"]?.SetValue(0f);
             _sb.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp,
@@ -530,26 +603,34 @@ public class SpellPreview
         DrawDrains();
         DrawZaps();
         DrawProjectileGlows();
-        DrawHitGlows();
+        DrawRealEffects(view, blendMode: 1);
         _sb.End();
 
         // Ribbon bolts/tendrils + god rays: the same post-batch triangle passes as
         // the game's LightningTris pass, flushed onto the scene RT before bloom.
         _strips.DrawAll();
         _godRays?.DrawAll();
+
+        // ScatterGlow halos (registered during the draws above) — same system,
+        // same shader, the preview's fixed camera.
+        if (_scatter != null)
+        {
+            _scatterCtx ??= new RenderContext();
+            _scatterCtx.Device = _gd;
+            _scatterCtx.Batch = _sb;
+            _scatterCtx.GameTime = _scatterTime;
+            _scatterCtx.ScreenW = _previewWidth;
+            _scatterCtx.ScreenH = _previewHeight;
+            _scatterTime.ElapsedGameTime = TimeSpan.FromSeconds(_lastDt);
+            _scatterTime.TotalGameTime = TimeSpan.FromSeconds(_totalTime);
+            _scatter.Draw(_scatterCtx);
+        }
+
         DrawDrainClouds();
 
         // Bloom composites scene + bloom → preview RT; without bloom, already on preview RT
         if (useBloom)
-        {
-            var bloomSettings = new Data.Registries.BloomSettings
-            {
-                Enabled = true, Threshold = 0.4f, SoftKnee = 0.5f,
-                Intensity = 2.0f, Scatter = 0.7f, Iterations = 4,
-                BicubicUpsampling = true,
-            };
             _bloom!.EndScene(_gd, _sb, bloomSettings, _rt);
-        }
 
         // Restore previous render target
         if (prevTargets.Length > 0 && prevTargets[0].RenderTarget != null)
@@ -558,50 +639,81 @@ public class SpellPreview
             _gd.SetRenderTarget(null);
     }
 
+    private RenderContext? _scatterCtx;
+    private readonly GameTime _scatterTime = new();
+
+    /// <summary>The preview's VfxView for SpellVfxDraw — same shared drawing
+    /// the game uses, pointed at the fixed preview camera. No fog gate.</summary>
+    private VfxView PreviewVfxView()
+    {
+        _vfxView ??= new VfxView
+        {
+            WorldToScreen = (pos, h) => _cam.WorldToScreen(pos, h, _previewWidth, _previewHeight),
+        };
+        _vfxView.Scope = _sb;
+        _vfxView.Device = _gd;
+        _vfxView.Flipbooks = _flipbooks ?? _emptyFlipbooks;
+        _vfxView.GlowTex = _glowTex!;
+        _vfxView.Zoom = CameraZoom;
+        _vfxView.Scatter = _scatter;
+        return _vfxView;
+    }
+    private static readonly Dictionary<string, Flipbook> _emptyFlipbooks = new();
+    private readonly Vector2[] _drainScatterPts = new Vector2[2];
+
+    /// <summary>Real spell effects (EffectManager) + the channel beams' looping
+    /// hit effect — both through SpellVfxDraw, identical to the game.</summary>
+    private void DrawRealEffects(VfxView view, int blendMode)
+    {
+        SpellVfxDraw.DrawEffects(view, _fx.Effects, blendMode);
+        if (_cachedSpell?.HitEffectFlipbook is { } fbRef)
+        {
+            foreach (var b in _beams)
+            {
+                if (!b.Alive) continue;
+                SpellVfxDraw.DrawFlipbookRefLoop(view, fbRef,
+                    new Vec2(b.EndPos.X, b.EndPos.Y), 1f, b.Elapsed, blendMode);
+            }
+        }
+    }
+
     /// <summary>
     /// Returns the render target texture for blitting to screen.
     /// </summary>
     public Texture2D? GetTexture() => _rt;
 
     // ========================================
-    // World-to-screen coordinate transform
+    // World-to-screen coordinate transform — the REAL Camera25D projection at
+    // a fixed frame (identical math to the game; camera Position is origin).
     // ========================================
     private Vector2 WorldToScreen(float wx, float wy)
-    {
-        float sx = _previewWidth * 0.5f + wx * CameraZoom;
-        float sy = _previewHeight * 0.5f + wy * CameraZoom * CameraYRatio;
-        return new Vector2(sx, sy);
-    }
+        => _cam.WorldToScreen(new Vec2(wx, wy), 0f, _previewWidth, _previewHeight);
 
     private Vector2 WorldToScreen(Vector2 worldPos) => WorldToScreen(worldPos.X, worldPos.Y);
 
     private Vector2 WorldToScreenWithHeight(float wx, float wy, float height)
-    {
-        var screen = WorldToScreen(wx, wy);
-        screen.Y -= height * CameraZoom * 0.5f;
-        return screen;
-    }
+        => _cam.WorldToScreen(new Vec2(wx, wy), height, _previewWidth, _previewHeight);
 
     // ========================================
     // Drawing helpers
     // ========================================
     private void DrawGround()
     {
-        // Draw a ground line
+        // Draw a ground line (grass-shaded so it reads on the green base)
         int groundY = (int)(_previewHeight * 0.5f + 0.8f * CameraZoom * CameraYRatio);
-        var groundColor = new Color(40, 45, 55);
+        var groundColor = new Color(60, 78, 30);
         Scope.Draw(_pixel, new Rectangle(0, groundY, _previewWidth, 1), groundColor);
 
         // Ground gradient below
         for (int i = 0; i < 30; i++)
         {
             float a = 1f - i / 30f;
-            var c = new Color(35, 38, 48) * (a * 0.3f);
+            var c = new Color(52, 68, 26) * (a * 0.3f);
             Scope.Draw(_pixel, new Rectangle(0, groundY + i, _previewWidth, 1), c);
         }
 
         // Grid dots
-        var gridColor = new Color(50, 55, 65, 60);
+        var gridColor = new Color(140, 160, 95, 80);
         for (float wx = -5f; wx <= 5f; wx += 1f)
         {
             var sp = WorldToScreen(wx, 0);
@@ -697,6 +809,11 @@ public class SpellPreview
             if (!p.Alive) continue;
             var screen = WorldToScreenWithHeight(p.Position.X, p.Position.Y, p.Height);
 
+            // ScatterGlow: one point emitter per projectile in flight — same
+            // registration as the game (DrawProjectilesHdr).
+            if (_scatter != null && _cachedSpell != null)
+                _scatter.AddSpellPoint(_cachedSpell, new Vec2(p.Position.X, p.Position.Y), height: p.Height);
+
             // Try flipbook rendering (matches Game1.DrawProjectilesHdr)
             if (!string.IsNullOrEmpty(p.FlipbookID) && _flipbooks != null &&
                 _flipbooks.TryGetValue(p.FlipbookID, out var fb) && fb.IsLoaded)
@@ -790,7 +907,10 @@ public class SpellPreview
                 {
                     var skyPos = new Vector2(screen.X - 20f, 5f);
                     LightningRenderer.AddBoltStripsStatic(_strips, skyPos, groundPos,
-                        s.Style, fade, _elapsed);
+                        s.Style, fade, _elapsed, widthScale: FxScale, seedSalt: s.Seed);
+                    if (_scatter != null)
+                        LightningRenderer.AddBoltScatterStatic(_scatter, skyPos, groundPos,
+                            s.Style, fade, FxScale, s.Seed, 0f, 0f, _elapsed);
 
                     // Impact glow
                     float radius = Math.Max(8f, s.AoeRadius * CameraZoom);
@@ -812,7 +932,10 @@ public class SpellPreview
             var startScreen = WorldToScreenWithHeight(z.StartPos.X, z.StartPos.Y, 1.5f);
             var endScreen = WorldToScreenWithHeight(z.EndPos.X, z.EndPos.Y, 1.0f);
             LightningRenderer.AddBoltStripsStatic(_strips, startScreen, endScreen,
-                z.Style, fade, _elapsed);
+                z.Style, fade, _elapsed, widthScale: FxScale, seedSalt: z.Seed);
+            if (_scatter != null)
+                LightningRenderer.AddBoltScatterStatic(_scatter, startScreen, endScreen,
+                    z.Style, fade, FxScale, z.Seed, z.StartPos.Y, z.EndPos.Y, _elapsed);
         }
     }
 
@@ -823,9 +946,13 @@ public class SpellPreview
             if (!b.Alive) continue;
             var startScreen = WorldToScreenWithHeight(b.StartPos.X, b.StartPos.Y, 1.5f);
             var endScreen = WorldToScreenWithHeight(b.EndPos.X, b.EndPos.Y, 1.0f);
-            float pulse = 1f + 0.3f * MathF.Sin(_elapsed * 8f);
+            // No width pulse — the game draws beams at constant width; the
+            // style's own flicker/jitter provide the life.
             LightningRenderer.AddBoltStripsStatic(_strips, startScreen, endScreen,
-                b.Style, 1f, _elapsed, widthScale: pulse);
+                b.Style, 1f, _elapsed, widthScale: FxScale, seedSalt: b.Seed);
+            if (_scatter != null)
+                LightningRenderer.AddBoltScatterStatic(_scatter, startScreen, endScreen,
+                    b.Style, 1f, FxScale, b.Seed, b.StartPos.Y, b.EndPos.Y, _elapsed);
         }
     }
 
@@ -840,10 +967,20 @@ public class SpellPreview
             // convention as LightningRenderer.Draw's drain loop.
             var casterScreen = WorldToScreenWithHeight(d.CasterPos.X, d.CasterPos.Y, 1.5f);
             var targetScreen = WorldToScreenWithHeight(d.TargetPos.X, d.TargetPos.Y, 1.0f);
-            LightningRenderer.AddDrainTendrilStripsStatic(_strips, casterScreen, targetScreen, d.Visuals, d.Elapsed);
-            LightningRenderer.AddDrainFlareSprites(_sb, _glowTex, casterScreen, targetScreen, d.Visuals, d.Elapsed);
+            // Scatter sheath along the drain line — same registration as the
+            // game's drain loop (LightningRenderer.Draw).
+            if (_scatter != null && d.Visuals.ScatterRadius > 0f)
+            {
+                _drainScatterPts[0] = casterScreen;
+                _drainScatterPts[1] = targetScreen;
+                _scatter.AddRibbonScreen(_drainScatterPts, d.Visuals.ScatterRadius,
+                    d.Visuals.ScatterRgb, d.Visuals.ScatterStrength,
+                    d.CasterPos.Y, d.TargetPos.Y);
+            }
+            LightningRenderer.AddDrainTendrilStripsStatic(_strips, casterScreen, targetScreen, d.Visuals, d.Elapsed, FxScale);
+            LightningRenderer.AddDrainFlareSprites(_sb, _glowTex, casterScreen, targetScreen, d.Visuals, d.Elapsed, FxScale);
             LightningRenderer.AddDrainCloudSprites(_sb, _glowTex, cloudFb, casterScreen, targetScreen,
-                d.Visuals, d.Elapsed);
+                d.Visuals, d.Elapsed, FxScale);
         }
     }
 
@@ -883,7 +1020,7 @@ public class SpellPreview
             Flipbook? impactFb = cloudFb;
             if (v.ImpactFlipbookID != "cloud03" && _flipbooks != null)
                 _flipbooks.TryGetValue(v.ImpactFlipbookID, out impactFb);
-            LightningRenderer.AddDrainImpactSprites(_sb, _glowTex, impactFb, casterScreen, targetScreen, v, d.Elapsed);
+            LightningRenderer.AddDrainImpactSprites(_sb, _glowTex, impactFb, casterScreen, targetScreen, v, d.Elapsed, FxScale);
         }
         _sb.End();
     }
@@ -920,50 +1057,20 @@ public class SpellPreview
         }
     }
 
-    private void DrawHitEffects()
+    // (DrawHitEffects/DrawHitGlows deleted — hit effects render through
+    // SpellVfxDraw.DrawEffects, identical to the game.)
+
+    /// <summary>Spawn a REAL effect from a FlipbookRef (hit/cast/summon) —
+    /// exactly the game's canonical EffectManager.SpawnFromRef path, with the
+    /// owning spell's scatter fields when it's an impact.</summary>
+    private void SpawnRealEffect(FlipbookRef? fb, Vector2 pos, bool impactScatter = false)
     {
-        foreach (var h in _hitEffects)
-        {
-            if (!h.Alive) continue;
-            float t = h.Timer / Math.Max(0.01f, h.Duration);
-            float fade = 1f - t;
-            var screen = WorldToScreen(h.Position);
-            int groundY = (int)(_previewHeight * 0.5f + 0.8f * CameraZoom * CameraYRatio);
-            screen.Y = groundY;
-
-            // Expanding ring
-            float radius = t * 15f * h.Scale;
-            DrawCircleOutline(screen, (int)radius, Core.ColorUtils.Fade(h.EffectColor, fade), 2);
-
-            // Core flash dot
-            float flashSize = (1f - t * t) * 4f * h.Scale;
-            Scope.Draw(_pixel, screen, null,
-                h.EffectColor * (fade * 0.7f),
-                0f, new Vector2(0.5f, 0.5f), flashSize, SpriteEffects.None, 0f);
-        }
-    }
-
-    /// <summary>
-    /// Draws radial glow for hit effects in the additive pass.
-    /// </summary>
-    private void DrawHitGlows()
-    {
-        foreach (var h in _hitEffects)
-        {
-            if (!h.Alive) continue;
-            float t = h.Timer / Math.Max(0.01f, h.Duration);
-            float fade = 1f - t;
-            var screen = WorldToScreen(h.Position);
-            int groundY = (int)(_previewHeight * 0.5f + 0.8f * CameraZoom * CameraYRatio);
-            screen.Y = groundY;
-
-            // Radial glow burst
-            float glowScale = (0.3f + t * 0.7f) * h.Scale * 0.6f;
-            byte alpha = (byte)(200 * fade);
-            Scope.Draw(_glowTex, screen, null,
-                new Color(h.EffectColor.R, h.EffectColor.G, h.EffectColor.B, alpha),
-                0f, new Vector2(32f, 32f), glowScale, SpriteEffects.None, 0f);
-        }
+        if (fb == null || _flipbooks == null) return;
+        float scatterRadius = impactScatter && _cachedSpell != null ? _cachedSpell.ScatterRadius * 1.6f : 0f;
+        _fx.SpawnFromRef(fb, new Vec2(pos.X, pos.Y), _flipbooks,
+            scatterRadius,
+            _cachedSpell?.ScatterRgb() ?? default,
+            _cachedSpell?.ScatterStrength ?? 1f);
     }
 
     // ========================================
@@ -1172,26 +1279,22 @@ public class SpellPreview
                 p.Position += perp * (currSwirl - prevSwirl);
             }
 
-            // Ground hit
-            if (p.Height <= 0f && p.VelocityZ < 0f)
+            // Impact. In the game most shots hit the TARGET UNIT'S body — the
+            // pure ballistic ground-landing overshoots the aim by many units
+            // when launched from hand height (equal-height solve), which in
+            // the preview flew the projectile far off-panel. Detonate like a
+            // unit collision: crossing the target at body height, or ground.
+            bool hitTarget = p.Position.X >= TargetX && p.Height <= 1.8f; // ~unit body height
+            bool hitGround = p.Height <= 0f && p.VelocityZ < 0f;
+            if (hitTarget || hitGround)
             {
-                p.Height = 0f;
+                if (hitGround) p.Height = 0f;
                 p.Alive = false;
 
-                // Spawn hit effect
-                Color hitColor = _cachedSpell?.HitEffectFlipbook != null
-                    ? _cachedSpell.HitEffectFlipbook.Color.ToColor()
-                    : p.ProjectileColor.ToColor();
-                float hitScale = _cachedSpell?.HitEffectFlipbook?.Scale ?? 1f;
-                _hitEffects.Add(new PreviewHitEffect
-                {
-                    Position = p.Position,
-                    Timer = 0f,
-                    Duration = 0.5f,
-                    Alive = true,
-                    EffectColor = hitColor,
-                    Scale = hitScale,
-                });
+                if (_cachedSpell?.HitEffectFlipbook != null)
+                    SpawnRealEffect(_cachedSpell.HitEffectFlipbook, p.Position, impactScatter: true);
+                else if (_cachedSpell != null && _cachedSpell.AoeRadius > 0f)
+                    _fx.SpawnExplosion(new Vec2(p.Position.X, p.Position.Y), _cachedSpell.AoeRadius);
             }
 
             if (p.Age > MaxProjectileAge)
@@ -1220,21 +1323,18 @@ public class SpellPreview
             }
             else
             {
+                // Strike LANDS on its first post-telegraph tick — the game
+                // fires the hit effect at the telegraph-elapse moment
+                // (LightningSystem.Update), not at the strike's visual end.
+                if (!s.HitFired)
+                {
+                    s.HitFired = true;
+                    if (_cachedSpell?.HitEffectFlipbook != null)
+                        SpawnRealEffect(_cachedSpell.HitEffectFlipbook, s.TargetPos, impactScatter: true);
+                }
                 s.EffectTimer += dt;
                 if (s.EffectTimer >= s.EffectDuration)
-                {
                     s.Alive = false;
-                    // Spawn hit effect
-                    _hitEffects.Add(new PreviewHitEffect
-                    {
-                        Position = s.TargetPos,
-                        Timer = 0f,
-                        Duration = 0.4f,
-                        Alive = true,
-                        EffectColor = s.Style.CoreColor.ToColor(),
-                        Scale = Math.Max(0.5f, s.AoeRadius * 0.1f + 0.5f),
-                    });
-                }
             }
 
             _strikes[i] = s;
@@ -1277,9 +1377,6 @@ public class SpellPreview
         (e, d) => { e.Timer += d; if (e.Timer >= e.Duration) e.Alive = false; return e; },
         e => e.Alive);
 
-    private void UpdateHitEffects(float dt) => AgeAndExpire(_hitEffects, dt,
-        (h, d) => { h.Timer += d; if (h.Timer >= h.Duration) h.Alive = false; return h; },
-        h => h.Alive);
 
     // ========================================
     // Scene state
@@ -1296,7 +1393,7 @@ public class SpellPreview
         _beams.Clear();
         _drains.Clear();
         _effects.Clear();
-        _hitEffects.Clear();
+        _fx.Clear();
         _remainingProjectiles = 0;
         _projectileTimer = 0f;
     }
@@ -1309,11 +1406,38 @@ public class SpellPreview
         if (_beams.Count > 0) return true;
         if (_drains.Count > 0) return true;
         if (_effects.Count > 0) return true;
-        if (_hitEffects.Count > 0) return true;
+        if (_fx.Effects.Count > 0) return true;
         if (_remainingProjectiles > 0) return true;
         return false;
     }
 
     private static float RandBipolar() => (_rand.Next(2001) - 1000) / 1000f;
     private static float RandUnit() => _rand.Next(1001) / 1000f;
+
+    /// <summary>Dev-server probe (spell editor preview_state) — internals dump.</summary>
+    internal string DevStateDump()
+    {
+        string fx0 = "null";
+        if (_fx.Effects.Count > 0)
+        {
+            var e = _fx.Effects[0];
+            bool loaded = _flipbooks != null && _flipbooks.TryGetValue(e.FlipbookKey, out var f) && f.IsLoaded;
+            fx0 = $"{{\"key\":\"{e.FlipbookKey}\",\"blend\":{e.BlendMode},\"age\":{e.Age:F2}," +
+                  $"\"life\":{e.Lifetime:F2},\"alive\":{(e.Alive ? 1 : 0)},\"loaded\":{(loaded ? 1 : 0)}," +
+                  $"\"tint\":[{e.Tint.R},{e.Tint.G},{e.Tint.B},{e.Tint.A}],\"x\":{e.Position.X:F1},\"y\":{e.Position.Y:F1}," +
+                  $"\"scale\":{e.ScaleCurve.Evaluate(0.5f):F2},\"hdrI\":{e.HdrIntensity:F2}}}";
+        }
+        string p0 = "null";
+        if (_projectiles.Count > 0)
+        {
+            var p = _projectiles[0];
+            p0 = $"{{\"x\":{p.Position.X:F2},\"y\":{p.Position.Y:F2},\"h\":{p.Height:F2}," +
+                 $"\"vx\":{p.Velocity.X:F2},\"vz\":{p.VelocityZ:F2},\"age\":{p.Age:F2},\"fb\":\"{p.FlipbookID}\"}}";
+        }
+        return $"{{\"p0\":{p0},\"playing\":{(_playing ? 1 : 0)},\"waitingReplay\":{(_waitingReplay ? 1 : 0)}," +
+           $"\"dirty\":{(_dirty ? 1 : 0)},\"elapsed\":{_elapsed:F2},\"spell\":\"{_currentSpellId}\"," +
+           $"\"projectiles\":{_projectiles.Count},\"strikes\":{_strikes.Count},\"zaps\":{_zaps.Count}," +
+           $"\"beams\":{_beams.Count},\"drains\":{_drains.Count},\"rings\":{_effects.Count}," +
+           $"\"fx\":{_fx.Effects.Count},\"remaining\":{_remainingProjectiles},\"fx0\":{fx0}}}";
+    }
 }
