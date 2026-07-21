@@ -67,24 +67,27 @@ compile-time forced through AnimResolver). Related gates: `Incap` (`IncapState`:
 ### `Necroking/Game1.Animation.cs` — the per-frame tick (`UpdateAnimations`)
 Owns `_unitAnims` (uid → `UnitAnimData{Ctrl,…}`; rebuilt by `RebuildUnitAnim`). Per unit:
 - **Corpse-interact branch** (CorpseInteractPhase != 0): drives WorkStart/Loop/End,
-  Pickup/Carry/PutDown by direct `ForceState`, bypassing both channels. **Anti-pattern
-  (egregious):** this branch also runs *gameplay* off `Ctrl.IsAnimFinished` — case 5
-  (PutDown) transfers the carried corpse into the table slot, removes it from the sim, and
-  fires `StartTableCraft` (spends essence + queues a zombie raise, commit `4f1e851`); cases
-  1-4 consume corpses on anim edges too. Craft start / corpse consumption should live on a
-  gameplay timer, not on `IsAnimFinished`. See anti-patterns-list.md.
+  Pickup/Carry/PutDown by direct `ForceState`, bypassing both channels. **Case 5 (PutDown)
+  is FIXED** — visual-only; the corpse transfer + `StartTableCraft` fire from a scheduled
+  sim task (`CorpsePutDownTask`, see anti-patterns.md Canonical resolution). **Cases 1-4
+  are STILL gameplay-coupled**: they advance the phase and consume corpses off
+  `Ctrl.IsAnimFinished` / the anim-tick `BaggingTimer` (const `BaggingDuration = 2.0f`
+  lives inline in this branch); case 3 fires `bc.Bagged = true` on the anim edge. See
+  anti-patterns-list.md.
 - **Archetype branch** (`Archetype > 0`): stamps the Combat override for `PendingAttack`
-  (`ResolvePendingAttackAnim`, compressed to the weapon cycle), stamps the **attack
-  pre-roll** override when `InCombat && AttackCooldown > 0` (so effect_time lands at
-  cooldown end — this RE-STAMPS EVERY FRAME while the condition holds), cancels a stale
-  attack swing once the unit moves and `!InCombat && PendingAttack.IsNone &&
-  PostAttackTimer<=0`, then `AnimResolver.Resolve`, then locomotion playback scaling
-  (`LocomotionScaling.ComputeLocomotionPlayback` — only for Walk/Jog/Run/Carry), then
-  `ctrl.Update`, `LungeSystem.Update`, `AnimInvariants.Check`.
+  (`ResolvePendingAttackAnim`, compressed to the weapon cycle). **The speculative attack
+  pre-roll is REMOVED** — attack anims start ONLY when a swing is actually queued
+  ("animation ⇔ committed attack"; the old pre-roll produced phantom windups vs fleeing
+  targets). Cancels a stale attack swing once the unit moves and `!InCombat &&
+  PendingAttack.IsNone && PostAttackTimer<=0`, then `AnimResolver.Resolve`, then locomotion
+  playback scaling (only for Walk/Jog/Run/Carry), `HoldAtEffectFrame` pin while
+  `ChannelTimer > 0` (AI beam channel), then `ctrl.Update`, `LungeSystem.Update`,
+  `AnimInvariants.Check`.
 - **Legacy branch** (`Archetype == 0`): priority chain in code order — InPhysics→Fall,
   Incap hold/recover, `Dodging`→Dodge, PendingAttack→attack anim, `HitReactTimer`→
-  BlockReact, `PostAttackTimer`→Block, pre-roll→Attack1/Block, GhostMode→Hover, else
-  gait from max(Velocity, PreferredVel) with Carry override.
+  BlockReact, `PostAttackTimer`→Block, combat stance Block while `InCombat &&
+  AttackCooldown > 0` (no pre-roll here either), GhostMode→Hover, else gait from the
+  centrally-picked loco tier with Carry override (Carry yields to a mid-cast necromancer).
 - Also here: `UpdateChanneledCast` (necromancer Imbue/Raise Start→Loop→Finish — drives
   the controller directly), `ComputeWeaponCycleSeconds`.
 
@@ -104,7 +107,8 @@ Enable when hunting "anim got weird N frames ago" bugs.
 - `Game/Simulation.cs` `AIForageGraze` — Action(Feeding) for boar grazing (sweep-driven).
 
 **OverrideAnim channel (via `AnimResolver.SetOverride`):**
-- `Game1.Animation.cs` — attack anim for PendingAttack; attack pre-roll (Combat, both).
+- `Game1.Animation.cs` — attack anim for PendingAttack (Combat). (The speculative attack
+  pre-roll override is removed — no override without a committed swing.)
 - `Game/DamageSystem.cs` — `ApplyHitReactAnim` → Combat(BlockReact) flinch, gated in ONE
   place (skips Incap/mid-jump, skips `Fleeing`/`Routing`/`FleeTimer>0`, skips
   `FlinchRefractoryTimer` window); death → Forced(Death) in `Apply` + `ApplyDirect`.
@@ -126,6 +130,10 @@ Enable when hunting "anim got weird N frames ago" bugs.
 - `Game1.Animation.cs` corpse-interact branch + `UpdateChanneledCast`; `Game1.Spells.cs`
   cast start (necromancer channels).
 - `GameRenderer.Corpses.cs` — corpse controllers (Death held at end), not live units.
+  NOTE these are get-or-created AND **ticked from the DRAW pass** (`DrawCorpses` does
+  `cad.Ctrl.Update(_clock.WorldDt)` once per Draw — lags under fixed-timestep catch-up),
+  and `Game1._corpseAnims` entries are never pruned when a corpse leaves the sim (only
+  session-Clear). Logged in anti-patterns-list.md.
 - Editor previews (`Editor/UnitEditorWindow.cs`, `WadingEditorPopup.cs`).
 
 ## Player (necromancer) cast-anim pipeline — the `_pendingCastAnim` machine
@@ -307,8 +315,10 @@ Who plays Standup:
 - **Incap/knockdown recovery** — `BuffSystem.TickBuffs` (`RecoverAnim`, buff field
   `incapRecoverAnim` in `Data/Registries/BuffRegistry.cs`), fatigue collapse in `Simulation`.
 - **Sleep-wake** — `AI/DeerHerdHandler.cs` `SleepWaking` (re-stamps `Combat(Standup)` every
-  frame; gates the AI transition on hardcoded `StandupDuration = 1.0f` consts, duplicated in
-  `AI/WolfPackHandler.cs` — divorced from the real clip length).
+  frame; the wait now derives from the real clip via `SubroutineSteps.StandupSeconds(ref ctx)`
+  — meta `TotalDurationMs`, 1s fallback for sprites without standup timing. The old
+  hardcoded per-handler `StandupDuration = 1.0f` consts and the dead `Unit.StandupTimer`
+  field are REMOVED).
 - **Jump abuse** — `NightfallPorts/RogueJump.cs` uses Standup **seeked to its MIDPOINT** as the
   takeoff spring (`SeekToMidpoint` = `CurrentAnimDurationMs * 0.5`) and Standup-from-frame-0 as
   the landing, and detects takeoff via the PlayOnceTransition exit edge. Any change to Standup's
@@ -352,14 +362,10 @@ yank the unit), and every waiter would end its lock one clip early.
 - **Movement and animation are independent channels** — an override replaces the walk
   clip but nothing stops `PreferredVel`, so the unit slides. Known slide-makers for a
   FLEEING archetype unit (deer): (1) melee-miss Dodge (`ResolveMeleeAttack`) has no
-  Fleeing gate, unlike the flinch; (2) the attack pre-roll re-stamps a Combat override
-  every frame while `InCombat && AttackCooldown>0` — and `EngagedTarget` (which derives
-  InCombat) is stamped onto ANY damaged unit whose `AIBehavior != FleeWhenHit` in
-  `DamageSystem.Apply/ApplyDirect`, so a hit fleeing deer with a wolf in melee range can
-  be pinned in attack/idle-fallback frames while running; DeerHerd only clears
-  EngagedTarget in `OnRoutineExit(FightBack)`; (3) a missing clip falls back to the
-  **Idle** frames while `CurrentState` stays e.g. Dodge — looks like "stuck idle while
-  moving".
+  Fleeing gate, unlike the flinch; (2) a missing clip falls back to the **Idle** frames
+  while `CurrentState` stays e.g. Dodge — looks like "stuck idle while moving". (The old
+  slide-maker #2 — the attack pre-roll re-stamping a Combat override every frame while
+  `InCombat && AttackCooldown>0` — is gone: the pre-roll was removed from both branches.)
 - **`RoutineAnim` is last-writer-holds** — a routine that sets `Action(Sit/Feeding)` must
   overwrite it (MoveToward/SetIdle do) on every later frame/exit or the pose sticks.
 - **Never write `OverrideAnim` raw** (internal setter enforces) and never pass raw

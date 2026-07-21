@@ -52,18 +52,27 @@ NOT anti-patterns (stay put per the exception): buff `RemainingDuration`, per-un
 arrays in `Simulation`, potion per-unit poison/paralysis timers, projectile/cloud TTLs,
 env respawn/trap timers, render-side TTLs, spell cooldown dictionaries (queryable state).
 
-# Standup duration hardcoded + dead field (found 2026-07-20)
+# FIXED — Standup duration hardcoded + dead field (found 2026-07-20, fixed)
 
-- **`Unit.StandupTimer` (`Movement/UnitModel.cs`) is write-only dead state** — set in 6 places
-  (`AI/DeerHerdHandler.cs`, `AI/WolfPackHandler.cs`, always to the local `StandupDuration`
-  const) and read by NOTHING. Remove it (or the writes) when next in those handlers.
-- **`StandupDuration = 1.0f` is duplicated as a private const in BOTH `DeerHerdHandler` and
-  `WolfPackHandler`** and is divorced from the real Standup clip length (the reanimation path
-  correctly derives its lock from `ctrl.GetTotalDurationSeconds(Standup)`). If the Standup clip
-  ever gets longer (e.g. the planned Standup+Standup2 stitch), the AI transitions out mid-anim.
-  Canonical fix direction: derive the timer from the clip (`AnimTiming.NaturalSeconds`) or fit
-  the anim to a designer duration (`AnimTiming.FitOneShot`) per the anti-patterns.md canonical
-  resolution — don't add a third copy of the const.
+The dead `Unit.StandupTimer` field and the duplicated per-handler `StandupDuration = 1.0f`
+consts are REMOVED. Both `AI/DeerHerdHandler.cs` and `AI/WolfPackHandler.cs` now derive the
+wake wait from the real clip via `SubroutineSteps.StandupSeconds(ref ctx)`
+(`AI/SubroutineSteps.cs` — meta `TotalDurationMs`, 1s fallback for sprites without Standup
+timing). Kept as the worked example of "derive AI wait from the clip, don't hardcode a
+duplicate const" (anti-patterns.md canonical resolution).
+
+# Corpse AnimControllers ticked from the DRAW pass + never pruned (found 2026-07-20)
+
+`GameRenderer.Corpses.cs` `DrawCorpses`: corpse controllers (`Game1._corpseAnims`, keyed by
+CorpseID) are get-or-created in the draw pass AND advanced there — `cad.Ctrl.Update(_g._clock.WorldDt)`
+runs once per Draw, not per sim tick, so corpse death-pose playback lags under fixed-timestep
+catch-up (multiple Updates per Draw) and double-advances if Draw ever runs twice per Update.
+Violates the "consuming/advancing sim-clock state on render frames" gameplay anti-pattern —
+cosmetic-only today (corpses hold the Death last frame), but any logic later hung off corpse
+anim completion would inherit the skew. Also: `_corpseAnims` entries are never pruned when a
+corpse leaves the sim — only the session-wide `_corpseAnims.Clear()` in `Game1.cs` — so a
+long session accumulates dead controllers. Fix direction: move the tick next to the unit anim
+tick in `Game1.Animation.cs` (WorldDt, once per update) and prune on corpse removal.
 
 # Swing-expiry window: melee and ranged stamp it from DIFFERENT sources (found 2026-07-19)
 
