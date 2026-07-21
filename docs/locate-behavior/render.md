@@ -513,13 +513,22 @@ instead of starting fresh.
 ### `Necroking/Render/EffectManager.cs` — general world visual-effect pool
 What lives here: the lightweight visual-effect system. `class Effect` is one timed visual
 (position, `Lifetime`, alpha/scale `BezierCurve`s, `Tint`, `HdrIntensity`, `FlipbookKey`,
-`BlendMode` 0=alpha/1=additive, `Alignment` 0=ground/1=upright). `class EffectManager`
-owns a `List<Effect>`, `Update(dt)` ages and culls them, and exposes the **spawn API**.
-These are pure visuals — no gameplay/sim state.
+`BlendMode` 0=alpha/1=additive, `Alignment` 0=ground/1=upright, `LoopFrames`/`FpsOverride`
+for frame playback, `ScatterRadius/Rgb/Strength` halo emitter fields, `TempRamp`).
+`class EffectManager` owns a `List<Effect>`, `Update(dt)` ages and culls them, and exposes
+the **spawn API**. These are pure visuals — no gameplay/sim state.
 Key members: `EffectManager.SpawnSpellImpact(pos, scale, tint, flipbookKey, hdrIntensity,
-blendMode, alignment, duration)` — the general "flipbook at a world point" spawn;
-`SpawnExplosion(pos, radius)`, `SpawnDustPuff(pos)` — preset one-liners; `Update`,
-`Clear`, `Effects` (read-only list); the `Effect` fields above.
+blendMode, alignment, duration, scatter…, temperatureRamp, loop, fpsOverride)` — the
+general "flipbook at a world point" spawn; `SpawnExplosion(pos, radius)`,
+`SpawnDustPuff(pos)` — preset one-liners; `Update`, `Clear`, `Effects` (read-only list).
+**`Update` is the ONE expiry site**: unconditional `Age += dt; if (Age >= Lifetime) remove`
+— every pooled effect dies (duration ≥ 0 is used verbatim; negative → 0.4s inside
+`SpawnSpellImpact`; NaN can't reach `Lifetime` because `duration >= 0f` is false for NaN).
+Ticked from `Game1.Animation.cs` `UpdateAnimations` on **`GameClock.WorldDt`** — effects
+freeze (don't expire) while paused or in an editor, and resume on unpause.
+The canonical FlipbookRef→spawn wrapper is `Game1.Spells.cs` `SpawnFlipbookEffect`
+(honors the ref's `Duration`/`Loop`/`FPS`/temperature ramp: Duration -1 = one playthrough
+at the effective FPS, or 0.4s when looping — a loop has no natural length).
 Look/edit here when: adding a **new kind** of generic visual effect, adding a new `SpawnX`
 preset, or changing how effects fade/scale/age. **New effect-spawn methods go here.**
 `SpawnDustPuff(Vec2 pos)` is the ready-made dust preset (0.5s life, brown tint, no
@@ -823,15 +832,22 @@ and disables the wake bake with a startup log.
   `Materials.HdrAdditive` (HdrSprite.fx, Additive), tint `HdrColor.ToHdrVertex` (true HDR).
 - `GameRenderer.World.cs` `DrawEffectsFiltered` — EffectManager one-shots (`eff.FlipbookKey`:
   spell impacts, cast flares, summon effects), `Materials.HdrAlpha`/`HdrAdditive` per
-  `BlendMode`, `ToHdrVertexAlpha`/`ToHdrVertex` (true HDR). NOTE `SpellDef.HitEffectFlipbook`
-  is consumed ONLY by the projectile/potion impact path (`SpawnProjectile`/`PotionSystem`
-  copy → `ImpactEvent` → `SpawnImpactEffects`); Strike/Beam/Drain "hit" visuals are the
-  LightningSystem's own fields (`DrainImpactFlipbook`→`ImpactFlipbookID`, endpoint flares
-  drawn statelessly per frame in `LightningRenderer` while the beam lives — the
-  pattern for a looping channel-end effect); Buff/Summon/Cloud ignore HitEffectFlipbook.
-  EffectManager has NO loop/kill-early/follow semantics — `Lifetime` only (duration -1 =
-  0.4s fallback in `SpawnSpellImpact`/`SpawnFlipbookEffect`, NOT "one full playthrough"
-  despite the FlipbookRef tooltip), frames via looping `GetFrameAtTime(Age)`.
+  `BlendMode`, `ToHdrVertexAlpha`/`ToHdrVertex` (true HDR); fog-of-war gated; registers a
+  ScatterGlow halo per effect. **Since a3cfd1a `SpellDef.HitEffectFlipbook` is the standard
+  hit splash for EVERY category** — spawn sites: projectile impacts (`Game1.Spells.cs`
+  `SpawnProjectileImpactEffects`, consumed once per tick right after `_sim.Tick`; spell
+  projectiles route through the def via `SpawnFlipbookEffect`, potions keep the legacy
+  field-copy), strike land (`LightningSystem.Update` telegraph-elapse, one-shot guarded by
+  `DamageApplied`), zap hit + cloud burst (`SpellEffectSystem.ExecuteStrikeFrom`/
+  `ExecuteCloud`). **Channel beams are different**: `DrawBeamHitEffects` draws the hit
+  effect STATELESSLY per frame off live `_sim.Lightning.Beams` records (frame clock =
+  `beam.Elapsed`; Loop cycles, off plays once + holds last frame) — it lives exactly as
+  long as `beam.Alive`. Drain "hit" visuals stay the LightningSystem's own fields
+  (`DrainImpactFlipbook`→`ImpactFlipbookID`, drawn statelessly in `LightningRenderer`
+  while the drain lives). Frame playback in `DrawEffectsFiltered`: `LoopFrames` cycles via
+  `(Age*fps) % TotalFrames`, one-shots map the clip once onto the Lifetime via
+  `GetFrameAtNormalizedTime`; missing/unloaded `FlipbookKey` falls back to a tinted
+  `_glowTex` soft round glow (what a dangling flipbook id looks like in-game).
 - `Render/BuffVisualSystem.cs` — ground auras / orbitals / unit-effect flipbooks via the raw
   Scene batch (AlphaBlend, `EncodeColor` LDR island); EXCEPTION `DrawAttachedFlames` →
   `Materials.HdrAdditive` YSort items (true HDR).

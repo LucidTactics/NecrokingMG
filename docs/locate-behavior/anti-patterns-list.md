@@ -160,13 +160,30 @@ OutlineFlat.fx dilation union. At wide radii the preview shows the faceted multi
 look the game no longer has. Preview-only fidelity issue (the preview has no sprite
 texture to dilate); at minimum single-source the pulse math if either side is touched.
 
-# RemoveCastingBuffAll strips ANY weapon-particle buff, not just casting buffs (latent, found 2026-07-20)
+# FIXED — RemoveCastingBuffAll strips ANY weapon-particle buff, not just casting buffs (found 2026-07-20, fixed)
 
-`Necroking/Game1.Spells.cs` `RemoveCastingBuffAll` — doc-comment says "buff_4 variants"
-but the predicate is `def.HasWeaponParticle`. Benign today (casting effects are the only
-weapon-particle buffs), but the first non-casting weapon-particle buff (e.g. a flaming
-weapon enchant) will be silently removed at every cast end. Fix direction: tag casting
-buffs explicitly (id prefix or a `IsCastingEffect` flag) and match on that.
+`Necroking/Game1.Spells.cs` `RemoveCastingBuffAll` now matches via `IsCastingBuff` — a
+buff is a casting effect iff some spell references it as `CastingBuffID` (or it's the
+table-channel glow); `HasWeaponParticle` is explicitly no longer the test (verified
+2026-07-21 while auditing effect lifetimes).
+
+# Immortal zero-tick corpse drains + unlimited-by-default channels (latent, found 2026-07-21)
+
+`Necroking/Game/LightningSystem.cs` `Update`, drain loop: for a **corpse-targeted** drain
+(`TargetCorpseIdx >= 0`) the ONLY kill paths besides caster invalidation are (a)
+`MaxDuration` — whose spell default `drainMaxDuration`/`beamMaxDuration` is **0 =
+unlimited** — and (b) pool exhaustion / missing corpse, which are checked **only inside
+the damage-tick loop**, gated `d.DamagePerTick > 0 || zeroTicks` where `zeroTicks`
+deliberately excludes corpse drains. So a corpse drain with `DamagePerTick <= 0` (the
+documented "visual-only sentinel" `-1`, used by the `spawn_lightning drain` dev verb)
+**never ticks and never dies** unless the caster dies/cancels — its stateless per-frame
+visuals (`LightningRenderer` impact flares + cloud puffs at the corpse) persist forever.
+Same shape for beams: `MaxDuration 0` beams (incl. the `beam <spellID> <selector>` dev
+verb, which nothing releases) live indefinitely via the retarget hop, and
+`GameRenderer.World.cs` `DrawBeamHitEffects` draws their hit effect statelessly per frame
+for as long as `beam.Alive`. Principle: **anything drawn statelessly off a live record
+needs a guaranteed-finite record lifetime**; audit every `Spawn{Beam,Drain,Zap}` caller's
+duration when adding new channel visuals.
 
 # FIXED — Wrong-list weapon lookup for ranged pending attacks (found 2026-07-19, fixed 2026-07-21)
 
