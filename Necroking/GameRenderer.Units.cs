@@ -61,6 +61,12 @@ partial class GameRenderer
         result.TipHeight = unitHeight - wpf.Tip.Y * worldScale;
         result.TipBehind = wpf.Tip.Behind;
 
+        // Away-facing rows (NE/N/NW — the AnimController NewSectors compass:
+        // normalized 202.5°..337.5°): the hand is usually behind the body, so
+        // hand-anchored buff particles force Behind (see WeaponAttachRuntime).
+        float facingNorm = ((_g._sim.Units[unitIdx].FacingAngle % 360f) + 360f) % 360f;
+        result.FacingAway = facingNorm >= 202.5f && facingNorm < 337.5f;
+
         result.Valid = true;
         return result;
     }

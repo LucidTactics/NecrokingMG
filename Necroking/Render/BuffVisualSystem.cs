@@ -31,6 +31,11 @@ public struct WeaponAttachRuntime
     public float TipHeight;
     public bool HiltBehind;
     public bool TipBehind;
+    /// <summary>Unit is facing NE/N/NW (away from the camera). The casting
+    /// hand is usually obscured behind the body on those rows, so hand-anchored
+    /// particles (attached flames, weapon-particle spawns) force Behind — an
+    /// effect floating over the middle of the unit's back reads wrong.</summary>
+    public bool FacingAway;
     public bool Valid;
 }
 
@@ -293,7 +298,8 @@ public class BuffVisualSystem
                     weaponAttach.HiltWorld.X + (weaponAttach.TipWorld.X - weaponAttach.HiltWorld.X) * ft,
                     weaponAttach.HiltWorld.Y + (weaponAttach.TipWorld.Y - weaponAttach.HiltWorld.Y) * ft);
                 flame.Height = weaponAttach.HiltHeight + (weaponAttach.TipHeight - weaponAttach.HiltHeight) * ft;
-                flame.Behind = ft < 0.5f ? weaponAttach.HiltBehind : weaponAttach.TipBehind;
+                flame.Behind = weaponAttach.FacingAway
+                    || (ft < 0.5f ? weaponAttach.HiltBehind : weaponAttach.TipBehind);
                 if (state.Particles.Count == 0) state.Particles.Add(flame);
                 else state.Particles[0] = flame;
                 if (state.Particles.Count > 1) // leftovers from a live mode switch in the editor
@@ -320,7 +326,8 @@ public class BuffVisualSystem
                             weaponAttach.HiltWorld.Y + (weaponAttach.TipWorld.Y - weaponAttach.HiltWorld.Y) * t),
                         Height = weaponAttach.HiltHeight + (weaponAttach.TipHeight - weaponAttach.HiltHeight) * t,
                         Age = 0f,
-                        Behind = t < 0.5f ? weaponAttach.HiltBehind : weaponAttach.TipBehind
+                        Behind = weaponAttach.FacingAway
+                            || (t < 0.5f ? weaponAttach.HiltBehind : weaponAttach.TipBehind)
                     };
                     state.Particles.Add(p);
                 }
