@@ -49,6 +49,12 @@ public static class BuffSystem
                     GrantMaxHpDelta(units, unitIdx, def); // one more stack of +MaxHP → real HP
                 }
                 b.RemainingDuration = durationSeconds;
+                // Re-derive Permanent on refresh: re-applying a duration<=0
+                // ("permanent until removed") buff onto a live timed instance —
+                // e.g. recasting mid fade-out — must make it permanent again,
+                // not leave RemainingDuration<=0 to be deleted next tick.
+                b.Permanent = durationSeconds <= 0f;
+                b.FadeDuration = def.FadeOutSeconds;
                 buffs[i] = b;
                 return;
             }
@@ -72,6 +78,7 @@ public static class BuffSystem
             Effects = def.Effects,
             StackCount = 1,
             Permanent = durationSeconds <= 0f,
+            FadeDuration = def.FadeOutSeconds,
         });
 
         // A +MaxHP buff is a REAL, larger health pool: grant the added MaxHP as

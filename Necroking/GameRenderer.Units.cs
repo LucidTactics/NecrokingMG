@@ -380,7 +380,8 @@ partial class GameRenderer
         if (_g._sim.Units[i].Faction != Faction.Undead && !_g._fogOfWar.IsVisible(_g._sim.Units[i].Position))
             return;
         _g._buffVisuals.DrawAttachedFlames(_g._sim.Units[i].Id, behind, _g.Scope,
-            _g._camera, _g._renderer, _g._flipbooks, _g._gameData.Buffs);
+            _g._camera, _g._renderer, _g._flipbooks, _g._gameData.Buffs,
+            _g._sim.Units[i].ActiveBuffs);
     }
 
     private void DrawSingleUnit(SpriteScope scope, int i)

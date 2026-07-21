@@ -19,6 +19,12 @@ public struct ActiveBuff
     public bool Permanent;
     public List<BuffEffect> Effects;
     public int StackCount;
+    /// <summary>Visual fade window (from BuffDef.FadeOutSeconds, captured at
+    /// apply). When non-permanent and RemainingDuration falls inside this
+    /// window, buff visuals draw at RemainingDuration/FadeDuration alpha —
+    /// the buff's own lifetime timer doubles as the fade clock. 0 = no fade
+    /// (visuals vanish with the buff, the old behavior).</summary>
+    public float FadeDuration;
 }
 
 /// <summary>

@@ -646,7 +646,7 @@
       "damage": 25,
       "aoeRadius": 3,
       "hitEffectFlipbook": {
-        "flipbookID": "radial_glow",
+        "flipbookID": "",
         "fps": 0,
         "scale": 1.75,
         "color": {
@@ -718,9 +718,9 @@
       "armorNegating": true,
       "damage": 12,
       "hitEffectFlipbook": {
-        "flipbookID": "",
+        "flipbookID": "curly_lightning_03_copy",
         "fps": 0,
-        "scale": 1,
+        "scale": 1.5,
         "color": {
           "r": 255,
           "g": 255,
@@ -729,7 +729,7 @@
           "intensity": 1
         },
         "rotation": 0,
-        "blendMode": "Alpha",
+        "blendMode": "Additive",
         "alignment": "Ground",
         "duration": -1
       },
@@ -790,6 +790,23 @@
       "armorNegating": true,
       "defenseNegating": false,
       "damage": 1,
+      "hitEffectFlipbook": {
+        "flipbookID": "curly_lightning_03_copy",
+        "fps": 24,
+        "scale": 1.2,
+        "color": {
+          "r": 150,
+          "g": 220,
+          "b": 255,
+          "a": 255,
+          "intensity": 3
+        },
+        "rotation": 0,
+        "blendMode": "Additive",
+        "alignment": "Upright",
+        "duration": -1,
+        "loop": true
+      },
       "beamTickRate": 0.5,
       "beamDisplacement": 0.15,
       "beamCoreWidth": 1,
