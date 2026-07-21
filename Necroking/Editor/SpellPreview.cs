@@ -26,9 +26,11 @@ public class SpellPreview
     private const float DefaultSpeed = ProjectileManager.MagicSpeed;
     private const float PI = MathF.PI;
 
-    // Scene layout (world units)
-    private const float CasterX = -3.0f;
-    private const float TargetX = 3.0f;
+    // Scene layout: caster/target sit at ±30% of the panel width from center
+    // (world units follow the panel size, so a wide preview pane spreads the
+    // scene out instead of cramping the flight into the middle).
+    private float CasterX => -0.30f * _previewWidth / CameraZoom;
+    private float TargetX => 0.30f * _previewWidth / CameraZoom;
     // Camera: maps world to preview pixels
     private const float CameraZoom = 35.0f;
     private const float CameraYRatio = 0.5f;
