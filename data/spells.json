@@ -1496,8 +1496,9 @@
         "g": 70,
         "b": 255,
         "a": 255,
-        "intensity": 1.5
-      }
+        "intensity": 2
+      },
+      "cloudArcScatterRadius": 1.5
     },
     {
       "name": "Poison Burst",

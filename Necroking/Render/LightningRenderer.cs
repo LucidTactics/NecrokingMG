@@ -149,9 +149,29 @@ public class LightningRenderer
                 zap.StartPos.Y, zap.EndPos.Y);
         }
 
-        // (Flipbook arcs draw via DrawSingleArcFx as Y-sorted world callbacks —
+        // Flipbook arcs draw via DrawSingleArcFx as Y-sorted world callbacks —
         // see GameRenderer.Units CollectYSortItems — NOT in this ribbons pass,
-        // so cloud puffs south of an arc occlude it.)
+        // so cloud puffs south of an arc occlude it. Only their ScatterGlow
+        // sheath (lit air around the bolt) registers here: the scatter overlay
+        // composes screen-wide, so it needs no Y-sorting.
+        if (_game._scatterGlow.Active)
+        {
+            foreach (var arc in _sim.Lightning.ArcFx)
+            {
+                if (arc.ScatterRadius <= 0f) continue;
+                // Strength envelope tracks the flipbook's life: full through the
+                // bright frames, out with the sheet's trailing dissipation frames.
+                float t = arc.Timer / MathF.Max(arc.Duration, 0.001f);
+                float env = MathF.Min(1f, (1f - t) * 3f);
+                if (env <= 0.01f) continue;
+                _arcScatterPts[0] = _renderer.WorldToScreen(arc.StartPos, arc.StartHeight, _camera);
+                _arcScatterPts[1] = _renderer.WorldToScreen(arc.EndPos, arc.EndHeight, _camera);
+                var c = arc.Color.ToColor();
+                _game._scatterGlow.AddRibbonScreen(_arcScatterPts, arc.ScatterRadius,
+                    new Color(c.R, c.G, c.B), arc.ScatterStrength * env,
+                    arc.StartPos.Y, arc.EndPos.Y);
+            }
+        }
 
         // Draw active beams
         foreach (var beam in _sim.Lightning.Beams)
@@ -230,6 +250,8 @@ public class LightningRenderer
     private static readonly List<Vector2> _barPts = new();
     // Scratch for the drain scatter sheath endpoints (render thread only).
     private readonly Vector2[] _drainScatterPts = new Vector2[2];
+    // Scratch for the flipbook-arc scatter sheath endpoints (render thread only).
+    private readonly Vector2[] _arcScatterPts = new Vector2[2];
 
     /// <summary>Screen-space endpoints for a drain: caster hand anchor (sprite
     /// height convention, no YRatio foreshortening — same as the beam) and the

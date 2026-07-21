@@ -1067,6 +1067,14 @@ public class SpellDef : INamedDef
     [EditorField(Label = "Arc Width x", Group = "CLOUD", Order = 849, Step = 0.05f, Decimals = 2, Tooltip = "Width multiplier on the frame's natural aspect ratio.")]
     [JsonPropertyName("cloudArcWidthScale")] public float CloudArcWidthScale { get; set; } = 1.0f;
 
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Arc Scatter R", Group = "CLOUD", Order = 850, Step = 0.1f, Decimals = 1, Tooltip = "Lit-air sheath radius around each arc, world units. 0 = off.")]
+    [JsonPropertyName("cloudArcScatterRadius")] public float CloudArcScatterRadius { get; set; }
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Arc Scatter Str", Group = "CLOUD", Order = 851, Step = 0.05f, Decimals = 2, Tooltip = "Lit-air sheath strength (tinted from Arc Color).")]
+    [JsonPropertyName("cloudArcScatterStrength")] public float CloudArcScatterStrength { get; set; } = 0.7f;
+
     // ============ SACRIFICE ============
     // Sacrifice the friendly undead nearest the cursor: it dies (crumbles into a
     // corpse) and the caster is healed by HealFlat + HealPercent × the victim's

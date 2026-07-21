@@ -65,6 +65,8 @@ public class PoisonCloud
     public float ArcDuration = 0.45f;
     public float ArcWidthScale = 1f;
     public HdrColor ArcColor = new(255, 255, 255, 255, 3f);
+    public float ArcScatterRadius;
+    public float ArcScatterStrength = 0.7f;
     public float ArcTimer;
     // Optional per-puff color mix (see SpellDef.CloudPalette). Shared REFERENCE to the
     // registry def's list — read-only, never mutate. Null/empty = derived ring shades.
@@ -159,6 +161,8 @@ public class PoisonCloudSystem
             ArcDuration = spell.CloudArcDuration,
             ArcWidthScale = spell.CloudArcWidthScale,
             ArcColor = spell.CloudArcColor,
+            ArcScatterRadius = spell.CloudArcScatterRadius,
+            ArcScatterStrength = spell.CloudArcScatterStrength,
             ArcTimer = spell.CloudArcInterval * (float)_rng.NextDouble(), // desync multiple clouds
         });
     }
@@ -234,7 +238,9 @@ public class PoisonCloudSystem
                         lightning.SpawnArcFx(a, b, cloud.ArcDuration, cloud.ArcFlipbookID,
                             cloud.ArcColor, cloud.ArcWidthScale, flipV: _rng.Next(2) == 0,
                             startHeight: hA, endHeight: hB,
-                            sortYBias: cloud.CurrentRadius * 0.9f);
+                            sortYBias: cloud.CurrentRadius * 0.9f,
+                            scatterRadius: cloud.ArcScatterRadius,
+                            scatterStrength: cloud.ArcScatterStrength);
                         break;
                     }
                 }

@@ -112,6 +112,11 @@ public class ActiveArcFx
     /// mid-pack — in front of some puffs, behind others. Same idea as the
     /// additive glow puffs' FrontSortBias.</summary>
     public float SortYBias;
+    /// <summary>ScatterGlow sheath along the arc (0 = none) — lit air around
+    /// the bolt, tinted from Color's RGB. World units, same convention as
+    /// LightningStyle.ScatterRadius.</summary>
+    public float ScatterRadius;
+    public float ScatterStrength = 0.7f;
 }
 
 public class ActiveBeam
@@ -322,14 +327,16 @@ public class LightningSystem
     public void SpawnArcFx(Vec2 start, Vec2 end, float duration, string flipbookID,
                            HdrColor color, float widthScale = 1f, bool flipV = false,
                            float startHeight = 0f, float endHeight = 0f,
-                           float sortYBias = 0f)
+                           float sortYBias = 0f,
+                           float scatterRadius = 0f, float scatterStrength = 0.7f)
     {
         _arcFx.Add(new ActiveArcFx
         {
             StartPos = start, EndPos = end, Duration = duration,
             FlipbookID = flipbookID, Color = color, WidthScale = widthScale,
             FlipV = flipV, StartHeight = startHeight, EndHeight = endHeight,
-            SortYBias = sortYBias
+            SortYBias = sortYBias,
+            ScatterRadius = scatterRadius, ScatterStrength = scatterStrength
         });
     }
 
