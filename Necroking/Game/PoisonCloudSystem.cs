@@ -219,10 +219,12 @@ public class PoisonCloudSystem
             // the renderer — draw code also runs on paused frames). Window: from
             // HALFWAY through the eruption (the cloud body is ~75% grown by then
             // — waiting for the full eruption read as the crackle arriving late)
-            // until the decay fade-out starts.
+            // until 0.4s BEFORE the decay fade-out starts — arcs live ~0.9s now,
+            // so a spawn right at the decay edge crackled well into the fading
+            // gas; the early cutoff lets the last arcs finish as decay begins.
             if (lightning != null && cloud.ArcFlipbookID.Length > 0 && cloud.ArcInterval > 0.01f
-                && cloud.Phase != CloudPhase.Decay
-                && cloud.Age >= cloud.EruptionDuration * 0.5f)
+                && cloud.Age >= cloud.EruptionDuration * 0.5f
+                && cloud.Age < cloud.EruptionDuration + cloud.SpreadDuration - 0.4f)
             {
                 cloud.ArcTimer -= dt;
                 if (cloud.ArcTimer <= 0f)
