@@ -61,8 +61,10 @@ public static class CorpseInteractionManager
                 var c = sim.CorpsesMut[bestIdx];
                 c.LerpStartPos = c.Position;
                 sim.UnitsMut[necroIdx].CarryingCorpseID = c.CorpseID;
-                sim.UnitsMut[necroIdx].CorpseInteractPhase = 4; // Pickup
                 c.DraggedByUnitID = nu.Id;
+                // Enters the Pickup visual AND schedules the carry handoff on the
+                // sim clock — completion never waits on the anim reporting finished.
+                Necroking.Game1.Instance?.BeginCorpsePickup(necroIdx, c.CorpseID);
             }
             return;
         }
@@ -84,8 +86,9 @@ public static class CorpseInteractionManager
             var c = sim.CorpsesMut[bestBaggedIdx];
             c.LerpStartPos = c.Position;
             sim.UnitsMut[necroIdx].CarryingCorpseID = c.CorpseID;
-            sim.UnitsMut[necroIdx].CorpseInteractPhase = 4; // Pickup
             c.DraggedByUnitID = nu.Id;
+            // Pickup phase + sim-clock completion, same as the raw-carry path above.
+            Necroking.Game1.Instance?.BeginCorpsePickup(necroIdx, c.CorpseID);
             return;
         }
 

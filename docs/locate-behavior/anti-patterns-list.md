@@ -19,14 +19,17 @@ gameplay-critical logic inside the animation tick, gated on `animData.Ctrl.IsAni
   duration and merely reflects it. Both the table-load and the ground-drop go through this.
   The imbue-table craft loop is fitted to `ProcessTime` via `AnimTiming.FitChannel`. This is
   the worked example for the **[Canonical resolution](anti-patterns.md)** — copy it.
-- **case 4 (Pickup)** and **cases 1/2/3 (WorkStart/Loop/End bagging) — STILL COUPLED.** They
-  still advance `CorpseInteractPhase` and consume corpses off `IsAnimFinished` / the anim-tick
-  `BaggingTimer >= BaggingDuration` (const `2.0f`). Bagging's payload (`bc.Bagged = true`) still
-  fires in case 3 on `IsAnimFinished`; note case 2 is shared with handler-driven trap building,
-  so converting it touches AI handlers. Fix the same way when you're next in here: schedule the
-  phase payloads via `_sim.Tasks` (`ScheduledTask` subclasses) and fit the anim via `AnimTiming`
-  (see the canonical resolution). Don't fix one and leave the matched pair — that's a sync-bug
-  waiting to happen.
+- **case 4 (Pickup) and cases 1/2/3 (WorkStart/Loop/End) — FIXED 2026-07-21.** The anim
+  branch is now a pure mirror of `CorpseInteractPhase`; no `IsAnimFinished` gates remain.
+  The phase clocks moved to gameplay, matched-pair-consistent across both consumers:
+  - `AI/WorkRoutine.cs` now owns the 1→2 and 3→0 transitions itself (BuildTimer on ctx.Dt
+    vs the clip's natural length via `AnimMetaLoader.ClipSeconds` — meta-driven, runs
+    headless, picks the ImbueTable variants when `CraftTableIdx >= 0`).
+  - Player bagging runs in `Simulation.TickCorpseBagging` (sim clock; `CorpseBagSeconds`
+    const; feeds `BaggingProgress`; fires `bc.Bagged` at the end of the WorkEnd window).
+  - Pickup completes via `CorpsePickupTask` / `Game1.BeginCorpsePickup` /
+    `CompleteCorpsePickup` (Game1.Crafting.cs) — the PutDown pattern's mirror, entered
+    from `CorpseInteractionManager` and the corpse-pile withdraw in `Game1.cs`.
 
 # Hand-ticked countdown fields on persistent objects (port to ScheduledTasks)
 
@@ -61,18 +64,13 @@ wake wait from the real clip via `SubroutineSteps.StandupSeconds(ref ctx)`
 timing). Kept as the worked example of "derive AI wait from the clip, don't hardcode a
 duplicate const" (anti-patterns.md canonical resolution).
 
-# Corpse AnimControllers ticked from the DRAW pass + never pruned (found 2026-07-20)
+# FIXED — Corpse AnimControllers ticked from the DRAW pass + never pruned (found 2026-07-20, fixed 2026-07-21)
 
-`GameRenderer.Corpses.cs` `DrawCorpses`: corpse controllers (`Game1._corpseAnims`, keyed by
-CorpseID) are get-or-created in the draw pass AND advanced there — `cad.Ctrl.Update(_g._clock.WorldDt)`
-runs once per Draw, not per sim tick, so corpse death-pose playback lags under fixed-timestep
-catch-up (multiple Updates per Draw) and double-advances if Draw ever runs twice per Update.
-Violates the "consuming/advancing sim-clock state on render frames" gameplay anti-pattern —
-cosmetic-only today (corpses hold the Death last frame), but any logic later hung off corpse
-anim completion would inherit the skew. Also: `_corpseAnims` entries are never pruned when a
-corpse leaves the sim — only the session-wide `_corpseAnims.Clear()` in `Game1.cs` — so a
-long session accumulates dead controllers. Fix direction: move the tick next to the unit anim
-tick in `Game1.Animation.cs` (WorldDt, once per update) and prune on corpse removal.
+`Game1.Animation.cs` `TickCorpseAnims` (called at the top of `UpdateAnimations`, WorldDt)
+now advances corpse controllers on the update pass, owns the Fall→Death landing snap, and
+prunes `_corpseAnims` entries whose corpse left the sim. `GameRenderer.Corpses.cs`
+`DrawCorpses` only lazily CREATES controllers for visible corpses and reads them. Kept as
+the worked example of "draw passes must not advance state".
 
 # Swing-expiry window: melee and ranged stamp it from DIFFERENT sources (found 2026-07-19)
 
@@ -170,12 +168,10 @@ weapon-particle buffs), but the first non-casting weapon-particle buff (e.g. a f
 weapon enchant) will be silently removed at every cast end. Fix direction: tag casting
 buffs explicitly (id prefix or a `IsCastingEffect` flag) and match on that.
 
-# Wrong-list weapon lookup for ranged pending attacks (latent, found 2026-07-19)
+# FIXED — Wrong-list weapon lookup for ranged pending attacks (found 2026-07-19, fixed 2026-07-21)
 
-`Game1.Animation.cs` `ComputeWeaponCycleSeconds(unitIdx, weaponIdx)` and
-`Simulation.GetAttackAnimDurationSec(unitIdx, weaponIdx)` both index
-`Stats.MeleeWeapons[weaponIdx]` unconditionally — but when `PendingWeaponIsRanged` is
-true, `PendingWeaponIdx` indexes `Stats.RangedWeapons`. Callers pass the ranged idx in
-(archetype attack-override block, line ~606). Benign today only because the OOB/mismatch
-falls back to defaults (1 round / 1.0s); becomes a real bug for any unit with both weapon
-lists. Both helpers need an `isRanged` parameter.
+`Game1.Animation.cs` `ComputeWeaponCycleSeconds(unitIdx, weaponIdx, isRanged)` and
+`Simulation.GetAttackAnimDurationSec(unitIdx, weaponIdx, isRanged)` now take the flag; the
+archetype attack-override block passes `PendingWeaponIsRanged`. Ranged cycles come from
+`Stats.RangedCooldownTime[weaponIdx]` (seconds — the same clock RangedUnitHandler locks
+between shots), ranged anim names from `Stats.RangedWeapons[weaponIdx].AnimName`.

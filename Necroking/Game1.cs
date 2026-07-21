@@ -371,8 +371,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         var c = _sim.FindCorpseByID(cid);
         if (c != null) c.LerpStartPos = pilePos;
         _sim.UnitsMut[necroIdx].CarryingCorpseID = cid;
-        _sim.UnitsMut[necroIdx].CorpseInteractPhase = 4; // Pickup
         if (c != null) c.DraggedByUnitID = nu.Id;
+        // Pickup phase + sim-clock completion (never waits on the anim finishing).
+        BeginCorpsePickup(necroIdx, cid);
         return true;
     }
 
@@ -3491,10 +3492,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // --- Update animations (scaled by timeScale so they match game speed) ---
-        // WORLD domain: UpdateAnimations isn't just visual — it drives the corpse-
-        // interaction state machine, resolves pending attacks / spell casts on anim
-        // action-frames, ticks jump/incap and death-fog corruption. Editors and pause
-        // must freeze all of it (the map-editor corruption-spread bug lived here).
+        // WORLD domain: UpdateAnimations isn't just visual — it resolves pending
+        // attacks / spell casts on anim action-frames, ticks jump/incap and death-fog
+        // corruption. Editors and pause must freeze all of it (the map-editor
+        // corruption-spread bug lived here). The corpse-interaction phases themselves
+        // advance on the sim clock (WorkRoutine / TickCorpseBagging / pickup+putdown
+        // tasks); the anim branch only mirrors them.
         UpdateAnimations(_clock.WorldDt);
 
         // --- Update damage numbers ---

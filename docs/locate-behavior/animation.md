@@ -66,14 +66,14 @@ compile-time forced through AnimResolver). Related gates: `Incap` (`IncapState`:
 
 ### `Necroking/Game1.Animation.cs` — the per-frame tick (`UpdateAnimations`)
 Owns `_unitAnims` (uid → `UnitAnimData{Ctrl,…}`; rebuilt by `RebuildUnitAnim`). Per unit:
-- **Corpse-interact branch** (CorpseInteractPhase != 0): drives WorkStart/Loop/End,
-  Pickup/Carry/PutDown by direct `ForceState`, bypassing both channels. **Case 5 (PutDown)
-  is FIXED** — visual-only; the corpse transfer + `StartTableCraft` fire from a scheduled
-  sim task (`CorpsePutDownTask`, see anti-patterns.md Canonical resolution). **Cases 1-4
-  are STILL gameplay-coupled**: they advance the phase and consume corpses off
-  `Ctrl.IsAnimFinished` / the anim-tick `BaggingTimer` (const `BaggingDuration = 2.0f`
-  lives inline in this branch); case 3 fires `bc.Bagged = true` on the anim edge. See
-  anti-patterns-list.md.
+- **Corpse-interact branch** (CorpseInteractPhase != 0): VISUAL-ONLY as of 2026-07-21 —
+  it mirrors the phase as a clip by direct `ForceState` (bypassing both channels) and
+  never gates on `IsAnimFinished`. The phase clocks are gameplay-owned: `AI/WorkRoutine`
+  (1→2/3→0 on BuildTimer vs `AnimMetaLoader.ClipSeconds`), `Simulation.TickCorpseBagging`
+  (player bagging incl. `bc.Bagged`, `CorpseBagSeconds` const), `CorpsePickupTask` /
+  `CorpsePutDownTask` (Game1.Crafting.cs) for the carry hand-offs. The file also hosts
+  `TickCorpseAnims` — update-pass tick + prune for `_corpseAnims` (corpse death/fall
+  controllers; Draw only lazily creates them).
 - **Archetype branch** (`Archetype > 0`): stamps the Combat override for `PendingAttack`
   (`ResolvePendingAttackAnim`, compressed to the weapon cycle). **The speculative attack
   pre-roll is REMOVED** — attack anims start ONLY when a swing is actually queued

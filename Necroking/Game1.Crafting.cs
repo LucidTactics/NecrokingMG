@@ -142,6 +142,58 @@ public partial class Game1
             putDownSeconds);
     }
 
+    /// <summary>Scheduled resolution of a corpse pickup: the delay is the Pickup clip's
+    /// length, the payload is <see cref="CompleteCorpsePickup"/>. Queued by
+    /// <see cref="BeginCorpsePickup"/> on the sim clock — the PutDown pattern's mirror.</summary>
+    sealed class CorpsePickupTask : ScheduledTask
+    {
+        public int CorpseId;
+        public override string Describe() => $"CorpsePickup(corpse={CorpseId})";
+        protected internal override void Fire()
+            => Instance.CompleteCorpsePickup(CorpseId);
+    }
+
+    /// <summary>Begin a corpse pickup: enters the visual Pickup phase AND schedules the
+    /// carry handoff on the sim clock, so completion never waits on the Pickup animation
+    /// reporting IsAnimFinished (the anim-coupling anti-pattern; see BeginCorpsePutDown).
+    /// Caller has already set CarryingCorpseID + the corpse's LerpStartPos/DraggedByUnitID.</summary>
+    internal void BeginCorpsePickup(int necroIdx, int corpseId)
+    {
+        if (necroIdx < 0) return;
+        _sim.UnitsMut[necroIdx].CorpseInteractPhase = 4; // Pickup (visual only from here on)
+
+        float pickupSeconds = 0.5f; // fallback if the clip has no timing metadata
+        uint uid = _sim.Units[necroIdx].Id;
+        if (_unitAnims.TryGetValue(uid, out var anim))
+        {
+            float natural = Render.AnimTiming.NaturalSeconds(anim.Ctrl, AnimState.Pickup);
+            if (natural > 0.01f) pickupSeconds = natural;
+        }
+
+        _sim.Tasks.Schedule(new CorpsePickupTask { CorpseId = corpseId }, pickupSeconds);
+    }
+
+    /// <summary>Resolve a scheduled corpse pickup (fired from Simulation.Tick via
+    /// CorpsePickupTask): leave the Pickup phase and hold the Carry pose frozen until the
+    /// unit moves (locomotion re-drives PlaybackSpeed for Carry). Re-validates the
+    /// necromancer is still mid-Pickup carrying this exact corpse, so a stale event
+    /// (interaction cancelled, corpse gone) is a safe no-op.</summary>
+    private void CompleteCorpsePickup(int corpseId)
+    {
+        int necroIdx = _sim.NecromancerIndex;
+        if (necroIdx < 0) return;
+        if (_sim.Units[necroIdx].CorpseInteractPhase != 4
+            || _sim.Units[necroIdx].CarryingCorpseID != corpseId)
+            return; // stale — the pickup was cancelled/superseded
+
+        _sim.UnitsMut[necroIdx].CorpseInteractPhase = 0;
+        if (_unitAnims.TryGetValue(_sim.Units[necroIdx].Id, out var anim))
+        {
+            anim.Ctrl.ForceState(AnimState.Carry);
+            anim.Ctrl.PlaybackSpeed = 0f; // freeze until the unit moves
+        }
+    }
+
     /// <summary>Resolve a scheduled corpse put-down (fired from Simulation.Tick via
     /// CorpsePutDownTask): load the carried corpse into the table slot and remove it from the sim
     /// (table drop), or settle it flat at the drop point (ground drop), then clear carry state

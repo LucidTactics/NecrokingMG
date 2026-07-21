@@ -89,6 +89,30 @@ public static class AnimMetaLoader
 {
     public static string MetaKey(string unitName, string category) => $"{unitName}.{category}";
 
+    /// <summary>Total duration in seconds of one unit anim clip, for GAMEPLAY clocks that
+    /// the animation must merely reflect (WorkRoutine phase timing, corpse bagging) — the
+    /// sim-side sibling of <see cref="AnimTiming.NaturalSeconds"/>, usable headless with
+    /// no AnimController. Honors the unit's per-anim AnimTimings override first, then the
+    /// sprite's meta (time_ms), else <paramref name="fallbackSec"/>.</summary>
+    public static float ClipSeconds(Dictionary<string, AnimationMeta>? meta,
+        Data.Registries.UnitDef? def, string animName, float fallbackSec)
+    {
+        if (def == null) return fallbackSec;
+        if (def.AnimTimings != null && def.AnimTimings.TryGetValue(animName, out var ov))
+        {
+            int sum = 0;
+            foreach (int ms in ov.FrameDurationsMs) sum += ms;
+            if (sum > 0) return sum / 1000f;
+        }
+        if (meta != null && def.Sprite != null
+            && meta.TryGetValue(MetaKey(def.Sprite.SpriteName, animName), out var m))
+        {
+            int total = m.TotalDurationMs();
+            if (total > 0) return total / 1000f;
+        }
+        return fallbackSec;
+    }
+
     // Categories that encode a "moment" event (hit connects, projectile spawns, jump
     // takeoff fires). Missing/zero effect_time on these causes silent timing bugs:
     // hits resolve at 50%-through fallback, pounces wait out the full safety timeout.

@@ -50,14 +50,20 @@ public static class WorkRoutine
                     ctx.Subroutine = WorkStart;
                     ctx.Units[i].PreferredVel = Vec2.Zero;
                     ctx.Units[i].CorpseInteractPhase = 1; // WorkStart anim
+                    ctx.Units[i].BuildTimer = 0f;
                 }
                 return Phase.Walking;
 
             case WorkStart:
                 ctx.Units[i].PreferredVel = Vec2.Zero;
                 FaceTowards(ref ctx, targetPos);
-                if (ctx.Units[i].CorpseInteractPhase == 2)
+                // The routine owns this clock: the phase advances after the start
+                // clip's natural length on the sim tick, never on IsAnimFinished —
+                // the anim branch in Game1.UpdateAnimations only mirrors the phase.
+                ctx.Units[i].BuildTimer += ctx.Dt;
+                if (ctx.Units[i].BuildTimer >= ClipSeconds(ref ctx, endClip: false))
                 {
+                    ctx.Units[i].CorpseInteractPhase = 2; // WorkLoop anim
                     ctx.Subroutine = WorkLoop;
                     ctx.Units[i].BuildTimer = 0f;
                 }
@@ -73,6 +79,7 @@ public static class WorkRoutine
                 {
                     ctx.Subroutine = WorkEnd;
                     ctx.Units[i].CorpseInteractPhase = 3; // WorkEnd anim
+                    ctx.Units[i].BuildTimer = 0f;
                     // One-shot signal to the caller: the work is *done* (apply
                     // side-effects now), but the standup animation has just
                     // started — keep the routine alive through Ending.
@@ -83,10 +90,31 @@ public static class WorkRoutine
             case WorkEnd:
                 ctx.Units[i].PreferredVel = Vec2.Zero;
                 if (ctx.Units[i].CorpseInteractPhase == 0)
+                    return Phase.Done; // externally cancelled (spell/sim cleanup)
+                // Same rule as WorkStart: the end clip's length is a sim-side clock.
+                ctx.Units[i].BuildTimer += ctx.Dt;
+                if (ctx.Units[i].BuildTimer >= ClipSeconds(ref ctx, endClip: true))
+                {
+                    ctx.Units[i].CorpseInteractPhase = 0;
                     return Phase.Done;
+                }
                 return Phase.Ending;
         }
         return Phase.Done;
+    }
+
+    /// <summary>Natural length (seconds) of this unit's work start/end clip — the
+    /// ImbueTable variants while channeling at a craft table (CraftTableIdx ≥ 0), the
+    /// generic Work set otherwise, mirroring the anim branch's state choice. Meta-driven
+    /// so it works headless; falls back to 0.5s when the sprite has no timing data.</summary>
+    static float ClipSeconds(ref AIContext ctx, bool endClip)
+    {
+        int i = ctx.UnitIndex;
+        bool imbue = ctx.Units[i].CraftTableIdx >= 0;
+        string anim = endClip ? (imbue ? "ImbueTableFinish" : "WorkEnd")
+                              : (imbue ? "ImbueTableStart" : "WorkStart");
+        var def = ctx.GameData?.Units.Get(ctx.Units[i].UnitDefID);
+        return Render.AnimMetaLoader.ClipSeconds(ctx.AnimMeta, def, anim, 0.5f);
     }
 
     /// <summary>Reset the unit out of any work routine. Caller is responsible
@@ -108,6 +136,7 @@ public static class WorkRoutine
         if (ctx.Subroutine != WorkLoop) return;
         ctx.Subroutine = WorkEnd;
         ctx.Units[ctx.UnitIndex].CorpseInteractPhase = 3;
+        ctx.Units[ctx.UnitIndex].BuildTimer = 0f;
     }
 
     public static void FaceTowards(ref AIContext ctx, Vec2 target)

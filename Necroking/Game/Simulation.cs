@@ -620,6 +620,12 @@ public class Simulation
         _tasks.Tick(dt);
         PhaseEnd("scheduled_tasks");
 
+        // Corpse bagging (player F-key, GameConstants.UseBodyBag). The 1→2→3→0
+        // phase clock lives HERE on the sim clock — the anim branch in
+        // Game1.UpdateAnimations only mirrors CorpseInteractPhase as a clip.
+        // (AI.WorkRoutine is this clock's twin for routine-driven work anims.)
+        PhaseStart(); TickCorpseBagging(dt); PhaseEnd("corpse_bag");
+
         // Table crafting timer + completion. Runs after AI-derived state from the
         // previous frame is visible (units' Routine/Subroutine fields drive whether
         // a table's channeler is "actually channeling" right now).
@@ -2271,17 +2277,92 @@ public class Simulation
         _units[i].ActionLabelTimer = animDur;
     }
 
+    /// <summary>How long the corpse-bagging WorkLoop holds (the actual "stuffing the
+    /// body in the bag" time; the Start/End clips add their own natural lengths).</summary>
+    public const float CorpseBagSeconds = 2.0f;
+
+    /// <summary>Drive the player corpse-bagging phases (CorpseInteractPhase 1→2→3→0 with
+    /// Routine == 0) on the sim clock. Start/End phases last their clip's natural length
+    /// (via AnimMetaLoader.ClipSeconds, so it runs headless); the loop lasts
+    /// <see cref="CorpseBagSeconds"/> and feeds the corpse's BaggingProgress bar. This
+    /// replaces the old anim-side machine that advanced phases on IsAnimFinished and
+    /// ticked BaggingTimer with render dt (the animation-affects-gameplay anti-pattern);
+    /// the anim branch now just plays whatever phase this says. Mothballed with
+    /// GameConstants.UseBodyBag but kept correct — AI work anims use WorkRoutine instead.</summary>
+    private void TickCorpseBagging(float dt)
+    {
+        if (!GameConstants.UseBodyBag) return;
+        for (int u = 0; u < _units.Count; u++)
+        {
+            if (_units[u].BaggingCorpseID < 0 || _units[u].Routine != 0) continue;
+            byte phase = _units[u].CorpseInteractPhase;
+            if (phase < 1 || phase > 3) continue;
+            if (!_units[u].Alive) continue;
+
+            var def = _gameData?.Units.Get(_units[u].UnitDefID);
+            _units[u].BaggingTimer += dt;
+            switch (phase)
+            {
+                case 1: // WorkStart clip
+                    if (_units[u].BaggingTimer >= Render.AnimMetaLoader.ClipSeconds(
+                            _animMeta, def, "WorkStart", 0.5f))
+                    {
+                        _units[u].CorpseInteractPhase = 2;
+                        _units[u].BaggingTimer = 0f;
+                    }
+                    break;
+
+                case 2: // WorkLoop — the bag-stuffing timer + progress bar
+                {
+                    var bc = FindCorpseByID(_units[u].BaggingCorpseID);
+                    if (bc != null)
+                        bc.BaggingProgress = Math.Min(1f, _units[u].BaggingTimer / CorpseBagSeconds);
+                    if (_units[u].BaggingTimer >= CorpseBagSeconds)
+                    {
+                        _units[u].CorpseInteractPhase = 3;
+                        _units[u].BaggingTimer = 0f;
+                    }
+                    break;
+                }
+
+                case 3: // WorkEnd clip, then the bag actually closes
+                    if (_units[u].BaggingTimer >= Render.AnimMetaLoader.ClipSeconds(
+                            _animMeta, def, "WorkEnd", 0.5f))
+                    {
+                        var bc = FindCorpseByID(_units[u].BaggingCorpseID);
+                        if (bc != null)
+                        {
+                            bc.Bagged = true;
+                            bc.BaggingProgress = 0f;
+                            bc.BaggedByUnitID = GameConstants.InvalidUnit;
+                        }
+                        _units[u].BaggingCorpseID = -1;
+                        _units[u].BaggingTimer = 0f;
+                        _units[u].CorpseInteractPhase = 0;
+                    }
+                    break;
+            }
+        }
+    }
+
     /// <summary>Look up the ms-based anim duration for a unit's attack, using the
     /// weapon's AnimName override or the unit's AttackAnim (e.g. "AttackBite"),
-    /// falling back to "Attack1".</summary>
-    private float GetAttackAnimDurationSec(int unitIdx, int weaponIdx)
+    /// falling back to "Attack1". <paramref name="isRanged"/> says which weapon list
+    /// <paramref name="weaponIdx"/> belongs to — a ranged index must never be used
+    /// to read MeleeWeapons, the lists are unrelated.</summary>
+    private float GetAttackAnimDurationSec(int unitIdx, int weaponIdx, bool isRanged = false)
     {
         if (_animMeta == null) return 1.0f;
         var def = _gameData.Units.Get(_units[unitIdx].UnitDefID);
         if (def?.Sprite == null) return 1.0f;
 
         string? animName = null;
-        if (weaponIdx >= 0 && weaponIdx < _units[unitIdx].Stats.MeleeWeapons.Count)
+        if (isRanged)
+        {
+            if (weaponIdx >= 0 && weaponIdx < _units[unitIdx].Stats.RangedWeapons.Count)
+                animName = _units[unitIdx].Stats.RangedWeapons[weaponIdx].AnimName;
+        }
+        else if (weaponIdx >= 0 && weaponIdx < _units[unitIdx].Stats.MeleeWeapons.Count)
             animName = _units[unitIdx].Stats.MeleeWeapons[weaponIdx].AnimName;
         if (string.IsNullOrEmpty(animName))
             animName = string.IsNullOrEmpty(def.AttackAnim) ? "Attack1" : def.AttackAnim;

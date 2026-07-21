@@ -185,16 +185,9 @@ partial class GameRenderer
                 _g._corpseAnims[corpse.CorpseID] = cad;
             }
 
-            // When corpse lands from knockback arc, snap to final death frame
-            if (!corpse.InPhysics && cad.Ctrl.CurrentState == AnimState.Fall)
-                cad.Ctrl.ForceStateAtEnd(AnimState.Death);
-
             bool reanimating = corpse.ReanimInstanceId > 0;
-            // WORLD domain: freezes while paused AND in editors (the old hand-rolled
-            // `!_paused` + min(rawDt,1/20)*timeScale expression was VisualDt by another
-            // name, which kept corpse anims playing inside the map editor).
-            if (!cad.Ctrl.IsAnimFinished)
-                cad.Ctrl.Update(_g._clock.WorldDt);
+            // Controllers are advanced (and pruned) by Game1.TickCorpseAnims on the
+            // update pass, WORLD dt — this draw loop only creates them lazily and reads.
 
             int alphaInt = 255;
             if (corpse.Dissolving)

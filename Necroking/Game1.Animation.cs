@@ -93,13 +93,23 @@ public partial class Game1
         _unitAnims[_sim.Units[unitIdx].Id] = anim.Value;
     }
 
-    /// <summary>Per-unit attack cycle in seconds: weapon.CooldownRounds × RoundDuration.
-    /// Falls back to 1 round when the unit has no melee weapon defined.</summary>
-    private float ComputeWeaponCycleSeconds(int unitIdx, int weaponIdx)
+    /// <summary>Per-unit attack cycle in seconds. Melee: weapon.CooldownRounds ×
+    /// RoundDuration (1 round when the unit has no melee weapon defined). Ranged:
+    /// the weapon's cooldown seconds (RangedCooldownTime — the same clock
+    /// RangedUnitHandler locks between shots); a ranged PendingWeaponIdx must never
+    /// index MeleeWeapons, the two lists are unrelated.</summary>
+    private float ComputeWeaponCycleSeconds(int unitIdx, int weaponIdx, bool isRanged)
     {
         float round = _gameData.Settings.Combat.RoundDuration;
-        int cdRounds = 1;
         var stats = _sim.Units[unitIdx].Stats;
+        if (isRanged)
+        {
+            if (weaponIdx >= 0 && weaponIdx < stats.RangedCooldownTime.Count
+                && stats.RangedCooldownTime[weaponIdx] > 0f)
+                return stats.RangedCooldownTime[weaponIdx];
+            return round;
+        }
+        int cdRounds = 1;
         if (weaponIdx >= 0 && weaponIdx < stats.MeleeWeapons.Count)
             cdRounds = Math.Max(1, stats.MeleeWeapons[weaponIdx].CooldownRounds);
         return cdRounds * round;
@@ -380,9 +390,42 @@ public partial class Game1
         _sim.SetNecromancerCasting(stopMovement, _channelAimAngleDeg);
     }
 
+    // Scratch sets for TickCorpseAnims pruning (avoid per-frame allocation).
+    private readonly HashSet<int> _corpseAnimLiveIds = new();
+    private readonly List<int> _corpseAnimDeadIds = new();
+
+    /// <summary>Advance the corpse death/fall anim controllers on the UPDATE pass (WORLD
+    /// domain dt — frozen while paused and in editors) and prune entries whose corpse no
+    /// longer exists. Controllers are still CREATED lazily in GameRenderer.Corpses (only
+    /// visible corpses need one), but Draw no longer advances them — a draw pass must not
+    /// mutate state, and the old draw-side tick also leaked one entry per removed corpse.</summary>
+    private void TickCorpseAnims(float dt)
+    {
+        if (_corpseAnims.Count == 0) return;
+
+        _corpseAnimLiveIds.Clear();
+        for (int ci = 0; ci < _sim.Corpses.Count; ci++)
+        {
+            var corpse = _sim.Corpses[ci];
+            _corpseAnimLiveIds.Add(corpse.CorpseID);
+            if (!_corpseAnims.TryGetValue(corpse.CorpseID, out var cad)) continue;
+            // When the corpse lands from a knockback arc, snap to the final death frame.
+            if (!corpse.InPhysics && cad.Ctrl.CurrentState == AnimState.Fall)
+                cad.Ctrl.ForceStateAtEnd(AnimState.Death);
+            if (!cad.Ctrl.IsAnimFinished)
+                cad.Ctrl.Update(dt);
+        }
+
+        _corpseAnimDeadIds.Clear();
+        foreach (var cid in _corpseAnims.Keys)
+            if (!_corpseAnimLiveIds.Contains(cid)) _corpseAnimDeadIds.Add(cid);
+        foreach (var cid in _corpseAnimDeadIds) _corpseAnims.Remove(cid);
+    }
+
     private void UpdateAnimations(float dt)
     {
         TickCastPlant();
+        TickCorpseAnims(dt);
 
         for (int i = 0; i < _sim.Units.Count; i++)
         {
@@ -453,12 +496,15 @@ public partial class Game1
                 }
             }
 
-            // --- Corpse interaction state machine ---
-            // PlayOnceHold states: ForceState on entry, IsAnimFinished for completion
+            // --- Corpse interaction anim (VISUAL ONLY) ---
+            // This branch only mirrors CorpseInteractPhase as a clip. The phase
+            // transitions and their gameplay all run on the sim clock: AI.WorkRoutine
+            // (routine work/build/craft), Simulation.TickCorpseBagging (player bagging),
+            // CorpsePickupTask / CorpsePutDownTask (carry hand-offs). Nothing here may
+            // gate on IsAnimFinished — see docs/locate-behavior/anti-patterns.md.
             if (_sim.Units[i].CorpseInteractPhase != 0)
             {
                 byte phase = _sim.Units[i].CorpseInteractPhase;
-                const float BaggingDuration = 2.0f;
 
                 // Reanimating a corpse on a craft table uses the ImbueTable
                 // animation set instead of the generic Work set. Keyed off the
@@ -489,61 +535,23 @@ public partial class Game1
 
                 switch (phase)
                 {
-                    case 1: // Start (PlayOnceHold)
+                    case 1: // Start (PlayOnceHold — holds its last frame until the sim advances the phase)
                         if (animData.Ctrl.CurrentState != wStart)
                             animData.Ctrl.ForceState(wStart);
-                        if (animData.Ctrl.IsAnimFinished)
-                        {
-                            _sim.UnitsMut[i].CorpseInteractPhase = 2;
-                            _sim.UnitsMut[i].BaggingTimer = 0f;
-                            animData.Ctrl.ForceState(wLoop);
-                        }
                         break;
 
-                    case 2: // Loop (Loop — timer driven)
+                    case 2: // Loop (repeats for as long as the sim holds the phase)
                         if (animData.Ctrl.CurrentState != wLoop)
                             animData.Ctrl.ForceState(wLoop);
-                        // Corpse bagging drives timer here; trap building is driven by handler
-                        if (_sim.Units[i].Routine == 0) // not in a handler routine
-                        {
-                            _sim.UnitsMut[i].BaggingTimer += dt;
-                            {
-                                var bc = _sim.FindCorpseByID(_sim.Units[i].BaggingCorpseID);
-                                if (bc != null)
-                                    bc.BaggingProgress = Math.Min(1f, _sim.Units[i].BaggingTimer / BaggingDuration);
-                            }
-                            if (_sim.Units[i].BaggingTimer >= BaggingDuration)
-                            {
-                                _sim.UnitsMut[i].CorpseInteractPhase = 3;
-                                animData.Ctrl.ForceState(wEnd);
-                            }
-                        }
-                        // else: handler controls timer and transitions CorpseInteractPhase
                         break;
 
-                    case 3: // End/Finish (PlayOnceHold)
+                    case 3: // End/Finish (PlayOnceHold; phase-0 guard above restores Idle + speed 1 on exit)
                         if (animData.Ctrl.CurrentState != wEnd)
                             animData.Ctrl.ForceState(wEnd);
-                        if (animData.Ctrl.IsAnimFinished)
-                        {
-                            if (_sim.Units[i].Routine == 0) // corpse bagging
-                            {
-                                var bc = _sim.FindCorpseByID(_sim.Units[i].BaggingCorpseID);
-                                if (bc != null)
-                                {
-                                    bc.Bagged = true;
-                                    bc.BaggingProgress = 0f;
-                                    bc.BaggedByUnitID = GameConstants.InvalidUnit;
-                                }
-                                _sim.UnitsMut[i].BaggingCorpseID = -1;
-                            }
-                            _sim.UnitsMut[i].CorpseInteractPhase = 0;
-                            animData.Ctrl.ForceState(AnimState.Idle);
-                            animData.Ctrl.PlaybackSpeed = 1f; // clear any channel time-stretch
-                        }
                         break;
 
-                    case 4: // Pickup — body bag tracks hilt visually via DrawCarriedBodyBag
+                    case 4: // Pickup — body bag tracks hilt visually via DrawCarriedBodyBag.
+                        // CorpsePickupTask ends the phase and swaps to the frozen Carry pose.
                         if (animData.Ctrl.CurrentState != AnimState.Pickup)
                             animData.Ctrl.ForceState(AnimState.Pickup);
                         {
@@ -553,12 +561,6 @@ public partial class Game1
                                 cc.Position = _sim.Units[i].Position; // keep world pos synced for logic
                                 cc.FacingAngle = _sim.Units[i].FacingAngle;
                             }
-                        }
-                        if (animData.Ctrl.IsAnimFinished)
-                        {
-                            _sim.UnitsMut[i].CorpseInteractPhase = 0;
-                            animData.Ctrl.ForceState(AnimState.Carry);
-                            animData.Ctrl.PlaybackSpeed = 0f; // freeze until unit moves
                         }
                         break;
 
@@ -603,7 +605,8 @@ public partial class Game1
                         _sim.Units[i].PendingWeaponIdx, _sim.Units[i].PendingWeaponIsRanged,
                         _sim.Units[i].Archetype);
                     float animDur = animData.Ctrl.GetTotalDurationSeconds(atkState);
-                    float cycle = ComputeWeaponCycleSeconds(i, _sim.Units[i].PendingWeaponIdx);
+                    float cycle = ComputeWeaponCycleSeconds(i, _sim.Units[i].PendingWeaponIdx,
+                        _sim.Units[i].PendingWeaponIsRanged);
                     float spd = (animDur > cycle && cycle > 0f) ? animDur / cycle : 1f;
                     AnimResolver.SetOverride(_sim.UnitsMut[i], AnimRequest.Combat(atkState, spd));
                 }
