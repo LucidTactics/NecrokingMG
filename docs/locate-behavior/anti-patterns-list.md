@@ -226,3 +226,19 @@ doesn't shrink it. Fix directions: reload ONLY the edited def (keyed rebuild of 
 the manager preview `_fbPreviewCache.GetOrLoad(fd.Path)` runs every frame keyed on the
 live path (one disk probe per keystroke while typing `fb_path`), and the texture browser's
 Up/Down nav decodes `.exr` previews synchronously per keypress (`SelectFile`).
+
+# Dead authored VFX fields — persisted in data, consumed by nothing (census 2026-07-21)
+
+Authored/serialized fields that silently do nothing (same class as the FIXED StandupTimer
+dead field; each is a "why doesn't my data change anything" trap):
+- **`Effect.Alignment` (0=ground/1=upright)** — set from `FlipbookRef.Alignment`
+  (`Render/EffectManager.cs` `SpawnSpellImpact` call sites) and mirrored through
+  `Projectile.HitEffectAlignment` (`Game/SpellEffectSystem.cs`, `Game/PotionSystem.cs`),
+  but **no draw path reads it** — `Render/SpellVfxDraw.cs` `DrawEffects`/`DrawFlipbookRefLoop`
+  draw every effect screen-facing with rotation 0. "Ground" renders identically to
+  "Upright". Fix direction: consume it in `SpellVfxDraw` (ground = squash Y by
+  `camera.YRatio` for the iso ellipse, the `DrawHoverGroundMarkers` precedent) or delete
+  the field + the enum validation in `SpellRegistry.cs`.
+- **`beamChain*` / `strikeChain*` / `chainQuantity`** on `SpellDef` — declared, persisted
+  in spells.json, consumed by NOTHING (planned chain lightning; already flagged in
+  render.md's beam section).

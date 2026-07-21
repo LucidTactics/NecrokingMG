@@ -687,20 +687,37 @@ by `DrawUserPrimitives` with `HdrIntensity.fx` — seamless bends, soft cross-se
 - **The shared ribbon builder**: `PolylineStrip.Build(outVerts, points, tint, alphaStart,
   alphaEnd, widthStart, widthEnd, edgeSoft)` (bottom of `HdrStripBatch.cs`) — miter joins,
   adaptive point merging (points closer than ~60% of half-width merge so wide ribbons don't
-  fold), tent-function edge alpha. **It already supports linear taper** (`widthStart` ≠
-  `widthEnd`) and end-to-end alpha ramp — callers currently pass equal widths.
+  fold), tent-function edge alpha. Supports linear taper (`widthStart` ≠ `widthEnd`), an
+  end-to-end alpha ramp, and a **gradient overload** (`tintStart`/`tintEnd` RGB lerp along
+  arc length — the drain's hotter-at-source shift). The drain funnel uses the taper
+  (`DrainVisualParams.SourceWidthScale` + `FlowReversed` pick which end is wide).
+- **TEXTURED ribbons exist**: `PolylineStrip.BuildTextured(outVerts, points, tintStart,
+  tintEnd, alphaStart, alphaEnd, widthStart, widthEnd, edgeSoft, uOffsetPx, uScalePx)` emits
+  `VertexPositionColorTexture` — U = arc-length px (offset/scaled, wrap-sampled so animating
+  `uOffsetPx` scrolls the texture along the beam), V spans 0→1 across the ribbon width.
+  Buckets: `HdrStripBatch.GetTexturedBucket(intensity)`; flushed with the
+  **`HdrIntensityTexturedTechnique`** in `HdrIntensity.fx` binding ONE shared batch-wide
+  texture — `TextureUtil.GetStreakNoise(device)` (the drain scroll noise). Consumer: the
+  drain scroll overlay in `AddDrainTendrilStripsStatic` (two layers at different
+  scales/speeds, gated by `DrainVisualParams.ScrollSpeed`/`ScrollAlpha`/`ScrollScale` —
+  `drainScroll*` fields in spells.json). **This is the seed for any "texture/flipbook
+  stretched from A to B" feature** — the current limits are the single shared texture (no
+  per-bucket texture key, so an arbitrary flipbook frame can't ride it yet) and
+  wrap-sampling (an atlas sub-rect would bleed neighbors; needs clamped sub-rect UV math).
 - **Bolt shape**: `ComputeBoltShape` (flicker + JitterHz-quantized reseed) →
   `GenerateBoltPoints` (recursive midpoint displacement) + `GenerateBranches`; rasterized by
   `AddBoltStripsStatic` (glow ribbon wide-first, then core), edge softness constants
   `CoreEdgeSoft=0.5` / `GlowEdgeSoft=0.9` at top of `LightningRenderer.cs`.
 - **Drain tendrils**: `AddDrainTendrilStripsStatic(strips, start, end, DrainVisualParams,
-  elapsed)` — THE single tendril rasterizer (in-game + `Editor/SpellPreview.cs` +
-  `SpellVisualTestScenario` all call it). Per tendril: start fanned by `SwayAmplitude`, end
-  swayed by sine, shape from `BuildTendrilPoints` (segments = length/20, perpendicular
-  arc `sin(t·π)·20` + travelling wave `sin(time·4 + t·8)·5` — **note: arc/wave amplitudes are
-  HARDCODED 20/5 px; `DrainVisualParams.ArcHeight` is currently NOT consumed**), then two
-  `PolylineStrip.Build` calls (glow @ alpha 120/255, core @ 200/255), widths pulsed by
-  `PulseHz`/`PulseStrength`.
+  elapsed, fxScale)` — THE single tendril rasterizer (in-game + `Editor/SpellPreview.cs` +
+  `SpellVisualTestScenario` all call it). Per tendril: the flow-source end fanned/swayed by
+  `SwayAmplitude` (`FlowReversed` picks which end), shape from `BuildTendrilPoints(start,
+  end, time, arcHeight, fxScale, outPts)` (segments = length/20, lateral offset =
+  `TendrilLateral(t, time, arcHeight) * fxScale` — **`ArcHeight` IS consumed now**; the old
+  "hardcoded 20/5 px" note is fixed), then glow+core `PolylineStrip.Build` calls (gradient
+  tints via `ScaledTint` per intensity bucket, alpha 120/255 glow / 200/255 core, widths
+  pulsed by `PulseHz`/`PulseStrength`, tapered by `SourceWidthScale`) + the optional
+  textured scroll overlay (see the textured-ribbons bullet).
 - **Not the same as `DrawUtils.DrawLine`**: the rope/bezier overlay helper
   (`Render/DrawUtils.cs`) is a straight-alpha screen-space rotated-pixel segment, unrelated.
 
@@ -844,7 +861,14 @@ and disables the wake bake with a startup log.
 - `GameRenderer.World.cs` `DrawEffectsFiltered` — EffectManager one-shots (`eff.FlipbookKey`:
   spell impacts, cast flares, summon effects), `Materials.HdrAlpha`/`HdrAdditive` per
   `BlendMode`, `ToHdrVertexAlpha`/`ToHdrVertex` (true HDR); fog-of-war gated; registers a
-  ScatterGlow halo per effect. **Since a3cfd1a `SpellDef.HitEffectFlipbook` is the standard
+  ScatterGlow halo per effect. **The draw bodies are extracted to
+  `Render/SpellVfxDraw.cs`** (`SpellVfxDraw.DrawEffects` + `DrawFlipbookRefLoop`, fed a
+  `VfxView` context — shared verbatim with `Editor/SpellPreview.cs`); flipbook frames draw
+  via `scope.Draw(fb.Texture, screenPos, srcRect, color, rotation:0, origin, fbScale, …)` —
+  always screen-facing, rotation hardwired 0. GOTCHA: `Effect.Alignment` (0=ground/
+  1=upright, set from `FlipbookRef.Alignment` and `Projectile.HitEffectAlignment`) is
+  **stored but consumed by NO draw path** — "Ground" alignment currently renders identically
+  to "Upright". **Since a3cfd1a `SpellDef.HitEffectFlipbook` is the standard
   hit splash for EVERY category** — spawn sites: projectile impacts (`Game1.Spells.cs`
   `SpawnProjectileImpactEffects`, consumed once per tick right after `_sim.Tick`; spell
   projectiles route through the def via `SpawnFlipbookEffect`, potions keep the legacy
