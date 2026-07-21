@@ -69,7 +69,7 @@ partial class GameRenderer
     // item kind, created lazily; per-item payload rides in the item's CbA/CbB
     // ints so submission never allocates.
     private SpriteDrawCallback? _cbUnit, _cbEnvObject, _cbCloudPuff, _cbGrassTuft,
-        _cbDeathFogPuff, _cbReanimDust, _cbFlameBehind, _cbFlameFront;
+        _cbDeathFogPuff, _cbReanimDust, _cbFlameBehind, _cbFlameFront, _cbMiasmaArc;
     private SpriteDrawCallback? _cbRoads, _cbTraps, _cbGlyphs, _cbWalls, _cbShadows,
         _cbHoverMarkers, _cbCorpses, _cbProjectilesRope, _cbRain;
 
@@ -298,6 +298,18 @@ partial class GameRenderer
             if (cb != null)
                 queue.SubmitCallback(WorldLayer.YSort, item.Y, cb, item.Index, item.SubIndex);
         }
+
+        // Flipbook arcs (miasma electricity): Y-sorted among the cloud puffs by
+        // the arc's midpoint ground Y, so smoke south of the arc alpha-blends
+        // over the ribbon and the arc reads as crackling INSIDE the gas. Each
+        // callback is a raw strip draw inside a Suspend/Resume bracket (a batch
+        // break per arc — arcs are rare, 0–2 alive at a time).
+        _cbMiasmaArc ??= (SpriteScope s, int a, int _) => _g._lightningRenderer.DrawSingleArcFx(s, a);
+        var arcFx = _g._sim.Lightning.ArcFx;
+        for (int i = 0; i < arcFx.Count; i++)
+            queue.SubmitCallback(WorldLayer.YSort,
+                (arcFx[i].StartPos.Y + arcFx[i].EndPos.Y) * 0.5f + arcFx[i].SortYBias,
+                _cbMiasmaArc, i, 0);
     }
 
     // --- Occlusion fade: a tall env object between the camera and a player-owned

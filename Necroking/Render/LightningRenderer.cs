@@ -31,6 +31,13 @@ public class LightningRenderer
     // batch callback), flushed post-batch in DrawTriangleEffects(). See HdrStripBatch.
     private readonly HdrStripBatch _strips = new();
 
+    // Immediate strip batch for the Y-sorted flipbook arcs (miasma electricity):
+    // each arc builds + flushes alone inside a SpriteScope Suspend/Resume bracket
+    // at its sorted position, so alpha puffs drawn later occlude it — the arc
+    // reads as INSIDE the gas, not painted over it. Separate from _strips, whose
+    // buckets accumulate all frame and flush once in DrawTriangleEffects.
+    private readonly HdrStripBatch _arcStrips = new();
+
     // Cross-section softness (PolylineStrip edgeSoft): the core keeps a crisp
     // flat middle with a thin anti-aliasing ramp; the glow is nearly a full tent
     // so it reads as a real falloff instead of a hard box.
@@ -51,6 +58,7 @@ public class LightningRenderer
         _godRayRenderer = new GodRayRenderer();
         _godRayRenderer.Init(graphicsDevice, hdrIntensityEffect);
         _strips.Init(graphicsDevice, hdrIntensityEffect);
+        _arcStrips.Init(graphicsDevice, hdrIntensityEffect);
     }
 
     public void SetGameTime(float gameTime) => _gameTime = gameTime;
@@ -141,23 +149,9 @@ public class LightningRenderer
                 zap.StartPos.Y, zap.EndPos.Y);
         }
 
-        // Draw active flipbook arcs (stretched-sprite A→B effects). The frame
-        // index rides the arc's normalized age — the sheet's own dissipation
-        // frames carry the fade-out, so alpha stays flat.
-        foreach (var arc in _sim.Lightning.ArcFx)
-        {
-            if (string.IsNullOrEmpty(arc.FlipbookID)) continue;
-            Flipbook? arcFb = null;
-            _game._flipbooks?.TryGetValue(arc.FlipbookID, out arcFb);
-            if (arcFb == null) continue;
-            // Both ends are physical world heights (points in the air over the
-            // area), not sprite-rig anchors — WorldToScreen convention.
-            var arcStartSp = _renderer.WorldToScreen(arc.StartPos, arc.StartHeight, _camera);
-            var arcEndSp = _renderer.WorldToScreen(arc.EndPos, arc.EndHeight, _camera);
-            int frame = arcFb.GetFrameAtNormalizedTime(arc.Timer / MathF.Max(arc.Duration, 0.001f));
-            AddStretchedFlipbookStrips(_strips, arcFb, frame, arcStartSp, arcEndSp,
-                arc.Color, 1f, arc.WidthScale, arc.FlipV);
-        }
+        // (Flipbook arcs draw via DrawSingleArcFx as Y-sorted world callbacks —
+        // see GameRenderer.Units CollectYSortItems — NOT in this ribbons pass,
+        // so cloud puffs south of an arc occlude it.)
 
         // Draw active beams
         foreach (var beam in _sim.Lightning.Beams)
@@ -274,6 +268,37 @@ public class LightningRenderer
             _sim.Units[casterIdx].EffectSpawnHeight * _camera.Zoom, _camera);
         endSp = _renderer.WorldToScreen(targetPos, 1f, _camera);
         return true;
+    }
+
+    /// <summary>Draw ONE flipbook arc immediately, as a Y-sorted world queue
+    /// callback (submitted per arc in GameRenderer.Units CollectYSortItems).
+    /// Suspends the open sprite batch for the raw strip draw and resumes after —
+    /// the arc keeps full HDR intensity through HdrIntensity.fx while the alpha
+    /// puffs drawn after it (greater sort Y) blend over it. The frame index
+    /// rides the arc's normalized age — the sheet's own dissipation frames
+    /// carry the fade-out, so alpha stays flat.</summary>
+    public void DrawSingleArcFx(SpriteScope s, int arcIdx)
+    {
+        var arcs = _sim.Lightning.ArcFx;
+        if (arcIdx < 0 || arcIdx >= arcs.Count) return;
+        var arc = arcs[arcIdx];
+        if (string.IsNullOrEmpty(arc.FlipbookID)) return;
+        Flipbook? fb = null;
+        _game._flipbooks?.TryGetValue(arc.FlipbookID, out fb);
+        if (fb == null) return;
+
+        // Both ends are physical world heights (points in the air over the
+        // area), not sprite-rig anchors — WorldToScreen convention.
+        var startSp = _renderer.WorldToScreen(arc.StartPos, arc.StartHeight, _camera);
+        var endSp = _renderer.WorldToScreen(arc.EndPos, arc.EndHeight, _camera);
+        if (Vector2.DistanceSquared(startSp, endSp) < 1f) return; // avoid a wasted batch break
+
+        int frame = fb.GetFrameAtNormalizedTime(arc.Timer / MathF.Max(arc.Duration, 0.001f));
+        AddStretchedFlipbookStrips(_arcStrips, fb, frame, startSp, endSp,
+            arc.Color, 1f, arc.WidthScale, arc.FlipV);
+        s.Suspend();
+        _arcStrips.DrawAll();
+        s.Resume();
     }
 
     /// <summary>

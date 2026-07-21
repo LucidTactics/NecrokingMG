@@ -105,6 +105,13 @@ public class ActiveArcFx
     public float WidthScale = 1f;
     /// <summary>Mirror the frame across the arc's axis (instance variety).</summary>
     public bool FlipV;
+    /// <summary>Camera-ward (south) offset added to the Y-sort key, in world
+    /// units. Cloud puffs sort by their southern visual EDGE (center + a large
+    /// extent term), so an unbiased arc loses to nearly every puff and gets
+    /// smothered; the spawner sets this (~the cloud radius) so the arc sits
+    /// mid-pack — in front of some puffs, behind others. Same idea as the
+    /// additive glow puffs' FrontSortBias.</summary>
+    public float SortYBias;
 }
 
 public class ActiveBeam
@@ -314,13 +321,15 @@ public class LightningSystem
 
     public void SpawnArcFx(Vec2 start, Vec2 end, float duration, string flipbookID,
                            HdrColor color, float widthScale = 1f, bool flipV = false,
-                           float startHeight = 0f, float endHeight = 0f)
+                           float startHeight = 0f, float endHeight = 0f,
+                           float sortYBias = 0f)
     {
         _arcFx.Add(new ActiveArcFx
         {
             StartPos = start, EndPos = end, Duration = duration,
             FlipbookID = flipbookID, Color = color, WidthScale = widthScale,
-            FlipV = flipV, StartHeight = startHeight, EndHeight = endHeight
+            FlipV = flipV, StartHeight = startHeight, EndHeight = endHeight,
+            SortYBias = sortYBias
         });
     }
 

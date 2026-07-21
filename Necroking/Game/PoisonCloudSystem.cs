@@ -233,7 +233,8 @@ public class PoisonCloudSystem
                         float hB = 0.2f + (float)_rng.NextDouble() * 0.8f;
                         lightning.SpawnArcFx(a, b, cloud.ArcDuration, cloud.ArcFlipbookID,
                             cloud.ArcColor, cloud.ArcWidthScale, flipV: _rng.Next(2) == 0,
-                            startHeight: hA, endHeight: hB);
+                            startHeight: hA, endHeight: hB,
+                            sortYBias: cloud.CurrentRadius * 0.9f);
                         break;
                     }
                 }
