@@ -477,9 +477,27 @@ per-field UI (tooltips, validation):
   covers every reflected field (also item editor, which shares the renderer). Unit editor
   needs a per-call helper (promote `RowTip` into `EditorBase`).
 
+### Spell preview pane (`Editor/SpellPreview.cs`) — what's shared vs duplicated with the game
+Fixed side-view mini-scene (caster x=-3, target x=+3, `CameraZoom=35`/`CameraYRatio=0.5`
+consts; own `WorldToScreen`, same projection math as `Camera25D` but fixed zoom, no camera).
+Own mini-sim structs (`PreviewProjectile/Strike/Zap/Beam/Drain/Effect/HitEffect`) with own
+spawn/update loops. **Shared with the game** (parity holds automatically): the
+`LightningRenderer.*Static` ribbon/drain helpers + `AddDrainFlare/Cloud/ImpactSprites`,
+`GodRayRenderer`, `HdrStripBatch`, `BloomRenderer` (same class, OWN instance with
+**hardcoded** `BloomSettings` Threshold 0.4/Intensity 2.0 — NOT the user's
+`Settings.Bloom`), `ProjectileManager.SolveLobTheta`/constants, the `Build*Style` builders,
+`Game1._flipbooks`, `Materials.SelectHdrFlipbookMaterial`, `TextureUtil.GetRadialGlow`.
+**Preview-only divergences**: no ScatterGlow (`AddBoltScatter` never called), no seed/
+fxScale on bolt statics, hardcoded endpoint heights 1.5/1.0 and sky positions, hit/cast/
+summon/cloud effects are hand-drawn rings using only the def's Color/Scale (the actual
+HitEffect/Cast/Summon flipbooks are NOT played), no arrow fallback, no fog/shadows/ground
+shader, no unit sprites (diamond markers). Driven by `SpellEditorWindow` (`Init` ~:1691,
+`UpdateSpell`/`Update(dt)` ~:1630, `RenderToTarget` → `GetTexture` blit).
+
 **Look/edit here when…** adding/reordering a spell-editor field (annotate `SpellDef` in
 `SpellRegistry.cs`), adding a unit-editor field (the section method in `UnitEditorWindow.cs`),
-adding per-field hover help (the `DrawField` chokepoint / `RowTip` precedent above).
+adding per-field hover help (the `DrawField` chokepoint / `RowTip` precedent above),
+or fixing a "preview doesn't match the game" visual (the shared-vs-duplicated split above).
 
 ## Flipbook Manager popup & the Texture File Browser
 
