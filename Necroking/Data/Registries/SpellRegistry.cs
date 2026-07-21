@@ -949,9 +949,9 @@ public class SpellDef : INamedDef
     [EditorField(Label = "Impact Flare x", Group = "DRAIN", Order = 733, Step = 0.1f, Decimals = 1, Tooltip = "Bright flare size at the beam endpoints. 0 = off.")]
     [JsonPropertyName("drainImpactFlareScale")] public float DrainImpactFlareScale { get; set; } = 1.0f;
 
-    [EditorVisible("Category", "Drain")]
-    [EditorField(Label = "Target Effect", Group = "DRAIN", Order = 734, Tooltip = "Effect played on the drained target.")]
-    [JsonPropertyName("drainTargetEffect")] public FlipbookRef? DrainTargetEffect { get; set; }
+    // (DrainTargetEffect removed 2026-07: declared + editor-visible but never
+    // consumed by any draw path — the standard HitEffectFlipbook now plays the
+    // looping target effect at the drain end, same as beams.)
 
     // ============ CLOUD ============
     [EditorVisible("Category", "Cloud")]
@@ -1248,7 +1248,6 @@ public class SpellRegistry : RegistryBase<SpellDef>
         CheckFlipbook(def.HitEffectFlipbook, "hitEffectFlipbook", report);
         CheckFlipbook(def.CastFlipbook, "castFlipbook", report);
         CheckFlipbook(def.SummonFlipbook, "summonFlipbook", report);
-        CheckFlipbook(def.DrainTargetEffect, "drainTargetEffect", report);
     }
 
     /// <summary>A typo'd magic-path id maps to MagicPath.None = "no requirement",

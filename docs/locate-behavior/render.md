@@ -99,7 +99,10 @@ both live in `GameRenderer.Pipeline.cs`:
    MUST set `layerDepth` via `FogDepthForY(worldY, cameraY)` or the depth test against the
    stamps is garbage (stamps map larger Y → smaller depth).
 2. **A new `scene.Add(new CustomPass(...))` between `FogDepthOccluders` and `_fxPass`**
-   (or after it, before `LightningTris`) — for imperative work that owns its device state.
+   (or after it, before `ScatterGlow`) — for imperative work that owns its device state.
+   (The old `LightningTris` CustomPass is gone — the ribbon flush is now a
+   `WorldLayer.Ribbons` queue item inside `HdrEffects`; prefer a queue item over a new pass
+   when the work must interleave with effect layers.)
 Materials: `Materials.FogWisp` = AlphaBlend + **DepthStencilState.DepthRead**;
 `Materials.HdrAdditive` = Additive but NO DepthRead — an additive+DepthRead effect needs a
 new `Materials.Register(name, effect, BlendState.Additive, LinearClamp,
@@ -672,8 +675,13 @@ by `DrawUserPrimitives` with `HdrIntensity.fx` — seamless bends, soft cross-se
   it only *collects* — projects endpoints to screen (caster anchor = `EffectSpawnPos2D` +
   `EffectSpawnHeight * Zoom` via `WorldToScreenPx`, target = `WorldToScreen(pos, 1f)`), then
   `AddBoltStrips` / `AddDrainTendrilStrips` append vertices into the `HdrStripBatch _strips`.
-  Flush = the `LightningTris` `CustomPass` right after (`_lightningRenderer.DrawTriangleEffects()`
-  → `_strips.DrawAll()` + god rays). Vertices are bucketed per HDR intensity
+  Flush = the `_cbFxRibbons` queue item (`WorldLayer.Ribbons = 132`, `GameRenderer.Pipeline.cs`):
+  `s.Suspend()` → `_lightningRenderer.DrawTriangleEffects()` (`_strips.DrawAll()` + god rays) →
+  `s.Resume()`. Above it sort `HitFxAlpha = 134` (legacy drain junction puffs via
+  `DrawDrainClouds(batch)` — draws into the item's open HdrAlpha batch, no Begin/End of its
+  own — then `DrawEffectsFiltered(0)`) and `HitFxAdditive = 136` (`DrawEffectsFiltered(1)`),
+  so spell one-shots and beam/drain `HitEffectFlipbook` loops render OVER the ribbons
+  ("hit effects in front" is a declared layer). Vertices are bucketed per HDR intensity
   (`HdrStripBatch.GetBucket`) because `VertexPositionColor` can't carry >1.0 — each bucket is
   one `DrawUserPrimitives` with `HdrIntensity.fx`'s `Intensity` uniform. Additive → bloom fires.
 - **The shared ribbon builder**: `PolylineStrip.Build(outVerts, points, tint, alphaStart,

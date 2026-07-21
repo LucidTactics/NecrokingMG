@@ -565,9 +565,32 @@ public class SpellPreview
         DrawEffects();
         _sb.End();
 
-        // Alpha-mode SPELL effects (hit/cast/summon flipbooks with Blend=Alpha)
-        // run through the same HdrAlpha material as the game — plain AlphaBlend
-        // would ignore their HDR intensity encoding.
+        // Additive HDR collect pass: lightning, beams, drains, projectile
+        // flipbooks — WorldLayer.EffectsHdrAdditive's mirror. Spell one-shot
+        // effects moved OUT of here (they draw post-ribbon now, like the game's
+        // HitFx layers).
+        BeginAdditiveHdrPass();
+        view.Scope = _sb; // resume material for Push/Pop = this pass
+
+        _strips.Clear();
+        _godRays?.PendingGodRays.Clear();
+        DrawStrikes();
+        DrawBeams();
+        DrawDrains();
+        DrawZaps();
+        DrawProjectileGlows();
+        _sb.End();
+
+        // Ribbon bolts/tendrils + god rays: WorldLayer.Ribbons' mirror — raw
+        // triangle flush onto the scene RT before the hit-effect passes.
+        _strips.DrawAll();
+        _godRays?.DrawAll();
+
+        // WorldLayer.HitFxAlpha mirror: legacy drain junction puffs first, then
+        // alpha-mode spell effects — both OVER the ribbons so they occlude beam
+        // ends. HdrAlpha material, not plain AlphaBlend: plain would ignore the
+        // HDR intensity encoding.
+        DrawDrainClouds();
         if (Render.Materials.HdrAlpha != null)
         {
             Render.Materials.HdrAlpha.Begin(_sb);
@@ -579,42 +602,15 @@ public class SpellPreview
             _sb.End();
         }
 
-        // Additive HDR blend pass: lightning, beams, drains, projectile flipbooks
-        if (Render.Materials.HdrAdditive != null)
-        {
-            Render.Materials.HdrAdditive.Begin(_sb);
-            view.Scope = _sb; // resume material for Push/Pop = this pass
-        }
-        else if (_hdrSpriteEffect != null)
-        {
-            _hdrSpriteEffect.Parameters["AlphaMode"]?.SetValue(0f);
-            _sb.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp,
-                effect: _hdrSpriteEffect);
-            Render.Materials.NoteAdHocBatch(); // HDR-encoded colors — no tint conversion
-        }
-        else
-        {
-            _sb.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp);
-            Render.Materials.NoteAdHocBatch(); // additive pass — colors pass through raw
-        }
-
-        _strips.Clear();
-        _godRays?.PendingGodRays.Clear();
-        DrawStrikes();
-        DrawBeams();
-        DrawDrains();
-        DrawZaps();
-        DrawProjectileGlows();
+        // WorldLayer.HitFxAdditive mirror: additive spell effects over the ribbons.
+        BeginAdditiveHdrPass();
+        view.Scope = _sb;
         DrawRealEffects(view, blendMode: 1);
         _sb.End();
 
-        // Ribbon bolts/tendrils + god rays: the same post-batch triangle passes as
-        // the game's LightningTris pass, flushed onto the scene RT before bloom.
-        _strips.DrawAll();
-        _godRays?.DrawAll();
-
         // ScatterGlow halos (registered during the draws above) — same system,
-        // same shader, the preview's fixed camera.
+        // same shader, the preview's fixed camera. After the whole effect stack,
+        // like the game's ScatterGlow pass runs after the HdrEffects queue.
         if (_scatter != null)
         {
             _scatterCtx ??= new RenderContext();
@@ -627,8 +623,6 @@ public class SpellPreview
             _scatterTime.TotalGameTime = TimeSpan.FromSeconds(_totalTime);
             _scatter.Draw(_scatterCtx);
         }
-
-        DrawDrainClouds();
 
         // Bloom composites scene + bloom → preview RT; without bloom, already on preview RT
         if (useBloom)
@@ -663,8 +657,31 @@ public class SpellPreview
     private static readonly Dictionary<string, Flipbook> _emptyFlipbooks = new();
     private readonly Vector2[] _drainScatterPts = new Vector2[2];
 
-    /// <summary>Real spell effects (EffectManager) + the channel beams' looping
-    /// hit effect — both through SpellVfxDraw, identical to the game.</summary>
+    /// <summary>Begin the additive HDR pass with the same fallback ladder the
+    /// game's matAdd uses (HdrAdditive material → raw HDR effect → plain
+    /// additive). Callers own the matching _sb.End().</summary>
+    private void BeginAdditiveHdrPass()
+    {
+        if (Render.Materials.HdrAdditive != null)
+        {
+            Render.Materials.HdrAdditive.Begin(_sb);
+        }
+        else if (_hdrSpriteEffect != null)
+        {
+            _hdrSpriteEffect.Parameters["AlphaMode"]?.SetValue(0f);
+            _sb.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp,
+                effect: _hdrSpriteEffect);
+            Render.Materials.NoteAdHocBatch(); // HDR-encoded colors — no tint conversion
+        }
+        else
+        {
+            _sb.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp);
+            Render.Materials.NoteAdHocBatch(); // additive pass — colors pass through raw
+        }
+    }
+
+    /// <summary>Real spell effects (EffectManager) + the channel beams'/drains'
+    /// looping hit effect — all through SpellVfxDraw, identical to the game.</summary>
     private void DrawRealEffects(VfxView view, int blendMode)
     {
         SpellVfxDraw.DrawEffects(view, _fx.Effects, blendMode);
@@ -675,6 +692,13 @@ public class SpellPreview
                 if (!b.Alive) continue;
                 SpellVfxDraw.DrawFlipbookRefLoop(view, fbRef,
                     new Vec2(b.EndPos.X, b.EndPos.Y), 1f, b.Elapsed, blendMode);
+            }
+            // Drains mirror GameRenderer.World's drain hit loop (target end).
+            foreach (var d in _drains)
+            {
+                if (!d.Alive) continue;
+                SpellVfxDraw.DrawFlipbookRefLoop(view, fbRef,
+                    new Vec2(d.TargetPos.X, d.TargetPos.Y), 1f, d.Elapsed, blendMode);
             }
         }
     }

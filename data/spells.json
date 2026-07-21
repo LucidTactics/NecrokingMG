@@ -992,6 +992,23 @@
       "castingBuffID": "buff_4_copy",
       "armorNegating": true,
       "drn": 1,
+      "hitEffectFlipbook": {
+        "flipbookID": "cloud03",
+        "fps": -1,
+        "scale": 0.9,
+        "color": {
+          "r": 220,
+          "g": 255,
+          "b": 120,
+          "a": 255,
+          "intensity": 4
+        },
+        "rotation": 0,
+        "blendMode": "Alpha",
+        "alignment": "Ground",
+        "duration": -1,
+        "loop": true
+      },
       "scatterRadius": 1.6,
       "scatterStrength": 0.7,
       "scatterColor": {
@@ -1050,25 +1067,8 @@
       "drainScrollSpeed": 160,
       "drainScrollScale": 70,
       "drainScrollAlpha": 0.55,
-      "drainImpactPuffs": 7,
       "drainImpactSize": 20,
-      "drainImpactFlareScale": 0.5,
-      "drainTargetEffect": {
-        "flipbookID": "",
-        "fps": 0,
-        "scale": 1,
-        "color": {
-          "r": 255,
-          "g": 255,
-          "b": 255,
-          "a": 255,
-          "intensity": 1
-        },
-        "rotation": 0,
-        "blendMode": "Alpha",
-        "alignment": "Ground",
-        "duration": -1
-      }
+      "drainImpactFlareScale": 0.5
     },
     {
       "name": "Sacrifice",

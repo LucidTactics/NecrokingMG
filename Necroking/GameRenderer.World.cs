@@ -608,6 +608,19 @@ partial class GameRenderer
                 worldHeight: 1f, beam.Elapsed, blendMode);
         }
 
+        // Drains get the same standard looping hit effect at their target end
+        // (unit if alive, captured corpse pos otherwise — the resolver the
+        // tendrils themselves use).
+        foreach (var drain in _g._sim.Lightning.Drains)
+        {
+            if (!drain.Alive || drain.SpellID.Length == 0) continue;
+            var spell = _g._gameData.Spells.Get(drain.SpellID);
+            if (spell?.HitEffectFlipbook is not { } fbRef) continue;
+            if (!_g._lightningRenderer.TryGetDrainTargetWorld(drain, out var targetPos)) continue;
+            SpellVfxDraw.DrawFlipbookRefLoop(view, fbRef, targetPos,
+                worldHeight: 1f, drain.Elapsed, blendMode);
+        }
+
         SpellVfxDraw.DrawEffects(view, _g._effectManager.Effects, blendMode);
     }
 

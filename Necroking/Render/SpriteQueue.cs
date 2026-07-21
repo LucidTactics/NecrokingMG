@@ -29,6 +29,9 @@ public enum WorldLayer : byte
     FogWisps = 115,          // ground-fog wisps, depth-tested vs unit stamps
     EffectsHdrAlpha = 120,   // HDR clouds/smoke (alpha-blended sub-pass)
     EffectsHdrAdditive = 130,// HDR glows/fireballs/reanim/lightning (additive)
+    Ribbons = 132,           // bolt/tendril triangle strips + god rays (flush item)
+    HitFxAlpha = 134,        // spell one-shots + hit-effect loops, alpha — OVER ribbons
+    HitFxAdditive = 136,     // spell one-shots + hit-effect loops, additive
     AdditiveShapes = 140,    // plain additive shapes (energy columns, debug)
     Foragables = 200,
     DamageNumbers = 210,

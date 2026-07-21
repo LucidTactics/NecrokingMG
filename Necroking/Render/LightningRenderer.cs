@@ -227,6 +227,19 @@ public class LightningRenderer
     private bool TryGetDrainEndpoints(ActiveDrain drain, out Vector2 startSp, out Vector2 endSp)
         => TryGetDrainEndpoints(drain, out startSp, out endSp, out _, out _);
 
+    /// <summary>Resolve the drain's TARGET end in world space: live unit first,
+    /// corpse capture second, false when neither exists (never Vec2.Zero). The
+    /// one resolution shared by the tendril endpoints, the impact clouds, and
+    /// the standard hit-effect loop in GameRenderer.World.</summary>
+    public bool TryGetDrainTargetWorld(ActiveDrain drain, out Vec2 pos)
+    {
+        pos = default;
+        int targetIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.TargetID);
+        if (targetIdx >= 0) { pos = _sim.Units[targetIdx].Position; return true; }
+        if (drain.TargetCorpseIdx >= 0) { pos = drain.CorpsePos; return true; }
+        return false;
+    }
+
     private bool TryGetDrainEndpoints(ActiveDrain drain, out Vector2 startSp, out Vector2 endSp,
         out Vec2 startWorld, out Vec2 targetWorld)
     {
@@ -235,10 +248,7 @@ public class LightningRenderer
         int casterIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.CasterID);
         if (casterIdx < 0) return false;
 
-        int targetIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.TargetID);
-        if (targetIdx < 0 && drain.TargetCorpseIdx < 0) return false;
-        Vec2 targetPos = drain.TargetCorpseIdx >= 0 ? drain.CorpsePos : Vec2.Zero;
-        if (targetIdx >= 0) targetPos = _sim.Units[targetIdx].Position;
+        if (!TryGetDrainTargetWorld(drain, out var targetPos)) return false;
 
         startWorld = _sim.Units[casterIdx].EffectSpawnPos2D;
         targetWorld = targetPos;
@@ -250,31 +260,28 @@ public class LightningRenderer
 
     /// <summary>
     /// Triangle passes with their own device state (bolt/tendril ribbons + god rays).
-    /// Must be called AFTER the additive SpriteBatch.End(), while the scene RT is
-    /// still bound — additive blending makes the batch/post-batch ordering moot.
+    /// Runs as the WorldLayer.Ribbons queue item — the callback Suspends the open
+    /// sprite batch around this call (raw DrawUserPrimitives) and Resumes after.
+    /// Additive blending makes ordering within the flush moot; what matters is
+    /// that it lands after the collect items (layer 130) and before the hit-effect
+    /// layers (134/136) that must occlude ribbon ends.
     /// </summary>
     public void DrawTriangleEffects()
     {
         _strips.DrawAll();
         _godRayRenderer.DrawAll();
-        DrawDrainClouds();
     }
 
     /// <summary>Drain impact clusters, alpha-blended AFTER the tendril ribbons
     /// so the junction puffs read as opaque clumps covering the beam end. (The
-    /// traveling puffs are all additive and draw with the tendrils in Draw().)</summary>
-    private void DrawDrainClouds()
+    /// traveling puffs are all additive and draw with the tendrils in Draw().)
+    /// Draws into the ALREADY-OPEN HitFxAlpha batch (Materials.HdrAlpha) — the
+    /// caller owns Begin/End; this must not open its own batch.</summary>
+    public void DrawDrainClouds(SpriteBatch batch)
     {
-        bool any = false;
-        foreach (var d in _sim.Lightning.Drains)
-            if (d.Alive && d.Visuals.ImpactPuffCount > 0) { any = true; break; }
-        if (!any) return;
-
         Flipbook? cloudFb = null;
         _game._flipbooks?.TryGetValue("cloud03", out cloudFb);
 
-        var mat = Materials.HdrAlpha ?? Materials.Scene;
-        mat.Begin(_spriteBatch);
         float fxScale = FxScale();
         foreach (var drain in _sim.Lightning.Drains)
         {
@@ -285,10 +292,9 @@ public class LightningRenderer
             Flipbook? impactFb = cloudFb;
             if (v.ImpactFlipbookID != "cloud03" && _game._flipbooks != null)
                 _game._flipbooks.TryGetValue(v.ImpactFlipbookID, out impactFb);
-            AddDrainImpactSprites(_spriteBatch, _glowTex, impactFb, startSp, endSp, v,
+            AddDrainImpactSprites(batch, _glowTex, impactFb, startSp, endSp, v,
                 drain.Elapsed, fxScale);
         }
-        _spriteBatch.End();
     }
     public GodRayRenderer GetGodRayRenderer() => _godRayRenderer;
 
