@@ -232,11 +232,15 @@ public class PoisonCloudSystem
                     // smears the frame into a dot; sub-1.5 arcs read as stray
                     // specks) so a beat rarely goes empty.
                     float arcR = cloud.CurrentRadius * 0.4f;
-                    for (int attempt = 0; attempt < 4; attempt++)
+                    // Min length 0.8x the disc radius (capped 1.5): demanding the
+                    // FULL disc radius rejected ~half of all pairs and left
+                    // visible holes in the crackle rhythm even with re-rolls.
+                    float minLen = MathF.Min(1.5f, arcR * 0.8f);
+                    for (int attempt = 0; attempt < 8; attempt++)
                     {
                         var a = RandomPointInDisc(cloud.Position, arcR);
                         var b = RandomPointInDisc(cloud.Position, arcR);
-                        if ((a - b).Length() < MathF.Min(1.5f, arcR)) continue;
+                        if ((a - b).Length() < minLen) continue;
                         // Arcs crawl through the gas at grazing heights — a small
                         // random lift per end so they aren't all glued to the ground.
                         float hA = 0.2f + (float)_rng.NextDouble() * 0.8f;

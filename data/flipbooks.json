@@ -72,6 +72,14 @@
       "cols": 3,
       "rows": 4,
       "defaultFPS": 24
+    },
+    {
+      "id": "curly_lightning_03",
+      "name": "Curly Lightning 03",
+      "path": "assets/Effects/Flipbooks/Electricity/FX_TX_CurvlyLightning_03_4x5.png",
+      "cols": 4,
+      "rows": 5,
+      "defaultFPS": 24
     }
   ]
 }
