@@ -35,8 +35,8 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0,
-        "scatterStrength": 0.6
+        "scatterRadius": 1.5,
+        "scatterStrength": 0.7
       },
       "projectileSpeed": 28.3,
       "projectileFlipbook": {
@@ -105,8 +105,8 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0,
-        "scatterStrength": 0.6
+        "scatterRadius": 1.5,
+        "scatterStrength": 0.7
       },
       "projectileSpeed": 28.3,
       "projectileFlipbook": {
@@ -173,8 +173,8 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0,
-        "scatterStrength": 0.6
+        "scatterRadius": 0.5,
+        "scatterStrength": 0.35
       },
       "quantity": 40,
       "trajectory": "DirectFire",
@@ -225,8 +225,8 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0,
-        "scatterStrength": 0.6
+        "scatterRadius": 0.5,
+        "scatterStrength": 0.35
       },
       "quantity": 40,
       "trajectory": "HighLob",
@@ -272,8 +272,8 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0,
-        "scatterStrength": 0.6
+        "scatterRadius": 0.7,
+        "scatterStrength": 0.5
       },
       "quantity": 10,
       "trajectory": "Swirly",
@@ -343,8 +343,8 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0,
-        "scatterStrength": 0.6
+        "scatterRadius": 0.7,
+        "scatterStrength": 0.5
       },
       "quantity": 10,
       "trajectory": "HomingSwirly",
@@ -768,8 +768,8 @@
         "blendMode": "Additive",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0,
-        "scatterStrength": 0.6
+        "scatterRadius": 1.4,
+        "scatterStrength": 0.8
       },
       "strikeTargetUnit": true,
       "zapDuration": 0.25,
@@ -844,8 +844,8 @@
         "alignment": "Upright",
         "duration": -1,
         "loop": true,
-        "scatterRadius": 1.2,
-        "scatterStrength": 0.6
+        "scatterRadius": 0.7,
+        "scatterStrength": 1.5
       },
       "beamTickRate": 0.5,
       "beamDisplacement": 0.15,
@@ -1073,8 +1073,8 @@
         "alignment": "Ground",
         "duration": -1,
         "loop": true,
-        "scatterRadius": 0,
-        "scatterStrength": 0.6
+        "scatterRadius": 1,
+        "scatterStrength": 0.5
       },
       "scatterRadius": 1.6,
       "scatterStrength": 0.7,
@@ -1908,8 +1908,8 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0,
-        "scatterStrength": 0.6
+        "scatterRadius": 1.5,
+        "scatterStrength": 0.7
       },
       "projectileSpeed": 28.3,
       "projectileFlipbook": {
@@ -2058,8 +2058,8 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0,
-        "scatterStrength": 0.6
+        "scatterRadius": 1.5,
+        "scatterStrength": 0.7
       },
       "projectileSpeed": 28.3,
       "projectileFlipbook": {
@@ -2389,8 +2389,8 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0,
-        "scatterStrength": 0.6
+        "scatterRadius": 1.5,
+        "scatterStrength": 0.7
       },
       "trajectory": "DirectFire",
       "projectileSpeed": 54,
@@ -2449,8 +2449,8 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0,
-        "scatterStrength": 0.6
+        "scatterRadius": 0.7,
+        "scatterStrength": 0.5
       },
       "quantity": 10,
       "trajectory": "HighLob",
@@ -2523,8 +2523,8 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0,
-        "scatterStrength": 0.6
+        "scatterRadius": 0.7,
+        "scatterStrength": 0.5
       },
       "quantity": 10,
       "trajectory": "HighLob",
@@ -2705,8 +2705,8 @@
         "blendMode": "Additive",
         "alignment": "Ground",
         "duration": -1,
-        "scatterRadius": 0,
-        "scatterStrength": 0.6
+        "scatterRadius": 2.8,
+        "scatterStrength": 1
       },
       "projectileSpeed": 28.3,
       "projectileFlipbook": {
