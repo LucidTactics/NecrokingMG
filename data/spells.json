@@ -34,7 +34,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "projectileSpeed": 28.3,
       "projectileFlipbook": {
@@ -51,7 +53,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "scatterRadius": 2.8,
       "scatterStrength": 0.6,
@@ -100,7 +104,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "projectileSpeed": 28.3,
       "projectileFlipbook": {
@@ -117,7 +123,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "scatterRadius": 2.4,
       "scatterStrength": 0.6,
@@ -164,7 +172,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "quantity": 40,
       "trajectory": "DirectFire",
@@ -214,7 +224,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "quantity": 40,
       "trajectory": "HighLob",
@@ -259,7 +271,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "quantity": 10,
       "trajectory": "Swirly",
@@ -281,7 +295,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "scatterRadius": 1.6,
       "scatterStrength": 0.5,
@@ -326,7 +342,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "quantity": 10,
       "trajectory": "HomingSwirly",
@@ -348,7 +366,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "scatterRadius": 1.6,
       "scatterStrength": 0.5,
@@ -394,7 +414,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": 1
+        "duration": 1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -430,7 +452,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": 1
+        "duration": 1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -467,7 +491,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": 1
+        "duration": 1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -504,7 +530,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": 1
+        "duration": 1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -541,7 +569,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": 1
+        "duration": 1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -583,7 +613,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": 1.5
+        "duration": 1.5,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -620,7 +652,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -659,7 +693,9 @@
         "rotation": 0,
         "blendMode": "Additive",
         "alignment": "Ground",
-        "duration": 0.22
+        "duration": 0.22,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "telegraphDuration": 0.3,
       "telegraphVisible": false,
@@ -731,7 +767,9 @@
         "rotation": 0,
         "blendMode": "Additive",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "strikeTargetUnit": true,
       "zapDuration": 0.25,
@@ -805,7 +843,9 @@
         "blendMode": "Additive",
         "alignment": "Upright",
         "duration": -1,
-        "loop": true
+        "loop": true,
+        "scatterRadius": 1.2,
+        "scatterStrength": 0.6
       },
       "beamTickRate": 0.5,
       "beamDisplacement": 0.15,
@@ -881,7 +921,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": 1.5
+        "duration": 1.5,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -916,7 +958,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": 0.4
+        "duration": 0.4,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -951,7 +995,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": 0.4
+        "duration": 0.4,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -985,7 +1031,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -1024,7 +1072,9 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
-        "loop": true
+        "loop": true,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "scatterRadius": 1.6,
       "scatterStrength": 0.7,
@@ -1144,7 +1194,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -1181,7 +1233,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -1219,7 +1273,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -1257,7 +1313,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -1297,7 +1355,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -1338,7 +1398,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "strikeVisual": "GodRay",
       "telegraphDuration": 0.4,
@@ -1508,6 +1570,7 @@
       ],
       "cloudArcFlipbookID": "curly_lightning_03",
       "cloudArcInterval": 0.18,
+      "cloudArcDuration": 0.9,
       "cloudArcColor": {
         "r": 175,
         "g": 70,
@@ -1844,7 +1907,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "projectileSpeed": 28.3,
       "projectileFlipbook": {
@@ -1861,7 +1926,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "friendlyOnly": false,
       "scatterRadius": 2,
@@ -1990,7 +2057,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "projectileSpeed": 28.3,
       "projectileFlipbook": {
@@ -2007,7 +2076,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -2046,7 +2117,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -2086,7 +2159,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "reanimationEffectID": "reanim_nosmoke"
     },
@@ -2127,7 +2202,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "reanimationEffectID": "reanim_nosmoke",
       "_test_riseSpeed": 4,
@@ -2168,7 +2245,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "_test_riseSpeed": 4,
       "_test_fogSpeed": 3
@@ -2208,7 +2287,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -2274,7 +2355,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": 0.4
+        "duration": 0.4,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -2305,7 +2388,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "trajectory": "DirectFire",
       "projectileSpeed": 54,
@@ -2324,7 +2409,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -2361,7 +2448,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "quantity": 10,
       "trajectory": "HighLob",
@@ -2385,7 +2474,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "scatterRadius": 1.8,
       "scatterStrength": 0.55,
@@ -2431,7 +2522,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "quantity": 10,
       "trajectory": "HighLob",
@@ -2456,7 +2549,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "scatterRadius": 1.8,
       "scatterStrength": 0.55,
@@ -2570,7 +2665,9 @@
         "rotation": 0,
         "blendMode": "Alpha",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       }
     },
     {
@@ -2607,7 +2704,9 @@
         "rotation": 0,
         "blendMode": "Additive",
         "alignment": "Ground",
-        "duration": -1
+        "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6
       },
       "projectileSpeed": 28.3,
       "projectileFlipbook": {
@@ -2625,6 +2724,8 @@
         "blendMode": "Alpha",
         "alignment": "Ground",
         "duration": -1,
+        "scatterRadius": 0,
+        "scatterStrength": 0.6,
         "temperatureRamp": {
           "max": 35,
           "harmonize": {

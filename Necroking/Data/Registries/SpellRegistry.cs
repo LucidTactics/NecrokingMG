@@ -46,6 +46,16 @@ public class FlipbookRef
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Loop { get; set; }
 
+    /// <summary>ScatterGlow halo around the effect while it plays (lit air,
+    /// tinted from Color). One-shots breathe with the alpha envelope; channel
+    /// hit loops hold steady while channeling. 0 = off. When set, this
+    /// OVERRIDES any spell-level scatter the spawn call site threads in.</summary>
+    [EditorField(Label = "Scatter R", Order = 9, Step = 0.1f, Decimals = 1, Tooltip = "Lit-air glow radius around the effect, world units.\n0 = off. Tinted from Color.")]
+    [JsonPropertyName("scatterRadius")] public float ScatterRadius { get; set; }
+
+    [EditorField(Label = "Scatter Str", Order = 10, Step = 0.05f, Decimals = 2, Tooltip = "Lit-air glow strength.")]
+    [JsonPropertyName("scatterStrength")] public float ScatterStrength { get; set; } = 0.6f;
+
     /// <summary>Optional temperature-ramp recolor — HDR (.exr) flipbooks drawn
     /// additive only. Presence turns the feature on: the texel's heat value
     /// picks a hue from a 1D ramp (t = heat / Max) and drives luminance, so one

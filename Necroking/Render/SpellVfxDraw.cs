@@ -120,6 +120,13 @@ public static class SpellVfxDraw
         if (!v.Flipbooks.TryGetValue(fbRef.FlipbookID, out var fb) || !fb.IsLoaded) return;
         if (v.Visible != null && !v.Visible(worldPos)) return;
 
+        // ScatterGlow halo while the loop plays (lit air around the channel hit
+        // point). Registered here — after the blend-pass and fog gates — so it
+        // fires exactly once per frame (a ref matches only one blend pass).
+        if (fbRef.ScatterRadius > 0f)
+            v.Scatter?.AddPoint(worldPos, fbRef.ScatterRadius,
+                new Color(fbRef.Color.R, fbRef.Color.G, fbRef.Color.B), fbRef.ScatterStrength);
+
         float fps = fbRef.FPS > 0f ? fbRef.FPS : fb.FPS;
         int frameIdx = fbRef.Loop
             ? (fb.TotalFrames > 0 && fps > 0f ? (int)(elapsed * fps) % fb.TotalFrames : 0)

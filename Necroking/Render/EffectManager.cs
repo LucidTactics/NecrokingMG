@@ -100,6 +100,16 @@ public class EffectManager
         int blendMode = fb.BlendMode == "Additive" ? 1 : 0;
         int alignment = fb.Alignment == "Upright" ? 1 : 0;
 
+        // The ref's OWN scatter fields beat whatever spell-level scatter the
+        // call site threaded in — per-effect authoring is the more specific
+        // intent (spell editor Hit Effect section).
+        if (fb.ScatterRadius > 0f)
+        {
+            scatterRadius = fb.ScatterRadius;
+            scatterRgb = new Color(fb.Color.R, fb.Color.G, fb.Color.B);
+            scatterStrength = fb.ScatterStrength;
+        }
+
         float duration = fb.Duration;
         if (duration < 0f)
         {
