@@ -874,12 +874,23 @@ and disables the wake bake with a startup log.
   projectiles route through the def via `SpawnFlipbookEffect`, potions keep the legacy
   field-copy), strike land (`LightningSystem.Update` telegraph-elapse, one-shot guarded by
   `DamageApplied`), zap hit + cloud burst (`SpellEffectSystem.ExecuteStrikeFrom`/
-  `ExecuteCloud`). **Channel beams are different**: `DrawBeamHitEffects` draws the hit
-  effect STATELESSLY per frame off live `_sim.Lightning.Beams` records (frame clock =
-  `beam.Elapsed`; Loop cycles, off plays once + holds last frame) — it lives exactly as
-  long as `beam.Alive`. Drain "hit" visuals stay the LightningSystem's own fields
-  (`DrainImpactFlipbook`→`ImpactFlipbookID`, drawn statelessly in `LightningRenderer`
-  while the drain lives). Frame playback in `DrawEffectsFiltered`: `LoopFrames` cycles via
+  `ExecuteCloud`). **Channel beams/drains are different**: the beam+drain loops at the top
+  of `DrawEffectsFiltered` (`GameRenderer.World.cs`, no named helper) draw the hit effect
+  STATELESSLY per frame off live `_sim.Lightning.Beams`/`.Drains` records via
+  `SpellVfxDraw.DrawFlipbookRefLoop` (frame clock = `beam.Elapsed`/`drain.Elapsed`; Loop
+  cycles, off plays once + holds last frame) — it lives exactly as long as the record's
+  `Alive`. Gates on that in-game path (each silently skips the draw): record `Alive` +
+  non-empty `SpellID`, `Spells.Get` hit, `ResolveUnitIndex(TargetID)` ≥ 0 (drains:
+  `TryGetDrainTargetWorld`), non-empty `FlipbookID`, blend-pass match, flipbook present
+  in `_g._flipbooks` + `IsLoaded`, fog-of-war `Visible(targetPos)` (preview has NO fog
+  gate). **GOTCHA — "shows in preview, invisible in game"**: `FlipbookRef.Loop` defaults
+  FALSE and is pruned from spells.json when default; a non-looping channel hit effect
+  plays its clip once (~frames/fps seconds) then HOLDS THE LAST FRAME for the whole
+  channel — FX sheets that fade to an empty last frame (e.g. `FX_TX_AroundLightning_01`)
+  render as nothing after the first split second. The spell-preview auto-replay keeps
+  resetting `Elapsed`, so the preview always shows the bright early frames and masks the
+  bug. Fix = set `loop: true` on the ref (2026-07-21 lightning_beam find). Frame playback
+  in `DrawEffectsFiltered`: `LoopFrames` cycles via
   `(Age*fps) % TotalFrames`, one-shots map the clip once onto the Lifetime via
   `GetFrameAtNormalizedTime`; missing/unloaded `FlipbookKey` falls back to a tinted
   `_glowTex` soft round glow (what a dangling flipbook id looks like in-game).
