@@ -167,7 +167,16 @@ buff is a casting effect iff some spell references it as `CastingBuffID` (or it'
 table-channel glow); `HasWeaponParticle` is explicitly no longer the test (verified
 2026-07-21 while auditing effect lifetimes).
 
-# Immortal zero-tick corpse drains + unlimited-by-default channels (latent, found 2026-07-21)
+# MOSTLY FIXED — Immortal zero-tick corpse drains + unlimited-by-default channels (found 2026-07-21, corpse drains fixed in `427034b`)
+
+**Update (commit `427034b`):** corpse-drain validity is now a per-frame rule in
+`LightningSystem.Update` (a drain that never ticks — `DamagePerTick <= 0` or corpse
+dissolved — can't live forever), and `spell.BeamMaxDuration` is wired into `SpawnBeam`
+for real casts. **Residual:** a `MaxDuration == 0` beam from the `beam <spellID> <selector>`
+dev verb still lives until its caster dies (nothing releases it), with
+`DrawBeamHitEffects` drawing statelessly per frame. The principle below stands.
+
+<details><summary>Original entry</summary>
 
 `Necroking/Game/LightningSystem.cs` `Update`, drain loop: for a **corpse-targeted** drain
 (`TargetCorpseIdx >= 0`) the ONLY kill paths besides caster invalidation are (a)
@@ -184,6 +193,7 @@ verb, which nothing releases) live indefinitely via the retarget hop, and
 for as long as `beam.Alive`. Principle: **anything drawn statelessly off a live record
 needs a guaranteed-finite record lifetime**; audit every `Spawn{Beam,Drain,Zap}` caller's
 duration when adding new channel visuals.
+</details>
 
 # FIXED — Spawn-then-re-archetype blocks duplicated per path, bypassing OnSpawn (found 2026-07-22, fixed in `427034b`)
 
@@ -195,7 +205,14 @@ new handler's OnSpawn), and all three sites call it — `Game1.cs` map-placed pa
 Verified 2026-07-22 during the init audit. Use ReassignArchetype for ANY future
 re-archetyping; never hand-stamp OnSpawn fields.
 
-# Session wiring duplicated across the two world-entry paths (found 2026-07-22)
+# FIXED — Session wiring duplicated across the two world-entry paths (found 2026-07-22, fixed in `f421e1c`)
+
+**Fixed in `f421e1c`:** the `_sim.Set*` back-reference block + env collision-dirty callbacks
+folded into `WireSessionSystems()`, called by both StartGame and StartScenario after
+`_sim.Init`; the `onVertexMapChanged` lambda extracted to `RefreshGroundVertexMapDirtyRect()`.
+Add any NEW sim back-reference to `WireSessionSystems`/`WireSimCallbacks`, never inline.
+
+<details><summary>Original entry</summary>
 
 `ResetWorldState()` (commit `c54b712`) unified the world-entry CLEAR, but the post-reset
 session WIRING is still hand-duplicated between `Game1.StartGame` (~1662-1675) and
@@ -211,8 +228,14 @@ Fix direction: fold the `_sim.Set*` family + env collision callbacks into `WireS
 (they only need the live `_sim`/`_envSystem` forwarders, both valid post-recreate), or a
 `WireSessionSystems()` helper both paths call after `_sim.Init`; extract the vertex-map lambda
 into a private `OnGroundVertexMapChanged()` method.
+</details>
 
-# StartScenario's inline flipbook loop drifted from ReloadFlipbooksFromRegistry (found 2026-07-22)
+# FIXED — StartScenario's inline flipbook loop drifted from ReloadFlipbooksFromRegistry (found 2026-07-22, fixed in `f421e1c`)
+
+**Fixed in `f421e1c`:** both paths now use the shared loader (guarded so batch scenario runs
+don't re-decode the EXR library per scenario).
+
+<details><summary>Original entry</summary>
 
 `Game1.StartScenario` (~2146-2159) hand-copies the flipbook load loop instead of calling
 `Game1.ReloadFlipbooksFromRegistry()` (~563). The copies have drifted: the shared method
@@ -223,8 +246,15 @@ disposes/refreshes stale defs (guarded by `_flipbooks.Count == 0`).
 Fix direction: replace the block with `if (_flipbooks.Count == 0) ReloadFlipbooksFromRegistry();`
 — the method already ends with the `_wakeSystem.Init(_flipbooks)` the next line repeats (keep
 the guard if reload-per-scenario cost matters for batch runs).
+</details>
 
-# Map-editor one-time init only runs on the StartGame path (found 2026-07-22)
+# FIXED — Map-editor one-time init only runs on the StartGame path (found 2026-07-22, fixed in `f421e1c`)
+
+**Fixed in `f421e1c`:** the editor one-time feed moved to `InitMapEditorForWorld()` shared by
+both paths, and `WriteSaveGame` now refuses while a scenario is active (`CaptureSaveData`
+stays unguarded for the in-memory round-trip scenarios).
+
+<details><summary>Original entry</summary>
 
 `StartGame` gives `_mapEditor` its full init: `SetItemRegistry` + `SetSpellRegistry` +
 `SetGameData` + `RestoreTabFromSettings` + `SetMapFilename` + `SetCorpseSettings` +
@@ -238,6 +268,57 @@ Fix direction: move the editor one-time feed (GameData/registries/RestoreTabFrom
 single init point both paths share (e.g. right after `_mapEditor.Init`, or app-startup once
 GameData exists), and have StartScenario stamp `_currentMapName = "scenario:" + name` or block
 WriteSaveGame while `_activeScenario != null`.
+</details>
+
+# Strength / Encumbrance buffs never reach combat — raw stat reads in AttackResolver (found 2026-07-22)
+
+`BuffStat.Strength` exists, is displayed as buffed (`UI/UnitInfoPanel.cs` ~329,
+`UI/CharacterStatsUI.cs`), and **3 authored buffs in `data/buffs.json` modify it** — but the
+two gameplay consumers read it RAW, so a Strength buff shows on the panel and does nothing:
+- `Game/Combat/AttackResolver.cs` ~459: melee damage roll `strContribution = atkStats.Strength`
+  (×1.25 two-handed) — Attack/Defense/Toughness at ~378/~474 are routed through
+  `GetModifiedStat` at the SAME site; Strength was simply missed.
+- `Game/Combat/AttackResolver.cs` ~654-659: knockdown STR contest, both sides raw.
+Latent twin: `AttackResolver.cs` ~354 fatigue gain reads `atkStats.Encumbrance` raw
+(`BuffStat.Encumbrance` exists, panel shows it buffed; no authored buffs yet).
+Fix: `BuffSystem.GetModifiedStat(units, idx, BuffStat.Strength, atkStats.Strength)` at both
+sites (c916a31 rule: when a stat is buffable, audit ALL readers).
+
+# CombatSpeed buffs missed by the effort/sprint speed helpers (found 2026-07-22)
+
+`Locomotion.UpdateSpeeds` (the single MaxSpeed writer) routes CombatSpeed through
+`GetModifiedStat` (~292), and **7 authored buffs modify CombatSpeed** — but the side helpers
+read it raw, so speed buffs don't apply on those paths:
+- `Movement/Locomotion.cs` `ResolveEffortSpeed` (~175) — routines clamp `PreferredVel` with an
+  UNBUFFED cap, so a speed-buffed unit's routine caps its own speed below its buffed MaxSpeed.
+- `Movement/Locomotion.cs` `SprintTopSpeed` (~183) — pounce/trample charge speeds ignore
+  speed buffs.
+- Minor: `Game1.Animation.cs` ~339 cast-plant gate (`CombatSpeed * CastPlantGateSpeedMult`)
+  raw — a heavily speed-buffed necro takes longer/inconsistently to pass the plant gate; and
+  `Locomotion.cs` ~238 uses raw CombatSpeed as the ramp-rate denominator while accel IS buffed.
+Fix: use the buff-list overload `BuffSystem.GetModifiedStat(u.ActiveBuffs, BuffStat.CombatSpeed,
+u.Stats.CombatSpeed)` (BuffSystem.cs ~549 — no UnitArrays needed) in the helpers, guarded by
+`ActiveBuffs.Count > 0` like UpdateSpeeds does.
+
+# EnrollInHorde is a 4th spawn-then-re-archetype site (found 2026-07-22)
+
+`Game/Simulation.cs` `EnrollInHorde` (~3217) hand-stamps `Archetype` + `Routine =
+HordeMinionHandler.RoutineFollowing` + `Subroutine = 0` instead of calling
+`AI.AIControl.ReassignArchetype` (the `427034b` helper). Two hazards: (a) when the def
+resolves a NON-HordeMinion archetype, `RoutineFollowing` (byte 1) is a per-handler byte
+applied to a different handler; (b) the new handler's `OnSpawn` never fires, so any setup
+field added there silently misses this conversion path. Note `ReassignArchetype`'s minimal
+ctx has `Horde == null`, so `HordeMinionHandler.OnSpawn`'s `ctx.Horde?.AddUnit` no-ops —
+keep the explicit `_horde.AddUnit` after the call.
+Fix: replace the three stamp lines with
+`AI.AIControl.ReassignArchetype(_units, idx, arch, "enroll in horde")`.
+
+# Raw routine literal in HUD: `Routine == 4 // RoutineCommanded` (found 2026-07-22)
+
+`GameRenderer.Hud.cs` ~239 compares against literal `4` (comment admits it means
+`RoutineCommanded`). Routine bytes are per-handler; use
+`AI.HordeMinionHandler.RoutineCommanded`. Several Scenario files share the trap
+(`Routine == 1 || Routine == 2`) — lower priority, tests only.
 
 # FIXED — Wrong-list weapon lookup for ranged pending attacks (found 2026-07-19, fixed 2026-07-21)
 
