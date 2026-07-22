@@ -222,13 +222,11 @@ public partial class Game1
                 Vec2 p = ScatterSpot(grid, va.Center, 2f, 6f, ref rng);
                 SpawnUnit(pd.SoldierDef, p);
                 int idx = _sim.Units.Count - 1;
-                _sim.UnitsMut[idx].Archetype = AI.ArchetypeRegistry.PatrolSoldier;
+                AI.AIControl.ReassignArchetype(_sim.UnitsMut, idx,
+                    AI.ArchetypeRegistry.PatrolSoldier, "village patrol");
                 _sim.UnitsMut[idx].PatrolRouteIdx = ri;
                 _sim.UnitsMut[idx].PatrolWaypointIdx = 0;
                 _sim.UnitsMut[idx].MoveTarget = route.Waypoints[0];
-                _sim.UnitsMut[idx].Routine = 0;
-                _sim.UnitsMut[idx].Subroutine = 0;
-                _sim.UnitsMut[idx].SpawnPosition = p;
             }
         }
     }

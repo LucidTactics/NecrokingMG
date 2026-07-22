@@ -86,6 +86,24 @@ public static class AIControl
     }
 
     /// <summary>
+    /// The canonical "spawned as X, becomes Y" path (map-placed patrol soldiers,
+    /// wild-undead conversion). Interrupts the unit (old handler's exit hook + pin
+    /// clears), swaps the archetype, then runs the NEW handler's OnSpawn — the same
+    /// initializer every normal spawn gets, so a setup field added to OnSpawn can't
+    /// silently miss a conversion site. Set the new routine's parameter fields
+    /// (PatrolRouteIdx, MoveTarget, …) AFTER this call.
+    /// </summary>
+    public static void ReassignArchetype(UnitArrays units, int idx, byte archetypeId, string reason)
+    {
+        Interrupt(units, idx, reason);
+        units[idx].Archetype = archetypeId;
+        var handler = ArchetypeRegistry.Get(archetypeId);
+        if (handler == null) return;
+        var ctx = new AIContext { Units = units, UnitIndex = idx };
+        handler.OnSpawn(ref ctx);
+    }
+
+    /// <summary>
     /// External-intent routine start (player orders, spells, UI). Same as
     /// <see cref="AIContext.TransitionTo"/> except a same-routine call RESTARTS the routine
     /// (full exit/enter hook cycle + Subroutine/SubroutineTimer stamp) instead of no-oping,

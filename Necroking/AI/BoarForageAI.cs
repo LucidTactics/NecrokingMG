@@ -90,7 +90,7 @@ public static class BoarForageAI
                     env.DestroyObject(eatIdx);             // gone from the world; now in the belly
                     sim.AddBoarBelly(units[u].Id, defIdx);
                     units[u].BellyMushrooms = (byte)System.Math.Min(byte.MaxValue, units[u].BellyMushrooms + 1);
-                    sim.OnForagerAte?.Invoke(new Vec2(eObj.X, eObj.Y));   // pickup pop
+                    Game1.Instance?.OnForagerAte(new Vec2(eObj.X, eObj.Y));   // pickup pop
                     DebugLog.Log("scenario", $"[BoarForage] boar#{units[u].Id} ate mushroom (belly={units[u].BellyMushrooms})");
                 }
                 continue;

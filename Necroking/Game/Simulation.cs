@@ -108,8 +108,9 @@ public struct SoulOrb
 /// <see cref="Init"/> resets the world, then <see cref="Tick"/> advances it one frame through a
 /// single ordered phase pipeline (buffs → AI → movement → physics → combat → deaths → corpses …).
 /// Player input arrives only as abstract intents via setters (SetNecromancerInput/Facing/Casting);
-/// the callbacks Game1 installs (<see cref="ReanimHandler"/>, <see cref="OnForagerAte"/>,
-/// <see cref="Workers"/>, SetAnimMeta) are optional and stay null in headless runs.
+/// the back-references Game1 installs (<see cref="Workers"/>, SetAnimMeta) are optional and
+/// stay null in headless runs; client-only effects go through <c>Game1.Instance</c> directly
+/// (null-checked, so Game1-less sims skip them).
 ///
 /// The rule: if it must behave identically in a headless scenario or a replay, it goes here —
 /// deterministically (Random.Shared is banned on sim paths). If it draws, reads a device, or is
@@ -371,13 +372,6 @@ public class Simulation
     /// start of every tick — in headless runs (no Game1) the requests are simply
     /// dropped, so AI casters don't cast there.</summary>
     public List<GameSystems.AISpellCastRequest> PendingAISpellCasts => _pendingAISpellCasts;
-    /// <summary>Game1 sets this to route a ready zombie-raise through the composite reanimation
-    /// pipeline (effect + body morph + deferred slow rise). When unset (headless sims) the tick
-    /// falls back to spawning the zombie directly with the slow standup.</summary>
-    public Action<PendingZombieRaise>? ReanimHandler;
-    /// <summary>Fired when a forager (zombie boar) swallows a mushroom, at the mushroom's
-    /// world position. Game1 hooks this to play the pickup sound. Null in headless sims.</summary>
-    public Action<Vec2>? OnForagerAte;
     public PlayerResources PlayerResources => _playerResources;
 
     // Anim metadata. Populated by Game1 once the atlases load so AI can look up
@@ -767,11 +761,13 @@ public class Simulation
         PhaseStart(); UpdateCombat(dt); PhaseEnd("combat");
 
         // Tick pending zombie raises. Game1 routes them through the composite reanimation effect
-        // (ReanimHandler -> the corpse stays visible, morphs, and the zombie rises after the full
-        // build-up); a headless sim falls back to spawning the zombie directly with the slow standup.
+        // (OnSimReanimReady -> the corpse stays visible, morphs, and the zombie rises after the
+        // full build-up); a Game1-less sim falls back to spawning the zombie directly with the
+        // slow standup.
         PotionSystem.TickZombieRaises(_pendingZombieRaises, dt, (PendingZombieRaise r) =>
         {
-            if (ReanimHandler != null) { ReanimHandler(r); return; }
+            var g1 = Game1.Instance;
+            if (g1 != null) { g1.OnSimReanimReady(r); return; }
 
             // Headless fallback: resolve the zombie type from the source def + spawn directly.
             string spawnId = "skeleton";

@@ -613,12 +613,10 @@ public class WorkerSystem
 
     private void SpawnReanimated(string unitDefId, Vec2 pos)
     {
-        SpawnWorkerUnit?.Invoke(unitDefId, pos);
+        // Through the canonical reanim pipeline (green rise effect); "" → the
+        // unit's own effect (else reanim_smoke).
+        _game.QueueReanimRise(unitDefId, -1, "", posOverride: pos);
     }
-
-    /// <summary>Game1 wires this to its SpawnUnit so the brain can create units
-    /// without referencing Game1.</summary>
-    public Action<string, Vec2>? SpawnWorkerUnit;
 
     /// <summary>Dev/diagnostic dump of every building stockpile + global totals.</summary>
     public string StockReport()

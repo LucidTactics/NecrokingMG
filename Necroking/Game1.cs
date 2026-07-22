@@ -1348,21 +1348,17 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     }
 
     /// <summary>
-    /// Install the Game1→Simulation back-references (delegates + the worker back-ref) onto
-    /// the CURRENT session's Sim. Must run after every session recreation, because <c>_sim</c>
-    /// forwards to <c>_session.Sim</c> and StartGame does <c>_session = new GameSession()</c> —
-    /// a fresh Simulation has these fields null, so reanimation / forager sounds / worker
-    /// dispatch would silently break on map load otherwise. Unlike a cached Simulation
-    /// reference (see LightningRenderer/ForagableSystem/WorkerSystem), these are one-way
-    /// writes onto the live Sim, so they must be re-applied rather than read live.
+    /// Install the Game1→Simulation back-references onto the CURRENT session's Sim. Must run
+    /// after every session recreation, because <c>_sim</c> forwards to <c>_session.Sim</c> and
+    /// StartGame does <c>_session = new GameSession()</c> — a fresh Simulation has these fields
+    /// null, so worker dispatch / ranged shot windows would silently break on map load
+    /// otherwise. Unlike a cached Simulation reference (see LightningRenderer/ForagableSystem/
+    /// WorkerSystem), these are one-way writes onto the live Sim, so they must be re-applied
+    /// rather than read live. Prefer direct <c>Game1.Instance</c> calls over adding a new
+    /// field here (see OnSimReanimReady / OnForagerAte — converted 2026-07-22).
     /// </summary>
     private void WireSimCallbacks()
     {
-        // Route sim-layer reanimations (potion / on-death / table-craft) through the composite
-        // reanimation pipeline, the same one spells use (headless sims fall back to a direct spawn).
-        _sim.ReanimHandler = OnSimReanimReady;
-        // Foraging boars reuse the same pickup pop when they swallow a mushroom.
-        _sim.OnForagerAte = OnForagerAte;
         // Worker job system back-ref so the sim can reach the job brain.
         _sim.Workers = _workerSystem;
         // Anim metadata for sim/AI-side effect-time lookups (pounce takeoff, ranged
@@ -1684,13 +1680,12 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
                 {
                     if (_triggerSystem.PatrolRoutes[pri].Id != pu.PatrolRouteId) continue;
                     var route = _triggerSystem.PatrolRoutes[pri];
-                    _sim.UnitsMut[lastIdx].Archetype = AI.ArchetypeRegistry.PatrolSoldier;
+                    AI.AIControl.ReassignArchetype(_sim.UnitsMut, lastIdx,
+                        AI.ArchetypeRegistry.PatrolSoldier, "map patrol route");
                     _sim.UnitsMut[lastIdx].PatrolRouteIdx = pri;
                     _sim.UnitsMut[lastIdx].PatrolWaypointIdx = 0;
                     if (route.Waypoints.Count > 0)
                         _sim.UnitsMut[lastIdx].MoveTarget = route.Waypoints[0];
-                    _sim.UnitsMut[lastIdx].Routine = 0;
-                    _sim.UnitsMut[lastIdx].Subroutine = 0;
                     break;
                 }
             }
@@ -2363,12 +2358,8 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     internal void MakeUnitWild(int idx)
     {
         _sim.Horde.RemoveUnit(_sim.Units[idx].Id);
-        _sim.UnitsMut[idx].Archetype = AI.ArchetypeRegistry.WildUndead;
-        _sim.UnitsMut[idx].Routine = 0;
-        _sim.UnitsMut[idx].Subroutine = 0;
-        // CombatUnitHandler.OnSpawn never ran for this unit — stamp the
-        // idle-roam/return anchor it would have set.
-        _sim.UnitsMut[idx].SpawnPosition = _sim.Units[idx].Position;
+        AI.AIControl.ReassignArchetype(_sim.UnitsMut, idx,
+            AI.ArchetypeRegistry.WildUndead, "make wild");
     }
 
     protected override void LoadContent()

@@ -237,7 +237,8 @@ public static class SpellEffectSystem
                 {
                     sim.Lightning.SpawnBeam(casterUid, units[beamTarget].Id,
                         spell.Id, spell.ScaledDamage(mastery), spell.BeamTickRate,
-                        spell.BeamRetargetRadius, spell.BuildBeamStyle());
+                        spell.BeamRetargetRadius, spell.BuildBeamStyle(),
+                        maxDuration: spell.BeamMaxDuration);
                     StartChannel(game, units, casterIdx, slot, spell, units[beamTarget].Position);
                 }
                 break;

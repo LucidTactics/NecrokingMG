@@ -424,6 +424,13 @@ public class LightningSystem
                 int ti = UnitUtil.ResolveUnitIndex(units, d.TargetID);
                 if (ti < 0 || !units[ti].Alive) d.Alive = false;
             }
+            // Corpse-target liveness is a per-frame rule, not a damage-tick side
+            // effect: the tick loop below never runs for DamagePerTick <= 0, so a
+            // corpse drain that can never pull (or whose corpse dissolved under
+            // it) would otherwise live — and flare — forever.
+            if (d.Alive && d.TargetCorpseIdx >= 0
+                && (d.DamagePerTick <= 0 || FindCorpseIndex(corpses, d.TargetCorpseID) < 0))
+                d.Alive = false;
 
             // Drain ticks. Damage goes out as LightningDamage (standard
             // DealDamage pipeline in Simulation); heals go out with IsHeal set

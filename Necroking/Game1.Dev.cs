@@ -2438,7 +2438,8 @@ public partial class Game1 {
                }
                _sim.Lightning.SpawnBeam(_sim.Units[beamNi].Id, _sim.Units[beamTargets[0]].Id,
                   beamSpell.Id, beamSpell.ScaledDamage(0), beamSpell.BeamTickRate,
-                  beamSpell.BeamRetargetRadius, beamSpell.BuildBeamStyle());
+                  beamSpell.BeamRetargetRadius, beamSpell.BuildBeamStyle(),
+                  maxDuration: beamSpell.BeamMaxDuration);
                c.Complete(Necroking.Dev.DevServer.Ok(
                   $"beam '{beamSpell.Id}' -> unit idx {beamTargets[0]}"));
                break;

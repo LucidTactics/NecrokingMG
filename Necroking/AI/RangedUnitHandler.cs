@@ -43,6 +43,11 @@ public class RangedUnitHandler : IArchetypeHandler
     // Slack past the anim's release frame so the SwingJanitor (which clears the
     // pending swing at PostAttackTimer <= 0) can never race the effect-frame edge.
     private const float EffectFrameMargin = 0.15f;
+    // Window when the unit has NO anim metadata: the release frame could land
+    // anywhere in the clip, so be generous — a too-short window makes the
+    // SwingJanitor eat EVERY shot silently (the archer mimes firing, no arrow),
+    // while a too-long one just plants the archer a little longer before kiting.
+    private const float NoMetaShotWindow = 1.5f;
 
     private readonly byte _archetypeId;
 
@@ -232,7 +237,7 @@ public class RangedUnitHandler : IArchetypeHandler
     {
         int i = ctx.UnitIndex;
         var def = ctx.GameData.Units.Get(ctx.Units[i].UnitDefID);
-        if (def?.Sprite == null || ctx.AnimMeta == null) return PostShotFollowThrough;
+        if (def?.Sprite == null || ctx.AnimMeta == null) return NoMetaShotWindow;
 
         ref var stats = ref ctx.Units[i].Stats;
         string? animName = (weaponIdx >= 0 && weaponIdx < stats.RangedWeapons.Count)
@@ -246,7 +251,7 @@ public class RangedUnitHandler : IArchetypeHandler
             if (effectMs > 0f)
                 return MathF.Max(PostShotFollowThrough, effectMs / 1000f + EffectFrameMargin);
         }
-        return PostShotFollowThrough;
+        return NoMetaShotWindow;
     }
 
     private static void UpdateReturn(ref AIContext ctx) => SentryTransitions.UpdateReturn(ref ctx);

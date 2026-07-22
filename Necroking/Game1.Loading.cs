@@ -475,9 +475,6 @@ public partial class Game1
             // Install the Game1→Simulation back-references onto the current Sim. Also called
             // from StartGame after every session recreation (see WireSimCallbacks).
             WireSimCallbacks();
-            // Reanimate job spawns through the canonical reanim pipeline (green rise effect).
-            _workerSystem.SpawnWorkerUnit = (defId, pos) =>
-                QueueReanimRise(defId, -1, "", posOverride: pos);  // "" → the unit's own effect (else reanim_smoke)
         });
 
         Step("Building editors", () =>

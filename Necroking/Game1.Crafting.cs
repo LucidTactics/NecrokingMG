@@ -256,10 +256,10 @@ public partial class Game1
         FloatingText.AddText(_damageNumbers, worldPos, resourceType, height: 2f);
     }
 
-    /// <summary>Simulation hook fired when a foraging boar swallows a mushroom.
+    /// <summary>Called (directly) when a foraging boar swallows a mushroom.
     /// Plays the same pickup pop the player hears, throttled + pitch-rotated so a
     /// pack of grazing boars doesn't machine-gun the sample.</summary>
-    private void OnForagerAte(Vec2 worldPos)
+    internal void OnForagerAte(Vec2 worldPos)
     {
         if (_pickupSound == null || _foragerEatSoundCd > 0f) return;
         _foragerEatSoundCd = 0.06f;

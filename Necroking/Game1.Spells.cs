@@ -49,9 +49,9 @@ public partial class Game1 {
    }
 
    /// <summary>Bridge for sim-layer raises (potion / on-death / table-craft): resolve the zombie
-   /// type and route through the SAME composite reanimation pipeline as spells. Wired to
-   /// Simulation.ReanimHandler in LoadContent. corpseId &lt; 0 (no world corpse) no-ops cleanly.</summary>
-   private void OnSimReanimReady(PendingZombieRaise r)
+   /// type and route through the SAME composite reanimation pipeline as spells. Called directly
+   /// from Simulation's raise tick. corpseId &lt; 0 (no world corpse) no-ops cleanly.</summary>
+   internal void OnSimReanimReady(PendingZombieRaise r)
    {
       string zombieDef = Game.TableCraftingSystem.ResolveZombieUnitID(_gameData, r.UnitDefID);
       if (string.IsNullOrEmpty(zombieDef)) zombieDef = "skeleton";
