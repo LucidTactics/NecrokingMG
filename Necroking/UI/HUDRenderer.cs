@@ -942,9 +942,10 @@ public partial class HUDRenderer
     {
         if (!gameData.Settings.General.ShowTimeControls || _smallFont == null) return;
 
-        ReadOnlySpan<float> speeds = stackalloc float[] { 0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f };
+        float[] speeds = TimeControlSpeeds;
         // Slow presets read as their multiplier (a "<" arrow would imply rewind);
         // normal-and-faster read as play/fast-forward triangles (> = 1x, >>> = 2x).
+        // labels must stay index-aligned with TimeControlSpeeds.
         string[] labels = { ".1", ".25", ".5", ">", ">>", ">>>" };
         LayoutTimeControls(screenW, screenH, _timeCtrlRects);
 

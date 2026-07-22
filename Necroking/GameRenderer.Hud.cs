@@ -401,7 +401,7 @@ partial class GameRenderer
             string info = sb.ToString();
             // Approximate width for anchoring — SpriteFont.MeasureString is accurate
             // but per-unit MeasureString every frame is hot-path waste.
-            var textPos = new Vector2(sp.X - info.Length, sp.Y - 28);
+            var textPos = new Vector2((int)(sp.X - info.Length), (int)(sp.Y - 28));
             _g.Scope.DrawString(_g._smallFont, info, textPos, new Color(255, 255, 200, 220));
         }
 
@@ -774,7 +774,8 @@ partial class GameRenderer
                 {
                     Vector2 br = new Vector2(cell.X + cell.Width - 2, cell.Y + cell.Height - 2);
                     Vector2 size = _g._smallFont.MeasureString(text);
-                    _g.Scope.DrawString(_g._smallFont, text, br - size, new Color(250, 250, 250));
+                    _g.Scope.DrawString(_g._smallFont, text,
+                        new Vector2((int)(br.X - size.X), (int)(br.Y - size.Y)), new Color(250, 250, 250));
                 }
             }
         }
@@ -822,13 +823,13 @@ partial class GameRenderer
     private void DrawText(SpriteFont? font, string text, Vector2 pos, Color color)
     {
         if (font != null)
-            _g.Scope.DrawString(font, text, pos, color);
+            _g.Scope.DrawString(font, text, new Vector2((int)pos.X, (int)pos.Y), color);
     }
 
     private void DrawText(SpriteFont? font, string text, Vector2 pos, Color color, float scale)
     {
         if (font != null)
-            _g.Scope.DrawString(font, text, pos, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+            _g.Scope.DrawString(font, text, new Vector2((int)pos.X, (int)pos.Y), color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
     }
 
     /// <summary>Draw a filled panel (rectangle) with an optional accent bar at the top (or bottom).
