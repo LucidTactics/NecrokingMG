@@ -118,7 +118,7 @@ public static class TrampleSystem
         // this was CombatSpeed × (1 + bonus), but CombatSpeed is now walk
         // speed — a trample at walk-speed-with-bonus would barely move.
         var trampleDef = sim.GameData.Units.Get(units[idx].UnitDefID);
-        float chargeSpeed = Movement.Locomotion.SprintTopSpeed(trampleDef, units[idx].Stats)
+        float chargeSpeed = Movement.Locomotion.SprintTopSpeed(trampleDef, units[idx])
             * (1f + weapon.TrampleSpeedBonus);
 
         // Phase 3 — follow-through. Locked direction, no homing, no impact checks.

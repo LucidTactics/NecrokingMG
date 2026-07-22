@@ -172,17 +172,25 @@ public static class Locomotion
         float? routineCapMult = null)
     {
         var def = UnitUtil.ResolveDef(u, gameData);
-        float speed = u.Stats.CombatSpeed * EffortMultiplier(def, effort);
+        float cs = u.ActiveBuffs.Count > 0
+            ? BuffSystem.GetModifiedStat(u.ActiveBuffs, BuffStat.CombatSpeed, u.Stats.CombatSpeed)
+            : u.Stats.CombatSpeed;
+        float speed = cs * EffortMultiplier(def, effort);
         if (routineCapMult.HasValue) speed *= routineCapMult.Value;
         return speed;
     }
 
-    /// <summary>Full sprint top speed for a unit: CombatSpeed × sprint
+    /// <summary>Full sprint top speed for a unit: buffed CombatSpeed × sprint
     /// multiplier (def override or default 4×). The single home for the
     /// "sprint mult with fallback" pattern used by pounce/trample/etc.</summary>
-    public static float SprintTopSpeed(UnitDef def, in UnitStats stats)
-        => stats.CombatSpeed * ((def?.SprintSpeedMultiplier > 0f)
+    public static float SprintTopSpeed(UnitDef def, Unit u)
+    {
+        float cs = u.ActiveBuffs.Count > 0
+            ? BuffSystem.GetModifiedStat(u.ActiveBuffs, BuffStat.CombatSpeed, u.Stats.CombatSpeed)
+            : u.Stats.CombatSpeed;
+        return cs * ((def?.SprintSpeedMultiplier > 0f)
             ? def.SprintSpeedMultiplier : LocomotionProfile.DefaultSprintMult);
+    }
 
     /// <summary>Initialize the speed cap on spawn / stat rebuild. The next
     /// <see cref="UpdateSpeeds"/> pass takes over from here.</summary>
@@ -235,7 +243,10 @@ public static class Locomotion
             // velocity model can follow, so the cap is always honest; derived
             // from the original accel-based player sprint ramp).
             float targetMult = EffortMultiplier(def, u.MoveEffort);
-            float cs = MathF.Max(0.01f, u.Stats.CombatSpeed);
+            float baseSpeed = u.ActiveBuffs.Count > 0
+                ? BuffSystem.GetModifiedStat(units, i, BuffStat.CombatSpeed, u.Stats.CombatSpeed)
+                : u.Stats.CombatSpeed;
+            float cs = MathF.Max(0.01f, baseSpeed);
             float em = u.EffortMult;
             if (em <= 0f) em = 1f; // safety for uninitialized units
 
@@ -288,10 +299,9 @@ public static class Locomotion
                 continue;
             }
 
-            // Base speed with buffs, then compose every modifier exactly once.
-            float speed = u.ActiveBuffs.Count > 0
-                ? BuffSystem.GetModifiedStat(units, i, BuffStat.CombatSpeed, u.Stats.CombatSpeed)
-                : u.Stats.CombatSpeed;
+            // Base speed with buffs (computed above for the ramp rate), then
+            // compose every modifier exactly once.
+            float speed = baseSpeed;
             speed *= em;
             if (u.RoutineSpeedCap > 0f) speed *= u.RoutineSpeedCap;
 

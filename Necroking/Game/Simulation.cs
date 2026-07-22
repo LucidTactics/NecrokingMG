@@ -2238,7 +2238,7 @@ public class Simulation
         string spriteName = def?.Sprite?.SpriteName ?? "";
         // Pounce traverses at sprint-top-speed regardless of current MaxSpeed
         // (a predator springing from idle still leaps fast).
-        float pounceSpeed = Movement.Locomotion.SprintTopSpeed(def, _units[i].Stats);
+        float pounceSpeed = Movement.Locomotion.SprintTopSpeed(def, _units[i]);
 
         // Lead the target: aim where it will be when the leap arrives, not
         // where it is now (a strafing deer used to be missed by design).
@@ -3230,9 +3230,12 @@ public class Simulation
             if (resolved != AI.ArchetypeRegistry.None && resolved != AI.ArchetypeRegistry.WildUndead)
                 arch = resolved;
         }
-        _units[idx].Archetype = arch;
-        _units[idx].Routine = AI.HordeMinionHandler.RoutineFollowing;
-        _units[idx].Subroutine = 0;
+        // ReassignArchetype interrupts, stamps the archetype, and fires the new
+        // handler's OnSpawn — which sets the handler's own starting routine
+        // (Following for HordeMinion). Hand-stamping Routine/Subroutine here was
+        // the spawn-then-re-archetype anti-pattern: routine bytes mean different
+        // things per handler, and OnSpawn never ran.
+        AI.AIControl.ReassignArchetype(_units, idx, arch, "enroll in horde");
 
         // Cap-count safeguard. The horde count isn't an incremented counter — it's
         // derived live by HordeCapTracker, which counts undead units whose def

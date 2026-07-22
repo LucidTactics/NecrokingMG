@@ -236,7 +236,7 @@ partial class GameRenderer
             // arrowhead pointing at the order point — this is the order, not the slot it
             // happens to own. (HordeUnitState has no Commanded value; the formation slot
             // it would otherwise occupy is stale while under orders, so don't draw it.)
-            bool commanded = _g._sim.Units[unitIdx].Routine == 4; // RoutineCommanded
+            bool commanded = _g._sim.Units[unitIdx].Routine == AI.HordeMinionHandler.RoutineCommanded;
             if (commanded)
             {
                 var cmdTarget = _g._sim.Units[unitIdx].MoveTarget;

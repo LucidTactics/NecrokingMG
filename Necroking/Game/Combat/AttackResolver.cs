@@ -351,7 +351,8 @@ public static class AttackResolver
         // Every attempted melee swing fatigues the attacker by their Encumbrance.
         // Fatigue caps at 100 (that's the ceiling of the (100 - Fatigue) knockdown-
         // recovery formula). Regens at 1/tick every FatigueRegenInterval seconds.
-        units[attackerIdx].Fatigue = MathF.Min(100f, units[attackerIdx].Fatigue + atkStats.Encumbrance);
+        float buffedEnc = BuffSystem.GetModifiedStat(units, attackerIdx, BuffStat.Encumbrance, atkStats.Encumbrance);
+        units[attackerIdx].Fatigue = MathF.Min(100f, units[attackerIdx].Fatigue + buffedEnc);
 
         // Hit resolution always rolls tier-4 (d6 open-ended) dice for BOTH sides,
         // regardless of unit tier — the exploding die means any attacker can
@@ -456,7 +457,8 @@ public static class AttackResolver
         var hitLoc = UnitUtil.RollHitLocation(units[attackerIdx].Size, units[defenderIdx].Size, weaponLength);
 
         // Damage roll: Strength (×1.25 if two-handed, manual p.61) + weapon damage + DRN.
-        int strContribution = twoHanded ? (int)(atkStats.Strength * 1.25f) : atkStats.Strength;
+        float buffedStr = BuffSystem.GetModifiedStat(units, attackerIdx, BuffStat.Strength, atkStats.Strength);
+        int strContribution = (int)(twoHanded ? buffedStr * 1.25f : buffedStr);
         int baseDmg = (int)((strContribution + weaponDamage) * atkParalysis);
         int dmgDRN = UnitUtil.RollDRN(atkStats.Drn);
         int dmgRoll = baseDmg + dmgDRN;
@@ -651,10 +653,14 @@ public static class AttackResolver
         // FROM victims TO the charger. Both active charge (1) and follow-through (3).
         if (units[defenderIdx].ChargePhase == 1 || units[defenderIdx].ChargePhase == 3) return;
 
-        int atkScore = units[attackerIdx].Stats.Strength
+        int atkStr = (int)BuffSystem.GetModifiedStat(units, attackerIdx,
+            BuffStat.Strength, units[attackerIdx].Stats.Strength);
+        int defStr = (int)BuffSystem.GetModifiedStat(units, defenderIdx,
+            BuffStat.Strength, units[defenderIdx].Stats.Strength);
+        int atkScore = atkStr
                      + units[attackerIdx].Size * 2
                      + UnitUtil.RollDRN(units[attackerIdx].Stats.Drn);
-        int defScore = units[defenderIdx].Stats.Strength
+        int defScore = defStr
                      + units[defenderIdx].Size * 2
                      + UnitUtil.RollDRN(units[defenderIdx].Stats.Drn);
 
@@ -668,9 +674,9 @@ public static class AttackResolver
         BuffSystem.ApplyBuffWithDuration(units, defenderIdx, knockdownBuff, durationSec);
         units[defenderIdx].KnockdownCheckTimer = KnockdownCheckInitialDelay;
 
-        DebugLog.Log("combat", $"[Knockdown] atk#{attackerIdx}(str={units[attackerIdx].Stats.Strength}" +
+        DebugLog.Log("combat", $"[Knockdown] atk#{attackerIdx}(str={atkStr}" +
             $",sz={units[attackerIdx].Size},score={atkScore}) vs def#{defenderIdx}" +
-            $"(str={units[defenderIdx].Stats.Strength},sz={units[defenderIdx].Size},score={defScore})" +
+            $"(str={defStr},sz={units[defenderIdx].Size},score={defScore})" +
             $" → diff={diff} duration={durationSec}s");
     }
 

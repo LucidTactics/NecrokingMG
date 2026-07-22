@@ -335,8 +335,14 @@ public partial class Game1
 
         if (!pca.WaitingForPlant) return;
 
-        // Anim-start gate: "some decel achieved" = at/below walking speed.
-        float gate = _sim.Units[necroIdx].Stats.CombatSpeed
+        // Anim-start gate: "some decel achieved" = at/below walking speed
+        // (buffed — a speed-buffed necromancer walks faster, so the gate
+        // must scale with it or the cast never plants mid-buff).
+        var necroUnit = _sim.Units[necroIdx];
+        float walkSpeed = necroUnit.ActiveBuffs.Count > 0
+            ? BuffSystem.GetModifiedStat(necroUnit.ActiveBuffs, BuffStat.CombatSpeed, necroUnit.Stats.CombatSpeed)
+            : necroUnit.Stats.CombatSpeed;
+        float gate = walkSpeed
             * (_gameData.Settings.Animation?.CastPlantGateSpeedMult ?? 1.15f);
         if (_sim.Units[necroIdx].Velocity.Length() > gate) return;
 
