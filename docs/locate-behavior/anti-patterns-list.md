@@ -342,47 +342,38 @@ fixed-timestep catch-up bursts no longer duplicate chars. Residual: typing is st
 a tap that goes down+up inside a single long frame is still dropped. Robust fix if it
 recurs: switch char entry to `Window.TextInput` events, keep polling for nav keys only.
 
-# Debounced flush does full-registry synchronous reload on the render thread (found 2026-07-21)
+# MOSTLY FIXED — Debounced flush did full-registry synchronous reload (found 2026-07-21, fixed)
 
-`Editor/SpellEditorWindow.cs` `MarkDirty()` override + `FlushPendingFlipbookReload`
-(~lines 1833-1864): flipbook-manager edits debounce 400ms (`_fbReloadDueAt`) then call
-`Game1.ReloadFlipbooksFromRegistry()` — which **reloads EVERY flipbook def from disk
-synchronously**, incl. full `.exr` HDR decode (`Flipbook.Load` →
-`ExrTgaTextures.LoadExrHdr`, whole-file read + per-pixel half-float conversion). Text
-fields commit per keystroke, so any >400ms typing pause fires a full reload mid-edit → a
-multi-hundred-ms stall → the key-repeat entry above turns it into dropped/repeated chars
-(and the repeats call MarkDirty again, re-arming the loop). A debounce defers work; it
-doesn't shrink it. Fix directions: reload ONLY the edited def (keyed rebuild of one
-`_flipbooks` entry); and/or hold the flush while `_ui.IsTextInputActive`; the close-path
-`force:true` flush already guarantees consistency on exit. Related per-keystroke churn:
-the manager preview `_fbPreviewCache.GetOrLoad(fd.Path)` runs every frame keyed on the
-live path (one disk probe per keystroke while typing `fb_path`), and the texture browser's
-Up/Down nav decodes `.exr` previews synchronously per keypress (`SelectFile`).
+`Editor/SpellEditorWindow.cs` now implements exactly the censused fix direction (the
+2026-07 typing-lag fix, comments at ~1850-1895): `MarkDirty` records the edited def in
+`_fbDirtyIds` (sets `_fbReloadAll` only when attribution fails), and
+`FlushPendingFlipbookReload` reloads per-def via `Game1.ReloadFlipbookFromRegistry(id)` —
+full `ReloadFlipbooksFromRegistry()` only on the `_fbReloadAll` fallback — and **holds the
+flush while `_ui.IsTextInputActive`** (a typing pause is not "done editing"; the manager's
+close path force-flushes). Verified 2026-07-22. Possible residuals (NOT re-verified): the
+manager preview `_fbPreviewCache.GetOrLoad(fd.Path)` keyed on the live path per frame
+(one disk probe per keystroke while typing `fb_path`), and the texture browser's Up/Down
+nav decoding `.exr` previews synchronously per keypress (`SelectFile`).
 
-# Sub-pixel DrawString positions in GameRenderer.Hud.cs (found 2026-07-22)
+# FIXED — Sub-pixel DrawString positions in GameRenderer.Hud.cs (found 2026-07-22, fixed in `330e64f`)
 
-The PointClamp text-rounding rule (CLAUDE.md "UI Text Rendering") is violated at three
-sites in `Necroking/GameRenderer.Hud.cs` — its private `DrawText` helpers (~822/~828) do
-NOT round, unlike `HUDRenderer.Text` (~1044) and `EditorBase.DrawText` which do:
-- `DrawGameOver` (~812, ~818): title + "Press R to restart" centered with
-  `screenW / 2f - size.X / 2f` floats — the exact MeasureString-centering case CLAUDE.md
-  calls out. Fix: cast to `(int)` (or round inside the `DrawText` helpers).
-- Save-preview card inventory quantity (~775-777): `br - size` where `size` is a float
-  `MeasureString` — sub-pixel bottom-right-aligned text. Fix: `(int)(br.X - size.X)` etc.
-- F7 unit-info debug overlay (~404): `new Vector2(sp.X - info.Length, sp.Y - 28)` with
-  float screen pos `sp` (debug-only, minor; also uses `info.Length` chars as pixels).
-Elsewhere the rule is respected (CharacterStatsUI, MenuCommon, TableCraftMenuUI,
-MapEditorWindow.DrawTextCentered, TooltipSystem, WidgetLayoutUtils all round; damage
-numbers in `GameRenderer.World.cs` draw at float positions deliberately — smooth-moving
-scaled world text, leave them).
+The PointClamp text-rounding rule (CLAUDE.md "UI Text Rendering") was violated at three
+sites in `Necroking/GameRenderer.Hud.cs`. Fixed in `330e64f`: both private `DrawText`
+helpers now round positions to integer pixels (covering `DrawGameOver`'s
+MeasureString-centering — the exact case CLAUDE.md calls out), and the save-preview
+quantity label + F7 debug overlay positions cast to int. Kept as the audit note:
+elsewhere the rule is respected (CharacterStatsUI, MenuCommon, TableCraftMenuUI,
+MapEditorWindow.DrawTextCentered, TooltipSystem, WidgetLayoutUtils, `HUDRenderer.Text`,
+`EditorBase.DrawText` all round; damage numbers in `GameRenderer.World.cs` draw at float
+positions deliberately — smooth-moving scaled world text, leave them). When adding a
+DrawText-style helper, round INSIDE the helper so every caller is covered.
 
-# DrawTimeControls re-declares the speed presets (found 2026-07-22)
+# FIXED — DrawTimeControls re-declared the speed presets (found 2026-07-22, fixed in `330e64f`)
 
-`UI/HUDRenderer.cs` `DrawTimeControls` (~945) declares
-`stackalloc float[] { 0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f }` instead of reading the
-public canonical `TimeControlSpeeds` (~699) that `TimeControlsLayer.OnPointer` applies —
-two copies of the presets ~250 lines apart that must stay in sync (a changed preset would
-draw one speed and set another). Fix: iterate `TimeControlSpeeds` in the draw.
+`UI/HUDRenderer.cs` `DrawTimeControls` duplicated the speed presets as a `stackalloc`
+~250 lines from the canonical `TimeControlSpeeds` that `TimeControlsLayer.OnPointer`
+applies. Fixed in `330e64f`: the draw iterates `TimeControlSpeeds` (the `labels` array
+must stay index-aligned with it — noted in a comment at the site).
 
 # Dead authored VFX fields — persisted in data, consumed by nothing (census 2026-07-21)
 
