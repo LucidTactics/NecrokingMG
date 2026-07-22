@@ -51,7 +51,13 @@
           "stat": "Toughness",
           "value": 15
         }
-      ]
+      ],
+      "unitTint": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 0
+      }
     },
     {
       "id": "strength_buff",
@@ -260,28 +266,35 @@
         "attachedFlame": true,
         "scatterRadius": 1.3,
         "scatterStrength": 0.8
+      },
+      "unitTint": {
+        "r": 0,
+        "g": 0,
+        "b": 0,
+        "a": 0
       }
     },
     {
       "id": "buff_4_copy_copy",
       "name": "CastingEffect Lightning",
-      "duration": 4,
+      "duration": -1,
+      "fadeOutSeconds": 0.5,
       "hasWeaponParticle": true,
       "weaponParticle": {
-        "flipbookID": "fire_loop",
-        "fps": 15,
+        "flipbookID": "curly_lightning_03_copy",
+        "fps": 25,
         "color": {
           "r": 216,
           "g": 253,
           "b": 248,
           "a": 58,
-          "intensity": 1.8
+          "intensity": 1
         },
         "spawnRate": 10,
         "rangeMin": 0,
         "rangeMax": 1,
         "particleLifetime": 0.5,
-        "particleScale": 0.7,
+        "particleScale": 1.8,
         "moveSpeed": 1,
         "moveDirX": 0,
         "moveDirY": 0,
@@ -289,8 +302,8 @@
         "blendMode": 1,
         "renderBehind": false,
         "attachedFlame": true,
-        "scatterRadius": 1.3,
-        "scatterStrength": 0.8
+        "scatterRadius": 0.6,
+        "scatterStrength": 1
       },
       "unitTint": {
         "r": 0,

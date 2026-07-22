@@ -46,6 +46,16 @@ public class FlipbookRef
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Loop { get; set; }
 
+    /// <summary>ScatterGlow halo around the effect while it plays (lit air,
+    /// tinted from Color). One-shots breathe with the alpha envelope; channel
+    /// hit loops hold steady while channeling. 0 = off. When set, this
+    /// OVERRIDES any spell-level scatter the spawn call site threads in.</summary>
+    [EditorField(Label = "Scatter R", Order = 9, Step = 0.1f, Decimals = 1, Tooltip = "Lit-air glow radius around the effect, world units.\n0 = off. Tinted from Color.")]
+    [JsonPropertyName("scatterRadius")] public float ScatterRadius { get; set; }
+
+    [EditorField(Label = "Scatter Str", Order = 10, Step = 0.05f, Decimals = 2, Tooltip = "Lit-air glow strength.")]
+    [JsonPropertyName("scatterStrength")] public float ScatterStrength { get; set; } = 0.6f;
+
     /// <summary>Optional temperature-ramp recolor — HDR (.exr) flipbooks drawn
     /// additive only. Presence turns the feature on: the texel's heat value
     /// picks a hue from a 1D ramp (t = heat / Max) and drives luminance, so one
@@ -949,9 +959,9 @@ public class SpellDef : INamedDef
     [EditorField(Label = "Impact Flare x", Group = "DRAIN", Order = 733, Step = 0.1f, Decimals = 1, Tooltip = "Bright flare size at the beam endpoints. 0 = off.")]
     [JsonPropertyName("drainImpactFlareScale")] public float DrainImpactFlareScale { get; set; } = 1.0f;
 
-    [EditorVisible("Category", "Drain")]
-    [EditorField(Label = "Target Effect", Group = "DRAIN", Order = 734, Tooltip = "Effect played on the drained target.")]
-    [JsonPropertyName("drainTargetEffect")] public FlipbookRef? DrainTargetEffect { get; set; }
+    // (DrainTargetEffect removed 2026-07: declared + editor-visible but never
+    // consumed by any draw path — the standard HitEffectFlipbook now plays the
+    // looping target effect at the drain end, same as beams.)
 
     // ============ CLOUD ============
     [EditorVisible("Category", "Cloud")]
@@ -1040,6 +1050,45 @@ public class SpellDef : INamedDef
     // of the derived outer/middle/inner shades of CloudColor; Additive entries emit.
     // JSON-only for now — not surfaced in the spell editor.
     [JsonPropertyName("cloudPalette")] public List<CloudPaletteEntry>? CloudPalette { get; set; }
+
+    // Electricity arcs: a flipbook frame stretched between two random points
+    // inside the cloud's live radius (the oriented-sprite ribbon path), spawned
+    // on a repeating timer while the cloud lives. Empty flipbook = off.
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Arc Flipbook", Group = "CLOUD", Order = 845, Tooltip = "Flipbook stretched between random points inside the cloud.\nPlays once per arc. Empty = no arcs.")]
+    [EditorRegistryDropdown("Flipbooks")]
+    [JsonPropertyName("cloudArcFlipbookID")] public string CloudArcFlipbookID { get; set; } = "";
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Arc Flipbook 2", Group = "CLOUD", Order = 846, Tooltip = "Optional second sheet — spawns alternate between the two\nfor visual variety. Empty = only the first is used.")]
+    [EditorRegistryDropdown("Flipbooks")]
+    [JsonPropertyName("cloudArcFlipbookID2")] public string CloudArcFlipbookID2 { get; set; } = "";
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Arc Interval", Group = "CLOUD", Order = 847, Step = 0.05f, Decimals = 2, Tooltip = "Seconds between arc spawns.")]
+    [JsonPropertyName("cloudArcInterval")] public float CloudArcInterval { get; set; } = 0.5f;
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Arc Duration", Group = "CLOUD", Order = 848, Step = 0.05f, Decimals = 2, Tooltip = "Lifetime of one arc — the flipbook plays exactly once over this.")]
+    [JsonPropertyName("cloudArcDuration")] public float CloudArcDuration { get; set; } = 0.45f;
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Arc Color", Group = "CLOUD", Order = 849, Compact = true, Tooltip = "Arc tint; HDR intensity feeds bloom.")]
+    [JsonPropertyName("cloudArcColor")]
+    [JsonConverter(typeof(HdrColorJsonConverter))]
+    public HdrColor CloudArcColor { get; set; } = new(255, 255, 255, 255, 3f);
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Arc Width x", Group = "CLOUD", Order = 850, Step = 0.05f, Decimals = 2, Tooltip = "Width multiplier on the frame's natural aspect ratio.")]
+    [JsonPropertyName("cloudArcWidthScale")] public float CloudArcWidthScale { get; set; } = 1.0f;
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Arc Scatter R", Group = "CLOUD", Order = 851, Step = 0.1f, Decimals = 1, Tooltip = "Lit-air sheath radius around each arc, world units. 0 = off.")]
+    [JsonPropertyName("cloudArcScatterRadius")] public float CloudArcScatterRadius { get; set; }
+
+    [EditorVisible("Category", "Cloud")]
+    [EditorField(Label = "Arc Scatter Str", Group = "CLOUD", Order = 852, Step = 0.05f, Decimals = 2, Tooltip = "Lit-air sheath strength (tinted from Arc Color).")]
+    [JsonPropertyName("cloudArcScatterStrength")] public float CloudArcScatterStrength { get; set; } = 0.7f;
 
     // ============ SACRIFICE ============
     // Sacrifice the friendly undead nearest the cursor: it dies (crumbles into a
@@ -1248,7 +1297,6 @@ public class SpellRegistry : RegistryBase<SpellDef>
         CheckFlipbook(def.HitEffectFlipbook, "hitEffectFlipbook", report);
         CheckFlipbook(def.CastFlipbook, "castFlipbook", report);
         CheckFlipbook(def.SummonFlipbook, "summonFlipbook", report);
-        CheckFlipbook(def.DrainTargetEffect, "drainTargetEffect", report);
     }
 
     /// <summary>A typo'd magic-path id maps to MagicPath.None = "no requirement",

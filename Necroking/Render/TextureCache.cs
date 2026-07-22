@@ -73,6 +73,16 @@ public sealed class TextureCache
         }
     }
 
+    /// <summary>Cache probe WITHOUT loading — lets callers show an already-decoded
+    /// texture instantly while deferring first-time decodes (the texture browser's
+    /// arrow-key nav must not synchronously decode a multi-MB EXR per keypress).
+    /// Returns true when the path has an entry (which may be a cached failure = null).</summary>
+    public bool TryGetCached(string? path, out Texture2D? tex)
+    {
+        tex = null;
+        return !string.IsNullOrEmpty(path) && _cache.TryGetValue(path, out tex);
+    }
+
     /// <summary>Drop all entries (positive and negative) without disposing — e.g. an
     /// editor refreshing its listing wants missing paths re-probed. Positive textures may
     /// still be referenced by in-flight draws, so this does NOT dispose them.</summary>

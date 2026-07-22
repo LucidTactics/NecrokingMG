@@ -31,6 +31,13 @@ public class LightningRenderer
     // batch callback), flushed post-batch in DrawTriangleEffects(). See HdrStripBatch.
     private readonly HdrStripBatch _strips = new();
 
+    // Immediate strip batch for the Y-sorted flipbook arcs (miasma electricity):
+    // each arc builds + flushes alone inside a SpriteScope Suspend/Resume bracket
+    // at its sorted position, so alpha puffs drawn later occlude it — the arc
+    // reads as INSIDE the gas, not painted over it. Separate from _strips, whose
+    // buckets accumulate all frame and flush once in DrawTriangleEffects.
+    private readonly HdrStripBatch _arcStrips = new();
+
     // Cross-section softness (PolylineStrip edgeSoft): the core keeps a crisp
     // flat middle with a thin anti-aliasing ramp; the glow is nearly a full tent
     // so it reads as a real falloff instead of a hard box.
@@ -51,6 +58,7 @@ public class LightningRenderer
         _godRayRenderer = new GodRayRenderer();
         _godRayRenderer.Init(graphicsDevice, hdrIntensityEffect);
         _strips.Init(graphicsDevice, hdrIntensityEffect);
+        _arcStrips.Init(graphicsDevice, hdrIntensityEffect);
     }
 
     public void SetGameTime(float gameTime) => _gameTime = gameTime;
@@ -141,6 +149,30 @@ public class LightningRenderer
                 zap.StartPos.Y, zap.EndPos.Y);
         }
 
+        // Flipbook arcs draw via DrawSingleArcFx as Y-sorted world callbacks —
+        // see GameRenderer.Units CollectYSortItems — NOT in this ribbons pass,
+        // so cloud puffs south of an arc occlude it. Only their ScatterGlow
+        // sheath (lit air around the bolt) registers here: the scatter overlay
+        // composes screen-wide, so it needs no Y-sorting.
+        if (_game._scatterGlow.Active)
+        {
+            foreach (var arc in _sim.Lightning.ArcFx)
+            {
+                if (arc.ScatterRadius <= 0f) continue;
+                // Strength envelope tracks the flipbook's life: full through the
+                // bright frames, out with the sheet's trailing dissipation frames.
+                float t = arc.Timer / MathF.Max(arc.Duration, 0.001f);
+                float env = MathF.Min(1f, (1f - t) * 3f);
+                if (env <= 0.01f) continue;
+                _arcScatterPts[0] = _renderer.WorldToScreen(arc.StartPos, arc.StartHeight, _camera);
+                _arcScatterPts[1] = _renderer.WorldToScreen(arc.EndPos, arc.EndHeight, _camera);
+                var c = arc.Color.ToColor();
+                _game._scatterGlow.AddRibbonScreen(_arcScatterPts, arc.ScatterRadius,
+                    new Color(c.R, c.G, c.B), arc.ScatterStrength * env,
+                    arc.StartPos.Y, arc.EndPos.Y);
+            }
+        }
+
         // Draw active beams
         foreach (var beam in _sim.Lightning.Beams)
         {
@@ -218,6 +250,8 @@ public class LightningRenderer
     private static readonly List<Vector2> _barPts = new();
     // Scratch for the drain scatter sheath endpoints (render thread only).
     private readonly Vector2[] _drainScatterPts = new Vector2[2];
+    // Scratch for the flipbook-arc scatter sheath endpoints (render thread only).
+    private readonly Vector2[] _arcScatterPts = new Vector2[2];
 
     /// <summary>Screen-space endpoints for a drain: caster hand anchor (sprite
     /// height convention, no YRatio foreshortening — same as the beam) and the
@@ -227,6 +261,19 @@ public class LightningRenderer
     private bool TryGetDrainEndpoints(ActiveDrain drain, out Vector2 startSp, out Vector2 endSp)
         => TryGetDrainEndpoints(drain, out startSp, out endSp, out _, out _);
 
+    /// <summary>Resolve the drain's TARGET end in world space: live unit first,
+    /// corpse capture second, false when neither exists (never Vec2.Zero). The
+    /// one resolution shared by the tendril endpoints, the impact clouds, and
+    /// the standard hit-effect loop in GameRenderer.World.</summary>
+    public bool TryGetDrainTargetWorld(ActiveDrain drain, out Vec2 pos)
+    {
+        pos = default;
+        int targetIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.TargetID);
+        if (targetIdx >= 0) { pos = _sim.Units[targetIdx].Position; return true; }
+        if (drain.TargetCorpseIdx >= 0) { pos = drain.CorpsePos; return true; }
+        return false;
+    }
+
     private bool TryGetDrainEndpoints(ActiveDrain drain, out Vector2 startSp, out Vector2 endSp,
         out Vec2 startWorld, out Vec2 targetWorld)
     {
@@ -235,10 +282,7 @@ public class LightningRenderer
         int casterIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.CasterID);
         if (casterIdx < 0) return false;
 
-        int targetIdx = UnitUtil.ResolveUnitIndex(_sim.Units, drain.TargetID);
-        if (targetIdx < 0 && drain.TargetCorpseIdx < 0) return false;
-        Vec2 targetPos = drain.TargetCorpseIdx >= 0 ? drain.CorpsePos : Vec2.Zero;
-        if (targetIdx >= 0) targetPos = _sim.Units[targetIdx].Position;
+        if (!TryGetDrainTargetWorld(drain, out var targetPos)) return false;
 
         startWorld = _sim.Units[casterIdx].EffectSpawnPos2D;
         targetWorld = targetPos;
@@ -248,33 +292,61 @@ public class LightningRenderer
         return true;
     }
 
+    /// <summary>Draw ONE flipbook arc immediately, as a Y-sorted world queue
+    /// callback (submitted per arc in GameRenderer.Units CollectYSortItems).
+    /// Suspends the open sprite batch for the raw strip draw and resumes after —
+    /// the arc keeps full HDR intensity through HdrIntensity.fx while the alpha
+    /// puffs drawn after it (greater sort Y) blend over it. The frame index
+    /// rides the arc's normalized age — the sheet's own dissipation frames
+    /// carry the fade-out, so alpha stays flat.</summary>
+    public void DrawSingleArcFx(SpriteScope s, int arcIdx)
+    {
+        var arcs = _sim.Lightning.ArcFx;
+        if (arcIdx < 0 || arcIdx >= arcs.Count) return;
+        var arc = arcs[arcIdx];
+        if (string.IsNullOrEmpty(arc.FlipbookID)) return;
+        Flipbook? fb = null;
+        _game._flipbooks?.TryGetValue(arc.FlipbookID, out fb);
+        if (fb == null) return;
+
+        // Both ends are physical world heights (points in the air over the
+        // area), not sprite-rig anchors — WorldToScreen convention.
+        var startSp = _renderer.WorldToScreen(arc.StartPos, arc.StartHeight, _camera);
+        var endSp = _renderer.WorldToScreen(arc.EndPos, arc.EndHeight, _camera);
+        if (Vector2.DistanceSquared(startSp, endSp) < 1f) return; // avoid a wasted batch break
+
+        int frame = fb.GetFrameAtNormalizedTime(arc.Timer / MathF.Max(arc.Duration, 0.001f));
+        AddStretchedFlipbookStrips(_arcStrips, fb, frame, startSp, endSp,
+            arc.Color, 1f, arc.WidthScale, arc.FlipV);
+        s.Suspend();
+        _arcStrips.DrawAll();
+        s.Resume();
+    }
+
     /// <summary>
     /// Triangle passes with their own device state (bolt/tendril ribbons + god rays).
-    /// Must be called AFTER the additive SpriteBatch.End(), while the scene RT is
-    /// still bound — additive blending makes the batch/post-batch ordering moot.
+    /// Runs as the WorldLayer.Ribbons queue item — the callback Suspends the open
+    /// sprite batch around this call (raw DrawUserPrimitives) and Resumes after.
+    /// Additive blending makes ordering within the flush moot; what matters is
+    /// that it lands after the collect items (layer 130) and before the hit-effect
+    /// layers (134/136) that must occlude ribbon ends.
     /// </summary>
     public void DrawTriangleEffects()
     {
         _strips.DrawAll();
         _godRayRenderer.DrawAll();
-        DrawDrainClouds();
     }
 
     /// <summary>Drain impact clusters, alpha-blended AFTER the tendril ribbons
     /// so the junction puffs read as opaque clumps covering the beam end. (The
-    /// traveling puffs are all additive and draw with the tendrils in Draw().)</summary>
-    private void DrawDrainClouds()
+    /// traveling puffs are all additive and draw with the tendrils in Draw().)
+    /// Draws into the ALREADY-OPEN HitFxAlpha batch (Materials.HdrAlpha) — the
+    /// caller owns Begin/End; this must not open its own batch.</summary>
+    public void DrawDrainClouds(SpriteBatch batch)
     {
-        bool any = false;
-        foreach (var d in _sim.Lightning.Drains)
-            if (d.Alive && d.Visuals.ImpactPuffCount > 0) { any = true; break; }
-        if (!any) return;
-
         Flipbook? cloudFb = null;
         _game._flipbooks?.TryGetValue("cloud03", out cloudFb);
 
-        var mat = Materials.HdrAlpha ?? Materials.Scene;
-        mat.Begin(_spriteBatch);
         float fxScale = FxScale();
         foreach (var drain in _sim.Lightning.Drains)
         {
@@ -285,10 +357,9 @@ public class LightningRenderer
             Flipbook? impactFb = cloudFb;
             if (v.ImpactFlipbookID != "cloud03" && _game._flipbooks != null)
                 _game._flipbooks.TryGetValue(v.ImpactFlipbookID, out impactFb);
-            AddDrainImpactSprites(_spriteBatch, _glowTex, impactFb, startSp, endSp, v,
+            AddDrainImpactSprites(batch, _glowTex, impactFb, startSp, endSp, v,
                 drain.Elapsed, fxScale);
         }
-        _spriteBatch.End();
     }
     public GodRayRenderer GetGodRayRenderer() => _godRayRenderer;
 
@@ -345,17 +416,26 @@ public class LightningRenderer
     /// glow (real channels brighten below a fork as the branch current joins).</summary>
     private void AddBoltScatter(Vector2 startSp, Vector2 endSp, LightningStyle style,
         float fade, float fxScale, uint seed, float worldYStart, float worldYEnd)
+        => AddBoltScatterStatic(_game._scatterGlow, startSp, endSp, style, fade, fxScale,
+            seed, worldYStart, worldYEnd, _gameTime);
+
+    /// <summary>Static variant (same pattern as AddBoltStripsStatic) so
+    /// SpellPreview's own ScatterGlowSystem instance registers the SAME bolt
+    /// sheath the game does — one bolt-shape/scatter conversion for both.</summary>
+    public static void AddBoltScatterStatic(ScatterGlowSystem scatter, Vector2 startSp,
+        Vector2 endSp, LightningStyle style, float fade, float fxScale, uint seed,
+        float worldYStart, float worldYEnd, float gameTime)
     {
-        if (style.ScatterRadius <= 0f || fade <= 0.01f || !_game._scatterGlow.Active) return;
-        float flicker = ComputeBoltShape(startSp, endSp, style, _gameTime,
+        if (style.ScatterRadius <= 0f || fade <= 0.01f || !scatter.Active) return;
+        float flicker = ComputeBoltShape(startSp, endSp, style, gameTime,
             out var pts, out var branches, seed, fxScale);
         float s = style.ScatterStrength * flicker * fade;
-        _game._scatterGlow.AddRibbonScreen(pts, style.ScatterRadius, style.ScatterRgb,
+        scatter.AddRibbonScreen(pts, style.ScatterRadius, style.ScatterRgb,
             s, worldYStart, worldYEnd);
         // Branch depth: branches are short, a flat mid-bolt Y is indistinguishable.
         float branchY = (worldYStart + worldYEnd) * 0.5f;
         foreach (var branch in branches)
-            _game._scatterGlow.AddRibbonScreen(branch, style.ScatterRadius * style.BranchDecay,
+            scatter.AddRibbonScreen(branch, style.ScatterRadius * style.BranchDecay,
                 style.ScatterRgb, s * 0.5f, branchY, branchY);
     }
 
@@ -506,6 +586,56 @@ public class LightningRenderer
 
     // Scratch for tendril polylines (render thread only).
     private static readonly List<Vector2> _tendrilPts = new();
+
+    // Scratch for stretched-flipbook arc endpoints (render thread only).
+    private static readonly List<Vector2> _arcPts = new();
+
+    /// <summary>
+    /// Stretch one flipbook frame from screen point A to screen point B as a
+    /// textured ribbon — the oriented-sprite primitive (electricity arcs etc.).
+    /// The ART carries the shape: the geometry is a straight strip whose width
+    /// preserves the frame's aspect ratio (widthScale on top of that), rotated
+    /// and stretched purely by where the endpoints land. THE single stretched-
+    /// flipbook rasterizer — in-game renderer and previews share it.
+    /// Brightness: tint.rgb * frame.rgb * intensity via the per-bucket uniform;
+    /// pass alpha pre-faded. flipV mirrors the frame across the arc's axis for
+    /// variety between instances.
+    /// </summary>
+    public static void AddStretchedFlipbookStrips(HdrStripBatch strips, Flipbook fb,
+        int frame, Vector2 start, Vector2 end, HdrColor color, float alpha,
+        float widthScale = 1f, bool flipV = false)
+    {
+        if (!fb.IsLoaded || fb.Texture == null || alpha <= 0.003f) return;
+        var src = fb.GetFrameRect(frame);
+        if (src.Width <= 0 || src.Height <= 0) return;
+        float len = Vector2.Distance(start, end);
+        if (len < 1f) return;
+
+        var tex = fb.Texture;
+        // Half-texel inset so linear filtering at the frame border can't bleed
+        // the neighboring frame's pixels into the strip.
+        float uvMinX = (src.Left + 0.5f) / tex.Width;
+        float uvMaxX = (src.Right - 0.5f) / tex.Width;
+        float uvMinY = (src.Top + 0.5f) / tex.Height;
+        float uvMaxY = (src.Bottom - 0.5f) / tex.Height;
+        var uvMin = new Vector2(uvMinX, flipV ? uvMaxY : uvMinY);
+        var uvMax = new Vector2(uvMaxX, flipV ? uvMinY : uvMaxY);
+
+        // Aspect-preserving width: the frame stretched A→B keeps its authored
+        // proportions, so the art never distorts as arc length varies... within
+        // reason — widthScale is the author's deliberate override.
+        float width = len * (src.Height / (float)src.Width) * widthScale;
+
+        float intensity = MathF.Min(color.Intensity, HdrColor.MaxHdrIntensity);
+        var verts = strips.GetTexturedBucket(intensity, tex);
+        _arcPts.Clear();
+        _arcPts.Add(start);
+        _arcPts.Add(end);
+        // edgeSoft 0: the frame's own alpha carries the edges — a vertex tent
+        // profile on top would double-fade the art.
+        PolylineStrip.BuildTexturedStretch(verts, _arcPts, color.ToColor(), color.ToColor(),
+            alpha, alpha, width, width, 0f, uvMin, uvMax);
+    }
 
     /// <summary>Perpendicular displacement of the tendril path at parameter t
     /// (arc + travelling wave), in authored pixels — callers multiply by their

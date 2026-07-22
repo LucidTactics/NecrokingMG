@@ -28,8 +28,11 @@ executed by `GameRenderer.Draw.cs::Draw()`. Full design + rationale:
   baked at load — the per-frame flip is gone), `DepthStamp`, `MorphSdf`, `OutlineAlpha`/
   `OutlineAdditive`; `MagicGlyph` (Immediate sort mode — per-glyph uniforms in one batch) and
   `WeatherFog` register themselves in their renderers.
-- **`SpriteQueue.cs`** — `WorldLayer` enum (the layer bands: Roads…Corpses, FogBack, YSort,
-  Projectiles, Rain, FogWisps, EffectsHdrAlpha/Additive, AdditiveShapes…), packed ulong
+- **`SpriteQueue.cs`** — `WorldLayer : byte` enum (numeric bands with insertion gaps:
+  Roads=10, Traps=20, Glyphs=30, Walls=40, Shadows=50, HoverMarkers=60, Corpses=70,
+  FogBack=75, YSort=80, Projectiles=90, Rope=100, Rain=110, FogWisps=115,
+  EffectsHdrAlpha=120, EffectsHdrAdditive=130, AdditiveShapes=140, Foragables=200,
+  DamageNumbers=210 — new layers slot into the numeric gaps, no renumbering), packed ulong
   `SortKey` (`[layer 8|depth24|materialId 16|seq 16]`, camera-relative quantized worldY),
   `RenderItem` (sprite args or cached-delegate callback with int payloads + optional
   `SetParams` + `LayerDepth`), `SpriteScope` (**`PushMaterial`/`PopMaterial`/`Suspend`/
@@ -96,7 +99,10 @@ both live in `GameRenderer.Pipeline.cs`:
    MUST set `layerDepth` via `FogDepthForY(worldY, cameraY)` or the depth test against the
    stamps is garbage (stamps map larger Y → smaller depth).
 2. **A new `scene.Add(new CustomPass(...))` between `FogDepthOccluders` and `_fxPass`**
-   (or after it, before `LightningTris`) — for imperative work that owns its device state.
+   (or after it, before `ScatterGlow`) — for imperative work that owns its device state.
+   (The old `LightningTris` CustomPass is gone — the ribbon flush is now a
+   `WorldLayer.Ribbons` queue item inside `HdrEffects`; prefer a queue item over a new pass
+   when the work must interleave with effect layers.)
 Materials: `Materials.FogWisp` = AlphaBlend + **DepthStencilState.DepthRead**;
 `Materials.HdrAdditive` = Additive but NO DepthRead — an additive+DepthRead effect needs a
 new `Materials.Register(name, effect, BlendState.Additive, LinearClamp,
@@ -669,27 +675,49 @@ by `DrawUserPrimitives` with `HdrIntensity.fx` — seamless bends, soft cross-se
   it only *collects* — projects endpoints to screen (caster anchor = `EffectSpawnPos2D` +
   `EffectSpawnHeight * Zoom` via `WorldToScreenPx`, target = `WorldToScreen(pos, 1f)`), then
   `AddBoltStrips` / `AddDrainTendrilStrips` append vertices into the `HdrStripBatch _strips`.
-  Flush = the `LightningTris` `CustomPass` right after (`_lightningRenderer.DrawTriangleEffects()`
-  → `_strips.DrawAll()` + god rays). Vertices are bucketed per HDR intensity
+  Flush = the `_cbFxRibbons` queue item (`WorldLayer.Ribbons = 132`, `GameRenderer.Pipeline.cs`):
+  `s.Suspend()` → `_lightningRenderer.DrawTriangleEffects()` (`_strips.DrawAll()` + god rays) →
+  `s.Resume()`. Above it sort `HitFxAlpha = 134` (legacy drain junction puffs via
+  `DrawDrainClouds(batch)` — draws into the item's open HdrAlpha batch, no Begin/End of its
+  own — then `DrawEffectsFiltered(0)`) and `HitFxAdditive = 136` (`DrawEffectsFiltered(1)`),
+  so spell one-shots and beam/drain `HitEffectFlipbook` loops render OVER the ribbons
+  ("hit effects in front" is a declared layer). Vertices are bucketed per HDR intensity
   (`HdrStripBatch.GetBucket`) because `VertexPositionColor` can't carry >1.0 — each bucket is
   one `DrawUserPrimitives` with `HdrIntensity.fx`'s `Intensity` uniform. Additive → bloom fires.
 - **The shared ribbon builder**: `PolylineStrip.Build(outVerts, points, tint, alphaStart,
   alphaEnd, widthStart, widthEnd, edgeSoft)` (bottom of `HdrStripBatch.cs`) — miter joins,
   adaptive point merging (points closer than ~60% of half-width merge so wide ribbons don't
-  fold), tent-function edge alpha. **It already supports linear taper** (`widthStart` ≠
-  `widthEnd`) and end-to-end alpha ramp — callers currently pass equal widths.
+  fold), tent-function edge alpha. Supports linear taper (`widthStart` ≠ `widthEnd`), an
+  end-to-end alpha ramp, and a **gradient overload** (`tintStart`/`tintEnd` RGB lerp along
+  arc length — the drain's hotter-at-source shift). The drain funnel uses the taper
+  (`DrainVisualParams.SourceWidthScale` + `FlowReversed` pick which end is wide).
+- **TEXTURED ribbons exist**: `PolylineStrip.BuildTextured(outVerts, points, tintStart,
+  tintEnd, alphaStart, alphaEnd, widthStart, widthEnd, edgeSoft, uOffsetPx, uScalePx)` emits
+  `VertexPositionColorTexture` — U = arc-length px (offset/scaled, wrap-sampled so animating
+  `uOffsetPx` scrolls the texture along the beam), V spans 0→1 across the ribbon width.
+  Buckets: `HdrStripBatch.GetTexturedBucket(intensity)`; flushed with the
+  **`HdrIntensityTexturedTechnique`** in `HdrIntensity.fx` binding ONE shared batch-wide
+  texture — `TextureUtil.GetStreakNoise(device)` (the drain scroll noise). Consumer: the
+  drain scroll overlay in `AddDrainTendrilStripsStatic` (two layers at different
+  scales/speeds, gated by `DrainVisualParams.ScrollSpeed`/`ScrollAlpha`/`ScrollScale` —
+  `drainScroll*` fields in spells.json). **This is the seed for any "texture/flipbook
+  stretched from A to B" feature** — the current limits are the single shared texture (no
+  per-bucket texture key, so an arbitrary flipbook frame can't ride it yet) and
+  wrap-sampling (an atlas sub-rect would bleed neighbors; needs clamped sub-rect UV math).
 - **Bolt shape**: `ComputeBoltShape` (flicker + JitterHz-quantized reseed) →
   `GenerateBoltPoints` (recursive midpoint displacement) + `GenerateBranches`; rasterized by
   `AddBoltStripsStatic` (glow ribbon wide-first, then core), edge softness constants
   `CoreEdgeSoft=0.5` / `GlowEdgeSoft=0.9` at top of `LightningRenderer.cs`.
 - **Drain tendrils**: `AddDrainTendrilStripsStatic(strips, start, end, DrainVisualParams,
-  elapsed)` — THE single tendril rasterizer (in-game + `Editor/SpellPreview.cs` +
-  `SpellVisualTestScenario` all call it). Per tendril: start fanned by `SwayAmplitude`, end
-  swayed by sine, shape from `BuildTendrilPoints` (segments = length/20, perpendicular
-  arc `sin(t·π)·20` + travelling wave `sin(time·4 + t·8)·5` — **note: arc/wave amplitudes are
-  HARDCODED 20/5 px; `DrainVisualParams.ArcHeight` is currently NOT consumed**), then two
-  `PolylineStrip.Build` calls (glow @ alpha 120/255, core @ 200/255), widths pulsed by
-  `PulseHz`/`PulseStrength`.
+  elapsed, fxScale)` — THE single tendril rasterizer (in-game + `Editor/SpellPreview.cs` +
+  `SpellVisualTestScenario` all call it). Per tendril: the flow-source end fanned/swayed by
+  `SwayAmplitude` (`FlowReversed` picks which end), shape from `BuildTendrilPoints(start,
+  end, time, arcHeight, fxScale, outPts)` (segments = length/20, lateral offset =
+  `TendrilLateral(t, time, arcHeight) * fxScale` — **`ArcHeight` IS consumed now**; the old
+  "hardcoded 20/5 px" note is fixed), then glow+core `PolylineStrip.Build` calls (gradient
+  tints via `ScaledTint` per intensity bucket, alpha 120/255 glow / 200/255 core, widths
+  pulsed by `PulseHz`/`PulseStrength`, tapered by `SourceWidthScale`) + the optional
+  textured scroll overlay (see the textured-ribbons bullet).
 - **Not the same as `DrawUtils.DrawLine`**: the rope/bezier overlay helper
   (`Render/DrawUtils.cs`) is a straight-alpha screen-space rotated-pixel segment, unrelated.
 
@@ -833,18 +861,36 @@ and disables the wake bake with a startup log.
 - `GameRenderer.World.cs` `DrawEffectsFiltered` — EffectManager one-shots (`eff.FlipbookKey`:
   spell impacts, cast flares, summon effects), `Materials.HdrAlpha`/`HdrAdditive` per
   `BlendMode`, `ToHdrVertexAlpha`/`ToHdrVertex` (true HDR); fog-of-war gated; registers a
-  ScatterGlow halo per effect. **Since a3cfd1a `SpellDef.HitEffectFlipbook` is the standard
+  ScatterGlow halo per effect. **The draw bodies are extracted to
+  `Render/SpellVfxDraw.cs`** (`SpellVfxDraw.DrawEffects` + `DrawFlipbookRefLoop`, fed a
+  `VfxView` context — shared verbatim with `Editor/SpellPreview.cs`); flipbook frames draw
+  via `scope.Draw(fb.Texture, screenPos, srcRect, color, rotation:0, origin, fbScale, …)` —
+  always screen-facing, rotation hardwired 0. GOTCHA: `Effect.Alignment` (0=ground/
+  1=upright, set from `FlipbookRef.Alignment` and `Projectile.HitEffectAlignment`) is
+  **stored but consumed by NO draw path** — "Ground" alignment currently renders identically
+  to "Upright". **Since a3cfd1a `SpellDef.HitEffectFlipbook` is the standard
   hit splash for EVERY category** — spawn sites: projectile impacts (`Game1.Spells.cs`
   `SpawnProjectileImpactEffects`, consumed once per tick right after `_sim.Tick`; spell
   projectiles route through the def via `SpawnFlipbookEffect`, potions keep the legacy
   field-copy), strike land (`LightningSystem.Update` telegraph-elapse, one-shot guarded by
   `DamageApplied`), zap hit + cloud burst (`SpellEffectSystem.ExecuteStrikeFrom`/
-  `ExecuteCloud`). **Channel beams are different**: `DrawBeamHitEffects` draws the hit
-  effect STATELESSLY per frame off live `_sim.Lightning.Beams` records (frame clock =
-  `beam.Elapsed`; Loop cycles, off plays once + holds last frame) — it lives exactly as
-  long as `beam.Alive`. Drain "hit" visuals stay the LightningSystem's own fields
-  (`DrainImpactFlipbook`→`ImpactFlipbookID`, drawn statelessly in `LightningRenderer`
-  while the drain lives). Frame playback in `DrawEffectsFiltered`: `LoopFrames` cycles via
+  `ExecuteCloud`). **Channel beams/drains are different**: the beam+drain loops at the top
+  of `DrawEffectsFiltered` (`GameRenderer.World.cs`, no named helper) draw the hit effect
+  STATELESSLY per frame off live `_sim.Lightning.Beams`/`.Drains` records via
+  `SpellVfxDraw.DrawFlipbookRefLoop` (frame clock = `beam.Elapsed`/`drain.Elapsed`; Loop
+  cycles, off plays once + holds last frame) — it lives exactly as long as the record's
+  `Alive`. Gates on that in-game path (each silently skips the draw): record `Alive` +
+  non-empty `SpellID`, `Spells.Get` hit, `ResolveUnitIndex(TargetID)` ≥ 0 (drains:
+  `TryGetDrainTargetWorld`), non-empty `FlipbookID`, blend-pass match, flipbook present
+  in `_g._flipbooks` + `IsLoaded`, fog-of-war `Visible(targetPos)` (preview has NO fog
+  gate). **GOTCHA — "shows in preview, invisible in game"**: `FlipbookRef.Loop` defaults
+  FALSE and is pruned from spells.json when default; a non-looping channel hit effect
+  plays its clip once (~frames/fps seconds) then HOLDS THE LAST FRAME for the whole
+  channel — FX sheets that fade to an empty last frame (e.g. `FX_TX_AroundLightning_01`)
+  render as nothing after the first split second. The spell-preview auto-replay keeps
+  resetting `Elapsed`, so the preview always shows the bright early frames and masks the
+  bug. Fix = set `loop: true` on the ref (2026-07-21 lightning_beam find). Frame playback
+  in `DrawEffectsFiltered`: `LoopFrames` cycles via
   `(Age*fps) % TotalFrames`, one-shots map the clip once onto the Lifetime via
   `GetFrameAtNormalizedTime`; missing/unloaded `FlipbookKey` falls back to a tinted
   `_glowTex` soft round glow (what a dangling flipbook id looks like in-game).

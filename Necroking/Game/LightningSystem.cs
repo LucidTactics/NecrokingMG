@@ -86,6 +86,39 @@ public class ActiveZap
     public LightningStyle Style = new();
 }
 
+/// <summary>A one-shot flipbook arc stretched between two world points — the
+/// oriented-sprite effect (miasma electricity crawl etc.). Pure visual: no
+/// damage, no channel rules; plays its flipbook once over Duration and dies.
+/// Rendered by LightningRenderer.AddStretchedFlipbookStrips.</summary>
+public class ActiveArcFx
+{
+    public Vec2 StartPos;
+    public Vec2 EndPos;
+    public float StartHeight;
+    public float EndHeight;
+    public float Timer;
+    public float Duration;
+    public string FlipbookID = "";
+    public HdrColor Color = new(255, 255, 255, 255, 2f);
+    /// <summary>Multiplier on the aspect-preserving width (1 = the frame's
+    /// authored proportions stretched A→B).</summary>
+    public float WidthScale = 1f;
+    /// <summary>Mirror the frame across the arc's axis (instance variety).</summary>
+    public bool FlipV;
+    /// <summary>Camera-ward (south) offset added to the Y-sort key, in world
+    /// units. Cloud puffs sort by their southern visual EDGE (center + a large
+    /// extent term), so an unbiased arc loses to nearly every puff and gets
+    /// smothered; the spawner sets this (~the cloud radius) so the arc sits
+    /// mid-pack — in front of some puffs, behind others. Same idea as the
+    /// additive glow puffs' FrontSortBias.</summary>
+    public float SortYBias;
+    /// <summary>ScatterGlow sheath along the arc (0 = none) — lit air around
+    /// the bolt, tinted from Color's RGB. World units, same convention as
+    /// LightningStyle.ScatterRadius.</summary>
+    public float ScatterRadius;
+    public float ScatterStrength = 0.7f;
+}
+
 public class ActiveBeam
 {
     /// <summary>Stable per-instance seed salt (see ActiveStrike.Seed). Without it a
@@ -212,6 +245,7 @@ public class LightningSystem
     private readonly List<ActiveZap> _zaps = new();
     private readonly List<ActiveBeam> _beams = new();
     private readonly List<ActiveDrain> _drains = new();
+    private readonly List<ActiveArcFx> _arcFx = new();
 
     // Per-instance seed salts (visual only — never touches sim determinism).
     private uint _seedCounter = 0x9E3779B9;
@@ -221,6 +255,7 @@ public class LightningSystem
     public IReadOnlyList<ActiveZap> Zaps => _zaps;
     public IReadOnlyList<ActiveBeam> Beams => _beams;
     public IReadOnlyList<ActiveDrain> Drains => _drains;
+    public IReadOnlyList<ActiveArcFx> ArcFx => _arcFx;
 
     public void SpawnStrike(Vec2 targetPos, float telegraphDuration, float effectDuration,
                             float aoeRadius, int damage, LightningStyle style, string spellID,
@@ -286,6 +321,22 @@ public class LightningSystem
             Seed = NextSeed(),
             StartPos = start, EndPos = end, Duration = duration, Style = style,
             StartHeight = startHeight, EndHeight = endHeight
+        });
+    }
+
+    public void SpawnArcFx(Vec2 start, Vec2 end, float duration, string flipbookID,
+                           HdrColor color, float widthScale = 1f, bool flipV = false,
+                           float startHeight = 0f, float endHeight = 0f,
+                           float sortYBias = 0f,
+                           float scatterRadius = 0f, float scatterStrength = 0.7f)
+    {
+        _arcFx.Add(new ActiveArcFx
+        {
+            StartPos = start, EndPos = end, Duration = duration,
+            FlipbookID = flipbookID, Color = color, WidthScale = widthScale,
+            FlipV = flipV, StartHeight = startHeight, EndHeight = endHeight,
+            SortYBias = sortYBias,
+            ScatterRadius = scatterRadius, ScatterStrength = scatterStrength
         });
     }
 
@@ -356,6 +407,13 @@ public class LightningSystem
         {
             _zaps[i].Timer += dt;
             if (_zaps[i].Timer >= _zaps[i].Duration) _zaps.RemoveAt(i);
+        }
+
+        // Update flipbook arcs (same lifecycle as zaps: age out, no damage)
+        for (int i = _arcFx.Count - 1; i >= 0; i--)
+        {
+            _arcFx[i].Timer += dt;
+            if (_arcFx[i].Timer >= _arcFx[i].Duration) _arcFx.RemoveAt(i);
         }
 
         // Update beams
@@ -569,6 +627,6 @@ public class LightningSystem
 
     public void Clear()
     {
-        _strikes.Clear(); _zaps.Clear(); _beams.Clear(); _drains.Clear();
+        _strikes.Clear(); _zaps.Clear(); _beams.Clear(); _drains.Clear(); _arcFx.Clear();
     }
 }

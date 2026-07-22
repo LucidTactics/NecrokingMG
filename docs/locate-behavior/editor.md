@@ -43,9 +43,24 @@ the vec2/area variants — all follow the identical activate/return pattern.)
   stuck unless the caller only commits on blur.
 
 ### Keyboard: `HandleTextInput(gameTime)`
-Called from the update tick only when `_activeFieldId != null` (see the `_activeFieldId !=
-null → HandleTextInput` line in the main update). Edits `_inputBuffer` in place; Enter/Tab
+Called from `EditorBase.UpdateInput` (invoked once per **Update** tick from `Game1.Update`,
+~line 2981) only when `_activeFieldId != null`. Edits `_inputBuffer` in place; Enter/Tab
 close single-line fields, Escape closes, key-repeat via `_keyRepeatTimer`/`_lastRepeatingKey`.
+
+**Typing is POLLED, not event-driven** — `_kb.GetPressedKeys()` per Update; there is no
+`Game.Window.TextInput` char-event path. Consequences under frame stalls (the game runs
+MonoGame default `IsFixedTimeStep = true`, so a slow Draw is followed by a burst of
+back-to-back catch-up Updates):
+- **Dropped chars:** a tap that goes down+up entirely inside one long frame is never seen in
+  any sampled `KeyboardState`.
+- **Repeated chars:** the repeat logic is `_keyRepeatTimer += dt; if (> 0.4) { -= 0.03;
+  repeat }` with dt = `ElapsedGameTime`. Catch-up Updates each add 16.6ms while the key from
+  the last real keystroke is still physically down, so a ~400ms+ stall crosses the 0.4s
+  initial-delay threshold inside one burst and then fires a repeat roughly every other
+  catch-up Update — a single tap becomes a burst of duplicates. The timer measures
+  accumulated *update time*, not wall-clock hold time, and `justPressed` does not reset
+  `_lastRepeatingKey` state across stalls. See anti-patterns-list.md "Editor key-repeat
+  timer".
 **Text-field clipboard (commit 9d3c626) lives here**: Ctrl+A/C/X/V on the single-line
 buffer via `TextCopy.ClipboardService`; other Ctrl+letter chords are swallowed. This only
 runs while a field is active — editors gate their own global chords on
@@ -477,9 +492,27 @@ per-field UI (tooltips, validation):
   covers every reflected field (also item editor, which shares the renderer). Unit editor
   needs a per-call helper (promote `RowTip` into `EditorBase`).
 
+### Spell preview pane (`Editor/SpellPreview.cs`) — what's shared vs duplicated with the game
+Fixed side-view mini-scene (caster x=-3, target x=+3, `CameraZoom=35`/`CameraYRatio=0.5`
+consts; own `WorldToScreen`, same projection math as `Camera25D` but fixed zoom, no camera).
+Own mini-sim structs (`PreviewProjectile/Strike/Zap/Beam/Drain/Effect/HitEffect`) with own
+spawn/update loops. **Shared with the game** (parity holds automatically): the
+`LightningRenderer.*Static` ribbon/drain helpers + `AddDrainFlare/Cloud/ImpactSprites`,
+`GodRayRenderer`, `HdrStripBatch`, `BloomRenderer` (same class, OWN instance with
+**hardcoded** `BloomSettings` Threshold 0.4/Intensity 2.0 — NOT the user's
+`Settings.Bloom`), `ProjectileManager.SolveLobTheta`/constants, the `Build*Style` builders,
+`Game1._flipbooks`, `Materials.SelectHdrFlipbookMaterial`, `TextureUtil.GetRadialGlow`.
+**Preview-only divergences**: no ScatterGlow (`AddBoltScatter` never called), no seed/
+fxScale on bolt statics, hardcoded endpoint heights 1.5/1.0 and sky positions, hit/cast/
+summon/cloud effects are hand-drawn rings using only the def's Color/Scale (the actual
+HitEffect/Cast/Summon flipbooks are NOT played), no arrow fallback, no fog/shadows/ground
+shader, no unit sprites (diamond markers). Driven by `SpellEditorWindow` (`Init` ~:1691,
+`UpdateSpell`/`Update(dt)` ~:1630, `RenderToTarget` → `GetTexture` blit).
+
 **Look/edit here when…** adding/reordering a spell-editor field (annotate `SpellDef` in
 `SpellRegistry.cs`), adding a unit-editor field (the section method in `UnitEditorWindow.cs`),
-adding per-field hover help (the `DrawField` chokepoint / `RowTip` precedent above).
+adding per-field hover help (the `DrawField` chokepoint / `RowTip` precedent above),
+or fixing a "preview doesn't match the game" visual (the shared-vs-duplicated split above).
 
 ## Flipbook Manager popup & the Texture File Browser
 
@@ -496,11 +529,28 @@ adding per-field hover help (the `DrawField` chokepoint / `RowTip` precedent abo
   "Total frames" label = `Cols * Rows` computed inline.
 - **Browse button** → `_fbTextureBrowser.Open(GamePaths.Resolve("assets/Effects"), fd.Path,
   path => { fd.Path = path; MarkDirty(); })` — the callback is where a picked texture lands.
-- **Live-reload seam**: `SpellEditorWindow.MarkDirty()` override calls
-  `Game1.Instance.ReloadFlipbooksFromRegistry()` while `_flipbookManagerOpen` — rebuilds the
-  runtime `Game1._flipbooks` dictionary (`Dictionary<string, Flipbook>`, keyed by id) so
-  grid/path edits take effect without a map reload. Any programmatic def edit must call
-  `MarkDirty()` for the same reason.
+- **Live-reload seam (now DEBOUNCED)**: `SpellEditorWindow.MarkDirty()` override (~line 1833)
+  no longer reloads immediately while `_flipbookManagerOpen` — it sets
+  `_fbReloadDueAt = Environment.TickCount64 + 400`. `FlushPendingFlipbookReload(force:)`
+  fires `Game1.Instance.ReloadFlipbooksFromRegistry()` when due; called with `force:false`
+  at the TOP of `DrawFlipbookManagerPopup` every frame and `force:true` in
+  `CloseFlipbookManager()` (all close paths). **Gotcha:** the debounce only *delays* the
+  work — `ReloadFlipbooksFromRegistry` (`Game1.cs` ~line 563) synchronously reloads EVERY
+  flipbook def from disk (incl. full `.exr` HDR decode via `Flipbook.Load` →
+  `ExrTgaTextures.LoadExrHdr`), and since text fields commit per keystroke, any >400ms
+  pause while typing triggers a full-registry reload mid-edit → a multi-hundred-ms frame
+  stall → dropped/repeated characters via the polled key-repeat mechanics above. Any
+  programmatic def edit must still call `MarkDirty()`.
+- **Animated preview**: shared `Editor/FlipbookPreviewPanel.cs` static `Draw(ui, area, tex,
+  cols, rows, animStartMs, fileName)` — `FrameMs = 130` hold per frame, wall-clock
+  (`Environment.TickCount64`) so it animates while the game clock is paused. Used by both
+  the manager popup and the texture browser's right panel. The manager loads the preview via
+  `_fbPreviewCache` (a `TextureCache`) with `GetOrLoad(_ui._gd, fd.Path)` **every frame**,
+  keyed on the LIVE `fd.Path` — while typing in `fb_path` each keystroke is a new cache key
+  (one disk probe each, negative-cached; a transiently-valid path does a full synchronous
+  decode — `.exr` routes through `ExrTgaTextures.LoadExrPremultiplied`). `_fbPreviewKey`
+  (id+path) restarts `_fbPreviewAnimStart` on change; `CloseFlipbookManager` disposes the
+  cache.
 
 ### Texture File Browser (`Editor/TextureFileBrowser.cs`) — reusable modal PNG picker
 - `class TextureFileBrowser : UI.IModalLayer`; instances owned per-editor (spell editor's
@@ -523,8 +573,17 @@ adding per-field hover help (the `DrawField` chokepoint / `RowTip` precedent abo
   hand-drawn checkerboard; `SpriteScope` (`Render/SpriteQueue.cs`) has
   `Draw(tex, destRect, srcRect, color)` overloads, so a sub-rect (flipbook frame) preview
   is the same call + a source `Rectangle`.
-- Gotcha: `Draw`/`Update` receive no dt — an animated preview needs its own clock
-  (`Environment.TickCount64` or a Stopwatch; `GameClock.VisualTime` freezes while paused).
+- Gotcha: `Draw`/`Update` receive no dt — the animated preview uses its own wall clock
+  (`_previewAnimStart = Environment.TickCount64` set in `SelectFile`, rendered by
+  `FlipbookPreviewPanel.Draw`; `GameClock.VisualTime` freezes while paused).
+- **Arrow-key nav (Up/Down/Enter)**: raw press edges in `Draw` (~line 271), gated on
+  `!typing` (`ui.IsTextInputActive` + a one-frame `_textInputWasActive` latch so the Enter
+  that commits the search field doesn't also commit a file) and `IsInputBlocked`. Each
+  Up/Down press calls `SelectFile(path)` which loads the preview **synchronously** via the
+  browser's `TextureCache` → `TextureUtil.LoadPremultiplied` → full `.exr` decode for HDR
+  sheets = a stall per keypress when arrowing over large EXR files. The Search filter itself
+  does NOT rescan the directory (listing cached by `RefreshListing`, only re-run on
+  `Open`/`NavigateTo`; `BuildDisplayEntries` per frame just filters the cached list).
 - **Keyboard in editor popups**: editor-land keys are OUTSIDE the HotkeySystem/InputState
   consumption flow — the pattern is raw press edges `_kb.IsKeyDown(K) && _prevKb.IsKeyUp(K)`
   guarded by `!ui.IsTextInputActive` (`EditorBase.IsTextInputActive` = `_activeFieldId != null`

@@ -2383,6 +2383,9 @@ public partial class Game1 {
                      _spellEditor.DevScrollDetail(c.Args.Length >= 2 ? DevFloat(c.Args[1]) : 0f);
                      c.Complete(Necroking.Dev.DevServer.Ok("detail scrolled"));
                      break;
+                  case "preview_state":
+                     c.Complete(Necroking.Dev.DevServer.OkRaw(_spellEditor.DevPreviewState()));
+                     break;
                   default:
                      c.Complete(Necroking.Dev.DevServer.Error("flipbook_ui supports: manager|browse|pick <path>|use"));
                      break;
@@ -2447,6 +2450,31 @@ public partial class Game1 {
 
             // Spawn a fireball projectile directly (deterministic, no mana/anim
             // gating). From the necromancer if present, else from offset of target.
+            // Spawn a sustained visual beam between two units (no damage) — for
+            // driving/verifying beam VFX (hit effects, casting glows) without
+            // needing an AI caster with the right magic paths or a held key.
+            case "spawn_beam": {  // devctl: cmd spawn_beam <casterSel> <targetSel> <spellID> [seconds]
+               if (c.Args.Length < 3) {
+                  c.Complete(Necroking.Dev.DevServer.Error("spawn_beam needs: <casterSel> <targetSel> <spellID> [seconds]"));
+                  break;
+               }
+               var casterIdxs = DevResolveUnits(c.Args[0]);
+               var targetIdxs = DevResolveUnits(c.Args[1]);
+               var beamSpell = _gameData.Spells.Get(c.Args[2]);
+               if (casterIdxs.Count == 0 || targetIdxs.Count == 0 || beamSpell == null) {
+                  c.Complete(Necroking.Dev.DevServer.Error("caster/target/spell not found"));
+                  break;
+               }
+               float beamSecs = c.Args.Length >= 4 ? DevFloat(c.Args[3]) : 0f;
+               _sim.Lightning.SpawnBeam(_sim.Units[casterIdxs[0]].Id, _sim.Units[targetIdxs[0]].Id,
+                  beamSpell.Id, damagePerTick: -1, tickRate: 0.25f, retargetRadius: 0f,
+                  beamSpell.BuildBeamStyle(), maxDuration: beamSecs);
+               c.Complete(Necroking.Dev.DevServer.Ok(
+                  $"beam {c.Args[2]}: unit {casterIdxs[0]} -> unit {targetIdxs[0]}" +
+                  (beamSecs > 0f ? $" for {beamSecs:F1}s" : " (until endpoint lost)")));
+               break;
+            }
+
             case "fireball": {
                if (c.Args.Length < 2) {
                   c.Complete(Necroking.Dev.DevServer.Error("fireball needs: <x> <y> [damage] [radius] [name]"));

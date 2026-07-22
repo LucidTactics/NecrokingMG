@@ -216,3 +216,53 @@ archetype, and fires the new handler's `OnSpawn`; both patrol sites + MakeUnitWi
 archetype attack-override block passes `PendingWeaponIsRanged`. Ranged cycles come from
 `Stats.RangedCooldownTime[weaponIdx]` (seconds — the same clock RangedUnitHandler locks
 between shots), ranged anim names from `Stats.RangedWeapons[weaponIdx].AnimName`.
+
+# Editor key-repeat timer accumulates catch-up dt + polled text input (found 2026-07-21)
+
+`Editor/EditorBase.cs` `HandleTextInput` (~line 2290): repeat logic is
+`_keyRepeatTimer += dt; if (> 0.4) { _keyRepeatTimer -= 0.03; repeat }` with
+dt = `ElapsedGameTime`, and typing is **polled** (`_kb.GetPressedKeys()` per Update; no
+`Game.Window.TextInput` char events). The game runs default `IsFixedTimeStep = true`, so a
+slow Draw is followed by a burst of back-to-back catch-up Updates: the still-held key from
+the last real keystroke accumulates 16.6ms per catch-up Update, crosses the 0.4s
+initial-delay threshold within one ~400ms+ burst, then fires a repeat roughly every other
+update — **one tap becomes ~5-15 duplicated chars**. Symmetrically, a tap that goes down+up
+inside a single long frame is never sampled — **dropped chars**. The timer measures
+accumulated update-time, not wall-clock hold; nothing resets repeat state across stalls.
+Surfaced as "Flipbook Manager typing lags/repeats" (the stalls came from the entry below).
+Fix directions: track hold start in wall-clock (`Environment.TickCount64`) and require a
+real 0.4s physical hold before repeating; cap repeats per rendered frame; or (robust)
+switch char entry to `Window.TextInput` events and keep polling only for nav keys.
+
+# Debounced flush does full-registry synchronous reload on the render thread (found 2026-07-21)
+
+`Editor/SpellEditorWindow.cs` `MarkDirty()` override + `FlushPendingFlipbookReload`
+(~lines 1833-1864): flipbook-manager edits debounce 400ms (`_fbReloadDueAt`) then call
+`Game1.ReloadFlipbooksFromRegistry()` — which **reloads EVERY flipbook def from disk
+synchronously**, incl. full `.exr` HDR decode (`Flipbook.Load` →
+`ExrTgaTextures.LoadExrHdr`, whole-file read + per-pixel half-float conversion). Text
+fields commit per keystroke, so any >400ms typing pause fires a full reload mid-edit → a
+multi-hundred-ms stall → the key-repeat entry above turns it into dropped/repeated chars
+(and the repeats call MarkDirty again, re-arming the loop). A debounce defers work; it
+doesn't shrink it. Fix directions: reload ONLY the edited def (keyed rebuild of one
+`_flipbooks` entry); and/or hold the flush while `_ui.IsTextInputActive`; the close-path
+`force:true` flush already guarantees consistency on exit. Related per-keystroke churn:
+the manager preview `_fbPreviewCache.GetOrLoad(fd.Path)` runs every frame keyed on the
+live path (one disk probe per keystroke while typing `fb_path`), and the texture browser's
+Up/Down nav decodes `.exr` previews synchronously per keypress (`SelectFile`).
+
+# Dead authored VFX fields — persisted in data, consumed by nothing (census 2026-07-21)
+
+Authored/serialized fields that silently do nothing (same class as the FIXED StandupTimer
+dead field; each is a "why doesn't my data change anything" trap):
+- **`Effect.Alignment` (0=ground/1=upright)** — set from `FlipbookRef.Alignment`
+  (`Render/EffectManager.cs` `SpawnSpellImpact` call sites) and mirrored through
+  `Projectile.HitEffectAlignment` (`Game/SpellEffectSystem.cs`, `Game/PotionSystem.cs`),
+  but **no draw path reads it** — `Render/SpellVfxDraw.cs` `DrawEffects`/`DrawFlipbookRefLoop`
+  draw every effect screen-facing with rotation 0. "Ground" renders identically to
+  "Upright". Fix direction: consume it in `SpellVfxDraw` (ground = squash Y by
+  `camera.YRatio` for the iso ellipse, the `DrawHoverGroundMarkers` precedent) or delete
+  the field + the enum validation in `SpellRegistry.cs`.
+- **`beamChain*` / `strikeChain*` / `chainQuantity`** on `SpellDef` — declared, persisted
+  in spells.json, consumed by NOTHING (planned chain lightning; already flagged in
+  render.md's beam section).

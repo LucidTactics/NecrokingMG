@@ -57,6 +57,19 @@ public class PoisonCloud
     public float NoiseOffset;          // Per-cloud randomization
     public byte ColorR = 90, ColorG = 180, ColorB = 55;   // Base cloud color
     public byte GlowR = 80, GlowG = 255, GlowB = 40;     // Center glow color
+
+    // Electricity arcs between random points inside the live radius (spawned as
+    // LightningSystem ArcFx records on a repeating timer; empty flipbook = off).
+    public string ArcFlipbookID = "";
+    public string ArcFlipbookID2 = "";   // optional second sheet; spawns alternate
+    public bool ArcUseSecond;            // alternation toggle, flips per spawn
+    public float ArcInterval = 0.5f;
+    public float ArcDuration = 0.45f;
+    public float ArcWidthScale = 1f;
+    public HdrColor ArcColor = new(255, 255, 255, 255, 3f);
+    public float ArcScatterRadius;
+    public float ArcScatterStrength = 0.7f;
+    public float ArcTimer;
     // Optional per-puff color mix (see SpellDef.CloudPalette). Shared REFERENCE to the
     // registry def's list — read-only, never mutate. Null/empty = derived ring shades.
     public System.Collections.Generic.List<Data.Registries.CloudPaletteEntry>? Palette;
@@ -145,11 +158,21 @@ public class PoisonCloudSystem
             GlowG = spell.CloudGlowColor.G,
             GlowB = spell.CloudGlowColor.B,
             Palette = spell.CloudPalette,
+            ArcFlipbookID = spell.CloudArcFlipbookID,
+            ArcFlipbookID2 = spell.CloudArcFlipbookID2,
+            ArcInterval = spell.CloudArcInterval,
+            ArcDuration = spell.CloudArcDuration,
+            ArcWidthScale = spell.CloudArcWidthScale,
+            ArcColor = spell.CloudArcColor,
+            ArcScatterRadius = spell.CloudArcScatterRadius,
+            ArcScatterStrength = spell.CloudArcScatterStrength,
+            ArcTimer = spell.CloudArcInterval * (float)_rng.NextDouble(), // desync multiple clouds
         });
     }
 
     public void Update(float dt, UnitArrays units, Quadtree qt, List<Corpse> corpses,
-                       BuffRegistry? buffs, List<CloudDamageEvent>? outDamage = null)
+                       BuffRegistry? buffs, List<CloudDamageEvent>? outDamage = null,
+                       LightningSystem? lightning = null)
     {
         var nearbyIDs = new List<uint>();
 
@@ -190,6 +213,57 @@ public class PoisonCloudSystem
                 cloud.TickTimer += cloud.TickInterval;
                 ApplyDamageTick(cloud, units, qt, nearbyIDs, outDamage, buffs);
             }
+
+            // Electricity arcs: spawn a one-shot flipbook arc between two random
+            // points inside the cloud. Spawned here on the sim tick (never from
+            // the renderer — draw code also runs on paused frames). Window: from
+            // HALFWAY through the eruption (the cloud body is ~75% grown by then
+            // — waiting for the full eruption read as the crackle arriving late)
+            // until 0.4s BEFORE the decay fade-out starts — arcs live ~0.9s now,
+            // so a spawn right at the decay edge crackled well into the fading
+            // gas; the early cutoff lets the last arcs finish as decay begins.
+            if (lightning != null && cloud.ArcFlipbookID.Length > 0 && cloud.ArcInterval > 0.01f
+                && cloud.Age >= cloud.EruptionDuration * 0.5f
+                && cloud.Age < cloud.EruptionDuration + cloud.SpreadDuration - 0.4f)
+            {
+                cloud.ArcTimer -= dt;
+                if (cloud.ArcTimer <= 0f)
+                {
+                    cloud.ArcTimer += cloud.ArcInterval;
+                    // 0.4: sample the MIDDLE puff ring only (the body ring sits at
+                    // ~0.25R with fat puffs over it) — the gas thins toward
+                    // CurrentRadius (the damage edge), and arcs out there crackle
+                    // in clear air. Re-roll short pairs (a near-coincident pair
+                    // smears the frame into a dot; sub-1.5 arcs read as stray
+                    // specks) so a beat rarely goes empty.
+                    float arcR = cloud.CurrentRadius * 0.4f;
+                    // Min length 0.8x the disc radius (capped 1.5): demanding the
+                    // FULL disc radius rejected ~half of all pairs and left
+                    // visible holes in the crackle rhythm even with re-rolls.
+                    float minLen = MathF.Min(1.5f, arcR * 0.8f);
+                    for (int attempt = 0; attempt < 8; attempt++)
+                    {
+                        var a = RandomPointInDisc(cloud.Position, arcR);
+                        var b = RandomPointInDisc(cloud.Position, arcR);
+                        if ((a - b).Length() < minLen) continue;
+                        // Arcs crawl through the gas at grazing heights — a small
+                        // random lift per end so they aren't all glued to the ground.
+                        float hA = 0.2f + (float)_rng.NextDouble() * 0.8f;
+                        float hB = 0.2f + (float)_rng.NextDouble() * 0.8f;
+                        // Alternate between the two sheets when a second is set.
+                        string fbId = cloud.ArcUseSecond && cloud.ArcFlipbookID2.Length > 0
+                            ? cloud.ArcFlipbookID2 : cloud.ArcFlipbookID;
+                        cloud.ArcUseSecond = !cloud.ArcUseSecond;
+                        lightning.SpawnArcFx(a, b, cloud.ArcDuration, fbId,
+                            cloud.ArcColor, cloud.ArcWidthScale, flipV: _rng.Next(2) == 0,
+                            startHeight: hA, endHeight: hB,
+                            sortYBias: cloud.CurrentRadius * 0.9f,
+                            scatterRadius: cloud.ArcScatterRadius,
+                            scatterStrength: cloud.ArcScatterStrength);
+                        break;
+                    }
+                }
+            }
         }
 
         // Plague exposure needs SUSTAINED time in gas: it accumulates in
@@ -213,6 +287,15 @@ public class PoisonCloudSystem
             }
             if (!inside) units[i].CloudExposureTime = 0f;
         }
+    }
+
+    /// <summary>Uniform random point in a disc (r = R·√u, else points bunch at
+    /// the center).</summary>
+    private static Vec2 RandomPointInDisc(Vec2 center, float radius)
+    {
+        float r = radius * MathF.Sqrt((float)_rng.NextDouble());
+        float ang = (float)_rng.NextDouble() * MathF.Tau;
+        return new Vec2(center.X + MathF.Cos(ang) * r, center.Y + MathF.Sin(ang) * r);
     }
 
     private void UpdateRadius(PoisonCloud cloud, float dt)

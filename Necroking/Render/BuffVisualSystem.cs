@@ -31,6 +31,11 @@ public struct WeaponAttachRuntime
     public float TipHeight;
     public bool HiltBehind;
     public bool TipBehind;
+    /// <summary>Unit is facing NE/N/NW (away from the camera). The casting
+    /// hand is usually obscured behind the body on those rows, so hand-anchored
+    /// particles (attached flames, weapon-particle spawns) force Behind — an
+    /// effect floating over the middle of the unit's back reads wrong.</summary>
+    public bool FacingAway;
     public bool Valid;
 }
 
@@ -293,7 +298,8 @@ public class BuffVisualSystem
                     weaponAttach.HiltWorld.X + (weaponAttach.TipWorld.X - weaponAttach.HiltWorld.X) * ft,
                     weaponAttach.HiltWorld.Y + (weaponAttach.TipWorld.Y - weaponAttach.HiltWorld.Y) * ft);
                 flame.Height = weaponAttach.HiltHeight + (weaponAttach.TipHeight - weaponAttach.HiltHeight) * ft;
-                flame.Behind = ft < 0.5f ? weaponAttach.HiltBehind : weaponAttach.TipBehind;
+                flame.Behind = weaponAttach.FacingAway
+                    || (ft < 0.5f ? weaponAttach.HiltBehind : weaponAttach.TipBehind);
                 if (state.Particles.Count == 0) state.Particles.Add(flame);
                 else state.Particles[0] = flame;
                 if (state.Particles.Count > 1) // leftovers from a live mode switch in the editor
@@ -320,7 +326,8 @@ public class BuffVisualSystem
                             weaponAttach.HiltWorld.Y + (weaponAttach.TipWorld.Y - weaponAttach.HiltWorld.Y) * t),
                         Height = weaponAttach.HiltHeight + (weaponAttach.TipHeight - weaponAttach.HiltHeight) * t,
                         Age = 0f,
-                        Behind = t < 0.5f ? weaponAttach.HiltBehind : weaponAttach.TipBehind
+                        Behind = weaponAttach.FacingAway
+                            || (t < 0.5f ? weaponAttach.HiltBehind : weaponAttach.TipBehind)
                     };
                     state.Particles.Add(p);
                 }
@@ -679,7 +686,7 @@ public class BuffVisualSystem
     /// </summary>
     public void DrawAttachedFlames(uint unitId, bool behind, SpriteScope scope,
         Camera25D cam, Renderer renderer, Dictionary<string, Flipbook> flipbooks,
-        BuffRegistry buffReg)
+        BuffRegistry buffReg, List<Movement.ActiveBuff>? activeBuffs = null)
     {
         if (!_wpEmitters.TryGetValue(unitId, out var emitters)) return;
 
@@ -687,6 +694,11 @@ public class BuffVisualSystem
         {
             var vis = buffReg.Get(buffId)?.WeaponParticle;
             if (vis == null || !vis.AttachedFlame || state.Particles.Count == 0) continue;
+
+            // Fade window: a non-permanent buff inside its FadeDuration draws
+            // at RemainingDuration/FadeDuration alpha (channel-end fade-out).
+            float fade = BuffFadeAlpha(activeBuffs, buffId);
+            if (fade <= 0.003f) continue;
 
             var p = state.Particles[0];
             if (p.Behind != behind) continue;
@@ -708,15 +720,34 @@ public class BuffVisualSystem
             float scale = pixelSize / src.Width;
 
             // Additive mode ignored the color's A byte in the LDR path; keep that
-            // (A=255, fade=1) so existing data reads the same, just brighter.
+            // (A=255) so existing data reads the same, just brighter. The fade
+            // multiplier is 1 outside a fade window.
             var color = HdrColor.ToHdrVertex(
-                new Color(vis.Color.R, vis.Color.G, vis.Color.B), 1f, vis.Color.Intensity);
+                new Color(vis.Color.R, vis.Color.G, vis.Color.B), fade, vis.Color.Intensity);
             // HDR (EXR) sheets need the LinearTexture material variant
             bool hdrTex = fb.IsHdr && Materials.HdrTexAdditive != null;
             if (hdrTex) scope.PushMaterial(Materials.HdrTexAdditive!);
             scope.Draw(fb.Texture, sp, src, color, 0f, origin, scale, SpriteEffects.None, 0f);
             if (hdrTex) scope.PopMaterial();
         }
+    }
+
+    /// <summary>Fade multiplier for a buff's visuals: 1 while permanent or
+    /// outside the fade window, RemainingDuration/FadeDuration inside it,
+    /// 1 when the buff (or the list) is missing — spawn-mode particles keep
+    /// draining on their own per-particle lifetimes after the buff dies.</summary>
+    public static float BuffFadeAlpha(List<Movement.ActiveBuff>? buffs, string buffId)
+    {
+        if (buffs == null) return 1f;
+        for (int i = 0; i < buffs.Count; i++)
+        {
+            if (buffs[i].BuffDefID != buffId) continue;
+            var b = buffs[i];
+            if (!b.Permanent && b.FadeDuration > 0.001f && b.RemainingDuration < b.FadeDuration)
+                return Math.Clamp(b.RemainingDuration / b.FadeDuration, 0f, 1f);
+            return 1f;
+        }
+        return 1f;
     }
 
     // ==========================================

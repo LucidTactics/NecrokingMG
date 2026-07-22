@@ -127,6 +127,13 @@ public class BuffDef : INamedDef
     /// stat-effect icon. Generate art via tools/gen_buff_icons.py.</summary>
     [JsonPropertyName("icon")] public string Icon { get; set; } = "";
     [JsonPropertyName("duration")] public float Duration { get; set; } = 10.0f;
+    /// <summary>Visual fade-out window in seconds. A non-permanent buff's
+    /// visuals (attached flame etc.) draw at RemainingDuration/FadeOutSeconds
+    /// alpha over its final seconds instead of vanishing. For casting buffs
+    /// with duration -1 ("lasts while channeling"), the channel-end removal
+    /// converts the buff to a FadeOutSeconds countdown instead of deleting it.
+    /// 0 = instant vanish (previous behavior).</summary>
+    [JsonPropertyName("fadeOutSeconds")] public float FadeOutSeconds { get; set; }
     [JsonPropertyName("effects")] public List<BuffEffect> Effects { get; set; } = new();
     [JsonPropertyName("maxStacks")] public int MaxStacks { get; set; } = 1;
 

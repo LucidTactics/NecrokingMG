@@ -141,38 +141,14 @@ public partial class Game1 {
       SpawnFlipbookEffect(spell.CastFlipbook, pos);
    }
 
-   /// <summary>Canonical FlipbookRef -> one-shot effect spawn (cast flares,
-   /// summon poofs, and every category's hit effect). Honors the ref's full
-   /// contract: Duration -1 = one playthrough at the effective FPS (or 0.4s
-   /// when looping — a loop has no natural length), Loop cycles frames for
-   /// the lifetime, FPS overrides the flipbook's own rate, temperature ramp
-   /// passes through. Scatter args come from the owning spell when the effect
-   /// should light the air.</summary>
+   /// <summary>Game entry for the canonical FlipbookRef spawn — the logic
+   /// lives in EffectManager.SpawnFromRef so the spell-editor preview's own
+   /// EffectManager spawns identically. Scatter args come from the owning
+   /// spell when the effect should light the air.</summary>
    internal void SpawnFlipbookEffect(FlipbookRef? fb, Vec2 pos,
       float scatterRadius = 0f, Microsoft.Xna.Framework.Color scatterRgb = default,
-      float scatterStrength = 1f) {
-      if (fb == null || string.IsNullOrEmpty(fb.FlipbookID)) return;
-
-      var tint = fb.Color.ToColor();
-      int blendMode = fb.BlendMode == "Additive" ? 1 : 0;
-      int alignment = fb.Alignment == "Upright" ? 1 : 0;
-
-      float duration = fb.Duration;
-      if (duration < 0f) {
-         // One playthrough of the clip; loops fall back to the classic 0.4s.
-         duration = 0.4f;
-         if (!fb.Loop && _flipbooks.TryGetValue(fb.FlipbookID, out var rtFb) && rtFb.IsLoaded) {
-            float fps = fb.FPS > 0f ? fb.FPS : rtFb.FPS;
-            if (fps > 0f) duration = rtFb.TotalFrames / fps;
-         }
-      }
-
-      _effectManager.SpawnSpellImpact(pos, fb.Scale, tint, fb.FlipbookID,
-         fb.Color.Intensity, blendMode, alignment, duration,
-         scatterRadius, scatterRgb, scatterStrength,
-         temperatureRamp: fb.TemperatureRamp,
-         loop: fb.Loop, fpsOverride: fb.FPS);
-   }
+      float scatterStrength = 1f)
+      => _effectManager.SpawnFromRef(fb, pos, _flipbooks, scatterRadius, scatterRgb, scatterStrength);
 
    /// <summary>
    /// Execute a spell's effect (projectile, buff, strike, etc.) for any caster. Called
@@ -283,12 +259,26 @@ public partial class Game1 {
       return false;
    }
 
-   /// <summary>Remove all casting effect buffs from a unit (buff_4 variants).</summary>
+   /// <summary>Remove all casting effect buffs from a unit (buff_4 variants).
+   /// A buff with FadeOutSeconds > 0 isn't deleted — it's converted to a
+   /// FadeOutSeconds countdown (Permanent off) so TickBuffs removes it
+   /// naturally while the visuals fade over the window. This is how a
+   /// duration:-1 casting buff ("lasts while channeling") ends: every
+   /// channel/cast-end funnel routes through here.</summary>
    void RemoveCastingBuffAll(int unitIdx) {
       var buffs = _sim.UnitsMut[unitIdx].ActiveBuffs;
       for (int b = buffs.Count - 1; b >= 0; b--) {
-         if (IsCastingBuff(buffs[b].BuffDefID))
+         if (!IsCastingBuff(buffs[b].BuffDefID)) continue;
+         var ab = buffs[b];
+         if (ab.FadeDuration > 0.001f) {
+            // Already fading (non-permanent inside the window)? Leave it be.
+            if (!ab.Permanent && ab.RemainingDuration <= ab.FadeDuration) continue;
+            ab.Permanent = false;
+            ab.RemainingDuration = ab.FadeDuration;
+            buffs[b] = ab;
+         } else {
             buffs.RemoveAt(b);
+         }
       }
    }
 
@@ -674,14 +664,29 @@ public partial class Game1 {
             _aiPendingSpell, _gameData);
          if (result != CastResult.Success) continue;
 
+         ExecuteSpellEffect(spell, casterIdx, req.Target, slot: -1, _aiPendingSpell);
+
          // Casting buff (glow/weapon particle) — same visual the legacy AI cast
          // applied; it expires on its own duration since AI has no anim-end hook.
+         // Applied AFTER the effect so a duration:-1 ("lasts while channeling")
+         // buff can read the ChannelTimer StartChannel just armed: the AI gets
+         // a finite channel-length duration instead of a permanent buff nothing
+         // would ever remove (CancelChannel doesn't touch buffs, and the
+         // ChannelSourceValid interrupt path bypasses CancelChannel entirely).
+         // The def's FadeOutSeconds rides on top so the tail still fades.
          if (!string.IsNullOrEmpty(spell.CastingBuffID)) {
             var castBuff = _gameData.Buffs.Get(spell.CastingBuffID);
-            if (castBuff != null) BuffSystem.ApplyBuff(_sim.UnitsMut, casterIdx, castBuff, _gameData);
+            if (castBuff != null) {
+               if (castBuff.Duration <= 0f) {
+                  float channelSecs = _sim.Units[casterIdx].ChannelTimer;
+                  if (channelSecs <= 0f) channelSecs = spell.CastTime > 0f ? spell.CastTime : 4f;
+                  BuffSystem.ApplyBuffWithDuration(_sim.UnitsMut, casterIdx, castBuff,
+                     channelSecs + castBuff.FadeOutSeconds, _gameData);
+               } else {
+                  BuffSystem.ApplyBuff(_sim.UnitsMut, casterIdx, castBuff, _gameData);
+               }
+            }
          }
-
-         ExecuteSpellEffect(spell, casterIdx, req.Target, slot: -1, _aiPendingSpell);
       }
       requests.Clear();
    }

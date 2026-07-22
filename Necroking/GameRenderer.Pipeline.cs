@@ -19,7 +19,7 @@ partial class GameRenderer
     private SpriteQueuePass? _worldPass;
     private SpriteQueuePass? _fxPass;
     private SpriteDrawCallback? _cbFxAlpha, _cbFxProjectilesHdr, _cbFxEffectsAdd,
-        _cbFxReanim, _cbFxLightning, _cbFxShapes;
+        _cbFxReanim, _cbFxLightning, _cbFxRibbons, _cbFxDrainClouds, _cbFxShapes;
 
     // Per-frame values shared between Scene OnBegin and OnEnd (computed once
     // per frame in Scene.OnBegin).
@@ -56,10 +56,26 @@ partial class GameRenderer
         _cbFxLightning ??= (SpriteScope _, int _, int _) =>
         {
             // Telegraph circles and strike flashes draw here as HDR sprites; the
-            // bolts/tendrils themselves are collected as ribbon vertices and drawn
-            // post-batch by the LightningTris pass (additive = order-independent).
+            // bolts/tendrils themselves are collected as ribbon vertices and
+            // flushed by the Ribbons queue item below (additive = order-independent).
             _g._lightningRenderer.SetGameTime(_g._gameTime);
             _g._lightningRenderer.Draw();
+        };
+        _cbFxRibbons ??= (SpriteScope s, int _, int _) =>
+        {
+            // Bolt/tendril triangle strips + god rays: raw DrawUserPrimitives with
+            // their own device state — suspend the open sprite batch around them
+            // (same pattern as the depth-sorted reanim callback above).
+            s.Suspend();
+            _g._lightningRenderer.DrawTriangleEffects();
+            s.Resume();
+        };
+        _cbFxDrainClouds ??= (SpriteScope s, int _, int _) =>
+        {
+            // Legacy drain junction puffs — alpha clumps occluding the tendril
+            // ends, so they live on the first post-ribbon layer. The item's own
+            // material (matAlpha) already has the batch open; draw straight in.
+            _g._lightningRenderer.DrawDrainClouds(s.Batch);
         };
         _cbFxShapes ??= (SpriteScope _, int _, int _) =>
         {
@@ -91,11 +107,19 @@ partial class GameRenderer
         // Ground-fog wisps (depth-tested vs the occluder stamps drawn just
         // before this pass) — FogWisps layer sorts before the HDR bands.
         _g._groundFog.CollectWisps(q, _g._ambientColor, ctx.ScreenW, ctx.ScreenH);
-        q.SubmitCallback(WorldLayer.EffectsHdrAlpha, _cbFxAlpha, 0, 0, matAlpha);
+        // Layer order (the render-queue transition, 2026-07): projectiles/reanim/
+        // lightning-collect (130) → ribbon flush (132) → hit-effect layers over
+        // the ribbons (134 alpha: drain clouds then one-shots; 136 additive).
+        // Spell effects draw POST-ribbon so alpha hit effects occlude beam ends —
+        // "hit effects in front of everything" as a declared layer, not a
+        // draw-call accident. Additive content is order-invariant either way.
         q.SubmitCallback(WorldLayer.EffectsHdrAdditive, _cbFxProjectilesHdr, 0, 0, matAdd);
-        q.SubmitCallback(WorldLayer.EffectsHdrAdditive, _cbFxEffectsAdd, 0, 0, matAdd);
         q.SubmitCallback(WorldLayer.EffectsHdrAdditive, _cbFxReanim, 0, 0, matAdd);
         q.SubmitCallback(WorldLayer.EffectsHdrAdditive, _cbFxLightning, 0, 0, matAdd);
+        q.SubmitCallback(WorldLayer.Ribbons, _cbFxRibbons, 0, 0, matAdd);
+        q.SubmitCallback(WorldLayer.HitFxAlpha, _cbFxDrainClouds, 0, 0, matAlpha);
+        q.SubmitCallback(WorldLayer.HitFxAlpha, _cbFxAlpha, 0, 0, matAlpha);
+        q.SubmitCallback(WorldLayer.HitFxAdditive, _cbFxEffectsAdd, 0, 0, matAdd);
         q.SubmitCallback(WorldLayer.AdditiveShapes, _cbFxShapes, 0, 0, Materials.AdditiveShapes);
     }
 
@@ -258,9 +282,9 @@ partial class GameRenderer
         };
         scene.Add(_fxPass);
 
-        // Lightning ribbons + god rays (HDR intensity triangle passes) — manage
-        // their own device state, must run after the additive sprite batch ends.
-        scene.Add(new CustomPass("LightningTris", ctx => _g._lightningRenderer.DrawTriangleEffects()));
+        // (Lightning ribbons + god rays were a fixed post-queue "LightningTris"
+        // pass; they're now a WorldLayer.Ribbons queue item inside HdrEffects so
+        // hit-effect layers can sort above them. See CollectFxItems.)
 
         // World-space light-scatter halos — after every effect has registered its
         // emitters (fx queue + lightning), depth-testing the unit stamps, still
