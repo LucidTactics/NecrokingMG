@@ -185,29 +185,59 @@ for as long as `beam.Alive`. Principle: **anything drawn statelessly off a live 
 needs a guaranteed-finite record lifetime**; audit every `Spawn{Beam,Drain,Zap}` caller's
 duration when adding new channel visuals.
 
-# Spawn-then-re-archetype blocks duplicated per path, bypassing OnSpawn (found 2026-07-22)
+# FIXED — Spawn-then-re-archetype blocks duplicated per path, bypassing OnSpawn (found 2026-07-22, fixed in `427034b`)
 
-Three call sites hand-roll "spawn a unit, then overwrite its Archetype + stamp the fields the
-new handler's OnSpawn would have set" with raw `UnitsMut[idx].Routine = 0` writes:
+Was: three call sites hand-rolled "spawn a unit, then overwrite its Archetype + stamp the
+fields the new handler's OnSpawn would have set". Now: `AI.AIControl.ReassignArchetype(units,
+idx, archetypeId, reason)` is the ONE helper (clears routine state, swaps archetype, fires the
+new handler's OnSpawn), and all three sites call it — `Game1.cs` map-placed patrol units
+(~1718), `Game1.Villages.cs` `SpawnPatrols` (~225), `Game1.cs` `MakeUnitWild` (~2396).
+Verified 2026-07-22 during the init audit. Use ReassignArchetype for ANY future
+re-archetyping; never hand-stamp OnSpawn fields.
 
-- `Necroking/Game1.cs` (~1684-1694, map-placed patrol units): stamps
-  `Archetype=PatrolSoldier` + `PatrolRouteIdx`/`PatrolWaypointIdx`/`MoveTarget`/`Routine`/`Subroutine`.
-- `Necroking/Game1.Villages.cs` `SpawnVillagePatrols` (~220-232): the SAME PatrolSoldier
-  field-stamp sequence duplicated in a second file (adds `SpawnPosition`) — the
-  two-implementations-in-separate-files violation; a new PatrolSoldier setup field will
-  silently miss one site.
-- `Necroking/Game1.cs` `MakeUnitWild` (~2363): WildUndead conversion; its own comment admits
-  the bug class — "CombatUnitHandler.OnSpawn never ran for this unit — stamp the fields it
-  would have set."
+# Session wiring duplicated across the two world-entry paths (found 2026-07-22)
 
-This is the `d08b584` spawn-path-asymmetry class: re-archetyping after `Game1.SpawnUnit`
-means the NEW handler's `OnSpawn` never runs, so each site must hand-copy whatever OnSpawn
-does (and drifts when OnSpawn changes). Raw `Routine = 0` is safe here only because the
-units are freshly spawned (no exit hooks owed) — but the pattern invites reuse on live
-units, where it would skip `AIControl.Interrupt`'s OnRoutineExit + pin clears.
-Fix direction: one `ReassignArchetype(idx, archetypeId)` helper (natural home:
-`AI/AIControl.cs` next to `Interrupt`, or `Simulation`) that clears routine state, swaps the
-archetype, and fires the new handler's `OnSpawn`; both patrol sites + MakeUnitWild call it.
+`ResetWorldState()` (commit `c54b712`) unified the world-entry CLEAR, but the post-reset
+session WIRING is still hand-duplicated between `Game1.StartGame` (~1662-1675) and
+`Game1.StartScenario` (~2168-2179): the `_sim.SetEnvironmentSystem` / `SetWallSystem` /
+`SetTriggerSystem` / `SetVillageSystem` / `SetSkillBook` block plus the two
+`_envSystem.OnCollisionsDirty` / `OnCollisionRegionDirty` lambdas. `WireSimCallbacks()` — whose
+own doc-comment declares it "the designated re-wire hook [that] must get EVERY such
+back-reference" — covers only `Workers` + `SetAnimMeta`. A new sim back-ref added to one path
+silently misses the other (the exact `c54b712`/SetAnimMeta failure shape). Also duplicated
+between the paths: the identical `onVertexMapChanged` dirty-rect lambda passed to
+`_mapEditor.Init` (~1846-1861 vs ~2278-2293).
+Fix direction: fold the `_sim.Set*` family + env collision callbacks into `WireSimCallbacks`
+(they only need the live `_sim`/`_envSystem` forwarders, both valid post-recreate), or a
+`WireSessionSystems()` helper both paths call after `_sim.Init`; extract the vertex-map lambda
+into a private `OnGroundVertexMapChanged()` method.
+
+# StartScenario's inline flipbook loop drifted from ReloadFlipbooksFromRegistry (found 2026-07-22)
+
+`Game1.StartScenario` (~2146-2159) hand-copies the flipbook load loop instead of calling
+`Game1.ReloadFlipbooksFromRegistry()` (~563). The copies have drifted: the shared method
+gained a per-def try/catch ("a malformed file must not kill StartGame — skip the one def and
+log") that the scenario copy NEVER got — a malformed flipbook (e.g. an unsupported `.exr`)
+crashes every `--scenario` run while normal play shrugs it off. The scenario copy also never
+disposes/refreshes stale defs (guarded by `_flipbooks.Count == 0`).
+Fix direction: replace the block with `if (_flipbooks.Count == 0) ReloadFlipbooksFromRegistry();`
+— the method already ends with the `_wakeSystem.Init(_flipbooks)` the next line repeats (keep
+the guard if reload-per-scenario cost matters for batch runs).
+
+# Map-editor one-time init only runs on the StartGame path (found 2026-07-22)
+
+`StartGame` gives `_mapEditor` its full init: `SetItemRegistry` + `SetSpellRegistry` +
+`SetGameData` + `RestoreTabFromSettings` + `SetMapFilename` + `SetCorpseSettings` +
+`SetGrassData`. `StartScenario` calls only `_mapEditor.Init(...)` + `SetItemRegistry` — so a
+cold `--scenario` boot (editor screenshot scenarios open the map editor) runs the editor with
+no GameData/spell registry/corpse settings and skips the `2f19f1d` tab restore. Same
+"one-time init in one of N entry paths" class as `2f19f1d` itself. Related: StartScenario
+never sets `_currentMapName` (or the editor Save target), so a save written during/after a
+scenario records the PREVIOUS map's name — loading it rebuilds the wrong world.
+Fix direction: move the editor one-time feed (GameData/registries/RestoreTabFromSettings) to a
+single init point both paths share (e.g. right after `_mapEditor.Init`, or app-startup once
+GameData exists), and have StartScenario stamp `_currentMapName = "scenario:" + name` or block
+WriteSaveGame while `_activeScenario != null`.
 
 # FIXED — Wrong-list weapon lookup for ranged pending attacks (found 2026-07-19, fixed 2026-07-21)
 

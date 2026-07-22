@@ -178,10 +178,10 @@ across map reloads or bleeds state from the previous map; the world renders blan
 reload (a system not wired to the fresh session).
 **Inverse trap — app-lifetime object holds a DEAD session's refs:** any app-lifetime system whose
 one-shot `Init` copies `_envSystem`/`_sim`/`_sim.X` into a private field keeps pointing at the
-disposed session after the next `StartGame` (exit to main menu → re-enter). Known offenders: the
-lazily-init'd `UI/BuildingMenuUI.cs` + `UI/TableCraftMenuUI.cs` via `EnsureInventoryUIsInitialized`
-(one-shot flag `_inventoryUIsInitialized`) — e.g. the build menu goes empty on re-enter because its
-captured env system got `ClearDefs()`d by `GameSession.Dispose`. Rule: read session state live
+disposed session after the next `StartGame` (exit to main menu → re-enter). The historical
+offenders (`UI/BuildingMenuUI.cs` + `UI/TableCraftMenuUI.cs` via `EnsureInventoryUIsInitialized`)
+are **FIXED** — both now live-read via property forwarders (`private EnvironmentSystem _envSystem
+=> Game1.Instance._envSystem;`), which is the pattern to copy. Rule: read session state live
 through the Game1 forwarding properties (or `Game1.Instance`), never cache it in a field that
 outlives the session. Current membership + the remaining migration
 checklist + the app-vs-game classification live in **`todos/gamesession-migration.md`**.
@@ -193,27 +193,28 @@ See also: `Game1.cs` (`StartGame` recreates `_session`; forwarding properties de
 system fields), `World/` (the owned systems), `Necroking/Game1.Dev.cs` (`mem` dev command — managed
 heap + process memory behind a forced compacting GC — and `census`, both for spotting reload leaks).
 
-#### StartGame vs StartScenario reset asymmetry — state bleeds scenario→scenario & scenario→map
-`Game1.StartGame` (`Game1.cs` ~1457) and `Game1.StartScenario` (~2096) are the **two world-entry
-paths**, and they clean up **different subsets** of per-game state — the source of spillover when
-running several scenarios in a row or returning from a scenario to the normal map. They share a
-**duplicated (not extracted) clear block** at the top: `_gameWorldLoaded=false`, `_gameOver=false`,
-`_clock.OnWorldStart()`, then `.Clear()` on `_damageNumbers`, `_unitAnims`, `_corpseAnims`,
-`_effectManager`, `_reanimFx`, `_buffVisuals`, `_tethers`/`_tetherAnchor`/`_tetherDustAccum`.
-**Only `StartGame` additionally resets:** `_foragables` (pickup arcs),
-`_skillBookState.InitFromDefs()` + `_skillLearnToasts`, `_workerSystem.Reset()` (stockpiles/jobs),
-`_grassRenderer.ClearAllFades()`, `_zoneSystem.Clear()`, the grass-field arrays, `_roadSystem.Init()`,
-`_dayNightSystem.Init()`. **Crucially `StartGame` does `_session.Dispose(); _session = new GameSession()`
-(recreating Sim/Ground/Env/Wall/Road), while `StartScenario` REUSES the same session** and manually
-re-inits only `_groundSystem.ClearTypes()`+`Init`, `_envSystem.Init`, `_wallSystem.Init`, `_sim.Init` —
-it **forgets `_session.Road`** (roads bleed into a scenario) plus every Game1-owned collection above.
-**Where a shared reset core should live:** extract the common Game1-field clears into one helper
-(e.g. a new `ResetPerGameState()` in `Game1.cs` or a small `Game1.WorldReset.cs` partial) that BOTH
-call up top; keep the session-lifecycle line (`Dispose`+`new` vs manual re-init) path-specific. The
-durable fix is to also recreate `_session` in `StartScenario` (so Road/Ground/Env/Wall/Sim reset
-uniformly) and migrate the remaining transient Game1 collections toward `GameSession`/`Census()`.
-Look/edit here when: state leaks between scenarios or from a scenario back to the map (leftover
-projectiles/foragables/roads/zones/worker piles/grass fades/skill unlocks).
+#### ResetWorldState — the ONE shared world-entry reset (formerly the StartGame/StartScenario asymmetry)
+The historical "two entry paths clean different subsets" bleed is **FIXED** (commit `c54b712`):
+`Game1.ResetWorldState()` (`Game1.cs`, just above `StartGame` ~1415) is the single "forget the old
+world" core, called first by BOTH `Game1.StartGame` (~1514) and `Game1.StartScenario` (~2122). It
+wipes every per-game Game1 collection (damage numbers, unit/corpse anims, effects, reanim fx, buff
+visuals, tethers, foragables, toasts, inventory, skill book, dev camera/walk overrides, spirit walk,
+grass arrays, zone/village/trigger systems, road/day-night re-init, ground vertex texture) AND does
+`_session.Dispose(); _session = new GameSession()` for both paths, then `WireSimCallbacks()`.
+**Rule (stated in its doc-comment): a new per-game collection added to Game1 must be cleared here —
+or better, moved into GameSession.**
+**What is still deliberately per-path (watch for drift):** after the reset, each caller re-does its
+own Sim/Env init and then hand-duplicates the session wiring — `_sim.SetEnvironmentSystem/
+SetWallSystem/SetTriggerSystem/SetVillageSystem/SetSkillBook` + the two `_envSystem.OnCollision*Dirty`
+lambdas + the `_mapEditor.Init(... onVertexMapChanged: <identical dirty-rect lambda>)` block appear
+in BOTH StartGame and StartScenario. `WireSimCallbacks` covers only `Workers`+`SetAnimMeta`. A new
+sim back-ref or editor-init call added to one path silently misses the other (StartScenario already
+misses `SetGameData`/`RestoreTabFromSettings`/`SetSpellRegistry` on the map editor, and leaves
+`_currentMapName` stale). StartScenario also keeps its own inline flipbook-load loop instead of
+calling `ReloadFlipbooksFromRegistry` — it lacks that method's per-def try/catch resilience.
+Look/edit here when: state leaks between scenarios or from a scenario back to the map; adding a new
+per-game collection/back-reference (put it in ResetWorldState/GameSession/WireSimCallbacks, NOT in
+one entry path).
 
 ### `Necroking/Game1.Animation.cs` — per-frame animation, cast-phase & attack-anim updates
 What lives here: the per-frame animation tick — advancing sprite flipbooks for every unit, driving
