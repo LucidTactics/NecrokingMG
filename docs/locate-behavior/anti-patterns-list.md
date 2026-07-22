@@ -185,6 +185,30 @@ for as long as `beam.Alive`. Principle: **anything drawn statelessly off a live 
 needs a guaranteed-finite record lifetime**; audit every `Spawn{Beam,Drain,Zap}` caller's
 duration when adding new channel visuals.
 
+# Spawn-then-re-archetype blocks duplicated per path, bypassing OnSpawn (found 2026-07-22)
+
+Three call sites hand-roll "spawn a unit, then overwrite its Archetype + stamp the fields the
+new handler's OnSpawn would have set" with raw `UnitsMut[idx].Routine = 0` writes:
+
+- `Necroking/Game1.cs` (~1684-1694, map-placed patrol units): stamps
+  `Archetype=PatrolSoldier` + `PatrolRouteIdx`/`PatrolWaypointIdx`/`MoveTarget`/`Routine`/`Subroutine`.
+- `Necroking/Game1.Villages.cs` `SpawnVillagePatrols` (~220-232): the SAME PatrolSoldier
+  field-stamp sequence duplicated in a second file (adds `SpawnPosition`) — the
+  two-implementations-in-separate-files violation; a new PatrolSoldier setup field will
+  silently miss one site.
+- `Necroking/Game1.cs` `MakeUnitWild` (~2363): WildUndead conversion; its own comment admits
+  the bug class — "CombatUnitHandler.OnSpawn never ran for this unit — stamp the fields it
+  would have set."
+
+This is the `d08b584` spawn-path-asymmetry class: re-archetyping after `Game1.SpawnUnit`
+means the NEW handler's `OnSpawn` never runs, so each site must hand-copy whatever OnSpawn
+does (and drifts when OnSpawn changes). Raw `Routine = 0` is safe here only because the
+units are freshly spawned (no exit hooks owed) — but the pattern invites reuse on live
+units, where it would skip `AIControl.Interrupt`'s OnRoutineExit + pin clears.
+Fix direction: one `ReassignArchetype(idx, archetypeId)` helper (natural home:
+`AI/AIControl.cs` next to `Interrupt`, or `Simulation`) that clears routine state, swaps the
+archetype, and fires the new handler's `OnSpawn`; both patrol sites + MakeUnitWild call it.
+
 # FIXED — Wrong-list weapon lookup for ranged pending attacks (found 2026-07-19, fixed 2026-07-21)
 
 `Game1.Animation.cs` `ComputeWeaponCycleSeconds(unitIdx, weaponIdx, isRanged)` and
