@@ -1405,6 +1405,72 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
     }
 
     /// <summary>
+    /// Attach the app-lifetime session systems and collision-dirty callbacks to the
+    /// CURRENT session's Sim/Env. Both world-entry paths (StartGame and StartScenario)
+    /// call this right after their <c>_sim.Init</c> — a fresh GameSession's Simulation
+    /// has every one of these references null. Keeping the list in ONE place is the
+    /// point: a reference added to one path but not the other is the failure shape
+    /// that produced the SetAnimMeta silent-null bug (see WireSimCallbacks).
+    /// </summary>
+    private void WireSessionSystems()
+    {
+        _sim.SetEnvironmentSystem(_envSystem);
+        _sim.SetWallSystem(_wallSystem);
+        _sim.SetTriggerSystem(_triggerSystem);
+        _sim.SetVillageSystem(_villageSystem);
+        _sim.SetSkillBook(_skillBookState);
+        // Collision change callbacks keep pathfinding in sync. Region path:
+        // single-object changes (forage pickup/respawn, tree destroyed, building
+        // placed) do a targeted ~ms rebake + invalidation. Full path: batch signals
+        // with no region info (editor exit). Both are deferred + coalesced to at
+        // most one rebuild per tick.
+        _envSystem.OnCollisionsDirty = () => _sim.RequestPathfinderRebuild();
+        _envSystem.OnCollisionRegionDirty = (x0, y0, x1, y1) => _sim.RequestPathfinderRegionRebuild(x0, y0, x1, y1);
+    }
+
+    /// <summary>
+    /// One-time-per-world map editor feed, shared by StartGame and StartScenario so
+    /// editor-screenshot scenarios run with the same registries/settings as a map
+    /// load (previously only StartGame fed SetSpellRegistry/SetGameData/
+    /// RestoreTabFromSettings/SetCorpseSettings, leaving a cold --scenario boot's
+    /// editor half-initialized). Map-specific feeds stay in StartGame:
+    /// SetMapFilename, SetPlacedUnits, SetGrassData.
+    /// </summary>
+    private void InitMapEditorForWorld()
+    {
+        _mapEditor.Init(
+            this,
+            onVertexMapChanged: RefreshGroundVertexMapDirtyRect,
+            onGrassMapChanged: SyncGrassMapReference,
+            onGrassTypesChanged: SyncGrassFromEditor);
+        _mapEditor.SetItemRegistry(_gameData.Items);
+        _mapEditor.SetSpellRegistry(_gameData.Spells);
+        _mapEditor.SetGameData(_gameData);
+        // Restore the last-open tab once, now that the editor has its settings —
+        // not in the open handlers (F11 / HUD button / pause menu each open it and
+        // we'd otherwise have to remember all of them).
+        _mapEditor.RestoreTabFromSettings();
+        int corpsesIdx = AtlasDefs.ResolveAtlasName("Corpses");
+        var corpsesAtlas = (corpsesIdx >= 0 && corpsesIdx < _atlases.Length) ? _atlases[corpsesIdx] : null;
+        _mapEditor.SetCorpseSettings(_gameData.Corpse, corpsesAtlas);
+    }
+
+    /// <summary>Editor paint callback: patch only the brush-sized dirty rect into
+    /// the existing vertex-map texture (a few hundred texels) instead of allocating
+    /// and uploading a fresh 4097x4097 (~67 MB) texture every painted frame. Falls
+    /// back to a full rebuild only if the texture is missing or its size no longer
+    /// matches the vertex map.</summary>
+    private void RefreshGroundVertexMapDirtyRect()
+    {
+        if (_groundVertexMapTex == null
+            || !_groundSystem.UploadDirtyRect(_groundVertexMapTex))
+        {
+            _groundVertexMapTex?.Dispose();
+            _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
+        }
+    }
+
+    /// <summary>
     /// Shared "forget the old world" core for BOTH world-entry paths — StartGame (map
     /// load) and StartScenario. Wipes every per-game collection and recreates the
     /// GameSession so nothing bleeds between runs (scenario→scenario, scenario→map,
@@ -1516,12 +1582,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         ResetWorldState();
         _currentMapName = mapName;
 
-        // Load flipbooks (shared with the spell editor's live-reload path).
+        // Load flipbooks (shared with the spell editor's live-reload path). The
+        // reload also re-Inits _wakeSystem with the dictionary, so systems that
+        // look up trail / splash / rain-splash animations are covered here too.
         ReloadFlipbooksFromRegistry();
         LogTiming($"Flipbooks loaded: {_flipbooks.Count}");
-        // Now that flipbooks are loaded, hand the dictionary to systems
-        // that need to look up the trail / splash / rain-splash animations.
-        _wakeSystem.Init(_flipbooks);
 
         // Animation metadata is loaded once in Initialize() and reused across
         // main-game and scenario flows.
@@ -1658,21 +1723,10 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         // cheaper trade until centroids can be baked offline into the spritemeta.
         LogTiming($"Ground textures: {_groundSystem.TypeCount}, Env textures: {_envSystem.DefCount}, VertexMap: {(_groundVertexMapTex != null ? "OK" : "NONE")}");
 
-        // Init simulation with map size
+        // Init simulation with map size, then attach session systems + collision
+        // callbacks (shared with StartScenario — see WireSessionSystems).
         _sim.Init(worldW, worldH, _gameData);
-        _sim.SetEnvironmentSystem(_envSystem);
-        _sim.SetWallSystem(_wallSystem);
-        _sim.SetTriggerSystem(_triggerSystem);
-        _sim.SetVillageSystem(_villageSystem);
-        _sim.SetSkillBook(_skillBookState);
-
-        // Wire collision change callbacks so pathfinding stays in sync.
-        // Region path: single-object changes (forage pickup/respawn, tree
-        // destroyed, building placed) do a targeted ~ms rebake + invalidation.
-        // Full path: batch signals with no region info (editor exit). Both are
-        // deferred + coalesced to at most one rebuild per tick.
-        _envSystem.OnCollisionsDirty = () => _sim.RequestPathfinderRebuild();
-        _envSystem.OnCollisionRegionDirty = (x0, y0, x1, y1) => _sim.RequestPathfinderRegionRebuild(x0, y0, x1, y1);
+        WireSessionSystems();
 
         // Stamp pathfinding terrain from ground vertex types (e.g. water-textured
         // tiles become ShallowWater/DeepWater for the cost field). Must happen
@@ -1842,40 +1896,11 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             _sim.NecroState.ManaRegen = 20f;
         }
 
-        // Init map editor with live systems
-        _mapEditor.Init(
-            this,
-            onVertexMapChanged: () =>
-            {
-                // Incremental: patch only the brush-sized dirty rect into the
-                // existing texture (a few hundred texels) instead of allocating
-                // and uploading a fresh 4097x4097 (~67 MB) texture every painted
-                // frame. Fall back to a full rebuild only if the texture is
-                // missing or its size no longer matches the vertex map.
-                if (_groundVertexMapTex == null
-                    || !_groundSystem.UploadDirtyRect(_groundVertexMapTex))
-                {
-                    _groundVertexMapTex?.Dispose();
-                    _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
-                }
-            },
-            onGrassMapChanged: SyncGrassMapReference,
-            onGrassTypesChanged: SyncGrassFromEditor);
-        _mapEditor.SetItemRegistry(_gameData.Items);
-        _mapEditor.SetSpellRegistry(_gameData.Spells);
-        _mapEditor.SetGameData(_gameData);
-        // Restore the last-open tab once, now that the editor has its settings —
-        // not in the open handlers (F11 / HUD button / pause menu each open it and
-        // we'd otherwise have to remember all of them).
-        _mapEditor.RestoreTabFromSettings();
+        // Init map editor with live systems (shared feed — see InitMapEditorForWorld)
+        InitMapEditorForWorld();
         // Default the editor's Save target to whichever map was just loaded, so
         // editing after "Play Test Map" saves to testmap.json — not default.json.
         _mapEditor.SetMapFilename(mapName);
-        {
-            int corpsesIdx = AtlasDefs.ResolveAtlasName("Corpses");
-            var corpsesAtlas = (corpsesIdx >= 0 && corpsesIdx < _atlases.Length) ? _atlases[corpsesIdx] : null;
-            _mapEditor.SetCorpseSettings(_gameData.Corpse, corpsesAtlas);
-        }
 
         // Feed grass data to map editor — unconditionally, so loading a map
         // without grass also CLEARS the editor's grass state from the previous
@@ -2143,40 +2168,26 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
         ResetWorldState();
         _activeScenario = scenario;
 
-        // Load flipbooks (needed for cloud effects, hit effects, etc.)
+        // Load flipbooks (needed for cloud effects, hit effects, etc.) via the
+        // shared loader, so a malformed def skips-and-logs instead of crashing the
+        // scenario run (this used to be a hand-copied loop that drifted and lost
+        // that resilience). Guarded: batch scenario runs shouldn't re-decode the
+        // EXR library per scenario — skipping is safe because _wakeSystem is
+        // app-lifetime and the loader re-Inits it with the (instance-stable)
+        // dictionary whenever it does run.
         if (_flipbooks.Count == 0)
-        {
-            foreach (var fbId in _gameData.Flipbooks.GetIDs())
-            {
-                var fbDef = _gameData.Flipbooks.Get(fbId);
-                if (fbDef == null || string.IsNullOrEmpty(fbDef.Path)) continue;
-                var resolvedPath = GamePaths.Resolve(fbDef.Path);
-                if (!File.Exists(resolvedPath)) continue;
-                var fb = new Flipbook();
-                if (fb.Load(GraphicsDevice, resolvedPath, fbDef.Cols, fbDef.Rows, fbDef.DefaultFPS))
-                    _flipbooks[fbId] = fb;
-            }
-        }
-        // Init systems that consume the flipbook dictionary. LoadGame does
-        // this for main-game runs; scenarios use this code path instead.
-        _wakeSystem.Init(_flipbooks);
+            ReloadFlipbooksFromRegistry();
 
         // Init simulation with a grid sized to the scenario's needs (the systems are
         // fresh from ResetWorldState's session recreate — no per-system clearing needed)
         int gridSize = scenario.GridSize;
         _groundSystem.Init(gridSize, gridSize);
         _envSystem.Init(gridSize);
-        _envSystem.OnCollisionsDirty = () => _sim.RequestPathfinderRebuild();
-        _envSystem.OnCollisionRegionDirty = (x0, y0, x1, y1) => _sim.RequestPathfinderRegionRebuild(x0, y0, x1, y1);
         _wallSystem.Init(gridSize, gridSize, gridSize);
         // Add a default wall def so scenarios can render walls
         _wallSystem.Defs.Add(new World.WallVisualDef { Name = "Stone", Color = new Color(130, 130, 130, 255), MaxHP = 100 });
         _sim.Init(gridSize, gridSize, _gameData);
-        _sim.SetEnvironmentSystem(_envSystem);
-        _sim.SetWallSystem(_wallSystem);
-        _sim.SetTriggerSystem(_triggerSystem);
-        _sim.SetVillageSystem(_villageSystem);
-        _sim.SetSkillBook(_skillBookState);
+        WireSessionSystems();
         // Size the death-fog grid to the scenario world — it's an app-lifetime system,
         // so without this it keeps the previous map's grid and fog densities.
         _deathFog.Init(gridSize, gridSize, cellSize: 4);
@@ -2274,26 +2285,9 @@ public partial class Game1 : Microsoft.Xna.Framework.Game
             scenario.DrawUnitSprite = (defId, rect) => _gameRenderer.DrawUnitIdleSprite(defId, rect);
         }
 
-        // Init map editor with scenario systems (needed for editor screenshot scenarios)
-        _mapEditor.Init(
-            this,
-            onVertexMapChanged: () =>
-            {
-                // Incremental: patch only the brush-sized dirty rect into the
-                // existing texture (a few hundred texels) instead of allocating
-                // and uploading a fresh 4097x4097 (~67 MB) texture every painted
-                // frame. Fall back to a full rebuild only if the texture is
-                // missing or its size no longer matches the vertex map.
-                if (_groundVertexMapTex == null
-                    || !_groundSystem.UploadDirtyRect(_groundVertexMapTex))
-                {
-                    _groundVertexMapTex?.Dispose();
-                    _groundVertexMapTex = _groundSystem.CreateVertexMapTexture(GraphicsDevice);
-                }
-            },
-            onGrassMapChanged: SyncGrassMapReference,
-            onGrassTypesChanged: SyncGrassFromEditor);
-        _mapEditor.SetItemRegistry(_gameData.Items);
+        // Init map editor with scenario systems (needed for editor screenshot
+        // scenarios) — shared feed, see InitMapEditorForWorld.
+        InitMapEditorForWorld();
 
         // Initialize the scenario
         scenario.OnInit(_sim);

@@ -171,9 +171,18 @@ public partial class Game1
     }
 
     /// <summary>Snapshot the current session into saves/{name}.json. Returns
-    /// false (logged) when there is no live player to save.</summary>
+    /// false (logged) when there is no live player to save, or while a scenario
+    /// is running — StartScenario never sets _currentMapName, so a scenario save
+    /// would record the previous map's name and load into the wrong world.
+    /// (CaptureSaveData stays unguarded: in-memory round-trips are how the
+    /// map-reload scenarios test save/load.)</summary>
     internal bool WriteSaveGame(string name)
     {
+        if (_activeScenario != null)
+        {
+            DebugLog.Log("saves", $"WriteSaveGame '{name}' blocked: scenario active, world is not a saveable map");
+            return false;
+        }
         var data = CaptureSaveData();
         if (data == null) return false;
         Directory.CreateDirectory(GamePaths.Resolve(GamePaths.SavesDir));
