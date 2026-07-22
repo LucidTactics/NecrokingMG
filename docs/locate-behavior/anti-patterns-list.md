@@ -47,9 +47,14 @@ next touched (full plan: `todos/scheduled-tasks-framework.md`):
   `_gpuWarnToastTimer`, `_devChannelHoldTimer`) — need a Game1-owned real-time `ScheduledTasks`
   instance ticked on `_rawDt`; these are render-queried countdowns, so port by holding the task
   reference and reading `SecondsLeft`.
-- Editor `_statusTimer` copy-pasted across ≥4 editor windows (`ItemEditorWindow`,
-  `MapEditorWindow`, `UnitEditorWindow`, `WallEditorWindow`) even though the `EditorWindow` base
-  already has `StatusTimer` — single-source-of-truth violation; consolidate onto the base.
+- Editor `_statusTimer` copy-pasted across SIX editor windows (`ItemEditorWindow`,
+  `MapEditorWindow`, `UnitEditorWindow`, `WallEditorWindow`, `UIEditorWindow`,
+  `EnvObjectEditorWindow` — recounted 2026-07-22) even though the `EditorWindow` base
+  already has `StatusTimer`/`SetStatus` + a base fade-draw (`Editor/EditorWindow.cs`).
+  Single-source-of-truth violation; consolidate onto the base. Caveat: not all six inherit
+  `EditorWindow` (`EnvObjectEditorWindow`/`WallEditorWindow` are `IModalLayer` classes,
+  `UIEditorWindow` extends `EditorBase`), so consolidation may mean moving
+  StatusTimer/SetStatus down to `EditorBase` or a small shared struct.
 
 NOT anti-patterns (stay put per the exception): buff `RemainingDuration`, per-unit bulk timer
 arrays in `Simulation`, potion per-unit poison/paralysis timers, projectile/cloud TTLs,
@@ -137,14 +142,13 @@ Fix direction: extract a shared static "resolve weapon frame" helper (natural ho
 `WeaponParticleVisual.AttachedFlame` (Data/Registries/BuffRegistry.cs) ignores
 `SpawnRate`/`ParticleLifetime`/`MoveSpeed`/`MoveDir*`/`RangeMin`/`RenderBehind`/`Color.A`
 and repurposes `RangeMax` as the flame's 0..1 hilt→tip position, but:
-- `Editor/SpellEditorWindow.cs` (weapon-particle block, `bf_wp_*` fields) draws every
-  spawn-mode row regardless of the Attached Flame checkbox, and the `RangeMax` label
-  still reads "Range Max". Fix: gate the dead rows on `!wp.AttachedFlame`, relabel
-  RangeMax in attached mode.
-- `data/buffs.json` `buff_4`/`buff_4_copy`/`buff_4_copy_copy` still carry the dead
-  spawn-mode values (spawnRate 20, lifetime 0.8, moveDirZ 1, …) — confusing to tuners.
-  Only prune once the editor gating exists (unchecking attachedFlame would otherwise
-  resurrect class defaults silently).
+- **FIXED (verified 2026-07-22):** `Editor/SpellEditorWindow.cs` now gates the spawn-mode
+  rows on `!wp.AttachedFlame` and relabels RangeMax "Flame Pos" in attached mode
+  (~1437-1463).
+- STILL OPEN: `data/buffs.json` `buff_4`/`buff_4_copy`/`buff_4_copy_copy` still carry the
+  dead spawn-mode values (spawnRate 20, lifetime 0.8, moveDirZ 1, …) — confusing to
+  tuners. Pruning is now unblocked (the editor gating exists, so unchecking attachedFlame
+  no longer silently resurrects class defaults on hidden rows).
 The three buff_4* defs are color-only clones (purple/green/yellow) referenced by ~16
 spells' `castingBuffID` + `Game1.cs` `TableChannelBuffId` + `CastPointDebugScenario` —
 deliberate authored variants, NOT a consolidation target unless a per-spell color
@@ -313,12 +317,12 @@ keep the explicit `_horde.AddUnit` after the call.
 Fix: replace the three stamp lines with
 `AI.AIControl.ReassignArchetype(_units, idx, arch, "enroll in horde")`.
 
-# Raw routine literal in HUD: `Routine == 4 // RoutineCommanded` (found 2026-07-22)
+# MOSTLY FIXED — Raw routine literal in HUD: `Routine == 4 // RoutineCommanded` (found 2026-07-22, HUD fixed)
 
-`GameRenderer.Hud.cs` ~239 compares against literal `4` (comment admits it means
-`RoutineCommanded`). Routine bytes are per-handler; use
-`AI.HordeMinionHandler.RoutineCommanded`. Several Scenario files share the trap
-(`Routine == 1 || Routine == 2`) — lower priority, tests only.
+`GameRenderer.Hud.cs` now compares `AI.HordeMinionHandler.RoutineCommanded` (verified
+2026-07-22 during the UI audit). Residual: Scenario files still compare raw routine
+literals (e.g. `DeerReAlertWhileCalmingScenario.cs` `curRoutine == 4 /*RoutineCalming*/`)
+— lower priority, tests only.
 
 # FIXED — Wrong-list weapon lookup for ranged pending attacks (found 2026-07-19, fixed 2026-07-21)
 
@@ -328,22 +332,15 @@ archetype attack-override block passes `PendingWeaponIsRanged`. Ranged cycles co
 `Stats.RangedCooldownTime[weaponIdx]` (seconds — the same clock RangedUnitHandler locks
 between shots), ranged anim names from `Stats.RangedWeapons[weaponIdx].AnimName`.
 
-# Editor key-repeat timer accumulates catch-up dt + polled text input (found 2026-07-21)
+# MOSTLY FIXED — Editor key-repeat timer accumulated catch-up dt (found 2026-07-21, fixed)
 
-`Editor/EditorBase.cs` `HandleTextInput` (~line 2290): repeat logic is
-`_keyRepeatTimer += dt; if (> 0.4) { _keyRepeatTimer -= 0.03; repeat }` with
-dt = `ElapsedGameTime`, and typing is **polled** (`_kb.GetPressedKeys()` per Update; no
-`Game.Window.TextInput` char events). The game runs default `IsFixedTimeStep = true`, so a
-slow Draw is followed by a burst of back-to-back catch-up Updates: the still-held key from
-the last real keystroke accumulates 16.6ms per catch-up Update, crosses the 0.4s
-initial-delay threshold within one ~400ms+ burst, then fires a repeat roughly every other
-update — **one tap becomes ~5-15 duplicated chars**. Symmetrically, a tap that goes down+up
-inside a single long frame is never sampled — **dropped chars**. The timer measures
-accumulated update-time, not wall-clock hold; nothing resets repeat state across stalls.
-Surfaced as "Flipbook Manager typing lags/repeats" (the stalls came from the entry below).
-Fix directions: track hold start in wall-clock (`Environment.TickCount64`) and require a
-real 0.4s physical hold before repeating; cap repeats per rendered frame; or (robust)
-switch char entry to `Window.TextInput` events and keep polling only for nav keys.
+`Editor/EditorBase.cs` `HandleTextInput` now repeats on the WALL CLOCK
+(`_keyRepeatNextAt`/`_lastRepeatingKey`, 400ms initial delay then 30ms cadence via
+`Environment.TickCount64` — inherently ≤1 repeat per real elapsed window), so
+fixed-timestep catch-up bursts no longer duplicate chars. Residual: typing is still
+**polled** (`_kb.GetPressedKeys()` per Update, no `Game.Window.TextInput` char events), so
+a tap that goes down+up inside a single long frame is still dropped. Robust fix if it
+recurs: switch char entry to `Window.TextInput` events, keep polling for nav keys only.
 
 # Debounced flush does full-registry synchronous reload on the render thread (found 2026-07-21)
 
@@ -361,6 +358,31 @@ doesn't shrink it. Fix directions: reload ONLY the edited def (keyed rebuild of 
 the manager preview `_fbPreviewCache.GetOrLoad(fd.Path)` runs every frame keyed on the
 live path (one disk probe per keystroke while typing `fb_path`), and the texture browser's
 Up/Down nav decodes `.exr` previews synchronously per keypress (`SelectFile`).
+
+# Sub-pixel DrawString positions in GameRenderer.Hud.cs (found 2026-07-22)
+
+The PointClamp text-rounding rule (CLAUDE.md "UI Text Rendering") is violated at three
+sites in `Necroking/GameRenderer.Hud.cs` — its private `DrawText` helpers (~822/~828) do
+NOT round, unlike `HUDRenderer.Text` (~1044) and `EditorBase.DrawText` which do:
+- `DrawGameOver` (~812, ~818): title + "Press R to restart" centered with
+  `screenW / 2f - size.X / 2f` floats — the exact MeasureString-centering case CLAUDE.md
+  calls out. Fix: cast to `(int)` (or round inside the `DrawText` helpers).
+- Save-preview card inventory quantity (~775-777): `br - size` where `size` is a float
+  `MeasureString` — sub-pixel bottom-right-aligned text. Fix: `(int)(br.X - size.X)` etc.
+- F7 unit-info debug overlay (~404): `new Vector2(sp.X - info.Length, sp.Y - 28)` with
+  float screen pos `sp` (debug-only, minor; also uses `info.Length` chars as pixels).
+Elsewhere the rule is respected (CharacterStatsUI, MenuCommon, TableCraftMenuUI,
+MapEditorWindow.DrawTextCentered, TooltipSystem, WidgetLayoutUtils all round; damage
+numbers in `GameRenderer.World.cs` draw at float positions deliberately — smooth-moving
+scaled world text, leave them).
+
+# DrawTimeControls re-declares the speed presets (found 2026-07-22)
+
+`UI/HUDRenderer.cs` `DrawTimeControls` (~945) declares
+`stackalloc float[] { 0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f }` instead of reading the
+public canonical `TimeControlSpeeds` (~699) that `TimeControlsLayer.OnPointer` applies —
+two copies of the presets ~250 lines apart that must stay in sync (a changed preset would
+draw one speed and set another). Fix: iterate `TimeControlSpeeds` in the draw.
 
 # Dead authored VFX fields — persisted in data, consumed by nothing (census 2026-07-21)
 
